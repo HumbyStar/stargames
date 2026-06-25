@@ -86,7 +86,7 @@ function AuthPage() {
             {loading ? "Entrando..." : "Entrar"}
           </Button>
           <p className="text-xs text-muted-foreground text-center">
-            Acesso restrito. Os usuários são criados pelo administrador no painel do Lovable Cloud.
+            Acesso restrito. Os usuários são criados pelo administrador.
           </p>
         </form>
       </div>
