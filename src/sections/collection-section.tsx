@@ -11,6 +11,7 @@ import {
   useStore,
 } from "@/lib/store";
 import { toast } from "sonner";
+import { MessageCircle } from "lucide-react";
 
 type Filter = "todos" | "reserva_vencida" | "pendente_vencido" | "mgmv_vencido" | "em_aberto";
 
@@ -71,10 +72,56 @@ export function CollectionSection({
     { id: "em_aberto", label: "Em aberto" },
   ];
 
-  const copyMessage = (clientName: string, productName: string, remaining: number) => {
-    const msg = `Olá, ${clientName}. Identificamos uma pendência referente ao item ${productName}, no valor restante de ${formatBRL(remaining)}. Podemos regularizar?`;
-    navigator.clipboard.writeText(msg);
-    toast.success("Mensagem de cobrança copiada");
+  const buildMessage = (
+    clientName: string,
+    productName: string,
+    remaining: number,
+    statusLabel: string,
+    dueDate: string,
+    late: number,
+  ) => {
+    const firstName = (clientName || "").split(" ")[0] || clientName;
+    const valor = formatBRL(remaining);
+    const venc = formatDateBR(dueDate);
+    switch (statusLabel) {
+      case "Reserva vencida":
+        return `Olá, ${firstName}! Aqui é da Star Games. Sua *reserva* do item *${productName}* venceu em ${venc} (${late} dias em atraso) e o valor restante é *${valor}*. Consegue regularizar hoje para mantermos o item reservado?`;
+      case "Pendente vencido":
+        return `Olá, ${firstName}! Aqui é da Star Games. Identificamos um *pagamento pendente* do item *${productName}*, vencido em ${venc} (${late} dias em atraso). Valor restante: *${valor}*. Podemos acertar?`;
+      case "MGMV vencido":
+        return `Olá, ${firstName}! Aqui é da Star Games. Sua *parcela MGMV* referente a *${productName}* venceu em ${venc} (${late} dias em atraso). Valor: *${valor}*. Consegue regularizar hoje?`;
+      case "Reserva":
+        return `Olá, ${firstName}! Aqui é da Star Games. Passando para lembrar da *reserva* do item *${productName}*. Valor restante: *${valor}*, vencimento em ${venc}.`;
+      case "Pendente":
+        return `Olá, ${firstName}! Aqui é da Star Games. Lembrete do *pagamento pendente* do item *${productName}*, no valor de *${valor}*, com vencimento em ${venc}.`;
+      default:
+        return `Olá, ${firstName}! Aqui é da Star Games. Sobre o item *${productName}*, o valor restante é *${valor}* com vencimento em ${venc}. Podemos regularizar?`;
+    }
+  };
+
+  const formatPhoneIntl = (phone: string) => {
+    const digits = (phone || "").replace(/\D/g, "");
+    if (!digits) return "";
+    return digits.startsWith("55") ? digits : `55${digits}`;
+  };
+
+  const openWhatsApp = (
+    phone: string,
+    clientName: string,
+    productName: string,
+    remaining: number,
+    statusLabel: string,
+    dueDate: string,
+    late: number,
+  ) => {
+    const intl = formatPhoneIntl(phone);
+    if (!intl) {
+      toast.error("Cliente sem telefone cadastrado");
+      return;
+    }
+    const msg = buildMessage(clientName, productName, remaining, statusLabel, dueDate, late);
+    const url = `https://wa.me/${intl}?text=${encodeURIComponent(msg)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const quickPayment = (productId: string, remaining: number) => {
@@ -196,9 +243,21 @@ export function CollectionSection({
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => copyMessage(client?.name ?? "", p.name, remaining)}
+                          title="Enviar mensagem no WhatsApp"
+                          aria-label="Enviar mensagem no WhatsApp"
+                          onClick={() =>
+                            openWhatsApp(
+                              client?.phone ?? "",
+                              client?.name ?? "",
+                              p.name,
+                              remaining,
+                              status.label,
+                              p.dueDate,
+                              late,
+                            )
+                          }
                         >
-                          Copiar
+                          <MessageCircle className="h-4 w-4" />
                         </Button>
                         <Button size="sm" onClick={() => quickPayment(p.id, remaining)}>
                           Pagar
