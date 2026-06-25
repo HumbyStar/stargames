@@ -53,6 +53,12 @@ interface NotionProduct {
 }
 
 interface NotionParseResult {
+  clients: NotionClientBlock[];
+  errors: string[];
+}
+
+interface NotionClientBlock {
+  index: number;
   client: { name: string; phone: string; phoneDisplay: string };
   products: NotionProduct[];
   notes: string;
@@ -110,39 +116,27 @@ function extractClientFromTitle(title: string) {
   return { name, phone: phoneRaw.replace(/\D/g, ""), phoneDisplay: phoneRaw };
 }
 
-function extractNotesAfterTable(doc: Document): string {
-  const text = doc.body?.textContent || "";
-  const notes: string[] = [];
-  const totalMatch = text.match(/TOTAL:[\s\S]*/i);
-  if (totalMatch) notes.push(totalMatch[0].trim());
-  return notes.join("\n");
+function extractClientNotes(root: Element): string {
+  const lines: string[] = [];
+  const paragraphs = Array.from(root.querySelectorAll("p, li"));
+  paragraphs.forEach((p) => {
+    // skip if inside a table
+    if (p.closest("table")) return;
+    const t = (p.textContent ?? "").trim();
+    if (!t) return;
+    lines.push(t);
+  });
+  if (lines.length === 0) {
+    const text = root.textContent ?? "";
+    const totalMatch = text.match(/TOTAL:[\s\S]*/i);
+    if (totalMatch) lines.push(totalMatch[0].trim());
+  }
+  return lines.join("\n");
 }
 
-function parseNotionHtml(html: string): NotionParseResult {
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  const errors: string[] = [];
-
-  const title =
-    doc.querySelector(".page-title")?.textContent?.trim() ||
-    doc.querySelector("h1")?.textContent?.trim() ||
-    doc.querySelector("title")?.textContent?.trim() ||
-    "";
-
-  const client = extractClientFromTitle(title);
-  if (!client.name) errors.push("Nome do cliente não encontrado no HTML.");
-  if (!client.phone) errors.push("Telefone do cliente não encontrado no HTML.");
-
-  const table =
-    doc.querySelector("table.simple-table") || doc.querySelector("table");
-
-  if (!table) {
-    errors.push("Tabela de produtos não encontrada no HTML.");
-    return { client, products: [], notes: extractNotesAfterTable(doc), errors };
-  }
-
+function parseProductsTable(table: Element): NotionProduct[] {
   const rows = Array.from(table.querySelectorAll("tr"));
   const dataRows = rows.slice(1);
-
   const products: NotionProduct[] = [];
   dataRows.forEach((row, idx) => {
     const cells = Array.from(row.querySelectorAll("td")).map((c) =>
@@ -194,8 +188,46 @@ function parseNotionHtml(html: string): NotionParseResult {
       warnings: rowWarnings,
     });
   });
+  return products;
+}
 
-  return { client, products, notes: extractNotesAfterTable(doc), errors };
+function parseClientArticle(article: Element, index: number): NotionClientBlock {
+  const errors: string[] = [];
+  const title =
+    article.querySelector(".page-title")?.textContent?.trim() ||
+    article.querySelector("h1")?.textContent?.trim() ||
+    "";
+  const client = extractClientFromTitle(title);
+  if (!client.name) errors.push(`Cliente #${index}: nome não encontrado.`);
+  if (!client.phone) errors.push(`Cliente #${index}: telefone não encontrado.`);
+  const table =
+    article.querySelector("table.simple-table") || article.querySelector("table");
+  let products: NotionProduct[] = [];
+  if (!table) {
+    errors.push(`Cliente #${index} (${client.name || "sem nome"}): tabela não encontrada.`);
+  } else {
+    products = parseProductsTable(table);
+  }
+  return {
+    index,
+    client,
+    products,
+    notes: extractClientNotes(article),
+    errors,
+  };
+}
+
+function parseNotionHtml(html: string): NotionParseResult {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const errors: string[] = [];
+  let articles = Array.from(doc.querySelectorAll("article.page"));
+  if (articles.length === 0) {
+    // fallback: treat the whole body as a single client article
+    if (doc.body) articles = [doc.body as unknown as Element];
+  }
+  const clients = articles.map((a, i) => parseClientArticle(a, i + 1));
+  if (clients.length === 0) errors.push("Nenhum cliente encontrado no HTML.");
+  return { clients, errors };
 }
 
 // =================================================================
@@ -342,7 +374,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       setNotion(result);
       setRows(null);
       if (result.errors.length) toast.error(result.errors[0]);
-      else toast.success(`${result.products.length} produto(s) extraído(s)`);
+      else {
+        const totalProducts = result.clients.reduce((s, c) => s + c.products.length, 0);
+        toast.success(`${result.clients.length} cliente(s) • ${totalProducts} produto(s) extraído(s)`);
+      }
     } else if (ext === "txt" || ext === "md" || !ext) {
       const txt = await file.text();
       setText(txt);
@@ -417,45 +452,56 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
 
   const confirmNotionImport = () => {
     if (!notion) return;
-    if (notion.errors.length) return toast.error(notion.errors[0]);
-    const validProducts = notion.products.filter((p) => p.product && p.errors.length === 0);
-    if (validProducts.length === 0) return toast.error("Nenhum produto válido para importar.");
-    let client = findClientByPhone(notion.client.phone);
-    let created = false;
-    if (!client) {
-      client = addClient({ name: notion.client.name, phone: notion.client.phoneDisplay || notion.client.phone });
-      created = true;
-    }
+    const usableClients = notion.clients.filter(
+      (c) => c.client.phone && c.client.name && c.errors.length === 0,
+    );
+    if (usableClients.length === 0) return toast.error("Nenhum cliente válido para importar.");
     const todayISO = new Date().toISOString();
-    validProducts.forEach((p) => {
-      const regISO = p.registerDate ? new Date(`${p.registerDate}T12:00:00`).toISOString() : todayISO;
-      const dueISO = p.dueDate
-        ? new Date(`${p.dueDate}T12:00:00`).toISOString()
-        : p.financialStatus === "Reserva"
-          ? new Date(new Date(regISO).getTime() + 30 * 86400000).toISOString()
-          : regISO;
-      addProduct({
-        clientId: client!.id,
-        name: p.product,
-        platform: p.platform || "—",
-        totalValue: p.totalValue,
-        paidValue: p.paidValue,
-        financialStatus: p.financialStatus,
-        situation: p.situation,
-        registerDate: regISO,
-        dueDate: dueISO,
+    let totalProducts = 0;
+    let createdClients = 0;
+    let firstClientId: string | null = null;
+    usableClients.forEach((block) => {
+      const validProducts = block.products.filter((p) => p.product && p.errors.length === 0);
+      let client = findClientByPhone(block.client.phone);
+      if (!client) {
+        client = addClient({
+          name: block.client.name,
+          phone: block.client.phoneDisplay || block.client.phone,
+        });
+        createdClients++;
+      }
+      if (!firstClientId) firstClientId = client.id;
+      validProducts.forEach((p) => {
+        const regISO = p.registerDate ? new Date(`${p.registerDate}T12:00:00`).toISOString() : todayISO;
+        const dueISO = p.dueDate
+          ? new Date(`${p.dueDate}T12:00:00`).toISOString()
+          : p.financialStatus === "Reserva"
+            ? new Date(new Date(regISO).getTime() + 30 * 86400000).toISOString()
+            : regISO;
+        addProduct({
+          clientId: client!.id,
+          name: p.product,
+          platform: p.platform || "—",
+          totalValue: p.totalValue,
+          paidValue: p.paidValue,
+          financialStatus: p.financialStatus,
+          situation: p.situation,
+          registerDate: regISO,
+          dueDate: dueISO,
+        });
+        totalProducts++;
       });
+      if (block.notes) {
+        const existing = client!.notes ? client!.notes + "\n\n" : "";
+        updateClientNotes(client!.id, existing + block.notes);
+      }
     });
-    if (notion.notes) {
-      const existing = client!.notes ? client!.notes + "\n\n" : "";
-      updateClientNotes(client!.id, existing + notion.notes);
-    }
     toast.success(
-      `${validProducts.length} produto(s) importados • ${created ? "cliente criado" : "cliente atualizado"}${notion.notes ? " • observações salvas" : ""}`,
+      `${usableClients.length} cliente(s) • ${totalProducts} produto(s) importados • ${createdClients} novo(s)`,
     );
     setNotion(null);
     setHtmlText("");
-    if (notion) openClient(findClientByPhone(notion.client.phone)?.id ?? null);
+    if (usableClients.length === 1 && firstClientId) openClient(firstClientId);
     onScrollTo("clientes");
   };
 
@@ -532,7 +578,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                       setNotion(result);
                       setRows(null);
                       if (result.errors.length) toast.error(result.errors[0]);
-                      else toast.success(`${result.products.length} produto(s) extraído(s)`);
+                      else {
+                        const total = result.clients.reduce((s, c) => s + c.products.length, 0);
+                        toast.success(`${result.clients.length} cliente(s) • ${total} produto(s) extraído(s)`);
+                      }
                     }}
                   >
                     Validar HTML
@@ -579,7 +628,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       {notion && (
         <NotionPreview
           result={notion}
-          existingClient={findClientByPhone(notion.client.phone)}
+          findClientByPhone={findClientByPhone}
           onConfirm={confirmNotionImport}
           onClear={() => { setNotion(null); setHtmlText(""); }}
         />
@@ -721,17 +770,27 @@ function TextDropzone({
 
 function NotionPreview({
   result,
-  existingClient,
+  findClientByPhone,
   onConfirm,
   onClear,
 }: {
   result: NotionParseResult;
-  existingClient: { id: string; name: string } | undefined;
+  findClientByPhone: (phone: string) => { id: string; name: string } | undefined;
   onConfirm: () => void;
   onClear: () => void;
 }) {
-  const valid = result.products.filter((p) => p.product && p.errors.length === 0).length;
-  const withErrors = result.products.length - valid;
+  const totalProducts = result.clients.reduce((s, c) => s + c.products.length, 0);
+  const totalValid = result.clients.reduce(
+    (s, c) => s + c.products.filter((p) => p.product && p.errors.length === 0).length,
+    0,
+  );
+  const totalErrors = totalProducts - totalValid;
+  const clientsWithError = result.clients.filter((c) => c.errors.length > 0).length;
+  const canConfirm =
+    result.clients.some(
+      (c) => c.client.phone && c.client.name && c.errors.length === 0 && c.products.some((p) => p.product && p.errors.length === 0),
+    );
+
   return (
     <div className="mt-6 space-y-4">
       {result.errors.length > 0 && (
@@ -742,85 +801,101 @@ function NotionPreview({
         </Card>
       )}
 
-      <div className="grid gap-4 md:grid-cols-[1fr_1fr]">
-        <Card title="Cliente identificado">
-          <dl className="space-y-2 text-sm">
-            <div className="flex justify-between"><dt className="text-muted-foreground">Nome</dt><dd className="font-medium">{result.client.name || "—"}</dd></div>
-            <div className="flex justify-between"><dt className="text-muted-foreground">Telefone</dt><dd className="font-mono">{result.client.phone || "—"}</dd></div>
-            <div className="flex justify-between"><dt className="text-muted-foreground">Exibição</dt><dd>{result.client.phoneDisplay || "—"}</dd></div>
-            <div className="flex justify-between"><dt className="text-muted-foreground">Status</dt><dd><Tag variant={existingClient ? "success" : "warning"}>{existingClient ? `Atualizar (${existingClient.name})` : "Será criado"}</Tag></dd></div>
-          </dl>
-        </Card>
-        <Card title="Observações detectadas">
-          {result.notes ? (
-            <pre className="whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">{result.notes}</pre>
-          ) : (
-            <p className="text-sm text-muted-foreground">Nenhuma observação complementar encontrada.</p>
-          )}
-        </Card>
-      </div>
-
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <MetricCard label="Produtos detectados" value={result.products.length} />
-        <MetricCard label="Válidos" value={valid} status="success" />
-        <MetricCard label="Com erro" value={withErrors} status={withErrors > 0 ? "danger" : undefined} />
-        <MetricCard label="Cliente" value={existingClient ? "Existente" : "Novo"} status="primary" />
+        <MetricCard label="Clientes encontrados" value={result.clients.length} status="primary" />
+        <MetricCard label="Clientes com erro" value={clientsWithError} status={clientsWithError > 0 ? "danger" : undefined} />
+        <MetricCard label="Produtos válidos" value={totalValid} status="success" />
+        <MetricCard label="Produtos com erro" value={totalErrors} status={totalErrors > 0 ? "danger" : undefined} />
       </div>
 
-      <Card
-        title="Prévia dos Produtos"
-        action={
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClear}>Cancelar</Button>
-            <Button onClick={onConfirm} disabled={valid === 0 || result.errors.length > 0}>Confirmar Importação</Button>
-          </div>
-        }
-      >
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="py-2 pr-3 font-medium">Produto</th>
-                <th className="py-2 pr-3 font-medium">Plataforma</th>
-                <th className="py-2 pr-3 font-medium">Total</th>
-                <th className="py-2 pr-3 font-medium">Pago</th>
-                <th className="py-2 pr-3 font-medium">Restante</th>
-                <th className="py-2 pr-3 font-medium">Status</th>
-                <th className="py-2 pr-3 font-medium">Situação</th>
-                <th className="py-2 pr-3 font-medium">Cadastro</th>
-                <th className="py-2 pr-3 font-medium">Limite</th>
-                <th className="py-2 pr-3 font-medium">Resultado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.products.map((p, idx) => {
-                const ok = p.product && p.errors.length === 0;
-                return (
-                  <tr key={idx} className="border-b border-border/60 last:border-0">
-                    <td className="py-3 pr-3">{p.product || "—"}</td>
-                    <td className="py-3 pr-3 text-muted-foreground">{p.platform || "—"}</td>
-                    <td className="py-3 pr-3 tabular-nums">{formatBRL(p.totalValue)}</td>
-                    <td className="py-3 pr-3 tabular-nums">{formatBRL(p.paidValue)}</td>
-                    <td className="py-3 pr-3 tabular-nums">{formatBRL(p.remainingValue)}</td>
-                    <td className="py-3 pr-3"><Tag variant={p.financialStatus === "Pago" ? "success" : p.financialStatus === "Pendente" ? "danger" : "warning"}>{p.financialStatus}</Tag></td>
-                    <td className="py-3 pr-3 text-muted-foreground">{p.situation}</td>
-                    <td className="py-3 pr-3 text-muted-foreground">{p.registerDate ?? "—"}</td>
-                    <td className="py-3 pr-3 text-muted-foreground">{p.dueDate ?? "—"}</td>
-                    <td className="py-3 pr-3">
-                      <Tag variant={ok ? "success" : "danger"}>{ok ? "Pronto" : "Erro"}</Tag>
-                      {(p.errors.length > 0 || p.warnings.length > 0) && (
-                        <div className="mt-1 text-[10px] text-muted-foreground">
-                          {[...p.errors, ...p.warnings].join(" • ")}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={onClear}>Cancelar</Button>
+        <Button onClick={onConfirm} disabled={!canConfirm}>Confirmar Importação</Button>
+      </div>
+
+      <div className="space-y-4">
+        {result.clients.map((block) => {
+          const existing = block.client.phone ? findClientByPhone(block.client.phone) : undefined;
+          const validCount = block.products.filter((p) => p.product && p.errors.length === 0).length;
+          return (
+            <Card
+              key={block.index}
+              title={`Cliente ${block.index}: ${block.client.name || "(sem nome)"}`}
+              action={
+                <Tag variant={existing ? "success" : "warning"}>
+                  {existing ? `Atualizar (${existing.name})` : "Será criado"}
+                </Tag>
+              }
+            >
+              <div className="grid gap-3 md:grid-cols-3 text-xs">
+                <div><span className="text-muted-foreground">Telefone:</span> <span className="font-mono">{block.client.phone || "—"}</span></div>
+                <div><span className="text-muted-foreground">Exibição:</span> {block.client.phoneDisplay || "—"}</div>
+                <div><span className="text-muted-foreground">Produtos:</span> {validCount} / {block.products.length}</div>
+              </div>
+
+              {block.errors.length > 0 && (
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-destructive">
+                  {block.errors.map((e, i) => <li key={i}>{e}</li>)}
+                </ul>
+              )}
+
+              {block.products.length > 0 && (
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="py-2 pr-3 font-medium">Produto</th>
+                        <th className="py-2 pr-3 font-medium">Plataforma</th>
+                        <th className="py-2 pr-3 font-medium">Total</th>
+                        <th className="py-2 pr-3 font-medium">Pago</th>
+                        <th className="py-2 pr-3 font-medium">Restante</th>
+                        <th className="py-2 pr-3 font-medium">Status</th>
+                        <th className="py-2 pr-3 font-medium">Situação</th>
+                        <th className="py-2 pr-3 font-medium">Cadastro</th>
+                        <th className="py-2 pr-3 font-medium">Limite</th>
+                        <th className="py-2 pr-3 font-medium">Resultado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {block.products.map((p, idx) => {
+                        const ok = p.product && p.errors.length === 0;
+                        return (
+                          <tr key={idx} className="border-b border-border/60 last:border-0">
+                            <td className="py-3 pr-3">{p.product || "—"}</td>
+                            <td className="py-3 pr-3 text-muted-foreground">{p.platform || "—"}</td>
+                            <td className="py-3 pr-3 tabular-nums">{formatBRL(p.totalValue)}</td>
+                            <td className="py-3 pr-3 tabular-nums">{formatBRL(p.paidValue)}</td>
+                            <td className="py-3 pr-3 tabular-nums">{formatBRL(p.remainingValue)}</td>
+                            <td className="py-3 pr-3"><Tag variant={p.financialStatus === "Pago" ? "success" : p.financialStatus === "Pendente" ? "danger" : "warning"}>{p.financialStatus}</Tag></td>
+                            <td className="py-3 pr-3 text-muted-foreground">{p.situation}</td>
+                            <td className="py-3 pr-3 text-muted-foreground">{p.registerDate ?? "—"}</td>
+                            <td className="py-3 pr-3 text-muted-foreground">{p.dueDate ?? "—"}</td>
+                            <td className="py-3 pr-3">
+                              <Tag variant={ok ? "success" : "danger"}>{ok ? "Pronto" : "Erro"}</Tag>
+                              {(p.errors.length > 0 || p.warnings.length > 0) && (
+                                <div className="mt-1 text-[10px] text-muted-foreground">
+                                  {[...p.errors, ...p.warnings].join(" • ")}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {block.notes && (
+                <details className="mt-3 rounded-md border border-border bg-muted/30 p-2 text-xs">
+                  <summary className="cursor-pointer font-medium">Observações</summary>
+                  <pre className="mt-2 whitespace-pre-wrap text-xs">{block.notes}</pre>
+                </details>
+              )}
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }
