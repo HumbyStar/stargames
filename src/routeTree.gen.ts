@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ImportRouteImport } from './routes/import'
+import { Route as ClientesRouteImport } from './routes/clientes'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CollectionIndexRouteImport } from './routes/collection.index'
 import { Route as CollectionClientIdRouteImport } from './routes/collection.$clientId'
@@ -23,6 +24,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const ImportRoute = ImportRouteImport.update({
   id: '/import',
   path: '/import',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClientesRoute = ClientesRouteImport.update({
+  id: '/clientes',
+  path: '/clientes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -43,6 +49,7 @@ const CollectionClientIdRoute = CollectionClientIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/clientes': typeof ClientesRoute
   '/import': typeof ImportRoute
   '/settings': typeof SettingsRoute
   '/collection/$clientId': typeof CollectionClientIdRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/clientes': typeof ClientesRoute
   '/import': typeof ImportRoute
   '/settings': typeof SettingsRoute
   '/collection/$clientId': typeof CollectionClientIdRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/clientes': typeof ClientesRoute
   '/import': typeof ImportRoute
   '/settings': typeof SettingsRoute
   '/collection/$clientId': typeof CollectionClientIdRoute
@@ -67,15 +76,23 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/clientes'
     | '/import'
     | '/settings'
     | '/collection/$clientId'
     | '/collection/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/import' | '/settings' | '/collection/$clientId' | '/collection'
+  to:
+    | '/'
+    | '/clientes'
+    | '/import'
+    | '/settings'
+    | '/collection/$clientId'
+    | '/collection'
   id:
     | '__root__'
     | '/'
+    | '/clientes'
     | '/import'
     | '/settings'
     | '/collection/$clientId'
@@ -84,6 +101,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ClientesRoute: typeof ClientesRoute
   ImportRoute: typeof ImportRoute
   SettingsRoute: typeof SettingsRoute
   CollectionClientIdRoute: typeof CollectionClientIdRoute
@@ -104,6 +122,13 @@ declare module '@tanstack/react-router' {
       path: '/import'
       fullPath: '/import'
       preLoaderRoute: typeof ImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clientes': {
+      id: '/clientes'
+      path: '/clientes'
+      fullPath: '/clientes'
+      preLoaderRoute: typeof ClientesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -132,6 +157,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ClientesRoute: ClientesRoute,
   ImportRoute: ImportRoute,
   SettingsRoute: SettingsRoute,
   CollectionClientIdRoute: CollectionClientIdRoute,
