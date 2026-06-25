@@ -165,6 +165,7 @@ function ImportPage() {
           toast.success(`${parsed.length} linha(s) processadas`);
         },
       });
+      setTab("csv");
     } else if (ext === "xlsx" || ext === "xls") {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array" });
@@ -173,9 +174,20 @@ function ImportPage() {
       const parsed = validateRows(parseTabular(json), findClientByPhone);
       setRows(parsed);
       toast.success(`${parsed.length} linha(s) processadas`);
+      setTab("excel");
     } else if (ext === "html" || ext === "htm") {
       const txt = await file.text();
+      setText(txt);
+      setTab("text");
       const parsed = validateRows(parseHTMLList(txt), findClientByPhone);
+      setRows(parsed);
+      toast.success(`${parsed.length} linha(s) processadas`);
+    } else if (ext === "txt" || ext === "md" || !ext) {
+      const txt = await file.text();
+      setText(txt);
+      setTab("text");
+      const raw = /<[a-z][\s\S]*>/i.test(txt) ? parseHTMLList(txt) : parseTextList(txt);
+      const parsed = validateRows(raw, findClientByPhone);
       setRows(parsed);
       toast.success(`${parsed.length} linha(s) processadas`);
     } else {
@@ -267,6 +279,14 @@ function ImportPage() {
         description="Importe clientes e produtos por lista, HTML, CSV ou Excel."
       />
 
+      <div className="mb-4">
+        <UploadArea
+          accept=".txt,.html,.htm,.csv,.xlsx,.xls"
+          onFile={handleFile}
+          hint="Arraste qualquer arquivo aqui (lista, HTML, CSV ou Excel) ou clique para selecionar"
+        />
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <Card>
           <Tabs value={tab} onValueChange={setTab}>
@@ -277,12 +297,7 @@ function ImportPage() {
             </TabsList>
 
             <TabsContent value="text" className="mt-4 space-y-3">
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder="Cole sua lista ou HTML aqui..."
-                className="min-h-64 w-full rounded-md border border-input bg-background p-3 font-mono text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-              />
+              <TextDropzone value={text} onChange={setText} onFile={handleFile} />
               <div className="flex justify-end">
                 <Button onClick={validateText}>Validar Importação</Button>
               </div>
@@ -410,5 +425,45 @@ function UploadArea({ accept, onFile, hint }: { accept: string; onFile: (f: File
         }}
       />
     </label>
+  );
+}
+
+function TextDropzone({
+  value,
+  onChange,
+  onFile,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onFile: (f: File) => void;
+}) {
+  const [drag, setDrag] = useState(false);
+  return (
+    <div
+      onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+      onDragLeave={() => setDrag(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDrag(false);
+        const f = e.dataTransfer.files[0];
+        if (f) onFile(f);
+      }}
+      className={
+        "relative rounded-md border-2 border-dashed transition " +
+        (drag ? "border-primary bg-primary/5" : "border-input bg-background")
+      }
+    >
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Cole sua lista ou HTML aqui, ou arraste um arquivo..."
+        className="min-h-64 w-full resize-y rounded-md bg-transparent p-3 font-mono text-sm outline-none"
+      />
+      {drag && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-md bg-primary/10 text-sm font-medium text-primary">
+          Solte para importar
+        </div>
+      )}
+    </div>
   );
 }
