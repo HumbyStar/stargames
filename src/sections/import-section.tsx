@@ -578,7 +578,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                       setNotion(result);
                       setRows(null);
                       if (result.errors.length) toast.error(result.errors[0]);
-                      else toast.success(`${result.products.length} produto(s) extraído(s)`);
+                      else {
+                        const total = result.clients.reduce((s, c) => s + c.products.length, 0);
+                        toast.success(`${result.clients.length} cliente(s) • ${total} produto(s) extraído(s)`);
+                      }
                     }}
                   >
                     Validar HTML
@@ -625,7 +628,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       {notion && (
         <NotionPreview
           result={notion}
-          existingClient={findClientByPhone(notion.client.phone)}
+          findClientByPhone={findClientByPhone}
           onConfirm={confirmNotionImport}
           onClear={() => { setNotion(null); setHtmlText(""); }}
         />
