@@ -770,17 +770,27 @@ function TextDropzone({
 
 function NotionPreview({
   result,
-  existingClient,
+  findClientByPhone,
   onConfirm,
   onClear,
 }: {
   result: NotionParseResult;
-  existingClient: { id: string; name: string } | undefined;
+  findClientByPhone: (phone: string) => { id: string; name: string } | undefined;
   onConfirm: () => void;
   onClear: () => void;
 }) {
-  const valid = result.products.filter((p) => p.product && p.errors.length === 0).length;
-  const withErrors = result.products.length - valid;
+  const totalProducts = result.clients.reduce((s, c) => s + c.products.length, 0);
+  const totalValid = result.clients.reduce(
+    (s, c) => s + c.products.filter((p) => p.product && p.errors.length === 0).length,
+    0,
+  );
+  const totalErrors = totalProducts - totalValid;
+  const clientsWithError = result.clients.filter((c) => c.errors.length > 0).length;
+  const canConfirm =
+    result.clients.some(
+      (c) => c.client.phone && c.client.name && c.errors.length === 0 && c.products.some((p) => p.product && p.errors.length === 0),
+    );
+
   return (
     <div className="mt-6 space-y-4">
       {result.errors.length > 0 && (
@@ -791,85 +801,101 @@ function NotionPreview({
         </Card>
       )}
 
-      <div className="grid gap-4 md:grid-cols-[1fr_1fr]">
-        <Card title="Cliente identificado">
-          <dl className="space-y-2 text-sm">
-            <div className="flex justify-between"><dt className="text-muted-foreground">Nome</dt><dd className="font-medium">{result.client.name || "—"}</dd></div>
-            <div className="flex justify-between"><dt className="text-muted-foreground">Telefone</dt><dd className="font-mono">{result.client.phone || "—"}</dd></div>
-            <div className="flex justify-between"><dt className="text-muted-foreground">Exibição</dt><dd>{result.client.phoneDisplay || "—"}</dd></div>
-            <div className="flex justify-between"><dt className="text-muted-foreground">Status</dt><dd><Tag variant={existingClient ? "success" : "warning"}>{existingClient ? `Atualizar (${existingClient.name})` : "Será criado"}</Tag></dd></div>
-          </dl>
-        </Card>
-        <Card title="Observações detectadas">
-          {result.notes ? (
-            <pre className="whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">{result.notes}</pre>
-          ) : (
-            <p className="text-sm text-muted-foreground">Nenhuma observação complementar encontrada.</p>
-          )}
-        </Card>
-      </div>
-
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <MetricCard label="Produtos detectados" value={result.products.length} />
-        <MetricCard label="Válidos" value={valid} status="success" />
-        <MetricCard label="Com erro" value={withErrors} status={withErrors > 0 ? "danger" : undefined} />
-        <MetricCard label="Cliente" value={existingClient ? "Existente" : "Novo"} status="primary" />
+        <MetricCard label="Clientes encontrados" value={result.clients.length} status="primary" />
+        <MetricCard label="Clientes com erro" value={clientsWithError} status={clientsWithError > 0 ? "danger" : undefined} />
+        <MetricCard label="Produtos válidos" value={totalValid} status="success" />
+        <MetricCard label="Produtos com erro" value={totalErrors} status={totalErrors > 0 ? "danger" : undefined} />
       </div>
 
-      <Card
-        title="Prévia dos Produtos"
-        action={
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClear}>Cancelar</Button>
-            <Button onClick={onConfirm} disabled={valid === 0 || result.errors.length > 0}>Confirmar Importação</Button>
-          </div>
-        }
-      >
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="py-2 pr-3 font-medium">Produto</th>
-                <th className="py-2 pr-3 font-medium">Plataforma</th>
-                <th className="py-2 pr-3 font-medium">Total</th>
-                <th className="py-2 pr-3 font-medium">Pago</th>
-                <th className="py-2 pr-3 font-medium">Restante</th>
-                <th className="py-2 pr-3 font-medium">Status</th>
-                <th className="py-2 pr-3 font-medium">Situação</th>
-                <th className="py-2 pr-3 font-medium">Cadastro</th>
-                <th className="py-2 pr-3 font-medium">Limite</th>
-                <th className="py-2 pr-3 font-medium">Resultado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.products.map((p, idx) => {
-                const ok = p.product && p.errors.length === 0;
-                return (
-                  <tr key={idx} className="border-b border-border/60 last:border-0">
-                    <td className="py-3 pr-3">{p.product || "—"}</td>
-                    <td className="py-3 pr-3 text-muted-foreground">{p.platform || "—"}</td>
-                    <td className="py-3 pr-3 tabular-nums">{formatBRL(p.totalValue)}</td>
-                    <td className="py-3 pr-3 tabular-nums">{formatBRL(p.paidValue)}</td>
-                    <td className="py-3 pr-3 tabular-nums">{formatBRL(p.remainingValue)}</td>
-                    <td className="py-3 pr-3"><Tag variant={p.financialStatus === "Pago" ? "success" : p.financialStatus === "Pendente" ? "danger" : "warning"}>{p.financialStatus}</Tag></td>
-                    <td className="py-3 pr-3 text-muted-foreground">{p.situation}</td>
-                    <td className="py-3 pr-3 text-muted-foreground">{p.registerDate ?? "—"}</td>
-                    <td className="py-3 pr-3 text-muted-foreground">{p.dueDate ?? "—"}</td>
-                    <td className="py-3 pr-3">
-                      <Tag variant={ok ? "success" : "danger"}>{ok ? "Pronto" : "Erro"}</Tag>
-                      {(p.errors.length > 0 || p.warnings.length > 0) && (
-                        <div className="mt-1 text-[10px] text-muted-foreground">
-                          {[...p.errors, ...p.warnings].join(" • ")}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={onClear}>Cancelar</Button>
+        <Button onClick={onConfirm} disabled={!canConfirm}>Confirmar Importação</Button>
+      </div>
+
+      <div className="space-y-4">
+        {result.clients.map((block) => {
+          const existing = block.client.phone ? findClientByPhone(block.client.phone) : undefined;
+          const validCount = block.products.filter((p) => p.product && p.errors.length === 0).length;
+          return (
+            <Card
+              key={block.index}
+              title={`Cliente ${block.index}: ${block.client.name || "(sem nome)"}`}
+              action={
+                <Tag variant={existing ? "success" : "warning"}>
+                  {existing ? `Atualizar (${existing.name})` : "Será criado"}
+                </Tag>
+              }
+            >
+              <div className="grid gap-3 md:grid-cols-3 text-xs">
+                <div><span className="text-muted-foreground">Telefone:</span> <span className="font-mono">{block.client.phone || "—"}</span></div>
+                <div><span className="text-muted-foreground">Exibição:</span> {block.client.phoneDisplay || "—"}</div>
+                <div><span className="text-muted-foreground">Produtos:</span> {validCount} / {block.products.length}</div>
+              </div>
+
+              {block.errors.length > 0 && (
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-destructive">
+                  {block.errors.map((e, i) => <li key={i}>{e}</li>)}
+                </ul>
+              )}
+
+              {block.products.length > 0 && (
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="py-2 pr-3 font-medium">Produto</th>
+                        <th className="py-2 pr-3 font-medium">Plataforma</th>
+                        <th className="py-2 pr-3 font-medium">Total</th>
+                        <th className="py-2 pr-3 font-medium">Pago</th>
+                        <th className="py-2 pr-3 font-medium">Restante</th>
+                        <th className="py-2 pr-3 font-medium">Status</th>
+                        <th className="py-2 pr-3 font-medium">Situação</th>
+                        <th className="py-2 pr-3 font-medium">Cadastro</th>
+                        <th className="py-2 pr-3 font-medium">Limite</th>
+                        <th className="py-2 pr-3 font-medium">Resultado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {block.products.map((p, idx) => {
+                        const ok = p.product && p.errors.length === 0;
+                        return (
+                          <tr key={idx} className="border-b border-border/60 last:border-0">
+                            <td className="py-3 pr-3">{p.product || "—"}</td>
+                            <td className="py-3 pr-3 text-muted-foreground">{p.platform || "—"}</td>
+                            <td className="py-3 pr-3 tabular-nums">{formatBRL(p.totalValue)}</td>
+                            <td className="py-3 pr-3 tabular-nums">{formatBRL(p.paidValue)}</td>
+                            <td className="py-3 pr-3 tabular-nums">{formatBRL(p.remainingValue)}</td>
+                            <td className="py-3 pr-3"><Tag variant={p.financialStatus === "Pago" ? "success" : p.financialStatus === "Pendente" ? "danger" : "warning"}>{p.financialStatus}</Tag></td>
+                            <td className="py-3 pr-3 text-muted-foreground">{p.situation}</td>
+                            <td className="py-3 pr-3 text-muted-foreground">{p.registerDate ?? "—"}</td>
+                            <td className="py-3 pr-3 text-muted-foreground">{p.dueDate ?? "—"}</td>
+                            <td className="py-3 pr-3">
+                              <Tag variant={ok ? "success" : "danger"}>{ok ? "Pronto" : "Erro"}</Tag>
+                              {(p.errors.length > 0 || p.warnings.length > 0) && (
+                                <div className="mt-1 text-[10px] text-muted-foreground">
+                                  {[...p.errors, ...p.warnings].join(" • ")}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {block.notes && (
+                <details className="mt-3 rounded-md border border-border bg-muted/30 p-2 text-xs">
+                  <summary className="cursor-pointer font-medium">Observações</summary>
+                  <pre className="mt-2 whitespace-pre-wrap text-xs">{block.notes}</pre>
+                </details>
+              )}
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }
