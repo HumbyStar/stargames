@@ -7,6 +7,7 @@ import { useStore, isOverdue, shouldAppearInCollection, formatBRL } from "@/lib/
 import { ClientesSection } from "@/sections/clientes-section";
 import { CollectionSection } from "@/sections/collection-section";
 import { ImportSection } from "@/sections/import-section";
+import { ConfiguracoesSection } from "@/sections/configuracoes-section";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -33,6 +34,7 @@ function OnePage() {
       <ClientesSection onScrollTo={onScrollTo} />
       <CollectionSection onScrollTo={onScrollTo} />
       <ImportSection onScrollTo={onScrollTo} />
+      <ConfiguracoesSection />
     </AppLayout>
   );
 }
