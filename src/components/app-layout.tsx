@@ -1,8 +1,10 @@
-import { Outlet } from "@tanstack/react-router";
-import { Search, Bell, HelpCircle, Menu, X, Sun, Moon, User, Package } from "lucide-react";
+import { Outlet, useNavigate } from "@tanstack/react-router";
+import { Search, Bell, HelpCircle, Menu, X, Sun, Moon, User, Package, LogOut } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const navItems = [
   { id: "dashboard", label: "Dashboard" },
@@ -202,6 +204,13 @@ function FloatingNavbar() {
     setIsDark(next);
   };
 
+  const navigate = useNavigate();
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    toast.success("Sessão encerrada");
+    navigate({ to: "/auth", replace: true });
+  };
+
   useEffect(() => {
     const onScroll = () => {
       setHidden(true);
@@ -265,6 +274,13 @@ function FloatingNavbar() {
           className="grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-colors"
         >
           {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+        </button>
+        <button
+          onClick={handleSignOut}
+          aria-label="Sair"
+          className="grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+        >
+          <LogOut className="size-4" />
         </button>
         <button
           className="md:hidden grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10"
