@@ -9,7 +9,7 @@ import { CollectionSection } from "@/sections/collection-section";
 import { ImportSection } from "@/sections/import-section";
 import { ConfiguracoesSection } from "@/sections/configuracoes-section";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
     meta: [
       { title: "Star Games — Gestão Operacional" },
