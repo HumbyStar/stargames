@@ -1,21 +1,38 @@
-import { Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { Outlet } from "@tanstack/react-router";
 import { Search, Bell, HelpCircle, Menu, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { to: "/", label: "Dashboard", exact: true },
-  { to: "/clientes", label: "Clientes", exact: false },
-  { to: "/collection", label: "Collection", exact: false },
-  { to: "/import", label: "Import", exact: true },
+  { id: "dashboard", label: "Dashboard" },
+  { id: "clientes", label: "Clientes" },
+  { id: "collection", label: "Collection" },
+  { id: "import", label: "Import" },
 ] as const;
 
-function NavLink({ to, label, exact }: { to: string; label: string; exact: boolean }) {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const active = exact ? pathname === to : pathname === to || pathname.startsWith(to + "/");
+function scrollToSection(id: string) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function NavLink({
+  id,
+  label,
+  active,
+  onClick,
+}: {
+  id: string;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
-    <Link
-      to={to}
+    <a
+      href={`#${id}`}
+      onClick={(e) => {
+        e.preventDefault();
+        onClick();
+      }}
       className={cn(
         "rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
         active
@@ -24,13 +41,14 @@ function NavLink({ to, label, exact }: { to: string; label: string; exact: boole
       )}
     >
       {label}
-    </Link>
+    </a>
   );
 }
 
 function FloatingNavbar() {
   const [hidden, setHidden] = useState(false);
   const [openMobile, setOpenMobile] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("dashboard");
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -38,8 +56,16 @@ function FloatingNavbar() {
       setHidden(true);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       timeoutRef.current = setTimeout(() => setHidden(false), 350);
+      const probe = window.scrollY + 200;
+      let current = navItems[0].id as string;
+      for (const item of navItems) {
+        const el = document.getElementById(item.id);
+        if (el && el.offsetTop <= probe) current = item.id;
+      }
+      setActiveSection(current);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
     return () => {
       window.removeEventListener("scroll", onScroll);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -48,7 +74,11 @@ function FloatingNavbar() {
 
   return (
     <nav className={cn("floating-navbar flex items-center gap-3 px-3 py-2 md:px-4", hidden && "navbar-hidden")}>
-      <Link to="/" className="flex items-center gap-2 pl-2 pr-1">
+      <a
+        href="#dashboard"
+        onClick={(e) => { e.preventDefault(); scrollToSection("dashboard"); }}
+        className="flex items-center gap-2 pl-2 pr-1"
+      >
         <div className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-primary to-[oklch(0.65_0.22_280)] text-primary-foreground font-bold shadow-md">
           S
         </div>
@@ -56,11 +86,17 @@ function FloatingNavbar() {
           <p className="text-sm font-semibold">Star Games</p>
           <p className="text-[10px] text-muted-foreground">Gestão Operacional</p>
         </div>
-      </Link>
+      </a>
 
       <div className="hidden md:flex items-center gap-1 rounded-full bg-white/40 p-1">
         {navItems.map((i) => (
-          <NavLink key={i.to} {...i} />
+          <NavLink
+            key={i.id}
+            id={i.id}
+            label={i.label}
+            active={activeSection === i.id}
+            onClick={() => scrollToSection(i.id)}
+          />
         ))}
       </div>
 
@@ -92,14 +128,18 @@ function FloatingNavbar() {
       {openMobile && (
         <div className="absolute left-2 right-2 top-[calc(100%+8px)] flex flex-col gap-1 rounded-2xl border border-white/60 bg-white/90 p-2 shadow-xl backdrop-blur md:hidden">
           {navItems.map((i) => (
-            <Link
-              key={i.to}
-              to={i.to}
-              onClick={() => setOpenMobile(false)}
+            <a
+              key={i.id}
+              href={`#${i.id}`}
+              onClick={(e) => {
+                e.preventDefault();
+                setOpenMobile(false);
+                scrollToSection(i.id);
+              }}
               className="rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-accent"
             >
               {i.label}
-            </Link>
+            </a>
           ))}
           <div className="relative mt-1">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
