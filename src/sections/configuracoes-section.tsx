@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   Download,
@@ -142,6 +142,11 @@ export function ConfiguracoesSection() {
 
   const [prefDraft, setPrefDraft] = useState(preferences);
   const [rulesDraft, setRulesDraft] = useState(rules);
+
+  // Mantém os drafts sincronizados com o store — se a Zona de Perigo resetar
+  // o sistema, os formulários refletem na hora e não regravam dados antigos.
+  useEffect(() => { setPrefDraft(preferences); }, [preferences]);
+  useEffect(() => { setRulesDraft(rules); }, [rules]);
 
   const [dangerOpen, setDangerOpen] = useState(false);
   const [dangerAction, setDangerAction] = useState<DangerAction | null>(null);

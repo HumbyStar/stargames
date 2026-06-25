@@ -328,13 +328,14 @@ export const useStore = create<State>()(
         set((s) => {
           switch (action) {
             case "deleteImportedData":
-              return { importHistory: [] };
+              return { ...s, importHistory: [] };
             case "deleteAllClients":
-              return { clients: [], products: [], openClientId: null };
+              return { ...s, clients: [], products: [], openClientId: null };
             case "deleteAllProducts":
-              return { products: [] };
+              return { ...s, products: [] };
             case "resetSystem":
               return {
+                ...s,
                 clients: [],
                 products: [],
                 importHistory: [],
