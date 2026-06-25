@@ -1,24 +1,43 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useNavigate } from "@tanstack/react-router";
+import { useCallback } from "react";
 import { AppLayout } from "@/components/app-layout";
 import { Alert, Card, MetricCard, PageHeader, StackedBar } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { useStore, isOverdue, shouldAppearInCollection, formatBRL } from "@/lib/store";
+import { ClientesSection } from "@/sections/clientes-section";
+import { CollectionSection } from "@/sections/collection-section";
+import { ImportSection } from "@/sections/import-section";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Dashboard — Star Games" },
-      { name: "description", content: "Indicadores operacionais da Star Games." },
-      { property: "og:title", content: "Dashboard — Star Games" },
-      { property: "og:description", content: "Indicadores operacionais." },
+      { title: "Star Games — Gestão Operacional" },
+      { name: "description", content: "Dashboard, clientes, cobranças e importação em uma única página." },
+      { property: "og:title", content: "Star Games — Gestão Operacional" },
+      { property: "og:description", content: "Sistema operacional one-page." },
     ],
   }),
-  component: DashboardPage,
+  component: OnePage,
 });
 
-function DashboardPage() {
-  const navigate = useNavigate();
+function scrollToSection(id: string) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function OnePage() {
+  const onScrollTo = useCallback(scrollToSection, []);
+  return (
+    <AppLayout>
+      <DashboardSection onScrollTo={onScrollTo} />
+      <ClientesSection onScrollTo={onScrollTo} />
+      <CollectionSection onScrollTo={onScrollTo} />
+      <ImportSection onScrollTo={onScrollTo} />
+    </AppLayout>
+  );
+}
+
+function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) {
   const { clients, products } = useStore();
 
   const overdueProducts = products.filter(shouldAppearInCollection);
@@ -54,7 +73,7 @@ function DashboardPage() {
   const aberto = products.filter((p) => p.situation === "Em Aberto").length;
 
   return (
-    <AppLayout>
+    <section id="dashboard" className="one-page-section">
       <PageHeader
         title="Dashboard"
         description="Acompanhe os principais indicadores operacionais da Star Games."
@@ -74,16 +93,9 @@ function DashboardPage() {
       </div>
 
       <div className="mt-6 flex flex-wrap gap-2">
-        <Button onClick={() => navigate({ to: "/import" })}>Importar Dados</Button>
-        <Button variant="outline" onClick={() => navigate({ to: "/collection" })}>
-          Ver Cobranças
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => navigate({ to: "/collection", search: { filter: "mgmv_vencido" } as never })}
-        >
-          Ver MGMV Vencido
-        </Button>
+        <Button onClick={() => onScrollTo("import")}>Importar Dados</Button>
+        <Button variant="outline" onClick={() => onScrollTo("collection")}>Ver Cobranças</Button>
+        <Button variant="outline" onClick={() => onScrollTo("clientes")}>Ver Clientes</Button>
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
@@ -146,6 +158,6 @@ function DashboardPage() {
           </div>
         </Card>
       </div>
-    </AppLayout>
+    </section>
   );
 }
