@@ -452,45 +452,56 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
 
   const confirmNotionImport = () => {
     if (!notion) return;
-    if (notion.errors.length) return toast.error(notion.errors[0]);
-    const validProducts = notion.products.filter((p) => p.product && p.errors.length === 0);
-    if (validProducts.length === 0) return toast.error("Nenhum produto válido para importar.");
-    let client = findClientByPhone(notion.client.phone);
-    let created = false;
-    if (!client) {
-      client = addClient({ name: notion.client.name, phone: notion.client.phoneDisplay || notion.client.phone });
-      created = true;
-    }
+    const usableClients = notion.clients.filter(
+      (c) => c.client.phone && c.client.name && c.errors.length === 0,
+    );
+    if (usableClients.length === 0) return toast.error("Nenhum cliente válido para importar.");
     const todayISO = new Date().toISOString();
-    validProducts.forEach((p) => {
-      const regISO = p.registerDate ? new Date(`${p.registerDate}T12:00:00`).toISOString() : todayISO;
-      const dueISO = p.dueDate
-        ? new Date(`${p.dueDate}T12:00:00`).toISOString()
-        : p.financialStatus === "Reserva"
-          ? new Date(new Date(regISO).getTime() + 30 * 86400000).toISOString()
-          : regISO;
-      addProduct({
-        clientId: client!.id,
-        name: p.product,
-        platform: p.platform || "—",
-        totalValue: p.totalValue,
-        paidValue: p.paidValue,
-        financialStatus: p.financialStatus,
-        situation: p.situation,
-        registerDate: regISO,
-        dueDate: dueISO,
+    let totalProducts = 0;
+    let createdClients = 0;
+    let firstClientId: string | null = null;
+    usableClients.forEach((block) => {
+      const validProducts = block.products.filter((p) => p.product && p.errors.length === 0);
+      let client = findClientByPhone(block.client.phone);
+      if (!client) {
+        client = addClient({
+          name: block.client.name,
+          phone: block.client.phoneDisplay || block.client.phone,
+        });
+        createdClients++;
+      }
+      if (!firstClientId) firstClientId = client.id;
+      validProducts.forEach((p) => {
+        const regISO = p.registerDate ? new Date(`${p.registerDate}T12:00:00`).toISOString() : todayISO;
+        const dueISO = p.dueDate
+          ? new Date(`${p.dueDate}T12:00:00`).toISOString()
+          : p.financialStatus === "Reserva"
+            ? new Date(new Date(regISO).getTime() + 30 * 86400000).toISOString()
+            : regISO;
+        addProduct({
+          clientId: client!.id,
+          name: p.product,
+          platform: p.platform || "—",
+          totalValue: p.totalValue,
+          paidValue: p.paidValue,
+          financialStatus: p.financialStatus,
+          situation: p.situation,
+          registerDate: regISO,
+          dueDate: dueISO,
+        });
+        totalProducts++;
       });
+      if (block.notes) {
+        const existing = client!.notes ? client!.notes + "\n\n" : "";
+        updateClientNotes(client!.id, existing + block.notes);
+      }
     });
-    if (notion.notes) {
-      const existing = client!.notes ? client!.notes + "\n\n" : "";
-      updateClientNotes(client!.id, existing + notion.notes);
-    }
     toast.success(
-      `${validProducts.length} produto(s) importados • ${created ? "cliente criado" : "cliente atualizado"}${notion.notes ? " • observações salvas" : ""}`,
+      `${usableClients.length} cliente(s) • ${totalProducts} produto(s) importados • ${createdClients} novo(s)`,
     );
     setNotion(null);
     setHtmlText("");
-    if (notion) openClient(findClientByPhone(notion.client.phone)?.id ?? null);
+    if (usableClients.length === 1 && firstClientId) openClient(firstClientId);
     onScrollTo("clientes");
   };
 
