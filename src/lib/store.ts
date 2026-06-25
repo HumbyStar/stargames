@@ -45,10 +45,13 @@ interface State {
   clients: Client[];
   products: Product[];
   addClient: (c: Omit<Client, "id">) => Client;
+  updateClient: (id: string, patch: Partial<Omit<Client, "id">>) => void;
   findClientByPhone: (phone: string) => Client | undefined;
   addProduct: (p: Omit<Product, "id">) => void;
+  updateProduct: (id: string, patch: Partial<Omit<Product, "id">>) => void;
   registerPayment: (productId: string, amount: number) => void;
   markResolved: (productId: string) => void;
+  setProductSituation: (productId: string, situation: Situation) => void;
   updateProductNotes: (productId: string, notes: string) => void;
   updateClientNotes: (clientId: string, notes: string) => void;
   payMGMVInstallment: (clientId: string, installmentNumber: number) => void;
@@ -132,9 +135,17 @@ export const useStore = create<State>()(
         set((s) => ({ clients: [...s.clients, client] }));
         return client;
       },
+      updateClient: (id, patch) =>
+        set((s) => ({
+          clients: s.clients.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+        })),
       findClientByPhone: (phone) =>
         get().clients.find((c) => c.phone.replace(/\D/g, "") === phone.replace(/\D/g, "")),
       addProduct: (p) => set((s) => ({ products: [...s.products, { ...p, id: uid() }] })),
+      updateProduct: (id, patch) =>
+        set((s) => ({
+          products: s.products.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+        })),
       registerPayment: (productId, amount) =>
         set((s) => ({
           products: s.products.map((p) => {
@@ -152,6 +163,12 @@ export const useStore = create<State>()(
         set((s) => ({
           products: s.products.map((p) =>
             p.id === productId ? { ...p, situation: "Resolvido" } : p,
+          ),
+        })),
+      setProductSituation: (productId, situation) =>
+        set((s) => ({
+          products: s.products.map((p) =>
+            p.id === productId ? { ...p, situation } : p,
           ),
         })),
       updateProductNotes: (productId, notes) =>
