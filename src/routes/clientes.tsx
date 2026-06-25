@@ -4,13 +4,6 @@ import { AppLayout } from "@/components/app-layout";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
-import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -309,9 +302,9 @@ function ClientesPage() {
         </div>
       </Card>
 
-      {/* Drawer cliente */}
-      <Sheet open={!!drawerClient} onOpenChange={(o) => !o && setDrawerClientId(null)}>
-        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
+      {/* Modal cliente em tela cheia */}
+      <Dialog open={!!drawerClient} onOpenChange={(o) => !o && setDrawerClientId(null)}>
+        <DialogContent className="max-w-[min(1200px,95vw)] max-h-[92vh] overflow-y-auto p-8">
           {drawerClient && (
             <ClientDrawer
               client={drawerClient}
@@ -341,8 +334,8 @@ function ClientesPage() {
               }}
             />
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal cliente */}
       <ClientModal
@@ -410,10 +403,10 @@ function ClientDrawer({
 
   return (
     <div className="space-y-6">
-      <SheetHeader>
-        <SheetTitle className="text-xl">{client.name}</SheetTitle>
-        <SheetDescription>Telefone: {client.phone}</SheetDescription>
-      </SheetHeader>
+      <DialogHeader>
+        <DialogTitle className="text-2xl">{client.name}</DialogTitle>
+        <DialogDescription>Telefone: {client.phone}</DialogDescription>
+      </DialogHeader>
 
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={onEdit}>Editar Cliente</Button>
