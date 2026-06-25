@@ -10,25 +10,11 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as ImportRouteImport } from './routes/import'
-import { Route as ClientesRouteImport } from './routes/clientes'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as CollectionIndexRouteImport } from './routes/collection.index'
-import { Route as CollectionClientIdRouteImport } from './routes/collection.$clientId'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ImportRoute = ImportRouteImport.update({
-  id: '/import',
-  path: '/import',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ClientesRoute = ClientesRouteImport.update({
-  id: '/clientes',
-  path: '/clientes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -36,76 +22,31 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CollectionIndexRoute = CollectionIndexRouteImport.update({
-  id: '/collection/',
-  path: '/collection/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CollectionClientIdRoute = CollectionClientIdRouteImport.update({
-  id: '/collection/$clientId',
-  path: '/collection/$clientId',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/clientes': typeof ClientesRoute
-  '/import': typeof ImportRoute
   '/settings': typeof SettingsRoute
-  '/collection/$clientId': typeof CollectionClientIdRoute
-  '/collection/': typeof CollectionIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/clientes': typeof ClientesRoute
-  '/import': typeof ImportRoute
   '/settings': typeof SettingsRoute
-  '/collection/$clientId': typeof CollectionClientIdRoute
-  '/collection': typeof CollectionIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/clientes': typeof ClientesRoute
-  '/import': typeof ImportRoute
   '/settings': typeof SettingsRoute
-  '/collection/$clientId': typeof CollectionClientIdRoute
-  '/collection/': typeof CollectionIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/clientes'
-    | '/import'
-    | '/settings'
-    | '/collection/$clientId'
-    | '/collection/'
+  fullPaths: '/' | '/settings'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/clientes'
-    | '/import'
-    | '/settings'
-    | '/collection/$clientId'
-    | '/collection'
-  id:
-    | '__root__'
-    | '/'
-    | '/clientes'
-    | '/import'
-    | '/settings'
-    | '/collection/$clientId'
-    | '/collection/'
+  to: '/' | '/settings'
+  id: '__root__' | '/' | '/settings'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ClientesRoute: typeof ClientesRoute
-  ImportRoute: typeof ImportRoute
   SettingsRoute: typeof SettingsRoute
-  CollectionClientIdRoute: typeof CollectionClientIdRoute
-  CollectionIndexRoute: typeof CollectionIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -117,20 +58,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/import': {
-      id: '/import'
-      path: '/import'
-      fullPath: '/import'
-      preLoaderRoute: typeof ImportRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/clientes': {
-      id: '/clientes'
-      path: '/clientes'
-      fullPath: '/clientes'
-      preLoaderRoute: typeof ClientesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -138,30 +65,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/collection/': {
-      id: '/collection/'
-      path: '/collection'
-      fullPath: '/collection/'
-      preLoaderRoute: typeof CollectionIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/collection/$clientId': {
-      id: '/collection/$clientId'
-      path: '/collection/$clientId'
-      fullPath: '/collection/$clientId'
-      preLoaderRoute: typeof CollectionClientIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ClientesRoute: ClientesRoute,
-  ImportRoute: ImportRoute,
   SettingsRoute: SettingsRoute,
-  CollectionClientIdRoute: CollectionClientIdRoute,
-  CollectionIndexRoute: CollectionIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

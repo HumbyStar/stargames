@@ -44,6 +44,8 @@ export interface Client {
 interface State {
   clients: Client[];
   products: Product[];
+  openClientId: string | null;
+  openClient: (id: string | null) => void;
   addClient: (c: Omit<Client, "id">) => Client;
   updateClient: (id: string, patch: Partial<Omit<Client, "id">>) => void;
   findClientByPhone: (phone: string) => Client | undefined;
@@ -130,6 +132,8 @@ export const useStore = create<State>()(
     (set, get) => ({
       clients: seedClients,
       products: seedProducts,
+      openClientId: null,
+      openClient: (id) => set({ openClientId: id }),
       addClient: (c) => {
         const client = { ...c, id: uid() };
         set((s) => ({ clients: [...s.clients, client] }));

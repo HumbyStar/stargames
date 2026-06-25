@@ -1,6 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { AppLayout } from "@/components/app-layout";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,16 +24,6 @@ import {
   type Situation,
 } from "@/lib/store";
 import { toast } from "sonner";
-
-export const Route = createFileRoute("/clientes")({
-  head: () => ({
-    meta: [
-      { title: "Clientes — Star Games" },
-      { name: "description", content: "Gestão completa de clientes, produtos e situação financeira." },
-    ],
-  }),
-  component: ClientesPage,
-});
 
 type ChipFilter =
   | "todos"
@@ -65,10 +53,12 @@ function generalStatus(client: Client, products: Product[]): {
   return { label: "Em dia", variant: "success" };
 }
 
-function ClientesPage() {
+export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => void }) {
   const {
     clients,
     products,
+    openClientId,
+    openClient,
     addClient,
     updateClient,
     addProduct,
@@ -84,7 +74,8 @@ function ClientesPage() {
   const [platformFilter, setPlatformFilter] = useState("Todas");
   const [periodFilter, setPeriodFilter] = useState("Todos");
 
-  const [drawerClientId, setDrawerClientId] = useState<string | null>(null);
+  const drawerClientId = openClientId;
+  const setDrawerClientId = (id: string | null) => openClient(id);
   const [clientModal, setClientModal] = useState<{ open: boolean; client?: Client | null }>({ open: false });
   const [productModal, setProductModal] = useState<{ open: boolean; clientId?: string; product?: Product | null }>({ open: false });
 
@@ -181,16 +172,14 @@ function ClientesPage() {
   };
 
   return (
-    <AppLayout>
+    <section id="clientes" className="one-page-section">
       <PageHeader
         title="Clientes"
         description="Gerencie clientes, produtos, histórico de compras e situação financeira."
         actions={
           <>
             <Button onClick={() => setClientModal({ open: true, client: null })}>Adicionar Cliente</Button>
-            <Button variant="outline" asChild>
-              <Link to="/import">Importar Clientes</Link>
-            </Button>
+            <Button variant="outline" onClick={() => onScrollTo("import")}>Importar Clientes</Button>
             <Button variant="outline" onClick={exportBase}>
               Exportar Base
             </Button>
@@ -287,9 +276,7 @@ function ClientesPage() {
                       <Button size="sm" variant="outline" onClick={() => setDrawerClientId(r.client.id)}>Abrir</Button>
                       <Button size="sm" variant="ghost" onClick={() => setClientModal({ open: true, client: r.client })}>Editar</Button>
                       <Button size="sm" onClick={() => setProductModal({ open: true, clientId: r.client.id })}>+ Produto</Button>
-                      <Button size="sm" variant="ghost" asChild>
-                        <Link to="/collection/$clientId" params={{ clientId: r.client.id }}>Cobrança</Link>
-                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => onScrollTo("collection")}>Cobrança</Button>
                     </div>
                   </td>
                 </tr>
@@ -369,7 +356,7 @@ function ClientesPage() {
           setProductModal({ open: false });
         }}
       />
-    </AppLayout>
+    </section>
   );
 }
 

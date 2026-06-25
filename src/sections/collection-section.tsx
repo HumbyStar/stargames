@@ -1,6 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { AppLayout } from "@/components/app-layout";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,24 +14,15 @@ import { toast } from "sonner";
 
 type Filter = "todos" | "reserva_vencida" | "pendente_vencido" | "mgmv_vencido" | "em_aberto";
 
-export const Route = createFileRoute("/collection/")({
-  validateSearch: (s: Record<string, unknown>) => ({
-    filter: (s.filter as Filter | undefined) ?? "todos",
-  }),
-  head: () => ({
-    meta: [
-      { title: "Collection — Star Games" },
-      { name: "description", content: "Cobranças, inadimplências e acordos em atraso." },
-    ],
-  }),
-  component: CollectionPage,
-});
-
-function CollectionPage() {
-  const search = Route.useSearch();
-  const navigate = useNavigate();
-  const { clients, products, registerPayment } = useStore();
-  const [filter, setFilter] = useState<Filter>(search.filter);
+export function CollectionSection({
+  onScrollTo,
+  initialFilter = "todos",
+}: {
+  onScrollTo: (id: string) => void;
+  initialFilter?: Filter;
+}) {
+  const { clients, products, registerPayment, openClient } = useStore();
+  const [filter, setFilter] = useState<Filter>(initialFilter);
   const [platform, setPlatform] = useState("Todas");
   const [period, setPeriod] = useState("Todos");
 
@@ -98,7 +87,7 @@ function CollectionPage() {
   };
 
   return (
-    <AppLayout>
+    <section id="collection" className="one-page-section">
       <PageHeader
         title="Collection"
         description="Controle cobranças, inadimplências, reservas vencidas e acordos em atraso."
@@ -194,10 +183,15 @@ function CollectionPage() {
                     <td className="py-3 pr-3"><Tag variant={late > 7 ? "danger" : "warning"}>{late} dias</Tag></td>
                     <td className="py-3 pr-3">
                       <div className="flex flex-wrap gap-1.5">
-                        <Button size="sm" variant="outline" asChild>
-                          <Link to="/collection/$clientId" params={{ clientId: p.clientId }}>
-                            Abrir
-                          </Link>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            openClient(p.clientId);
+                            onScrollTo("clientes");
+                          }}
+                        >
+                          Abrir
                         </Button>
                         <Button
                           size="sm"
@@ -229,11 +223,11 @@ function CollectionPage() {
       <div className="mt-4 text-xs text-muted-foreground">
         <button
           className="underline-offset-2 hover:underline"
-          onClick={() => navigate({ to: "/" })}
+          onClick={() => onScrollTo("dashboard")}
         >
           ← Voltar para o Dashboard
         </button>
       </div>
-    </AppLayout>
+    </section>
   );
 }

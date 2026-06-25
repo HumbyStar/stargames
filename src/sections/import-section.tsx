@@ -1,6 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { AppLayout } from "@/components/app-layout";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -8,11 +6,6 @@ import { formatBRL, useStore, type FinancialStatus, type Situation } from "@/lib
 import { toast } from "sonner";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
-
-export const Route = createFileRoute("/import")({
-  head: () => ({ meta: [{ title: "Importação — Star Games" }] }),
-  component: ImportPage,
-});
 
 interface ParsedRow {
   line: number;
@@ -311,9 +304,8 @@ function validateRows(
   });
 }
 
-function ImportPage() {
-  const navigate = useNavigate();
-  const { findClientByPhone, addClient, addProduct, updateClientNotes } = useStore();
+export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void }) {
+  const { findClientByPhone, addClient, addProduct, openClient, updateClientNotes } = useStore();
   const [tab, setTab] = useState("text");
   const [text, setText] = useState(SAMPLE_LIST);
   const [rows, setRows] = useState<ParsedRow[] | null>(null);
@@ -420,7 +412,7 @@ function ImportPage() {
     );
     setRows(null);
     setText("");
-    navigate({ to: "/clientes" });
+    onScrollTo("clientes");
   };
 
   const confirmNotionImport = () => {
@@ -463,7 +455,8 @@ function ImportPage() {
     );
     setNotion(null);
     setHtmlText("");
-    navigate({ to: "/clientes" });
+    if (notion) openClient(findClientByPhone(notion.client.phone)?.id ?? null);
+    onScrollTo("clientes");
   };
 
   const downloadModel = (kind: "csv" | "xlsx") => {
@@ -485,7 +478,7 @@ function ImportPage() {
   };
 
   return (
-    <AppLayout>
+    <section id="import" className="one-page-section">
       <PageHeader
         title="Importação em Massa"
         description="Importe clientes e produtos por lista, HTML, CSV ou Excel."
@@ -649,7 +642,7 @@ function ImportPage() {
           </Card>
         </div>
       )}
-    </AppLayout>
+    </section>
   );
 }
 
