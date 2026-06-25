@@ -114,7 +114,7 @@ function extractClientFromTitle(title: string) {
   const parts = title.split(/\s+-\s+/);
   const name = parts[0]?.trim() || "";
   const phoneRaw = parts.slice(1).join(" - ").trim();
-  return { name, phone: normalizePhone(phoneRaw), phoneDisplay: phoneRaw };
+  return { name, phone: phoneRaw.replace(/\D/g, ""), phoneDisplay: phoneRaw };
 }
 
 function extractNotesAfterTable(doc: Document): string {
