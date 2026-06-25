@@ -37,7 +37,7 @@ function NavLink({
         "rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
         active
           ? "bg-primary text-primary-foreground shadow-sm"
-          : "text-muted-foreground hover:bg-white/60 hover:text-foreground",
+          : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground",
       )}
     >
       {label}
@@ -107,7 +107,7 @@ function FloatingNavbar() {
         </div>
       </a>
 
-      <div className="hidden md:flex items-center gap-1 rounded-full bg-white/40 p-1">
+      <div className="hidden md:flex items-center gap-1 rounded-full bg-foreground/5 p-1">
         {navItems.map((i) => (
           <NavLink
             key={i.id}
@@ -125,24 +125,24 @@ function FloatingNavbar() {
           <input
             type="search"
             placeholder="Buscar cliente, telefone ou produto..."
-            className="h-9 w-56 lg:w-72 rounded-full border border-white/60 bg-white/60 pl-9 pr-3 text-sm outline-none transition focus:border-primary/40 focus:bg-white"
+            className="h-9 w-56 lg:w-72 rounded-full border border-border bg-background/60 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none transition focus:border-primary/40 focus:bg-background"
           />
         </div>
-        <button className="hidden md:grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-white/70 hover:text-foreground">
+        <button className="hidden md:grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground">
           <HelpCircle className="size-4" />
         </button>
-        <button className="hidden md:grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-white/70 hover:text-foreground">
+        <button className="hidden md:grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground">
           <Bell className="size-4" />
         </button>
         <button
           onClick={toggleTheme}
           aria-label={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
-          className="grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-white/70 hover:text-foreground transition-colors"
+          className="grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-colors"
         >
           {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
         </button>
         <button
-          className="md:hidden grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-white/70"
+          className="md:hidden grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10"
           onClick={() => setOpenMobile((v) => !v)}
           aria-label="Menu"
         >
@@ -151,7 +151,7 @@ function FloatingNavbar() {
       </div>
 
       {openMobile && (
-        <div className="absolute left-2 right-2 top-[calc(100%+8px)] flex flex-col gap-1 rounded-2xl border border-white/60 bg-white/90 p-2 shadow-xl backdrop-blur md:hidden">
+        <div className="absolute left-2 right-2 top-[calc(100%+8px)] flex flex-col gap-1 rounded-2xl border border-border bg-popover/95 p-2 shadow-xl backdrop-blur md:hidden">
           {navItems.map((i) => (
             <a
               key={i.id}
@@ -182,7 +182,7 @@ function FloatingNavbar() {
 
 export function AppLayout({ children }: { children?: ReactNode }) {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[oklch(0.985_0.005_260)] via-background to-[oklch(0.97_0.015_260)]">
+    <div className="min-h-screen bg-background bg-gradient-to-b from-background via-background to-accent/30">
       <FloatingNavbar />
       <main className="page-container">{children ?? <Outlet />}</main>
     </div>
