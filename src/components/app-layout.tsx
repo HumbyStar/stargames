@@ -1,7 +1,8 @@
 import { Outlet } from "@tanstack/react-router";
-import { Search, Bell, HelpCircle, Menu, X, Sun, Moon } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Search, Bell, HelpCircle, Menu, X, Sun, Moon, User, Package } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { useStore } from "@/lib/store";
 
 const navItems = [
   { id: "dashboard", label: "Dashboard" },
@@ -13,6 +14,136 @@ const navItems = [
 function scrollToSection(id: string) {
   const el = document.getElementById(id);
   if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function SearchBox({ className }: { className?: string }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const clients = useStore((s) => s.clients);
+  const products = useStore((s) => s.products);
+  const openClient = useStore((s) => s.openClient);
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [] as Array<
+      | { type: "client"; id: string; title: string; subtitle: string }
+      | { type: "product"; id: string; clientId: string; title: string; subtitle: string }
+    >;
+    const digits = q.replace(/\D/g, "");
+    const clientMatches = clients
+      .filter((c) => {
+        const inName = c.name.toLowerCase().includes(q);
+        const inPhone = digits.length > 0 && c.phone.replace(/\D/g, "").includes(digits);
+        return inName || inPhone;
+      })
+      .slice(0, 6)
+      .map((c) => ({
+        type: "client" as const,
+        id: c.id,
+        title: c.name,
+        subtitle: c.phone,
+      }));
+    const productMatches = products
+      .filter((p) => p.name.toLowerCase().includes(q) || p.platform.toLowerCase().includes(q))
+      .slice(0, 6)
+      .map((p) => {
+        const owner = clients.find((c) => c.id === p.clientId);
+        return {
+          type: "product" as const,
+          id: p.id,
+          clientId: p.clientId,
+          title: p.name,
+          subtitle: `${p.platform} · ${owner?.name ?? "Cliente"}`,
+        };
+      });
+    return [...clientMatches, ...productMatches];
+  }, [query, clients, products]);
+
+  useEffect(() => {
+    setActive(0);
+  }, [query]);
+
+  const handleSelect = (item: (typeof results)[number]) => {
+    const clientId = item.type === "client" ? item.id : item.clientId;
+    openClient(clientId);
+    scrollToSection("clientes");
+    setOpen(false);
+    setQuery("");
+  };
+
+  return (
+    <div ref={wrapRef} className={cn("relative", className)}>
+      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => query && setOpen(true)}
+        onKeyDown={(e) => {
+          if (!open || results.length === 0) return;
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setActive((a) => Math.min(a + 1, results.length - 1));
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setActive((a) => Math.max(a - 1, 0));
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            handleSelect(results[active]);
+          } else if (e.key === "Escape") {
+            setOpen(false);
+          }
+        }}
+        placeholder="Buscar cliente, telefone ou produto..."
+        className="h-9 w-full rounded-full border border-border bg-background/60 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none transition focus:border-primary/40 focus:bg-background"
+      />
+      {open && query.trim() && (
+        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 max-h-80 overflow-auto rounded-2xl border border-border bg-popover/95 p-1 shadow-xl backdrop-blur">
+          {results.length === 0 ? (
+            <div className="px-3 py-4 text-center text-sm text-muted-foreground">
+              Nenhum resultado encontrado
+            </div>
+          ) : (
+            results.map((item, idx) => (
+              <button
+                key={`${item.type}-${item.id}`}
+                onMouseEnter={() => setActive(idx)}
+                onClick={() => handleSelect(item)}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors",
+                  idx === active ? "bg-accent text-accent-foreground" : "hover:bg-accent/60",
+                )}
+              >
+                <div className="grid size-8 place-items-center rounded-full bg-primary/10 text-primary">
+                  {item.type === "client" ? <User className="size-4" /> : <Package className="size-4" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{item.title}</p>
+                  <p className="truncate text-xs text-muted-foreground">{item.subtitle}</p>
+                </div>
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {item.type === "client" ? "Cliente" : "Produto"}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function NavLink({
@@ -120,14 +251,7 @@ function FloatingNavbar() {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
-        <div className="relative hidden md:block">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="search"
-            placeholder="Buscar cliente, telefone ou produto..."
-            className="h-9 w-56 lg:w-72 rounded-full border border-border bg-background/60 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none transition focus:border-primary/40 focus:bg-background"
-          />
-        </div>
+        <SearchBox className="hidden md:block w-56 lg:w-72" />
         <button className="hidden md:grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground">
           <HelpCircle className="size-4" />
         </button>
@@ -166,14 +290,7 @@ function FloatingNavbar() {
               {i.label}
             </a>
           ))}
-          <div className="relative mt-1">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="search"
-              placeholder="Buscar..."
-              className="h-9 w-full rounded-full border border-input bg-background pl-9 pr-3 text-sm outline-none"
-            />
-          </div>
+          <SearchBox className="mt-1 w-full" />
         </div>
       )}
     </nav>
