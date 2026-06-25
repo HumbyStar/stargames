@@ -41,10 +41,58 @@ export interface Client {
   mgmv?: MGMVAgreement;
 }
 
+export interface SystemPreferences {
+  companyName: string;
+  currency: "BRL" | "USD" | "EUR";
+  dateFormat: "DD/MM/AAAA" | "AAAA-MM-DD";
+  compactTables: boolean;
+  showDashboardAlerts: boolean;
+  theme: "light" | "dark" | "system";
+}
+
+export interface OperationalRules {
+  reservaDaysDefault: number;
+  blockReserveOnActiveMGMV: boolean;
+  hideDesistenciasFromCollection: boolean;
+  hideAbandonosFromCollection: boolean;
+  autoCalculateReservaDueDate: boolean;
+  treatOverduePendenteAsDelinquent: boolean;
+}
+
+export interface SecuritySettings {
+  requireConfirmBeforeDelete: boolean;
+  blockMassDeleteWithoutPassword: boolean;
+  enableAuditLog: boolean;
+}
+
+export type ImportSource = "HTML Notion" | "CSV" | "Excel" | "Texto";
+export type ImportStatus = "Concluído" | "Com avisos" | "Erro" | "Cancelado";
+
+export interface ImportHistoryEntry {
+  id: string;
+  date: string; // ISO
+  source: ImportSource;
+  file: string;
+  clientsCreated: number;
+  productsAdded: number;
+  errors: number;
+  status: ImportStatus;
+}
+
+export type DangerAction =
+  | "deleteImportedData"
+  | "deleteAllClients"
+  | "deleteAllProducts"
+  | "resetSystem";
+
 interface State {
   clients: Client[];
   products: Product[];
   openClientId: string | null;
+  preferences: SystemPreferences;
+  rules: OperationalRules;
+  security: SecuritySettings;
+  importHistory: ImportHistoryEntry[];
   openClient: (id: string | null) => void;
   addClient: (c: Omit<Client, "id">) => Client;
   updateClient: (id: string, patch: Partial<Omit<Client, "id">>) => void;
@@ -57,6 +105,11 @@ interface State {
   updateProductNotes: (productId: string, notes: string) => void;
   updateClientNotes: (clientId: string, notes: string) => void;
   payMGMVInstallment: (clientId: string, installmentNumber: number) => void;
+  setPreferences: (patch: Partial<SystemPreferences>) => void;
+  setRules: (patch: Partial<OperationalRules>) => void;
+  setSecurity: (patch: Partial<SecuritySettings>) => void;
+  addImportHistory: (entry: Omit<ImportHistoryEntry, "id" | "date"> & { date?: string }) => void;
+  executeDangerAction: (action: DangerAction) => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -127,12 +180,63 @@ const seedProducts: Product[] = [
   },
 ];
 
+const defaultPreferences: SystemPreferences = {
+  companyName: "Star Games",
+  currency: "BRL",
+  dateFormat: "DD/MM/AAAA",
+  compactTables: false,
+  showDashboardAlerts: true,
+  theme: "system",
+};
+
+const defaultRules: OperationalRules = {
+  reservaDaysDefault: 30,
+  blockReserveOnActiveMGMV: true,
+  hideDesistenciasFromCollection: true,
+  hideAbandonosFromCollection: true,
+  autoCalculateReservaDueDate: true,
+  treatOverduePendenteAsDelinquent: true,
+};
+
+const defaultSecurity: SecuritySettings = {
+  requireConfirmBeforeDelete: true,
+  blockMassDeleteWithoutPassword: true,
+  enableAuditLog: false,
+};
+
+const seedImportHistory: ImportHistoryEntry[] = [
+  {
+    id: "h1",
+    date: daysAgo(0),
+    source: "HTML Notion",
+    file: "Bruno Kripel.html",
+    clientsCreated: 1,
+    productsAdded: 5,
+    errors: 0,
+    status: "Concluído",
+  },
+  {
+    id: "h2",
+    date: daysAgo(1),
+    source: "CSV",
+    file: "clientes_junho.csv",
+    clientsCreated: 12,
+    productsAdded: 38,
+    errors: 2,
+    status: "Com avisos",
+  },
+];
+
 export const useStore = create<State>()(
   persist(
     (set, get) => ({
       clients: seedClients,
       products: seedProducts,
       openClientId: null,
+      preferences: defaultPreferences,
+      rules: defaultRules,
+      security: defaultSecurity,
+      importHistory: seedImportHistory,
       openClient: (id) => set({ openClientId: id }),
       addClient: (c) => {
         const client = { ...c, id: uid() };
@@ -200,6 +304,49 @@ export const useStore = create<State>()(
             };
           }),
         })),
+      setPreferences: (patch) =>
+        set((s) => ({ preferences: { ...s.preferences, ...patch } })),
+      setRules: (patch) => set((s) => ({ rules: { ...s.rules, ...patch } })),
+      setSecurity: (patch) => set((s) => ({ security: { ...s.security, ...patch } })),
+      addImportHistory: (entry) =>
+        set((s) => ({
+          importHistory: [
+            {
+              id: uid(),
+              date: entry.date ?? new Date().toISOString(),
+              source: entry.source,
+              file: entry.file,
+              clientsCreated: entry.clientsCreated,
+              productsAdded: entry.productsAdded,
+              errors: entry.errors,
+              status: entry.status,
+            },
+            ...s.importHistory,
+          ].slice(0, 50),
+        })),
+      executeDangerAction: (action) =>
+        set((s) => {
+          switch (action) {
+            case "deleteImportedData":
+              return { importHistory: [] };
+            case "deleteAllClients":
+              return { clients: [], products: [], openClientId: null };
+            case "deleteAllProducts":
+              return { products: [] };
+            case "resetSystem":
+              return {
+                clients: [],
+                products: [],
+                importHistory: [],
+                openClientId: null,
+                preferences: defaultPreferences,
+                rules: defaultRules,
+                security: defaultSecurity,
+              };
+            default:
+              return s;
+          }
+        }),
     }),
     { name: "star-games-store" },
   ),
