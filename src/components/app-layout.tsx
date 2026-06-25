@@ -1,5 +1,5 @@
 import { Outlet } from "@tanstack/react-router";
-import { Search, Bell, HelpCircle, Menu, X } from "lucide-react";
+import { Search, Bell, HelpCircle, Menu, X, Sun, Moon } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -49,7 +49,26 @@ function FloatingNavbar() {
   const [hidden, setHidden] = useState(false);
   const [openMobile, setOpenMobile] = useState(false);
   const [activeSection, setActiveSection] = useState<string>("dashboard");
+  const [isDark, setIsDark] = useState(() =>
+    typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
+  );
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const stored = localStorage.getItem("theme");
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const dark = stored ? stored === "dark" : prefersDark;
+    document.documentElement.classList.toggle("dark", dark);
+    setIsDark(dark);
+  }, []);
+
+  const toggleTheme = () => {
+    const next = !isDark;
+    document.documentElement.classList.toggle("dark", next);
+    localStorage.setItem("theme", next ? "dark" : "light");
+    setIsDark(next);
+  };
 
   useEffect(() => {
     const onScroll = () => {
@@ -115,7 +134,13 @@ function FloatingNavbar() {
         <button className="hidden md:grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-white/70 hover:text-foreground">
           <Bell className="size-4" />
         </button>
-        <div className="size-9 rounded-full bg-gradient-to-br from-primary to-[oklch(0.65_0.22_280)] ring-2 ring-white/70" />
+        <button
+          onClick={toggleTheme}
+          aria-label={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
+          className="grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-white/70 hover:text-foreground transition-colors"
+        >
+          {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+        </button>
         <button
           className="md:hidden grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-white/70"
           onClick={() => setOpenMobile((v) => !v)}
