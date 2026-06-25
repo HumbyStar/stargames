@@ -87,7 +87,7 @@ export function CollectionSection({
   };
 
   return (
-    <AppLayout>
+    <section id="collection" className="one-page-section">
       <PageHeader
         title="Collection"
         description="Controle cobranças, inadimplências, reservas vencidas e acordos em atraso."
@@ -183,10 +183,15 @@ export function CollectionSection({
                     <td className="py-3 pr-3"><Tag variant={late > 7 ? "danger" : "warning"}>{late} dias</Tag></td>
                     <td className="py-3 pr-3">
                       <div className="flex flex-wrap gap-1.5">
-                        <Button size="sm" variant="outline" asChild>
-                          <Link to="/collection/$clientId" params={{ clientId: p.clientId }}>
-                            Abrir
-                          </Link>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            openClient(p.clientId);
+                            onScrollTo("clientes");
+                          }}
+                        >
+                          Abrir
                         </Button>
                         <Button
                           size="sm"
@@ -218,11 +223,11 @@ export function CollectionSection({
       <div className="mt-4 text-xs text-muted-foreground">
         <button
           className="underline-offset-2 hover:underline"
-          onClick={() => navigate({ to: "/" })}
+          onClick={() => onScrollTo("dashboard")}
         >
           ← Voltar para o Dashboard
         </button>
       </div>
-    </AppLayout>
+    </section>
   );
 }
