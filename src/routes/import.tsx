@@ -313,10 +313,12 @@ function validateRows(
 
 function ImportPage() {
   const navigate = useNavigate();
-  const { findClientByPhone, addClient, addProduct } = useStore();
+  const { findClientByPhone, addClient, addProduct, updateClientNotes } = useStore();
   const [tab, setTab] = useState("text");
   const [text, setText] = useState(SAMPLE_LIST);
   const [rows, setRows] = useState<ParsedRow[] | null>(null);
+  const [notion, setNotion] = useState<NotionParseResult | null>(null);
+  const [htmlText, setHtmlText] = useState("");
 
   const handleFile = async (file: File) => {
     const ext = file.name.toLowerCase().split(".").pop();
@@ -342,11 +344,13 @@ function ImportPage() {
       setTab("excel");
     } else if (ext === "html" || ext === "htm") {
       const txt = await file.text();
-      setText(txt);
-      setTab("text");
-      const parsed = validateRows(parseHTMLList(txt), findClientByPhone);
-      setRows(parsed);
-      toast.success(`${parsed.length} linha(s) processadas`);
+      setHtmlText(txt);
+      setTab("html");
+      const result = parseNotionHtml(txt);
+      setNotion(result);
+      setRows(null);
+      if (result.errors.length) toast.error(result.errors[0]);
+      else toast.success(`${result.products.length} produto(s) extraído(s)`);
     } else if (ext === "txt" || ext === "md" || !ext) {
       const txt = await file.text();
       setText(txt);
@@ -419,6 +423,49 @@ function ImportPage() {
     navigate({ to: "/clientes" });
   };
 
+  const confirmNotionImport = () => {
+    if (!notion) return;
+    if (notion.errors.length) return toast.error(notion.errors[0]);
+    const validProducts = notion.products.filter((p) => p.product && p.errors.length === 0);
+    if (validProducts.length === 0) return toast.error("Nenhum produto válido para importar.");
+    let client = findClientByPhone(notion.client.phone);
+    let created = false;
+    if (!client) {
+      client = addClient({ name: notion.client.name, phone: notion.client.phoneDisplay || notion.client.phone });
+      created = true;
+    }
+    const todayISO = new Date().toISOString();
+    validProducts.forEach((p) => {
+      const regISO = p.registerDate ? new Date(`${p.registerDate}T12:00:00`).toISOString() : todayISO;
+      const dueISO = p.dueDate
+        ? new Date(`${p.dueDate}T12:00:00`).toISOString()
+        : p.financialStatus === "Reserva"
+          ? new Date(new Date(regISO).getTime() + 30 * 86400000).toISOString()
+          : regISO;
+      addProduct({
+        clientId: client!.id,
+        name: p.product,
+        platform: p.platform || "—",
+        totalValue: p.totalValue,
+        paidValue: p.paidValue,
+        financialStatus: p.financialStatus,
+        situation: p.situation,
+        registerDate: regISO,
+        dueDate: dueISO,
+      });
+    });
+    if (notion.notes) {
+      const existing = client!.notes ? client!.notes + "\n\n" : "";
+      updateClientNotes(client!.id, existing + notion.notes);
+    }
+    toast.success(
+      `${validProducts.length} produto(s) importados • ${created ? "cliente criado" : "cliente atualizado"}${notion.notes ? " • observações salvas" : ""}`,
+    );
+    setNotion(null);
+    setHtmlText("");
+    navigate({ to: "/clientes" });
+  };
+
   const downloadModel = (kind: "csv" | "xlsx") => {
     const headers = ["nome","telefone","produto","plataforma","valor_total","valor_pago","status_financeiro","situacao","data_cadastro","data_limite","observacoes"];
     const sample = ["João Silva","11999999999","GTA V","PS5","250","50","Reserva","Em Aberto","2026-06-25","2026-07-25","Cliente pediu prazo"];
@@ -456,7 +503,8 @@ function ImportPage() {
         <Card>
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList>
-              <TabsTrigger value="text">Lista / HTML</TabsTrigger>
+              <TabsTrigger value="text">Lista</TabsTrigger>
+              <TabsTrigger value="html">HTML / Notion</TabsTrigger>
               <TabsTrigger value="csv">CSV</TabsTrigger>
               <TabsTrigger value="excel">Excel</TabsTrigger>
             </TabsList>
@@ -466,6 +514,38 @@ function ImportPage() {
               <div className="flex justify-end">
                 <Button onClick={validateText}>Validar Importação</Button>
               </div>
+            </TabsContent>
+
+            <TabsContent value="html" className="mt-4 space-y-3">
+              <UploadArea
+                accept=".html,.htm"
+                onFile={handleFile}
+                hint="Arraste um arquivo HTML exportado do Notion ou clique para selecionar"
+              />
+              <details className="rounded-md border border-border bg-muted/30 p-3 text-xs">
+                <summary className="cursor-pointer font-medium">Colar HTML manualmente</summary>
+                <textarea
+                  value={htmlText}
+                  onChange={(e) => setHtmlText(e.target.value)}
+                  placeholder="<h1 class='page-title'>Nome - Telefone</h1>..."
+                  className="mt-2 min-h-40 w-full rounded-md border border-input bg-background p-2 font-mono text-xs outline-none"
+                />
+                <div className="mt-2 flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      if (!htmlText.trim()) return toast.error("Cole o HTML para validar.");
+                      const result = parseNotionHtml(htmlText);
+                      setNotion(result);
+                      setRows(null);
+                      if (result.errors.length) toast.error(result.errors[0]);
+                      else toast.success(`${result.products.length} produto(s) extraído(s)`);
+                    }}
+                  >
+                    Validar HTML
+                  </Button>
+                </div>
+              </details>
             </TabsContent>
 
             <TabsContent value="csv" className="mt-4 space-y-3">
@@ -488,6 +568,10 @@ function ImportPage() {
           <Card title="Formato esperado">
             <p className="text-xs text-muted-foreground">Lista:</p>
             <code className="block rounded-md bg-muted p-2 text-xs">Nome - Telefone - Produto - Plataforma - Valor - Status</code>
+            <p className="mt-3 text-xs text-muted-foreground">HTML / Notion:</p>
+            <code className="block rounded-md bg-muted p-2 text-[10px] leading-relaxed">
+              Título "Nome - Telefone" + tabela com Item, Plataforma, Valor, Valor Pago, Status, Data, Situação.
+            </code>
             <p className="mt-3 text-xs text-muted-foreground">CSV/Excel — colunas:</p>
             <code className="block rounded-md bg-muted p-2 text-[10px] leading-relaxed">
               nome, telefone, produto, plataforma, valor_total, valor_pago, status_financeiro, situacao, data_cadastro, data_limite, observacoes
@@ -498,6 +582,15 @@ function ImportPage() {
           </Card>
         </div>
       </div>
+
+      {notion && (
+        <NotionPreview
+          result={notion}
+          existingClient={findClientByPhone(notion.client.phone)}
+          onConfirm={confirmNotionImport}
+          onClear={() => { setNotion(null); setHtmlText(""); }}
+        />
+      )}
 
       {rows && (
         <div className="mt-6 space-y-4">
