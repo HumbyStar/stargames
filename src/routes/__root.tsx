@@ -78,14 +78,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
+      { title: "stargamesmgmv" },
       { name: "description", content: "Star Games — Gestão Operacional" },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Star Games — Gestão Operacional" },
-      { property: "og:description", content: "Painel de gestão operacional Star Games." },
+      { property: "og:title", content: "stargamesmgmv" },
+      { property: "og:description", content: "Star Games — Gestão Operacional" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "stargamesmgmv" },
+      { name: "twitter:description", content: "Star Games — Gestão Operacional" },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/f44b2d19-92eb-4c1a-8721-4386b7044396/id-preview-15b0ecb7--9675ace6-1d0a-4259-a33a-8378153df5fa.lovable.app-1782423492922.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/f44b2d19-92eb-4c1a-8721-4386b7044396/id-preview-15b0ecb7--9675ace6-1d0a-4259-a33a-8378153df5fa.lovable.app-1782423492922.png" },
     ],
     links: [
       {
