@@ -1,6 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { AppLayout } from "@/components/app-layout";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -8,11 +6,6 @@ import { formatBRL, useStore, type FinancialStatus, type Situation } from "@/lib
 import { toast } from "sonner";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
-
-export const Route = createFileRoute("/import")({
-  head: () => ({ meta: [{ title: "Importação — Star Games" }] }),
-  component: ImportPage,
-});
 
 interface ParsedRow {
   line: number;
