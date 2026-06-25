@@ -42,6 +42,171 @@ João - 11999999999 - GTA V - PS5 - 50 - Reserva
 Pedro - 21988888888 - Figure Goku - Colecionável - 80 - Pago
 Carlos - 41977777777 - PS2 Slim - PS2 - 300 - Pendente`;
 
+// ===================== Notion HTML parser =====================
+
+interface NotionProduct {
+  line: number;
+  product: string;
+  platform: string;
+  totalValue: number;
+  paidValue: number;
+  remainingValue: number;
+  financialStatus: FinancialStatus;
+  situation: Situation;
+  registerDate: string | null; // YYYY-MM-DD
+  dueDate: string | null; // YYYY-MM-DD
+  errors: string[];
+  warnings: string[];
+}
+
+interface NotionParseResult {
+  client: { name: string; phone: string; phoneDisplay: string };
+  products: NotionProduct[];
+  notes: string;
+  errors: string[];
+}
+
+const normalizeMoney = (v: string) => {
+  if (!v) return 0;
+  return (
+    Number(String(v).replace(/R\$/gi, "").replace(/\./g, "").replace(",", ".").trim()) || 0
+  );
+};
+
+const normalizeStatusBR = (s: string): FinancialStatus => {
+  const v = String(s ?? "").trim().toLowerCase();
+  if (v.includes("pago")) return "Pago";
+  if (v.includes("reserva")) return "Reserva";
+  if (v.includes("mgmv")) return "MGMV";
+  if (v.includes("pendente")) return "Pendente";
+  return "Pendente";
+};
+
+const normalizeSituationBR = (s: string): Situation => {
+  const v = String(s ?? "").trim().toLowerCase();
+  if (v.includes("entregue") || v.includes("enviado")) return "Enviado";
+  if (v.includes("desistiu")) return "Desistiu";
+  if (v.includes("abandonou")) return "Abandonou";
+  return "Em Aberto";
+};
+
+const normalizeDateBR = (s: string): string | null => {
+  if (!s) return null;
+  const parts = s.trim().split("/");
+  if (parts.length === 3) {
+    const [d, m, y] = parts;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+  return null;
+};
+
+const calculateDueDate = (status: FinancialStatus, registerDate: string | null) => {
+  if (!registerDate) return null;
+  if (status === "Reserva") {
+    const d = new Date(`${registerDate}T12:00:00`);
+    d.setDate(d.getDate() + 30);
+    return d.toISOString().split("T")[0];
+  }
+  return registerDate;
+};
+
+function extractClientFromTitle(title: string) {
+  const parts = title.split(/\s+-\s+/);
+  const name = parts[0]?.trim() || "";
+  const phoneRaw = parts.slice(1).join(" - ").trim();
+  return { name, phone: normalizePhone(phoneRaw), phoneDisplay: phoneRaw };
+}
+
+function extractNotesAfterTable(doc: Document): string {
+  const text = doc.body?.textContent || "";
+  const notes: string[] = [];
+  const totalMatch = text.match(/TOTAL:[\s\S]*/i);
+  if (totalMatch) notes.push(totalMatch[0].trim());
+  return notes.join("\n");
+}
+
+function parseNotionHtml(html: string): NotionParseResult {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const errors: string[] = [];
+
+  const title =
+    doc.querySelector(".page-title")?.textContent?.trim() ||
+    doc.querySelector("h1")?.textContent?.trim() ||
+    doc.querySelector("title")?.textContent?.trim() ||
+    "";
+
+  const client = extractClientFromTitle(title);
+  if (!client.name) errors.push("Nome do cliente não encontrado no HTML.");
+  if (!client.phone) errors.push("Telefone do cliente não encontrado no HTML.");
+
+  const table =
+    doc.querySelector("table.simple-table") || doc.querySelector("table");
+
+  if (!table) {
+    errors.push("Tabela de produtos não encontrada no HTML.");
+    return { client, products: [], notes: extractNotesAfterTable(doc), errors };
+  }
+
+  const rows = Array.from(table.querySelectorAll("tr"));
+  const dataRows = rows.slice(1);
+
+  const products: NotionProduct[] = [];
+  dataRows.forEach((row, idx) => {
+    const cells = Array.from(row.querySelectorAll("td")).map((c) =>
+      (c.textContent ?? "").trim(),
+    );
+    if (cells.length === 0) return;
+    const [item, platform, totalRaw, paidRaw, status, date, situation] = cells;
+    const rowErrors: string[] = [];
+    const rowWarnings: string[] = [];
+    if (!item) {
+      rowErrors.push("Produto sem nome (linha ignorada).");
+      products.push({
+        line: idx + 1,
+        product: "",
+        platform: platform ?? "",
+        totalValue: 0,
+        paidValue: 0,
+        remainingValue: 0,
+        financialStatus: "Pendente",
+        situation: "Em Aberto",
+        registerDate: null,
+        dueDate: null,
+        errors: rowErrors,
+        warnings: rowWarnings,
+      });
+      return;
+    }
+    const totalValue = normalizeMoney(totalRaw ?? "");
+    const paidValue = normalizeMoney(paidRaw ?? "");
+    if (!totalRaw) rowWarnings.push("Valor vazio (considerado 0).");
+    const financialStatus = normalizeStatusBR(status ?? "");
+    if (!status) rowWarnings.push('Status vazio (usado "Pendente").');
+    const situationN = normalizeSituationBR(situation ?? "");
+    if (!situation) rowWarnings.push('Situação vazia (usado "Em Aberto").');
+    const registerDate = normalizeDateBR(date ?? "");
+    const dueDate = calculateDueDate(financialStatus, registerDate);
+    products.push({
+      line: idx + 1,
+      product: item,
+      platform: platform ?? "",
+      totalValue,
+      paidValue,
+      remainingValue: Math.max(0, totalValue - paidValue),
+      financialStatus,
+      situation: situationN,
+      registerDate,
+      dueDate,
+      errors: rowErrors,
+      warnings: rowWarnings,
+    });
+  });
+
+  return { client, products, notes: extractNotesAfterTable(doc), errors };
+}
+
+// =================================================================
+
 const normalizePhone = (p: string) => String(p ?? "").replace(/\D/g, "");
 const parseValue = (v: string | number | undefined | null) => {
   if (v === null || v === undefined || v === "") return NaN;
