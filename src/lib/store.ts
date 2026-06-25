@@ -325,19 +325,17 @@ export const useStore = create<State>()(
           ].slice(0, 50),
         })),
       executeDangerAction: (action) =>
-        {
+        set((s) => {
           switch (action) {
             case "deleteImportedData":
-              set({ importHistory: [] });
-              break;
+              return { ...s, importHistory: [] };
             case "deleteAllClients":
-              set({ clients: [], products: [], openClientId: null });
-              break;
+              return { ...s, clients: [], products: [], openClientId: null };
             case "deleteAllProducts":
-              set({ products: [] });
-              break;
+              return { ...s, products: [] };
             case "resetSystem":
-              set({
+              return {
+                ...s,
                 clients: [],
                 products: [],
                 importHistory: [],
@@ -345,17 +343,11 @@ export const useStore = create<State>()(
                 preferences: defaultPreferences,
                 rules: defaultRules,
                 security: defaultSecurity,
-              });
-              break;
+              };
+            default:
+              return s;
           }
-          // Force persisted storage to reflect the new (cleared) state immediately,
-          // so a refresh never resurrects seed/stale data.
-          try {
-            void useStore.persist.rehydrate();
-          } catch {
-            /* noop */
-          }
-        },
+        }),
     }),
     { name: "star-games-store" },
   ),
