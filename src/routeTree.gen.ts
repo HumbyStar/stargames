@@ -9,10 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ImportRouteImport } from './routes/import'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CollectionIndexRouteImport } from './routes/collection.index'
 import { Route as CollectionClientIdRouteImport } from './routes/collection.$clientId'
 
+const ImportRoute = ImportRouteImport.update({
+  id: '/import',
+  path: '/import',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -31,36 +37,47 @@ const CollectionClientIdRoute = CollectionClientIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/import': typeof ImportRoute
   '/collection/$clientId': typeof CollectionClientIdRoute
   '/collection/': typeof CollectionIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/import': typeof ImportRoute
   '/collection/$clientId': typeof CollectionClientIdRoute
   '/collection': typeof CollectionIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/import': typeof ImportRoute
   '/collection/$clientId': typeof CollectionClientIdRoute
   '/collection/': typeof CollectionIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/collection/$clientId' | '/collection/'
+  fullPaths: '/' | '/import' | '/collection/$clientId' | '/collection/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/collection/$clientId' | '/collection'
-  id: '__root__' | '/' | '/collection/$clientId' | '/collection/'
+  to: '/' | '/import' | '/collection/$clientId' | '/collection'
+  id: '__root__' | '/' | '/import' | '/collection/$clientId' | '/collection/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ImportRoute: typeof ImportRoute
   CollectionClientIdRoute: typeof CollectionClientIdRoute
   CollectionIndexRoute: typeof CollectionIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/import': {
+      id: '/import'
+      path: '/import'
+      fullPath: '/import'
+      preLoaderRoute: typeof ImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ImportRoute: ImportRoute,
   CollectionClientIdRoute: CollectionClientIdRoute,
   CollectionIndexRoute: CollectionIndexRoute,
 }
