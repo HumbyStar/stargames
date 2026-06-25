@@ -1,6 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { AppLayout } from "@/components/app-layout";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,24 +14,15 @@ import { toast } from "sonner";
 
 type Filter = "todos" | "reserva_vencida" | "pendente_vencido" | "mgmv_vencido" | "em_aberto";
 
-export const Route = createFileRoute("/collection/")({
-  validateSearch: (s: Record<string, unknown>) => ({
-    filter: (s.filter as Filter | undefined) ?? "todos",
-  }),
-  head: () => ({
-    meta: [
-      { title: "Collection — Star Games" },
-      { name: "description", content: "Cobranças, inadimplências e acordos em atraso." },
-    ],
-  }),
-  component: CollectionPage,
-});
-
-function CollectionPage() {
-  const search = Route.useSearch();
-  const navigate = useNavigate();
-  const { clients, products, registerPayment } = useStore();
-  const [filter, setFilter] = useState<Filter>(search.filter);
+export function CollectionSection({
+  onScrollTo,
+  initialFilter = "todos",
+}: {
+  onScrollTo: (id: string) => void;
+  initialFilter?: Filter;
+}) {
+  const { clients, products, registerPayment, openClient } = useStore();
+  const [filter, setFilter] = useState<Filter>(initialFilter);
   const [platform, setPlatform] = useState("Todas");
   const [period, setPeriod] = useState("Todos");
 
