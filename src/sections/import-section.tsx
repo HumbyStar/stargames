@@ -412,7 +412,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     );
     setRows(null);
     setText("");
-    navigate({ to: "/clientes" });
+    onScrollTo("clientes");
   };
 
   const confirmNotionImport = () => {
@@ -455,7 +455,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     );
     setNotion(null);
     setHtmlText("");
-    navigate({ to: "/clientes" });
+    if (notion) openClient(findClientByPhone(notion.client.phone)?.id ?? null);
+    onScrollTo("clientes");
   };
 
   const downloadModel = (kind: "csv" | "xlsx") => {
@@ -477,7 +478,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   };
 
   return (
-    <AppLayout>
+    <section id="import" className="one-page-section">
       <PageHeader
         title="Importação em Massa"
         description="Importe clientes e produtos por lista, HTML, CSV ou Excel."
@@ -641,7 +642,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           </Card>
         </div>
       )}
-    </AppLayout>
+    </section>
   );
 }
 
