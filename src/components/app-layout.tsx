@@ -9,6 +9,7 @@ const navItems = [
   { id: "clientes", label: "Clientes" },
   { id: "collection", label: "Collection" },
   { id: "import", label: "Import" },
+  { id: "configuracoes", label: "Configurações" },
 ] as const;
 
 function scrollToSection(id: string) {
