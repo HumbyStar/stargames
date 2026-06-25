@@ -374,7 +374,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       setNotion(result);
       setRows(null);
       if (result.errors.length) toast.error(result.errors[0]);
-      else toast.success(`${result.products.length} produto(s) extraído(s)`);
+      else {
+        const totalProducts = result.clients.reduce((s, c) => s + c.products.length, 0);
+        toast.success(`${result.clients.length} cliente(s) • ${totalProducts} produto(s) extraído(s)`);
+      }
     } else if (ext === "txt" || ext === "md" || !ext) {
       const txt = await file.text();
       setText(txt);
