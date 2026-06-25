@@ -53,6 +53,12 @@ interface NotionProduct {
 }
 
 interface NotionParseResult {
+  clients: NotionClientBlock[];
+  errors: string[];
+}
+
+interface NotionClientBlock {
+  index: number;
   client: { name: string; phone: string; phoneDisplay: string };
   products: NotionProduct[];
   notes: string;
@@ -110,39 +116,27 @@ function extractClientFromTitle(title: string) {
   return { name, phone: phoneRaw.replace(/\D/g, ""), phoneDisplay: phoneRaw };
 }
 
-function extractNotesAfterTable(doc: Document): string {
-  const text = doc.body?.textContent || "";
-  const notes: string[] = [];
-  const totalMatch = text.match(/TOTAL:[\s\S]*/i);
-  if (totalMatch) notes.push(totalMatch[0].trim());
-  return notes.join("\n");
+function extractClientNotes(root: Element): string {
+  const lines: string[] = [];
+  const paragraphs = Array.from(root.querySelectorAll("p, li"));
+  paragraphs.forEach((p) => {
+    // skip if inside a table
+    if (p.closest("table")) return;
+    const t = (p.textContent ?? "").trim();
+    if (!t) return;
+    lines.push(t);
+  });
+  if (lines.length === 0) {
+    const text = root.textContent ?? "";
+    const totalMatch = text.match(/TOTAL:[\s\S]*/i);
+    if (totalMatch) lines.push(totalMatch[0].trim());
+  }
+  return lines.join("\n");
 }
 
-function parseNotionHtml(html: string): NotionParseResult {
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  const errors: string[] = [];
-
-  const title =
-    doc.querySelector(".page-title")?.textContent?.trim() ||
-    doc.querySelector("h1")?.textContent?.trim() ||
-    doc.querySelector("title")?.textContent?.trim() ||
-    "";
-
-  const client = extractClientFromTitle(title);
-  if (!client.name) errors.push("Nome do cliente não encontrado no HTML.");
-  if (!client.phone) errors.push("Telefone do cliente não encontrado no HTML.");
-
-  const table =
-    doc.querySelector("table.simple-table") || doc.querySelector("table");
-
-  if (!table) {
-    errors.push("Tabela de produtos não encontrada no HTML.");
-    return { client, products: [], notes: extractNotesAfterTable(doc), errors };
-  }
-
+function parseProductsTable(table: Element): NotionProduct[] {
   const rows = Array.from(table.querySelectorAll("tr"));
   const dataRows = rows.slice(1);
-
   const products: NotionProduct[] = [];
   dataRows.forEach((row, idx) => {
     const cells = Array.from(row.querySelectorAll("td")).map((c) =>
@@ -194,8 +188,46 @@ function parseNotionHtml(html: string): NotionParseResult {
       warnings: rowWarnings,
     });
   });
+  return products;
+}
 
-  return { client, products, notes: extractNotesAfterTable(doc), errors };
+function parseClientArticle(article: Element, index: number): NotionClientBlock {
+  const errors: string[] = [];
+  const title =
+    article.querySelector(".page-title")?.textContent?.trim() ||
+    article.querySelector("h1")?.textContent?.trim() ||
+    "";
+  const client = extractClientFromTitle(title);
+  if (!client.name) errors.push(`Cliente #${index}: nome não encontrado.`);
+  if (!client.phone) errors.push(`Cliente #${index}: telefone não encontrado.`);
+  const table =
+    article.querySelector("table.simple-table") || article.querySelector("table");
+  let products: NotionProduct[] = [];
+  if (!table) {
+    errors.push(`Cliente #${index} (${client.name || "sem nome"}): tabela não encontrada.`);
+  } else {
+    products = parseProductsTable(table);
+  }
+  return {
+    index,
+    client,
+    products,
+    notes: extractClientNotes(article),
+    errors,
+  };
+}
+
+function parseNotionHtml(html: string): NotionParseResult {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const errors: string[] = [];
+  let articles = Array.from(doc.querySelectorAll("article.page"));
+  if (articles.length === 0) {
+    // fallback: treat the whole body as a single client article
+    if (doc.body) articles = [doc.body as unknown as Element];
+  }
+  const clients = articles.map((a, i) => parseClientArticle(a, i + 1));
+  if (clients.length === 0) errors.push("Nenhum cliente encontrado no HTML.");
+  return { clients, errors };
 }
 
 // =================================================================
