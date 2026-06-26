@@ -114,6 +114,24 @@ interface State {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
+/**
+ * Regra única de status financeiro com base nos valores.
+ * - Pago: valorPago >= valorTotal (e total > 0)
+ * - Reserva: valorPago > 0 && valorPago < valorTotal
+ * - Pendente: caso contrário (sem entrada)
+ * MGMV é tratado fora desta função (fluxo separado).
+ */
+export function calculateFinancialStatus(
+  totalValue: number | null | undefined,
+  paidValue: number | null | undefined,
+): FinancialStatus {
+  const total = Number(totalValue) || 0;
+  const paid = Number(paidValue) || 0;
+  if (total > 0 && paid >= total) return "Pago";
+  if (paid > 0 && paid < total) return "Reserva";
+  return "Pendente";
+}
+
 const today = new Date();
 const daysAgo = (n: number) => new Date(today.getTime() - n * 86400000).toISOString();
 const daysAhead = (n: number) => new Date(today.getTime() + n * 86400000).toISOString();
@@ -150,22 +168,22 @@ const seedProducts: Product[] = [
   },
   {
     id: "p2", clientId: "c1", name: "FIFA 24", platform: "PS5",
-    totalValue: 300, paidValue: 100, financialStatus: "Pendente",
+    totalValue: 300, paidValue: 100, financialStatus: "Reserva",
     situation: "Em Aberto", registerDate: daysAgo(25), dueDate: daysAgo(5),
   },
   {
     id: "p3", clientId: "c1", name: "Controle DualSense", platform: "PS5",
-    totalValue: 400, paidValue: 0, financialStatus: "Reserva",
+    totalValue: 400, paidValue: 0, financialStatus: "Pendente",
     situation: "Em Aberto", registerDate: daysAgo(15), dueDate: daysAhead(3),
   },
   {
     id: "p4", clientId: "c2", name: "Figure Goku", platform: "Colecionável",
-    totalValue: 180, paidValue: 80, financialStatus: "Pendente",
+    totalValue: 180, paidValue: 80, financialStatus: "Reserva",
     situation: "Em Aberto", registerDate: daysAgo(10), dueDate: daysAgo(2),
   },
   {
     id: "p5", clientId: "c3", name: "PS2 Slim", platform: "PS2",
-    totalValue: 600, paidValue: 300, financialStatus: "Pendente",
+    totalValue: 600, paidValue: 300, financialStatus: "Reserva",
     situation: "Em Aberto", registerDate: daysAgo(8), dueDate: daysAgo(1),
   },
   {
@@ -259,11 +277,14 @@ export const useStore = create<State>()(
           products: s.products.map((p) => {
             if (p.id !== productId) return p;
             const paidValue = Math.min(p.totalValue, p.paidValue + amount);
-            const fullyPaid = paidValue >= p.totalValue;
+            const nextStatus =
+              p.financialStatus === "MGMV"
+                ? "MGMV"
+                : calculateFinancialStatus(p.totalValue, paidValue);
             return {
               ...p,
               paidValue,
-              financialStatus: fullyPaid ? "Pago" : p.financialStatus,
+              financialStatus: nextStatus,
             };
           }),
         })),
@@ -349,7 +370,23 @@ export const useStore = create<State>()(
           }
         }),
     }),
-    { name: "star-games-store" },
+    {
+      name: "star-games-store",
+      version: 2,
+      migrate: (persisted: unknown) => {
+        const state = persisted as Partial<State> | undefined;
+        if (state && Array.isArray(state.products)) {
+          state.products = state.products.map((p) => ({
+            ...p,
+            financialStatus:
+              p.financialStatus === "MGMV"
+                ? "MGMV"
+                : calculateFinancialStatus(p.totalValue, p.paidValue),
+          }));
+        }
+        return state as State;
+      },
+    },
   ),
 );
 
