@@ -199,3 +199,40 @@
   padding-top: 0;
   border-top: none;
 }
+
+/* Glowing blue scrollbar — applied globally and inside modals */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--color-primary) 80%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  box-shadow: 0 0 8px color-mix(in oklch, var(--color-primary) 70%, transparent),
+    0 0 16px color-mix(in oklch, var(--color-primary) 45%, transparent);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+  background-clip: padding-box;
+  box-shadow: 0 0 12px color-mix(in oklch, var(--color-primary) 90%, transparent),
+    0 0 24px color-mix(in oklch, var(--color-primary) 60%, transparent);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--color-primary) 80%, transparent) transparent;
+}
+
+/* Stronger glow inside dialog/modal content */
+[role="dialog"] ::-webkit-scrollbar-thumb,
+[role="alertdialog"] ::-webkit-scrollbar-thumb {
+  background: var(--color-primary);
+  background-clip: padding-box;
+  box-shadow: 0 0 10px var(--color-primary),
+    0 0 22px color-mix(in oklch, var(--color-primary) 70%, transparent),
+    inset 0 0 4px color-mix(in oklch, var(--color-primary) 60%, transparent);
+}
