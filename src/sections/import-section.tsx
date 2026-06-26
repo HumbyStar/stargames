@@ -473,13 +473,17 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           ? new Date(new Date(regISO).getTime() + 30 * 86400000).toISOString()
           : new Date(new Date(regISO).getTime() + 7 * 86400000).toISOString());
       const paid = r.paidValue ?? (r.financialStatus === "Pago" ? total : 0);
+      const finalStatus: FinancialStatus =
+        r.financialStatus === "MGMV"
+          ? "MGMV"
+          : calculateFinancialStatus(total, paid);
       addProduct({
         clientId: client.id,
         name: r.product,
         platform: r.platform || "—",
         totalValue: total,
         paidValue: paid,
-        financialStatus: r.financialStatus as FinancialStatus,
+        financialStatus: finalStatus,
         situation: (r.situation || "Em Aberto") as Situation,
         registerDate: regISO,
         dueDate: dueISO,
