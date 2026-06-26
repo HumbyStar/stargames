@@ -708,6 +708,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                     <th className="py-2 pr-3 font-medium">Plataforma</th>
                     <th className="py-2 pr-3 font-medium">Valor</th>
                     <th className="py-2 pr-3 font-medium">Status</th>
+                    <th className="py-2 pr-3 font-medium">Aviso</th>
                     <th className="py-2 pr-3 font-medium">Cliente</th>
                     <th className="py-2 pr-3 font-medium">Resultado</th>
                     <th className="py-2 pr-3 font-medium">Erro</th>
@@ -727,6 +728,14 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                         <Tag variant={r.financialStatus === "Pago" ? "success" : r.financialStatus === "Pendente" ? "danger" : "warning"}>
                           {r.financialStatus || "—"}
                         </Tag>
+                        {r.statusWarning && r.originalFinancialStatus && (
+                          <div className="mt-1 text-[10px] text-muted-foreground">
+                            original: <span className="line-through">{r.originalFinancialStatus}</span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 pr-3 text-xs text-amber-600 dark:text-amber-400">
+                        {r.statusWarning ?? "—"}
                       </td>
                       <td className="py-3 pr-3 text-muted-foreground">{r.clientFound ? "Encontrado" : "Será criado"}</td>
                       <td className="py-3 pr-3"><Tag variant={r.result === "Pronto" ? "success" : "danger"}>{r.result}</Tag></td>
