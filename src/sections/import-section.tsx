@@ -349,12 +349,30 @@ function validateRows(
     if (phoneDigits.length < 10 || phoneDigits.length > 11) errors.push("Telefone inválido");
     if (!r.product) errors.push("Produto sem nome");
     if (r.totalValue === null || !Number.isFinite(r.totalValue) || r.totalValue <= 0) errors.push("Valor inválido");
-    if (!VALID_STATUS.includes(r.financialStatus as (typeof VALID_STATUS)[number])) errors.push("Status inválido");
     if (r.situation && !VALID_SITUATION.includes(r.situation as (typeof VALID_SITUATION)[number])) errors.push("Situação inválida");
     const found = phoneDigits ? findClientByPhone(phoneDigits) : undefined;
+    const originalStatus = r.financialStatus;
+    const total = Number(r.totalValue) || 0;
+    const paid = Number(r.paidValue ?? (originalStatus === "Pago" ? total : 0)) || 0;
+    const correctedStatus: FinancialStatus =
+      originalStatus === "MGMV"
+        ? "MGMV"
+        : calculateFinancialStatus(total, paid);
+    let statusWarning: string | undefined;
+    if (originalStatus && correctedStatus !== originalStatus) {
+      statusWarning =
+        paid === 0
+          ? "Valor pago é zero, portanto o status correto é Pendente."
+          : paid >= total && total > 0
+            ? "Valor pago quita o total, portanto o status correto é Pago."
+            : "Existe valor pago de entrada, portanto o status correto é Reserva.";
+    }
     return {
       ...r,
       phone: phoneDigits,
+      financialStatus: correctedStatus,
+      originalFinancialStatus: originalStatus,
+      statusWarning,
       clientFound: !!found,
       result: errors.length === 0 ? "Pronto" : "Erro",
       errors,
