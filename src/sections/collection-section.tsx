@@ -25,6 +25,19 @@ import { Label } from "@/components/ui/label";
 
 type Filter = "todos" | "reserva_vencida" | "pendente_vencido" | "mgmv_vencido" | "em_aberto";
 
+type Period =
+  | "todos"
+  | "hoje"
+  | "7"
+  | "15"
+  | "30"
+  | "mes"
+  | "mes_passado"
+  | "personalizado"
+  | "maximo";
+
+const PAGE_SIZE = 50;
+
 export function CollectionSection({
   onScrollTo,
   initialFilter = "todos",
@@ -34,35 +47,54 @@ export function CollectionSection({
 }) {
   const { clients, products, registerPayment, openClient } = useStore();
   const [filter, setFilter] = useState<Filter>(initialFilter);
-  const [platform, setPlatform] = useState("Todas");
-  const [period, setPeriod] = useState("Todos");
+  const [period, setPeriod] = useState<Period>("todos");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [payTarget, setPayTarget] = useState<{ id: string; remaining: number; productName: string } | null>(null);
   const [payAmount, setPayAmount] = useState("");
 
   const overdueAll = useMemo(() => products.filter(shouldAppearInCollection), [products]);
 
   const filtered = useMemo(() => {
-    const now = Date.now();
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const endOfToday = startOfToday + 86400000;
     return overdueAll.filter((p) => {
       if (filter === "reserva_vencida" && p.financialStatus !== "Reserva") return false;
       if (filter === "pendente_vencido" && p.financialStatus !== "Pendente") return false;
       if (filter === "mgmv_vencido" && p.financialStatus !== "MGMV") return false;
       if (filter === "em_aberto" && p.situation !== "Em Aberto") return false;
-      if (platform !== "Todas" && p.platform !== platform) return false;
-      if (period !== "Todos") {
-        const reg = new Date(p.registerDate).getTime();
-        const diff = (now - reg) / 86400000;
-        if (period === "7" && diff > 7) return false;
-        if (period === "30" && diff > 30) return false;
-        if (period === "mes") {
-          const d = new Date();
-          const r = new Date(p.registerDate);
-          if (d.getMonth() !== r.getMonth() || d.getFullYear() !== r.getFullYear()) return false;
+      if (period !== "todos" && period !== "maximo") {
+        const due = new Date(p.dueDate);
+        const dueTime = due.getTime();
+        if (period === "hoje") {
+          if (dueTime < startOfToday || dueTime >= endOfToday) return false;
+        } else if (period === "7" || period === "15" || period === "30") {
+          const days = Number(period);
+          const minTime = startOfToday - days * 86400000;
+          if (dueTime < minTime || dueTime >= endOfToday) return false;
+        } else if (period === "mes") {
+          if (due.getMonth() !== now.getMonth() || due.getFullYear() !== now.getFullYear()) return false;
+        } else if (period === "mes_passado") {
+          const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          if (due.getMonth() !== prev.getMonth() || due.getFullYear() !== prev.getFullYear()) return false;
+        } else if (period === "personalizado") {
+          if (customFrom) {
+            const from = new Date(customFrom).getTime();
+            if (dueTime < from) return false;
+          }
+          if (customTo) {
+            const to = new Date(customTo).getTime() + 86400000;
+            if (dueTime >= to) return false;
+          }
         }
       }
       return true;
     });
-  }, [overdueAll, filter, platform, period]);
+  }, [overdueAll, filter, period, customFrom, customTo]);
+
+  const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
 
   const totalAtraso = overdueAll.reduce((a, p) => a + (p.totalValue - p.paidValue), 0);
   const valorRestante = products
@@ -82,6 +114,18 @@ export function CollectionSection({
     { id: "pendente_vencido", label: "Pendente vencido" },
     { id: "mgmv_vencido", label: "MGMV vencido" },
     { id: "em_aberto", label: "Em aberto" },
+  ];
+
+  const periodOptions: { value: Period; label: string }[] = [
+    { value: "todos", label: "Todos os períodos" },
+    { value: "hoje", label: "Hoje" },
+    { value: "7", label: "Últimos 7 dias" },
+    { value: "15", label: "Últimos 15 dias" },
+    { value: "30", label: "Últimos 30 dias" },
+    { value: "mes", label: "Este mês" },
+    { value: "mes_passado", label: "Mês passado" },
+    { value: "personalizado", label: "Personalizado" },
+    { value: "maximo", label: "Máximo" },
   ];
 
   const buildMessage = (
@@ -175,7 +219,10 @@ export function CollectionSection({
           {chips.map((c) => (
             <button
               key={c.id}
-              onClick={() => setFilter(c.id)}
+              onClick={() => {
+                setFilter(c.id);
+                setVisibleCount(PAGE_SIZE);
+              }}
               className={
                 "rounded-full px-3 py-1 text-xs font-medium transition-colors " +
                 (filter === c.id
@@ -186,28 +233,43 @@ export function CollectionSection({
               {c.label}
             </button>
           ))}
-          <div className="ml-auto flex gap-2">
-            <select
-              value={platform}
-              onChange={(e) => setPlatform(e.target.value)}
-              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-            >
-              <option value="Todas">Todas as plataformas</option>
-              <option>PS5</option>
-              <option>PS4</option>
-              <option>PS2</option>
-              <option>Xbox</option>
-              <option>Colecionável</option>
-            </select>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {period === "personalizado" && (
+              <>
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={(e) => {
+                    setCustomFrom(e.target.value);
+                    setVisibleCount(PAGE_SIZE);
+                  }}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                />
+                <span className="text-xs text-muted-foreground">até</span>
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={(e) => {
+                    setCustomTo(e.target.value);
+                    setVisibleCount(PAGE_SIZE);
+                  }}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                />
+              </>
+            )}
             <select
               value={period}
-              onChange={(e) => setPeriod(e.target.value)}
+              onChange={(e) => {
+                setPeriod(e.target.value as Period);
+                setVisibleCount(PAGE_SIZE);
+              }}
               className="h-9 rounded-md border border-input bg-background px-2 text-sm"
             >
-              <option value="Todos">Todos os períodos</option>
-              <option value="7">Últimos 7 dias</option>
-              <option value="30">Últimos 30 dias</option>
-              <option value="mes">Este mês</option>
+              {periodOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -231,7 +293,7 @@ export function CollectionSection({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p) => {
+              {visible.map((p) => {
                 const client = clients.find((c) => c.id === p.clientId);
                 const status = productCollectionStatus(p);
                 const remaining = p.totalValue - p.paidValue;
@@ -298,6 +360,28 @@ export function CollectionSection({
             </tbody>
           </table>
         </div>
+
+        {filtered.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+            <span>
+              Mostrando {Math.min(visible.length, filtered.length)} de {filtered.length} cobranças encontradas
+              {period === "maximo" && filtered.length > 200 && (
+                <span className="ml-2 text-amber-500">
+                  (modo Máximo — muitos registros podem ser exibidos)
+                </span>
+              )}
+            </span>
+            {visible.length < filtered.length && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+              >
+                Carregar mais
+              </Button>
+            )}
+          </div>
+        )}
       </Card>
 
       <div className="mt-4 text-xs text-muted-foreground">
