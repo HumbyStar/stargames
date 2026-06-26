@@ -416,7 +416,10 @@ export const isOverdue = (dueIso: string) => daysLate(dueIso) > 0;
 
 export function shouldAppearInCollection(p: Product) {
   return (
-    (p.financialStatus === "Reserva" || p.financialStatus === "Pendente" || p.financialStatus === "MGMV") &&
+    // Produtos marcados como MGMV foram consolidados em um acordo do cliente
+    // e a cobrança passa a ser feita pela parcela do acordo (linha consolidada),
+    // portanto não devem aparecer como cobrança individual.
+    (p.financialStatus === "Reserva" || p.financialStatus === "Pendente") &&
     p.situation === "Em Aberto" &&
     isOverdue(p.dueDate)
   );
@@ -435,4 +438,59 @@ export function productCollectionStatus(p: Product): {
   if (p.financialStatus === "Reserva") return { label: "Reserva", variant: "warning" };
   if (p.financialStatus === "Pendente") return { label: "Pendente", variant: "warning" };
   return { label: p.financialStatus, variant: "neutral" };
+}
+
+// ============= MGMV (acordo consolidado por cliente) =============
+
+export interface MGMVDisplay {
+  clientId: string;
+  totalDebt: number;
+  installmentsTotal: number;
+  installmentsPaid: number;
+  installmentValue: number;
+  remainingBalance: number;
+  nextInstallment: MGMVInstallment | null;
+  hasOverdue: boolean;
+  overdueCount: number;
+  active: boolean; // tem alguma parcela em aberto
+  status: "Ativo" | "Quitado" | "Vencido";
+}
+
+export function getMGMVDisplay(client: Client): MGMVDisplay | null {
+  if (!client.mgmv) return null;
+  const ins = client.mgmv.installments;
+  const paid = ins.filter((i) => i.paid);
+  const unpaid = ins.filter((i) => !i.paid);
+  const overdue = unpaid.filter((i) => isOverdue(i.dueDate));
+  const next = unpaid.slice().sort((a, b) => +new Date(a.dueDate) - +new Date(b.dueDate))[0] ?? null;
+  const installmentValue = ins[0]?.value ?? 0;
+  const remainingBalance = unpaid.reduce((s, i) => s + i.value, 0);
+  const active = unpaid.length > 0;
+  const status: MGMVDisplay["status"] = !active
+    ? "Quitado"
+    : overdue.length > 0
+      ? "Vencido"
+      : "Ativo";
+  return {
+    clientId: client.id,
+    totalDebt: client.mgmv.totalDebt,
+    installmentsTotal: ins.length,
+    installmentsPaid: paid.length,
+    installmentValue,
+    remainingBalance,
+    nextInstallment: next,
+    hasOverdue: overdue.length > 0,
+    overdueCount: overdue.length,
+    active,
+    status,
+  };
+}
+
+export function clientHasActiveMGMV(client: Client | undefined | null): boolean {
+  if (!client?.mgmv) return false;
+  return client.mgmv.installments.some((i) => !i.paid);
+}
+
+export function productIncludedInMGMV(p: Product): boolean {
+  return p.financialStatus === "MGMV";
 }
