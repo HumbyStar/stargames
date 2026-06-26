@@ -339,13 +339,98 @@ export function CollectionSection({
               </tr>
             </thead>
             <tbody>
-              {visible.map((p) => {
+              {visible.map((row, idx) => {
+                if (row.kind === "mgmv") {
+                  const { client, display } = row;
+                  const next = display.nextInstallment;
+                  const dueIso = next?.dueDate ?? new Date().toISOString();
+                  const late = next ? daysLate(dueIso) : 0;
+                  const remaining = next?.value ?? display.installmentValue;
+                  const statusLabel =
+                    display.hasOverdue ? "Parcela MGMV vencida" : "Parcela MGMV";
+                  const productLabel = next
+                    ? `Parcela ${next.number}/${next.total} — MGMV`
+                    : "Acordo MGMV";
+                  return (
+                    <tr key={`mgmv-${client.id}`} className="border-b border-border/60 last:border-0 bg-primary/[0.04]">
+                      <td className="py-3 pr-3 font-medium">{client.name}</td>
+                      <td className="py-3 pr-3 text-muted-foreground">{client.phone}</td>
+                      <td className="py-3 pr-3">{productLabel}</td>
+                      <td className="py-3 pr-3 text-muted-foreground">—</td>
+                      <td className="py-3 pr-3 tabular-nums">{formatBRL(display.totalDebt)}</td>
+                      <td className="py-3 pr-3 tabular-nums text-muted-foreground">
+                        {formatBRL(display.totalDebt - display.remainingBalance)}
+                      </td>
+                      <td className="py-3 pr-3 tabular-nums font-medium">{formatBRL(remaining)}</td>
+                      <td className="py-3 pr-3">
+                        <Tag variant={display.hasOverdue ? "danger" : "warning"}>{statusLabel}</Tag>
+                      </td>
+                      <td className="py-3 pr-3"><Tag>MGMV</Tag></td>
+                      <td className="py-3 pr-3 text-muted-foreground">
+                        {next ? formatDateBR(dueIso) : "—"}
+                      </td>
+                      <td className="py-3 pr-3">
+                        {display.hasOverdue ? (
+                          <Tag variant={late > 7 ? "danger" : "warning"}>{late} dias</Tag>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">no prazo</span>
+                        )}
+                      </td>
+                      <td className="py-3 pr-3">
+                        <div className="flex flex-wrap gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              openClient(client.id);
+                              onScrollTo("clientes");
+                            }}
+                          >
+                            Abrir
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="Enviar mensagem no WhatsApp"
+                            aria-label="Enviar mensagem no WhatsApp"
+                            onClick={() =>
+                              openWhatsApp(
+                                client.phone,
+                                client.name,
+                                productLabel,
+                                remaining,
+                                statusLabel,
+                                dueIso,
+                                late,
+                              )
+                            }
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            disabled={!next}
+                            onClick={() => {
+                              if (next) {
+                                payMGMVInstallment(client.id, next.number);
+                                toast.success(`Parcela ${next.number} marcada como paga`);
+                              }
+                            }}
+                          >
+                            Pagar parcela
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+                const p = row.product;
                 const client = clients.find((c) => c.id === p.clientId);
                 const status = productCollectionStatus(p);
                 const remaining = p.totalValue - p.paidValue;
                 const late = daysLate(p.dueDate);
                 return (
-                  <tr key={p.id} className="border-b border-border/60 last:border-0">
+                  <tr key={`p-${p.id}-${idx}`} className="border-b border-border/60 last:border-0">
                     <td className="py-3 pr-3 font-medium">{client?.name}</td>
                     <td className="py-3 pr-3 text-muted-foreground">{client?.phone}</td>
                     <td className="py-3 pr-3">{p.name}</td>
