@@ -7,6 +7,7 @@ import {
   formatBRL,
   useStore,
   type FinancialStatus,
+  type MGMVAgreement,
   type Situation,
 } from "@/lib/store";
 import { toast } from "sonner";
@@ -142,6 +143,44 @@ function extractClientNotes(root: Element): string {
     if (totalMatch) lines.push(totalMatch[0].trim());
   }
   return lines.join("\n");
+}
+
+// Extrai o acordo MGMV consolidado do texto de observações do cliente.
+// Padrão esperado: "TOTAL: 200 PENDENTES (4x Parcelas de 50 reais)" e
+// opcionalmente "1º Pagamento -> 07/03/2025".
+export function extractMGMVAgreementFromNotes(notes: string): MGMVAgreement | null {
+  if (!notes) return null;
+  const totalMatch = notes.match(/TOTAL:\s*([\d.,]+)/i);
+  const installmentsMatch = notes.match(/(\d+)\s*x\s*Parcelas?\s*de\s*([\d.,]+)/i);
+  const firstPaymentMatch = notes.match(
+    /1[ºo]?\s*Pagamento\s*[-–—>]+\s*(\d{2}\/\d{2}\/\d{4})/i,
+  );
+  if (!totalMatch || !installmentsMatch) return null;
+  const totalDebt = normalizeMoney(totalMatch[1]);
+  const count = Number(installmentsMatch[1]);
+  const value = normalizeMoney(installmentsMatch[2]);
+  if (!totalDebt || !count || !value) return null;
+  const firstDueIso =
+    firstPaymentMatch && normalizeDateBR(firstPaymentMatch[1])
+      ? new Date(`${normalizeDateBR(firstPaymentMatch[1])}T12:00:00`).toISOString()
+      : new Date().toISOString();
+  const start = new Date(firstDueIso);
+  const installments = Array.from({ length: count }, (_, idx) => {
+    const d = new Date(start);
+    d.setMonth(d.getMonth() + idx);
+    return {
+      number: idx + 1,
+      total: count,
+      dueDate: d.toISOString(),
+      value,
+      paid: false,
+    };
+  });
+  return {
+    startDate: new Date().toISOString(),
+    totalDebt,
+    installments,
+  };
 }
 
 function parseProductsTable(table: Element): NotionProduct[] {
