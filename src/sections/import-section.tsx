@@ -907,6 +907,7 @@ function NotionPreview({
                         <th className="py-2 pr-3 font-medium">Pago</th>
                         <th className="py-2 pr-3 font-medium">Restante</th>
                         <th className="py-2 pr-3 font-medium">Status</th>
+                        <th className="py-2 pr-3 font-medium">Aviso</th>
                         <th className="py-2 pr-3 font-medium">Situação</th>
                         <th className="py-2 pr-3 font-medium">Cadastro</th>
                         <th className="py-2 pr-3 font-medium">Limite</th>
@@ -923,7 +924,15 @@ function NotionPreview({
                             <td className="py-3 pr-3 tabular-nums">{formatBRL(p.totalValue)}</td>
                             <td className="py-3 pr-3 tabular-nums">{formatBRL(p.paidValue)}</td>
                             <td className="py-3 pr-3 tabular-nums">{formatBRL(p.remainingValue)}</td>
-                            <td className="py-3 pr-3"><Tag variant={p.financialStatus === "Pago" ? "success" : p.financialStatus === "Pendente" ? "danger" : "warning"}>{p.financialStatus}</Tag></td>
+                            <td className="py-3 pr-3">
+                              <Tag variant={p.financialStatus === "Pago" ? "success" : p.financialStatus === "Pendente" ? "danger" : "warning"}>{p.financialStatus}</Tag>
+                              {p.statusWarning && p.originalFinancialStatus && p.originalFinancialStatus !== p.financialStatus && (
+                                <div className="mt-1 text-[10px] text-muted-foreground">
+                                  original: <span className="line-through">{p.originalFinancialStatus}</span>
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-3 pr-3 text-xs text-amber-600 dark:text-amber-400">{p.statusWarning ?? "—"}</td>
                             <td className="py-3 pr-3 text-muted-foreground">{p.situation}</td>
                             <td className="py-3 pr-3 text-muted-foreground">{p.registerDate ?? "—"}</td>
                             <td className="py-3 pr-3 text-muted-foreground">{p.dueDate ?? "—"}</td>
