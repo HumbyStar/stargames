@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  calculateFinancialStatus,
   formatBRL,
   formatDateBR,
   isOverdue,
@@ -563,6 +564,13 @@ function ProductModal({
   const blockReserva = mgmvActive && financialStatus === "Reserva" && !initial;
   const remaining = Math.max(0, Number(totalValue) - Number(paidValue));
 
+  // Auto-sincroniza o status financeiro com base nos valores (exceto MGMV).
+  useEffect(() => {
+    if (financialStatus === "MGMV") return;
+    const computed = calculateFinancialStatus(totalValue, paidValue);
+    if (computed !== financialStatus) setFinancialStatus(computed);
+  }, [totalValue, paidValue, financialStatus]);
+
   return (
     <Dialog
       open={state.open}
@@ -676,7 +684,10 @@ function ProductModal({
                 platform,
                 totalValue: Number(totalValue),
                 paidValue: Number(paidValue),
-                financialStatus,
+                financialStatus:
+                  financialStatus === "MGMV"
+                    ? "MGMV"
+                    : calculateFinancialStatus(totalValue, paidValue),
                 situation,
                 registerDate: new Date(registerDate).toISOString(),
                 dueDate: new Date(dueDate).toISOString(),
