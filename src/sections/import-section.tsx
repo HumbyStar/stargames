@@ -420,7 +420,14 @@ function validateRows(
 }
 
 export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void }) {
-  const { findClientByPhone, addClient, addProduct, openClient, updateClientNotes } = useStore();
+  const {
+    findClientByPhone,
+    addClient,
+    addProduct,
+    openClient,
+    updateClientNotes,
+    setMGMVAgreement,
+  } = useStore();
   const [tab, setTab] = useState("text");
   const [text, setText] = useState(SAMPLE_LIST);
   const [rows, setRows] = useState<ParsedRow[] | null>(null);
@@ -546,6 +553,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     const todayISO = new Date().toISOString();
     let totalProducts = 0;
     let createdClients = 0;
+    let createdAgreements = 0;
     let firstClientId: string | null = null;
     usableClients.forEach((block) => {
       const validProducts = block.products.filter((p) => p.product && p.errors.length === 0);
@@ -582,9 +590,15 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         const existing = client!.notes ? client!.notes + "\n\n" : "";
         updateClientNotes(client!.id, existing + block.notes);
       }
+      // Cria/atualiza acordo MGMV consolidado a partir do texto "TOTAL: ..."
+      const agreement = extractMGMVAgreementFromNotes(block.notes);
+      if (agreement) {
+        setMGMVAgreement(client!.id, agreement);
+        createdAgreements++;
+      }
     });
     toast.success(
-      `${usableClients.length} cliente(s) • ${totalProducts} produto(s) importados • ${createdClients} novo(s)`,
+      `${usableClients.length} cliente(s) • ${totalProducts} produto(s) • ${createdAgreements} acordo(s) MGMV • ${createdClients} novo(s)`,
     );
     setNotion(null);
     setHtmlText("");
