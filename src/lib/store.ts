@@ -105,6 +105,7 @@ interface State {
   updateProductNotes: (productId: string, notes: string) => void;
   updateClientNotes: (clientId: string, notes: string) => void;
   payMGMVInstallment: (clientId: string, installmentNumber: number) => void;
+  setMGMVAgreement: (clientId: string, agreement: MGMVAgreement | undefined) => void;
   setPreferences: (patch: Partial<SystemPreferences>) => void;
   setRules: (patch: Partial<OperationalRules>) => void;
   setSecurity: (patch: Partial<SecuritySettings>) => void;
@@ -343,6 +344,12 @@ export const useStore = create<State>()(
               },
             };
           }),
+        })),
+      setMGMVAgreement: (clientId, agreement) =>
+        set((s) => ({
+          clients: s.clients.map((c) =>
+            c.id === clientId ? { ...c, mgmv: agreement } : c,
+          ),
         })),
       setPreferences: (patch) =>
         set((s) => ({ preferences: { ...s.preferences, ...patch } })),
