@@ -392,19 +392,7 @@ export const useStore = create<State>()(
     {
       name: "star-games-store",
       version: 3,
-      migrate: (persisted: unknown) => {
-        const state = persisted as Partial<State> | undefined;
-        if (state && Array.isArray(state.products)) {
-          state.products = state.products.map((p) => ({
-            ...p,
-            financialStatus:
-              p.financialStatus === "MGMV"
-                ? "MGMV"
-                : calculateFinancialStatus(p.totalValue, p.paidValue),
-          }));
-        }
-        return state as State;
-      },
+      migrate: (persisted: unknown) => migrateStoreV3(persisted) as State,
     },
   ),
 );
