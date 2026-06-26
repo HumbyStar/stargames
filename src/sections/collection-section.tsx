@@ -12,6 +12,16 @@ import {
 } from "@/lib/store";
 import { toast } from "sonner";
 import { MessageCircle } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 type Filter = "todos" | "reserva_vencida" | "pendente_vencido" | "mgmv_vencido" | "em_aberto";
 
@@ -26,6 +36,8 @@ export function CollectionSection({
   const [filter, setFilter] = useState<Filter>(initialFilter);
   const [platform, setPlatform] = useState("Todas");
   const [period, setPeriod] = useState("Todos");
+  const [payTarget, setPayTarget] = useState<{ id: string; remaining: number; productName: string } | null>(null);
+  const [payAmount, setPayAmount] = useState("");
 
   const overdueAll = useMemo(() => products.filter(shouldAppearInCollection), [products]);
 
@@ -124,13 +136,22 @@ export function CollectionSection({
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  const quickPayment = (productId: string, remaining: number) => {
-    const raw = window.prompt("Valor recebido (R$):", remaining.toFixed(2));
-    if (!raw) return;
-    const amount = Number(raw.replace(",", "."));
-    if (!Number.isFinite(amount) || amount <= 0) return;
-    registerPayment(productId, amount);
+  const openPayDialog = (productId: string, remaining: number, productName: string) => {
+    setPayTarget({ id: productId, remaining, productName });
+    setPayAmount(remaining.toFixed(2));
+  };
+
+  const confirmPayment = () => {
+    if (!payTarget) return;
+    const amount = Number(payAmount.replace(",", "."));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Informe um valor válido");
+      return;
+    }
+    registerPayment(payTarget.id, amount);
     toast.success("Pagamento registrado");
+    setPayTarget(null);
+    setPayAmount("");
   };
 
   return (
@@ -259,7 +280,7 @@ export function CollectionSection({
                         >
                           <MessageCircle className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" onClick={() => quickPayment(p.id, remaining)}>
+                        <Button size="sm" onClick={() => openPayDialog(p.id, remaining, p.name)}>
                           Pagar
                         </Button>
                       </div>
@@ -287,6 +308,36 @@ export function CollectionSection({
           ← Voltar para o Dashboard
         </button>
       </div>
+
+      <Dialog open={!!payTarget} onOpenChange={(o) => !o && setPayTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registrar pagamento</DialogTitle>
+            <DialogDescription>
+              {payTarget ? `${payTarget.productName} — Restante: ${formatBRL(payTarget.remaining)}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Label htmlFor="pay-amount">Valor recebido (R$)</Label>
+            <Input
+              id="pay-amount"
+              inputMode="decimal"
+              value={payAmount}
+              onChange={(e) => setPayAmount(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") confirmPayment();
+              }}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayTarget(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmPayment}>Confirmar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
