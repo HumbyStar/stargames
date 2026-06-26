@@ -16,6 +16,7 @@ import {
   calculateFinancialStatus,
   formatBRL,
   formatDateBR,
+  getMGMVDisplay,
   isOverdue,
   productCollectionStatus,
   useStore,
@@ -66,6 +67,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     updateProduct,
     registerPayment,
     setProductSituation,
+    payMGMVInstallment,
   } = useStore();
 
   const [search, setSearch] = useState("");
@@ -320,6 +322,10 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                 updateProduct(p.id, { paidValue: p.totalValue, financialStatus: "Pago" });
                 toast.success("Marcado como pago");
               }}
+              onPayMGMVInstallment={(installmentNumber) => {
+                payMGMVInstallment(drawerClient.id, installmentNumber);
+                toast.success(`Parcela ${installmentNumber} marcada como paga`);
+              }}
             />
           )}
         </DialogContent>
@@ -371,6 +377,7 @@ function ClientDrawer({
   onRegisterPayment,
   onChangeSituation,
   onMarkPaid,
+  onPayMGMVInstallment,
 }: {
   client: Client;
   products: Product[];
@@ -381,6 +388,7 @@ function ClientDrawer({
   onRegisterPayment: (productId: string, remaining: number) => void;
   onChangeSituation: (productId: string, s: Situation) => void;
   onMarkPaid: (p: Product) => void;
+  onPayMGMVInstallment: (installmentNumber: number) => void;
 }) {
   const [notes, setNotes] = useState(client.notes ?? "");
   const totalBought = products.reduce((a, p) => a + p.totalValue, 0);
@@ -388,6 +396,12 @@ function ClientDrawer({
   const totalRest = products
     .filter((p) => p.situation === "Em Aberto")
     .reduce((a, p) => a + (p.totalValue - p.paidValue), 0);
+  const mgmv = getMGMVDisplay(client);
+  const mgmvProducts = products.filter((p) => p.financialStatus === "MGMV");
+  const pctPaid =
+    mgmv && mgmv.installmentsTotal > 0
+      ? Math.round((mgmv.installmentsPaid / mgmv.installmentsTotal) * 100)
+      : 0;
 
   return (
     <div className="space-y-6">
@@ -415,6 +429,116 @@ function ClientDrawer({
           <Button size="sm" onClick={() => onSaveNotes(notes)}>Salvar Observação</Button>
         </div>
       </Card>
+
+      {mgmv && (
+        <Card title={`Acordo MGMV — ${mgmv.status}`}>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+            <MetricCard label="Valor total do acordo" value={formatBRL(mgmv.totalDebt)} status="primary" />
+            <MetricCard
+              label="Parcelas"
+              value={`${mgmv.installmentsTotal}x de ${formatBRL(mgmv.installmentValue)}`}
+            />
+            <MetricCard label="Parcelas pagas" value={`${mgmv.installmentsPaid}/${mgmv.installmentsTotal}`} status="success" />
+            <MetricCard
+              label="Próximo vencimento"
+              value={mgmv.nextInstallment ? formatDateBR(mgmv.nextInstallment.dueDate) : "—"}
+              status={mgmv.hasOverdue ? "danger" : undefined}
+            />
+            <MetricCard label="Saldo restante" value={formatBRL(mgmv.remainingBalance)} status="danger" />
+          </div>
+          <div className="mt-4">
+            <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
+              <span>{pctPaid}% quitado</span>
+              <span>
+                {mgmv.installmentsPaid} de {mgmv.installmentsTotal} parcelas
+              </span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${pctPaid}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="py-2 pr-3 font-medium">Parcela</th>
+                  <th className="py-2 pr-3 font-medium">Vencimento</th>
+                  <th className="py-2 pr-3 font-medium">Valor</th>
+                  <th className="py-2 pr-3 font-medium">Status</th>
+                  <th className="py-2 pr-3 font-medium">Pagamento</th>
+                  <th className="py-2 pr-3 font-medium">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {client.mgmv?.installments.map((i) => {
+                  const overdue = !i.paid && isOverdue(i.dueDate);
+                  const label = i.paid ? "Pago" : overdue ? "Vencido" : "Pendente";
+                  const variant = i.paid ? "success" : overdue ? "danger" : "warning";
+                  return (
+                    <tr key={i.number} className="border-b border-border/60 last:border-0">
+                      <td className="py-2 pr-3 font-medium">{i.number}/{i.total}</td>
+                      <td className="py-2 pr-3 text-muted-foreground">{formatDateBR(i.dueDate)}</td>
+                      <td className="py-2 pr-3 tabular-nums">{formatBRL(i.value)}</td>
+                      <td className="py-2 pr-3"><Tag variant={variant}>{label}</Tag></td>
+                      <td className="py-2 pr-3 text-muted-foreground">
+                        {i.paidAt ? formatDateBR(i.paidAt) : "—"}
+                      </td>
+                      <td className="py-2 pr-3">
+                        {!i.paid && (
+                          <Button size="sm" onClick={() => onPayMGMVInstallment(i.number)}>
+                            Marcar como paga
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {mgmvProducts.length > 0 && (
+            <div className="mt-6">
+              <h4 className="mb-2 text-sm font-semibold">
+                Itens incluídos no MGMV
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  (informativo — a cobrança é feita pela parcela do acordo)
+                </span>
+              </h4>
+              <div className="overflow-x-auto rounded-md border border-border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                      <th className="py-2 px-3 font-medium">Produto</th>
+                      <th className="py-2 px-3 font-medium">Plataforma</th>
+                      <th className="py-2 px-3 font-medium">Valor Total</th>
+                      <th className="py-2 px-3 font-medium">Valor Pago</th>
+                      <th className="py-2 px-3 font-medium">Restante incluído</th>
+                      <th className="py-2 px-3 font-medium">Data</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mgmvProducts.map((p) => (
+                      <tr key={p.id} className="border-b border-border/60 last:border-0">
+                        <td className="py-2 px-3 font-medium">{p.name}</td>
+                        <td className="py-2 px-3 text-muted-foreground">{p.platform}</td>
+                        <td className="py-2 px-3 tabular-nums">{formatBRL(p.totalValue)}</td>
+                        <td className="py-2 px-3 tabular-nums text-muted-foreground">{formatBRL(p.paidValue)}</td>
+                        <td className="py-2 px-3 tabular-nums">{formatBRL(Math.max(0, p.totalValue - p.paidValue))}</td>
+                        <td className="py-2 px-3 text-muted-foreground">{formatDateBR(p.registerDate)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       <Card title="Histórico de Produtos">
         <div className="overflow-x-auto">

@@ -5,10 +5,14 @@ import {
   daysLate,
   formatBRL,
   formatDateBR,
+  getMGMVDisplay,
   isOverdue,
   productCollectionStatus,
   shouldAppearInCollection,
   useStore,
+  type Client,
+  type Product,
+  type MGMVDisplay,
 } from "@/lib/store";
 import { toast } from "sonner";
 import { MessageCircle } from "lucide-react";
@@ -23,7 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type Filter = "todos" | "reserva_vencida" | "pendente_vencido" | "mgmv_vencido" | "em_aberto";
+type Filter = "todos" | "reserva_vencida" | "pendente_vencido" | "mgmv" | "mgmv_vencido" | "em_aberto";
 
 type Period =
   | "todos"
@@ -45,7 +49,7 @@ export function CollectionSection({
   onScrollTo: (id: string) => void;
   initialFilter?: Filter;
 }) {
-  const { clients, products, registerPayment, openClient } = useStore();
+  const { clients, products, registerPayment, openClient, payMGMVInstallment } = useStore();
   const [filter, setFilter] = useState<Filter>(initialFilter);
   const [period, setPeriod] = useState<Period>("todos");
   const [customFrom, setCustomFrom] = useState("");
@@ -54,19 +58,54 @@ export function CollectionSection({
   const [payTarget, setPayTarget] = useState<{ id: string; remaining: number; productName: string } | null>(null);
   const [payAmount, setPayAmount] = useState("");
 
-  const overdueAll = useMemo(() => products.filter(shouldAppearInCollection), [products]);
+  const overdueProducts = useMemo(() => products.filter(shouldAppearInCollection), [products]);
+
+  // Acordos MGMV consolidados (1 linha por cliente com acordo ativo + parcelas vencidas)
+  const mgmvRows = useMemo(() => {
+    return clients
+      .map((c) => {
+        const d = getMGMVDisplay(c);
+        if (!d || !d.active || !d.hasOverdue) return null;
+        return { client: c, display: d };
+      })
+      .filter(Boolean) as { client: Client; display: MGMVDisplay }[];
+  }, [clients]);
+
+  type RowItem =
+    | { kind: "product"; product: Product }
+    | { kind: "mgmv"; client: Client; display: MGMVDisplay };
+
+  const allRows = useMemo<RowItem[]>(
+    () => [
+      ...mgmvRows.map<RowItem>((r) => ({ kind: "mgmv", client: r.client, display: r.display })),
+      ...overdueProducts.map<RowItem>((p) => ({ kind: "product", product: p })),
+    ],
+    [mgmvRows, overdueProducts],
+  );
 
   const filtered = useMemo(() => {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const endOfToday = startOfToday + 86400000;
-    return overdueAll.filter((p) => {
-      if (filter === "reserva_vencida" && p.financialStatus !== "Reserva") return false;
-      if (filter === "pendente_vencido" && p.financialStatus !== "Pendente") return false;
-      if (filter === "mgmv_vencido" && p.financialStatus !== "MGMV") return false;
-      if (filter === "em_aberto" && p.situation !== "Em Aberto") return false;
+    return allRows.filter((row) => {
+      // Filtro por tipo
+      if (filter === "reserva_vencida")
+        if (row.kind !== "product" || row.product.financialStatus !== "Reserva") return false;
+      if (filter === "pendente_vencido")
+        if (row.kind !== "product" || row.product.financialStatus !== "Pendente") return false;
+      if (filter === "mgmv" || filter === "mgmv_vencido")
+        if (row.kind !== "mgmv") return false;
+      if (filter === "em_aberto")
+        if (row.kind === "product" && row.product.situation !== "Em Aberto") return false;
+
+      // Data de referência para o filtro de período
+      const refIso =
+        row.kind === "product"
+          ? row.product.dueDate
+          : row.display.nextInstallment?.dueDate ?? "";
+      if (!refIso) return period === "todos" || period === "maximo";
       if (period !== "todos" && period !== "maximo") {
-        const due = new Date(p.dueDate);
+        const due = new Date(refIso);
         const dueTime = due.getTime();
         if (period === "hoje") {
           if (dueTime < startOfToday || dueTime >= endOfToday) return false;
@@ -92,17 +131,22 @@ export function CollectionSection({
       }
       return true;
     });
-  }, [overdueAll, filter, period, customFrom, customTo]);
+  }, [allRows, filter, period, customFrom, customTo]);
 
   const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
 
-  const totalAtraso = overdueAll.reduce((a, p) => a + (p.totalValue - p.paidValue), 0);
+  const totalAtraso =
+    overdueProducts.reduce((a, p) => a + (p.totalValue - p.paidValue), 0) +
+    mgmvRows.reduce((a, r) => a + r.display.remainingBalance, 0);
   const valorRestante = products
     .filter((p) => p.situation === "Em Aberto")
     .reduce((a, p) => a + (p.totalValue - p.paidValue), 0);
-  const inadimplentes = new Set(overdueAll.map((p) => p.clientId)).size;
-  const reservasVencidas = overdueAll.filter((p) => p.financialStatus === "Reserva").length;
-  const pendentesVencidos = overdueAll.filter((p) => p.financialStatus === "Pendente").length;
+  const inadimplentes = new Set([
+    ...overdueProducts.map((p) => p.clientId),
+    ...mgmvRows.map((r) => r.client.id),
+  ]).size;
+  const reservasVencidas = overdueProducts.filter((p) => p.financialStatus === "Reserva").length;
+  const pendentesVencidos = overdueProducts.filter((p) => p.financialStatus === "Pendente").length;
   const mgmvVencidas = clients.reduce(
     (a, c) => a + (c.mgmv?.installments.filter((i) => !i.paid && isOverdue(i.dueDate)).length ?? 0),
     0,
@@ -112,7 +156,8 @@ export function CollectionSection({
     { id: "todos", label: "Todos" },
     { id: "reserva_vencida", label: "Reserva vencida" },
     { id: "pendente_vencido", label: "Pendente vencido" },
-    { id: "mgmv_vencido", label: "MGMV vencido" },
+    { id: "mgmv", label: "MGMV" },
+    { id: "mgmv_vencido", label: "Parcela MGMV vencida" },
     { id: "em_aberto", label: "Em aberto" },
   ];
 
@@ -145,7 +190,8 @@ export function CollectionSection({
       case "Pendente vencido":
         return `Olá, ${firstName}! Aqui é da Star Games. Identificamos um *pagamento pendente* do item *${productName}*, vencido em ${venc} (${late} dias em atraso). Valor restante: *${valor}*. Podemos acertar?`;
       case "MGMV vencido":
-        return `Olá, ${firstName}! Aqui é da Star Games. Sua *parcela MGMV* referente a *${productName}* venceu em ${venc} (${late} dias em atraso). Valor: *${valor}*. Consegue regularizar hoje?`;
+      case "Parcela MGMV vencida":
+        return `Olá, ${firstName}! Aqui é da Star Games. Sua *parcela MGMV* (${productName}) venceu em ${venc} (${late} dias em atraso). Valor: *${valor}*. Consegue regularizar hoje?`;
       case "Reserva":
         return `Olá, ${firstName}! Aqui é da Star Games. Passando para lembrar da *reserva* do item *${productName}*. Valor restante: *${valor}*, vencimento em ${venc}.`;
       case "Pendente":
@@ -293,13 +339,98 @@ export function CollectionSection({
               </tr>
             </thead>
             <tbody>
-              {visible.map((p) => {
+              {visible.map((row, idx) => {
+                if (row.kind === "mgmv") {
+                  const { client, display } = row;
+                  const next = display.nextInstallment;
+                  const dueIso = next?.dueDate ?? new Date().toISOString();
+                  const late = next ? daysLate(dueIso) : 0;
+                  const remaining = next?.value ?? display.installmentValue;
+                  const statusLabel =
+                    display.hasOverdue ? "Parcela MGMV vencida" : "Parcela MGMV";
+                  const productLabel = next
+                    ? `Parcela ${next.number}/${next.total} — MGMV`
+                    : "Acordo MGMV";
+                  return (
+                    <tr key={`mgmv-${client.id}`} className="border-b border-border/60 last:border-0 bg-primary/[0.04]">
+                      <td className="py-3 pr-3 font-medium">{client.name}</td>
+                      <td className="py-3 pr-3 text-muted-foreground">{client.phone}</td>
+                      <td className="py-3 pr-3">{productLabel}</td>
+                      <td className="py-3 pr-3 text-muted-foreground">—</td>
+                      <td className="py-3 pr-3 tabular-nums">{formatBRL(display.totalDebt)}</td>
+                      <td className="py-3 pr-3 tabular-nums text-muted-foreground">
+                        {formatBRL(display.totalDebt - display.remainingBalance)}
+                      </td>
+                      <td className="py-3 pr-3 tabular-nums font-medium">{formatBRL(remaining)}</td>
+                      <td className="py-3 pr-3">
+                        <Tag variant={display.hasOverdue ? "danger" : "warning"}>{statusLabel}</Tag>
+                      </td>
+                      <td className="py-3 pr-3"><Tag>MGMV</Tag></td>
+                      <td className="py-3 pr-3 text-muted-foreground">
+                        {next ? formatDateBR(dueIso) : "—"}
+                      </td>
+                      <td className="py-3 pr-3">
+                        {display.hasOverdue ? (
+                          <Tag variant={late > 7 ? "danger" : "warning"}>{late} dias</Tag>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">no prazo</span>
+                        )}
+                      </td>
+                      <td className="py-3 pr-3">
+                        <div className="flex flex-wrap gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              openClient(client.id);
+                              onScrollTo("clientes");
+                            }}
+                          >
+                            Abrir
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="Enviar mensagem no WhatsApp"
+                            aria-label="Enviar mensagem no WhatsApp"
+                            onClick={() =>
+                              openWhatsApp(
+                                client.phone,
+                                client.name,
+                                productLabel,
+                                remaining,
+                                statusLabel,
+                                dueIso,
+                                late,
+                              )
+                            }
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            disabled={!next}
+                            onClick={() => {
+                              if (next) {
+                                payMGMVInstallment(client.id, next.number);
+                                toast.success(`Parcela ${next.number} marcada como paga`);
+                              }
+                            }}
+                          >
+                            Pagar parcela
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+                const p = row.product;
                 const client = clients.find((c) => c.id === p.clientId);
                 const status = productCollectionStatus(p);
                 const remaining = p.totalValue - p.paidValue;
                 const late = daysLate(p.dueDate);
                 return (
-                  <tr key={p.id} className="border-b border-border/60 last:border-0">
+                  <tr key={`p-${p.id}-${idx}`} className="border-b border-border/60 last:border-0">
                     <td className="py-3 pr-3 font-medium">{client?.name}</td>
                     <td className="py-3 pr-3 text-muted-foreground">{client?.phone}</td>
                     <td className="py-3 pr-3">{p.name}</td>
