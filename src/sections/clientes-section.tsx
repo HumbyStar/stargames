@@ -564,6 +564,13 @@ function ProductModal({
   const blockReserva = mgmvActive && financialStatus === "Reserva" && !initial;
   const remaining = Math.max(0, Number(totalValue) - Number(paidValue));
 
+  // Auto-sincroniza o status financeiro com base nos valores (exceto MGMV).
+  useEffect(() => {
+    if (financialStatus === "MGMV") return;
+    const computed = calculateFinancialStatus(totalValue, paidValue);
+    if (computed !== financialStatus) setFinancialStatus(computed);
+  }, [totalValue, paidValue, financialStatus]);
+
   return (
     <Dialog
       open={state.open}
