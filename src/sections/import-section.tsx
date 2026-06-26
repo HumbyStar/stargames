@@ -2,7 +2,13 @@ import { useMemo, useState } from "react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { formatBRL, useStore, type FinancialStatus, type Situation } from "@/lib/store";
+import {
+  calculateFinancialStatus,
+  formatBRL,
+  useStore,
+  type FinancialStatus,
+  type Situation,
+} from "@/lib/store";
 import { toast } from "sonner";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
@@ -17,6 +23,8 @@ interface ParsedRow {
   totalValue: number | null;
   paidValue: number | null;
   financialStatus: string;
+  originalFinancialStatus?: string;
+  statusWarning?: string;
   situation: string;
   registerDate: string | null;
   dueDate: string | null;
@@ -45,6 +53,8 @@ interface NotionProduct {
   paidValue: number;
   remainingValue: number;
   financialStatus: FinancialStatus;
+  originalFinancialStatus?: FinancialStatus;
+  statusWarning?: string;
   situation: Situation;
   registerDate: string | null; // YYYY-MM-DD
   dueDate: string | null; // YYYY-MM-DD
@@ -167,8 +177,22 @@ function parseProductsTable(table: Element): NotionProduct[] {
     const totalValue = normalizeMoney(totalRaw ?? "");
     const paidValue = normalizeMoney(paidRaw ?? "");
     if (!totalRaw) rowWarnings.push("Valor vazio (considerado 0).");
-    const financialStatus = normalizeStatusBR(status ?? "");
+    const originalStatus = normalizeStatusBR(status ?? "");
     if (!status) rowWarnings.push('Status vazio (usado "Pendente").');
+    const financialStatus =
+      originalStatus === "MGMV"
+        ? "MGMV"
+        : calculateFinancialStatus(totalValue, paidValue);
+    let statusWarning: string | undefined;
+    if (financialStatus !== originalStatus) {
+      statusWarning =
+        paidValue === 0
+          ? "Valor pago é zero, portanto o status correto é Pendente."
+          : paidValue >= totalValue && totalValue > 0
+            ? "Valor pago quita o total, portanto o status correto é Pago."
+            : "Existe valor pago de entrada, portanto o status correto é Reserva.";
+      rowWarnings.push(`Status corrigido de "${originalStatus}" para "${financialStatus}". ${statusWarning}`);
+    }
     const situationN = normalizeSituationBR(situation ?? "");
     if (!situation) rowWarnings.push('Situação vazia (usado "Em Aberto").');
     const registerDate = normalizeDateBR(date ?? "");
@@ -181,6 +205,8 @@ function parseProductsTable(table: Element): NotionProduct[] {
       paidValue,
       remainingValue: Math.max(0, totalValue - paidValue),
       financialStatus,
+      originalFinancialStatus: originalStatus,
+      statusWarning,
       situation: situationN,
       registerDate,
       dueDate,
