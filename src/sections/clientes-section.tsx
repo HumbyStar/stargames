@@ -684,7 +684,10 @@ function ProductModal({
                 platform,
                 totalValue: Number(totalValue),
                 paidValue: Number(paidValue),
-                financialStatus,
+                financialStatus:
+                  financialStatus === "MGMV"
+                    ? "MGMV"
+                    : calculateFinancialStatus(totalValue, paidValue),
                 situation,
                 registerDate: new Date(registerDate).toISOString(),
                 dueDate: new Date(dueDate).toISOString(),
