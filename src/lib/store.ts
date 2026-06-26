@@ -372,7 +372,7 @@ export const useStore = create<State>()(
     }),
     {
       name: "star-games-store",
-      version: 2,
+      version: 3,
       migrate: (persisted: unknown) => {
         const state = persisted as Partial<State> | undefined;
         if (state && Array.isArray(state.products)) {
