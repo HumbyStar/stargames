@@ -132,6 +132,25 @@ export function calculateFinancialStatus(
   return "Pendente";
 }
 
+/**
+ * Migração v3 do store persistido: recalcula `financialStatus` de todos os
+ * produtos a partir de `totalValue` e `paidValue`, preservando MGMV.
+ * Exportado para permitir testes unitários da regra.
+ */
+export function migrateStoreV3(persisted: unknown): unknown {
+  const state = persisted as Partial<State> | undefined;
+  if (state && Array.isArray(state.products)) {
+    state.products = state.products.map((p) => ({
+      ...p,
+      financialStatus:
+        p.financialStatus === "MGMV"
+          ? "MGMV"
+          : calculateFinancialStatus(p.totalValue, p.paidValue),
+    }));
+  }
+  return state;
+}
+
 const today = new Date();
 const daysAgo = (n: number) => new Date(today.getTime() - n * 86400000).toISOString();
 const daysAhead = (n: number) => new Date(today.getTime() + n * 86400000).toISOString();
