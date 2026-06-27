@@ -772,6 +772,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   const products = useStore((s) => s.products);
   const clients = useStore((s) => s.clients);
   const importHistory = useStore((s) => s.importHistory);
+  const hydrated = useStore((s) => s.hydrated);
   const [tab, setTab] = useState("text");
   const [text, setText] = useState(SAMPLE_LIST);
   const [rows, setRows] = useState<ParsedRow[] | null>(null);
@@ -820,6 +821,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
 
   // Ao montar, retoma uma importação não finalizada (se houver).
   useEffect(() => {
+    if (!hydrated) return;
     let cancelled = false;
     (async () => {
       try {
@@ -879,7 +881,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [hydrated]);
 
   const discardProgress = async () => {
     // Apaga TODOS os progressos do usuário, não apenas o atual — evita
