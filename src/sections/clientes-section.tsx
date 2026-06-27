@@ -115,15 +115,22 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           if (!hit) return false;
         }
         if (chip !== "todos") {
+          const mgmvActive = r.client.mgmv && r.client.mgmv.installments.some((i) => !i.paid);
+          const mgmvOverdue = r.client.mgmv && r.client.mgmv.installments.some((i) => !i.paid && isOverdue(i.dueDate));
+          const mgmvQuitado = r.client.mgmv && r.client.mgmv.installments.every((i) => i.paid);
           const map: Record<ChipFilter, boolean> = {
             todos: true,
             reserva_vencida: r.status.label === "Reserva vencida",
             pendente: r.products.some((p) => p.financialStatus === "Pendente" && p.situation === "Em Aberto"),
-            mgmv: !!r.client.mgmv,
+            mgmv: !!mgmvActive,
+            mgmv_vencido: !!mgmvOverdue,
+            mgmv_quitado: !!mgmvQuitado,
             pago_aguardando: r.products.some((p) => p.financialStatus === "Pago" && p.situation === "Em Aberto"),
             enviado: r.products.some((p) => p.situation === "Enviado"),
             desistiu: r.products.some((p) => p.situation === "Desistiu"),
             abandonou: r.products.some((p) => p.situation === "Abandonou"),
+            em_dia: r.status.label === "Em dia",
+            sem_produtos: r.products.length === 0,
           };
           if (!map[chip]) return false;
         }
