@@ -309,6 +309,14 @@ const seedImportHistory: ImportHistoryEntry[] = [
 
 let hydratePromise: Promise<void> | null = null;
 
+export const RESET_VERSION_KEY = "import.resetVersion";
+export function getResetVersion(): string {
+  return getUiValue<string>(RESET_VERSION_KEY, "");
+}
+function bumpResetVersion() {
+  setUiValue(RESET_VERSION_KEY, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+}
+
 export const useStore = create<State>()((set, get) => ({
       clients: [],
       products: [],
