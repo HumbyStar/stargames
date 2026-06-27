@@ -462,6 +462,23 @@ interface ZipClientPreview {
   // uma auto-correção do telefone: "merge" (importar e mesclar — padrão) ou
   // "skip" (pular a importação deste cliente/itens).
   correctionAction?: "merge" | "skip";
+  /**
+   * Sinaliza que o cliente já tem um acordo MGMV ativo com parcelas pagas.
+   * Quando o ZIP traz um novo acordo, sobrescrever apagaria o histórico de
+   * pagamento — por isso exigimos uma decisão explícita do operador.
+   */
+  mgmvConflict?: {
+    existingPaid: number;
+    existingTotal: number;
+    existingRemaining: number;
+  };
+  /**
+   * Ação para o acordo MGMV detectado neste arquivo:
+   * - "apply": aplica (padrão quando não há conflito)
+   * - "replace": substitui o acordo existente (operador confirmou perda)
+   * - "keep": mantém o acordo existente e descarta o do arquivo
+   */
+  mgmvAction?: "apply" | "replace" | "keep";
   errors: string[];
   criticalError: boolean;
   selected: boolean;
@@ -474,6 +491,12 @@ interface ZipPreviewData {
   globalErrors: string[];
   parseFailures: { path: string; reason: string }[];
   zipName: string;
+  fileHash: string;
+  /** Se este hash já apareceu antes no importHistory. */
+  alreadyImported: boolean;
+  previousImportDate?: string;
+  /** Agrupamento de erros por causa para análise. */
+  errorGroups: { reason: string; paths: string[] }[];
 }
 
 type ZipFilter =
