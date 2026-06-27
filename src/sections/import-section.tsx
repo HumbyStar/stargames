@@ -1908,8 +1908,24 @@ function ZipPreview({
                                 </div>
                               )}
                               {e.matchedAfterCorrection && (
-                                <div className="mt-1">
+                                <div className="mt-1 space-y-1">
                                   <Tag variant="warning">Match após correção</Tag>
+                                  <div className="flex gap-1">
+                                    <Button
+                                      size="sm"
+                                      variant={e.correctionAction !== "skip" ? "default" : "ghost"}
+                                      onClick={() => onCorrectionAction(e.id, "merge")}
+                                    >
+                                      Mesclar
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant={e.correctionAction === "skip" ? "default" : "ghost"}
+                                      onClick={() => onCorrectionAction(e.id, "skip")}
+                                    >
+                                      Pular
+                                    </Button>
+                                  </div>
                                 </div>
                               )}
                               {e.client.correctionReason && !e.criticalError && (
