@@ -750,6 +750,12 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         folders.add(folderName);
         rawEntries.push({ path, fileName, folderName, entry });
       });
+      if (rawEntries.length > ZIP_LIMITS.maxFiles) {
+        globalErrors.push(
+          `ZIP contém ${rawEntries.length} arquivos — acima do limite de ${ZIP_LIMITS.maxFiles}. Apenas os primeiros serão processados.`,
+        );
+        rawEntries.length = ZIP_LIMITS.maxFiles;
+      }
       setZipProgress({ done: 0, total: rawEntries.length });
       // Extract in chunks of 25 so the UI stays responsive on big archives.
       const CHUNK = 25;
