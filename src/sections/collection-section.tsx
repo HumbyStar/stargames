@@ -376,30 +376,30 @@ export function CollectionSection({
                     : "Acordo MGMV";
                   return (
                     <tr key={`mgmv-${client.id}`} className="border-b border-border/60 last:border-0 bg-primary/[0.04]">
-                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 font-medium"}>{client.name}</td>
-                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 text-muted-foreground"}>{client.phone}</td>
-                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}>{productLabel}</td>
-                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 text-muted-foreground"}>—</td>
-                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums"}>{formatBRL(display.totalDebt)}</td>
-                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums text-muted-foreground"}>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 font-medium"}>{client.name}</td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{client.phone}</td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>{productLabel}</td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>—</td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums"}>{formatBRL(display.totalDebt)}</td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums text-muted-foreground"}>
                         {formatBRL(display.totalDebt - display.remainingBalance)}
                       </td>
-                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums font-medium"}>{formatBRL(remaining)}</td>
-                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums font-medium"}>{formatBRL(remaining)}</td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>
                         <Tag variant={display.hasOverdue ? "danger" : "warning"}>{statusLabel}</Tag>
                       </td>
-                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}><Tag>MGMV</Tag></td>
-                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 text-muted-foreground"}>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}><Tag>MGMV</Tag></td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>
                         {next ? formatDateBR(dueIso) : "—"}
                       </td>
-                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>
                         {display.hasOverdue ? (
                           <Tag variant={late > 7 ? "danger" : "warning"}>{late} dias</Tag>
                         ) : (
                           <span className="text-xs text-muted-foreground">no prazo</span>
                         )}
                       </td>
-                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>
                         <div className="flex flex-wrap gap-1.5">
                           <Button
                             size="sm"
@@ -454,18 +454,18 @@ export function CollectionSection({
                 const late = daysLate(p.dueDate);
                 return (
                   <tr key={`p-${p.id}-${idx}`} className="border-b border-border/60 last:border-0">
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 font-medium"}>{client?.name}</td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 text-muted-foreground"}>{client?.phone}</td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}>{p.name}</td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 text-muted-foreground"}>{p.platform}</td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums"}>{formatBRL(p.totalValue)}</td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums text-muted-foreground"}>{formatBRL(p.paidValue)}</td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums font-medium"}>{formatBRL(remaining)}</td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}><Tag variant={status.variant === "danger" ? "danger" : status.variant === "warning" ? "warning" : "neutral"}>{status.label}</Tag></td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}><Tag>{p.situation}</Tag></td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 text-muted-foreground"}>{formatDateBR(p.dueDate)}</td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}><Tag variant={late > 7 ? "danger" : "warning"}>{late} dias</Tag></td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 font-medium"}>{client?.name}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{client?.phone}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>{p.name}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{p.platform}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums"}>{formatBRL(p.totalValue)}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums text-muted-foreground"}>{formatBRL(p.paidValue)}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums font-medium"}>{formatBRL(remaining)}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}><Tag variant={status.variant === "danger" ? "danger" : status.variant === "warning" ? "warning" : "neutral"}>{status.label}</Tag></td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}><Tag>{p.situation}</Tag></td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{formatDateBR(p.dueDate)}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}><Tag variant={late > 7 ? "danger" : "warning"}>{late} dias</Tag></td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>
                       <div className="flex flex-wrap gap-1.5">
                         <Button
                           size="sm"

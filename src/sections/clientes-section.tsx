@@ -408,7 +408,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
             <tbody>
               {pagedRows.map((r) => (
                 <tr key={r.client.id} className="border-b border-border/60 last:border-0">
-                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 font-medium"}>
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 font-medium"}>
                     <button onClick={() => setDrawerClientId(r.client.id)} className="text-left hover:text-primary">
                       {r.client.name}
                       {r.client.folder && (
@@ -419,16 +419,16 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                       )}
                     </button>
                   </td>
-                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 text-muted-foreground"}>{r.client.phone}</td>
-                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}><Tag variant={r.status.variant}>{r.status.label}</Tag></td>
-                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums"}>{r.products.length}</td>
-                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums"}>{formatBRL(r.totalPurchased)}</td>
-                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums font-medium"}>{formatBRL(r.totalOpen)}</td>
-                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 text-muted-foreground"}>{r.last ? formatDateBR(r.last) : "—"}</td>
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{r.client.phone}</td>
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}><Tag variant={r.status.variant}>{r.status.label}</Tag></td>
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums"}>{r.products.length}</td>
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums"}>{formatBRL(r.totalPurchased)}</td>
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums font-medium"}>{formatBRL(r.totalOpen)}</td>
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{r.last ? formatDateBR(r.last) : "—"}</td>
                   {!compact && (
                     <td className="py-3 pr-3 max-w-[220px] truncate text-muted-foreground">{r.client.notes ?? "—"}</td>
                   )}
-                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}>
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>
                     <div className="flex flex-wrap gap-1.5">
                       <Button size="sm" variant="outline" onClick={() => setDrawerClientId(r.client.id)}>Abrir</Button>
                       {!compact && (
