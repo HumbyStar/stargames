@@ -1961,6 +1961,30 @@ function ZipPreview({
     return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [data]);
 
+  // Pastas visíveis após filtro — fonte de verdade para a sanfona.
+  const visibleFolders = useMemo(
+    () =>
+      byFolder
+        .map(([folder, entries]) => {
+          const visible = entries.filter((e) => filteredIds.has(e.id));
+          return { folder, entries, visible };
+        })
+        .filter((g) => g.visible.length > 0),
+    [byFolder, filteredIds],
+  );
+
+  // Mantém sempre uma pasta aberta. Se a aberta sumir do filtro, abre a próxima.
+  const [openFolder, setOpenFolder] = useState<string>("");
+  useEffect(() => {
+    if (visibleFolders.length === 0) {
+      if (openFolder) setOpenFolder("");
+      return;
+    }
+    if (!visibleFolders.some((g) => g.folder === openFolder)) {
+      setOpenFolder(visibleFolders[0].folder);
+    }
+  }, [visibleFolders, openFolder]);
+
   const selectedEntries = data.entries.filter((e) => e.selected && !e.criticalError);
   const summary = useMemo(() => {
     let newCount = 0;
