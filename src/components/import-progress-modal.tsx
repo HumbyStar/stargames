@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,12 +8,27 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Folder, FolderCheck, FolderOpen, PackageCheck, User, Sparkles, Trophy } from "lucide-react";
+import {
+  AlertTriangle,
+  Folder,
+  FolderCheck,
+  FolderOpen,
+  PackageCheck,
+  Sparkles,
+  Timer,
+  Trophy,
+  User,
+  Zap,
+} from "lucide-react";
 
 export type ImportProgressState = {
+  fileHash: string;
+  zipName: string;
+  startedAt: string; // ISO
   folders: string[];
   currentIdx: number; // -1 = aguardando, folders.length = concluído
   messages: string[];
+  errors: string[];
   stats: {
     createdClients: number;
     updatedClients: number;
@@ -25,6 +40,7 @@ export type ImportProgressState = {
     skippedAfterCorrection: number;
   };
   done: boolean;
+  resumed?: boolean; // carregado do banco após reload
 };
 
 const FUN_TIPS = [
@@ -36,16 +52,34 @@ const FUN_TIPS = [
   "Quase lá, mais uma pastinha…",
 ];
 
+function fmtDuration(ms: number) {
+  if (!isFinite(ms) || ms < 0) return "—";
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return r ? `${m}m ${r}s` : `${m}m`;
+}
+
 export function ImportProgressModal({
   state,
   open,
   onClose,
+  onDiscard,
 }: {
   state: ImportProgressState | null;
   open: boolean;
   onClose: () => void;
+  onDiscard?: () => void;
 }) {
   const logRef = useRef<HTMLDivElement>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!state || state.done || state.resumed) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [state?.done, state?.resumed, state?.fileHash]);
 
   useEffect(() => {
     if (logRef.current) {
@@ -57,21 +91,41 @@ export function ImportProgressModal({
 
   const total = state.folders.length;
   const idx = state.currentIdx;
-  const pct = total === 0 ? 100 : Math.min(100, Math.round(((Math.max(idx, 0) + (state.done ? 1 : 0)) / total) * 100));
+  const processed = state.done ? total : Math.max(idx, 0);
+  const pct = total === 0 ? 100 : Math.min(100, Math.round((processed / total) * 100));
   const currentFolder = idx >= 0 && idx < total ? state.folders[idx] : null;
   const tip = FUN_TIPS[(Math.max(idx, 0)) % FUN_TIPS.length];
 
+  const startedMs = new Date(state.startedAt).getTime();
+  const elapsedMs = Math.max(0, now - startedMs);
+  const ratePerSec = processed > 0 && elapsedMs > 0 ? processed / (elapsedMs / 1000) : 0;
+  const remaining = Math.max(0, total - processed);
+  const etaMs = state.done ? 0 : ratePerSec > 0 ? (remaining / ratePerSec) * 1000 : Infinity;
+  const ratePerMin = ratePerSec * 60;
+
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o && state.done) onClose(); }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o && (state.done || state.resumed)) onClose(); }}>
       <DialogContent className="max-w-xl" onInteractOutside={(e) => { if (!state.done) e.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {state.done ? <Trophy className="h-5 w-5 text-amber-500" /> : <Sparkles className="h-5 w-5 text-primary animate-pulse" />}
-            {state.done ? "Importação concluída!" : "Importando suas pastas…"}
+            {state.done ? (
+              <Trophy className="h-5 w-5 text-amber-500" />
+            ) : state.resumed ? (
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+            ) : (
+              <Sparkles className="h-5 w-5 text-primary animate-pulse" />
+            )}
+            {state.done
+              ? "Importação concluída!"
+              : state.resumed
+                ? "Importação interrompida"
+                : "Importando suas pastas…"}
           </DialogTitle>
           <DialogDescription>
             {state.done
               ? "Tudo certo. Veja o resumo abaixo."
+              : state.resumed
+                ? <>A última importação de <span className="font-medium text-foreground">{state.zipName}</span> não terminou. Reenvie o ZIP para continuar — duplicatas serão detectadas automaticamente.</>
               : currentFolder
                 ? <>Processando <span className="font-medium text-foreground">{currentFolder}</span> — {tip}</>
                 : "Preparando a esteira…"}
@@ -88,7 +142,7 @@ export function ImportProgressModal({
               style={{
                 backgroundImage:
                   "repeating-linear-gradient(90deg, hsl(var(--foreground)/0.15) 0 10px, transparent 10px 20px)",
-                animation: state.done ? "none" : "conveyor-belt 1.2s linear infinite",
+                animation: state.done || state.resumed ? "none" : "conveyor-belt 1.2s linear infinite",
               }}
             />
           </div>
@@ -98,7 +152,7 @@ export function ImportProgressModal({
             <div
               className="flex gap-6 px-4 will-change-transform"
               style={{
-                animation: state.done ? "none" : "conveyor-load 5s linear infinite",
+                animation: state.done || state.resumed ? "none" : "conveyor-load 5s linear infinite",
               }}
             >
               {Array.from({ length: 10 }).map((_, i) => {
@@ -122,7 +176,7 @@ export function ImportProgressModal({
             ) : (
               <>
                 <FolderOpen className="h-4 w-4 text-primary" />
-                {Math.max(idx, 0) + 1} / {total || 1}
+                {processed} / {total || 1}
               </>
             )}
           </div>
@@ -144,6 +198,32 @@ export function ImportProgressModal({
           </div>
         </div>
 
+        {/* Métricas: tempo decorrido, taxa, ETA */}
+        <div className="grid grid-cols-3 gap-2 text-xs">
+          <div className="rounded-md border bg-muted/30 p-2">
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <Timer className="h-3 w-3" /> Decorrido
+            </div>
+            <div className="mt-0.5 font-mono text-sm">{fmtDuration(elapsedMs)}</div>
+          </div>
+          <div className="rounded-md border bg-muted/30 p-2">
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <Zap className="h-3 w-3" /> Taxa
+            </div>
+            <div className="mt-0.5 font-mono text-sm">
+              {ratePerMin > 0 ? `${ratePerMin.toFixed(1)}/min` : "—"}
+            </div>
+          </div>
+          <div className="rounded-md border bg-muted/30 p-2">
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <Sparkles className="h-3 w-3" /> Restante
+            </div>
+            <div className="mt-0.5 font-mono text-sm">
+              {state.done ? "0s" : fmtDuration(etaMs)}
+            </div>
+          </div>
+        </div>
+
         {/* Log de mensagens */}
         <div
           ref={logRef}
@@ -156,10 +236,20 @@ export function ImportProgressModal({
               <div key={i} className="animate-fade-in">{m}</div>
             ))
           )}
+          {state.errors.length > 0 && (
+            <div className="mt-2 border-t border-destructive/30 pt-2 space-y-1">
+              {state.errors.map((e, i) => (
+                <div key={i} className="text-destructive">⚠️ {e}</div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {state.done && (
+        {(state.done || state.resumed) && (
           <DialogFooter>
+            {state.resumed && !state.done && onDiscard && (
+              <Button variant="ghost" onClick={onDiscard}>Descartar progresso</Button>
+            )}
             <Button onClick={onClose}>Fechar</Button>
           </DialogFooter>
         )}
