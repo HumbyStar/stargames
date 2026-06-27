@@ -692,6 +692,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   } = useStore();
   const products = useStore((s) => s.products);
   const clients = useStore((s) => s.clients);
+  const importHistory = useStore((s) => s.importHistory);
   const [tab, setTab] = useState("text");
   const [text, setText] = useState(SAMPLE_LIST);
   const [rows, setRows] = useState<ParsedRow[] | null>(null);
