@@ -394,6 +394,68 @@ export function AppLayout({ children }: { children?: ReactNode }) {
     <div className="min-h-screen bg-background bg-gradient-to-b from-background via-background to-accent/30">
       <FloatingNavbar />
       <main className="page-container">{children ?? <Outlet />}</main>
+      <GlobalModals />
     </div>
+  );
+}
+
+function GlobalModals() {
+  const importOpen = useUiStore((s) => s.importOpen);
+  const closeImport = useUiStore((s) => s.closeImport);
+  const settingsOpen = useUiStore((s) => s.settingsOpen);
+  const closeSettings = useUiStore((s) => s.closeSettings);
+  const helpOpen = useUiStore((s) => s.helpOpen);
+  const closeHelp = useUiStore((s) => s.closeHelp);
+
+  // onScrollTo dentro dos modais: fecha o modal e rola até a seção alvo.
+  const handleScrollTo = (id: string) => {
+    closeImport();
+    closeSettings();
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
+  };
+
+  return (
+    <>
+      <Dialog open={importOpen} onOpenChange={(o) => (o ? null : closeImport())}>
+        <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Importação</DialogTitle>
+            <DialogDescription>Importe clientes e produtos em massa.</DialogDescription>
+          </DialogHeader>
+          <ImportSection onScrollTo={handleScrollTo} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={settingsOpen} onOpenChange={(o) => (o ? null : closeSettings())}>
+        <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Configurações</DialogTitle>
+            <DialogDescription>Preferências, regras e zona de perigo.</DialogDescription>
+          </DialogHeader>
+          <ConfiguracoesSection />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={helpOpen} onOpenChange={(o) => (o ? null : closeHelp())}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Central de Ajuda</DialogTitle>
+            <DialogDescription>
+              Em breve: tutorial guiado da operação.
+            </DialogDescription>
+          </DialogHeader>
+          <ol className="space-y-2 text-sm text-muted-foreground">
+            <li>1. Como importar clientes</li>
+            <li>2. Como revisar cobranças</li>
+            <li>3. Como abrir cliente</li>
+            <li>4. Como copiar mensagem de cobrança</li>
+            <li>5. Como usar configurações</li>
+          </ol>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
