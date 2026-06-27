@@ -767,6 +767,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     updateClientNotes,
     setMGMVAgreement,
     addImportHistory,
+    persistConfirmedImport,
   } = useStore();
   const products = useStore((s) => s.products);
   const clients = useStore((s) => s.clients);
@@ -839,8 +840,14 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         const stats = (data.stats as Record<string, unknown>) ?? {};
         const progressResetVersion = String(stats.resetVersion ?? "");
         const currentResetVersion = getResetVersion();
-        if (currentResetVersion && progressResetVersion !== currentResetVersion) {
+        if (!progressResetVersion || (currentResetVersion && progressResetVersion !== currentResetVersion)) {
           void supabase.from("import_progress").delete().eq("id", data.id);
+          try {
+            const { clearImportRuntimeState } = await import("@/lib/db-sync");
+            clearImportRuntimeState();
+          } catch {
+            /* ignore */
+          }
           return;
         }
         setProgressRowId(data.id);
@@ -1417,6 +1424,14 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       skippedDuplicates: stats.ignoredDuplicates,
       durationMs: Math.round(performance.now() - startedAt),
     });
+    const savedHistory = useStore.getState().importHistory[0];
+    if (savedHistory) {
+      await persistConfirmedImport({
+        clients: useStore.getState().clients,
+        products: useStore.getState().products,
+        history: savedHistory,
+      });
+    }
     let finalState: ImportProgressState | null = null;
     setImportProgress((prev) => {
       if (!prev) return prev;
@@ -1432,7 +1447,16 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       };
       return finalState;
     });
-    if (finalState) void persistProgress(finalState);
+    if (finalState) await persistProgress(finalState);
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes.user?.id;
+      if (uid) {
+        await supabase.from("import_progress").delete().eq("user_id", uid).eq("file_hash", zipData.fileHash);
+      }
+    } catch {
+      /* ignore */
+    }
     toast.success(
       `ZIP importado: ${stats.createdClients} novo(s) • ${stats.updatedClients} atualizado(s) • ${stats.createdProducts} produto(s) • ${stats.createdAgreements} MGMV novo(s)${stats.replacedAgreements ? ` • ${stats.replacedAgreements} MGMV substituído(s)` : ""} • ${stats.ignoredDuplicates} duplicata(s) ignorada(s)${stats.skippedAfterCorrection > 0 ? ` • ${stats.skippedAfterCorrection} pulado(s) por correção` : ""}`,
     );
