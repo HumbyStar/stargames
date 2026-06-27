@@ -1531,7 +1531,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     };
   }, [rows]);
 
-  const confirmImport = () => {
+  const confirmImport = async () => {
     if (!rows) return;
     const ready = rows.filter((r) => r.result === "Pronto");
     if (ready.length === 0) return toast.error("Nenhuma linha válida.");
@@ -1567,6 +1567,25 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         notes: r.notes,
       });
     });
+    const importSource = tab === "csv" ? "CSV" : tab === "excel" ? "Excel" : "Texto";
+    const fileHash = await sha1Hex(JSON.stringify(ready));
+    addImportHistory({
+      source: importSource,
+      file: importSource === "Texto" ? "importacao-manual.txt" : `importacao-${tab}`,
+      clientsCreated: createdClients,
+      productsAdded: ready.length,
+      errors: rows.length - ready.length,
+      status: rows.length - ready.length > 0 ? "Com avisos" : "Concluído",
+      fileHash,
+    });
+    const savedHistory = useStore.getState().importHistory[0];
+    if (savedHistory) {
+      await persistConfirmedImport({
+        clients: useStore.getState().clients,
+        products: useStore.getState().products,
+        history: savedHistory,
+      });
+    }
     toast.success(
       `${ready.length} registro(s) importados • ${createdClients} cliente(s) novos • ${rows.length - ready.length} erro(s) ignorados`,
     );
@@ -1575,7 +1594,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     onScrollTo("clientes");
   };
 
-  const confirmNotionImport = () => {
+  const confirmNotionImport = async () => {
     if (!notion) return;
     const usableClients = notion.clients.filter(
       (c) => c.client.phone && c.client.name && c.errors.length === 0,
@@ -1628,6 +1647,25 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         createdAgreements++;
       }
     });
+    const fileHash = await sha1Hex(htmlText || JSON.stringify(notion));
+    addImportHistory({
+      source: "HTML Notion",
+      file: "notion.html",
+      clientsCreated: createdClients,
+      productsAdded: totalProducts,
+      errors: notion.errors.length,
+      status: notion.errors.length > 0 ? "Com avisos" : "Concluído",
+      fileHash,
+      agreementsCreated: createdAgreements,
+    });
+    const savedHistory = useStore.getState().importHistory[0];
+    if (savedHistory) {
+      await persistConfirmedImport({
+        clients: useStore.getState().clients,
+        products: useStore.getState().products,
+        history: savedHistory,
+      });
+    }
     toast.success(
       `${usableClients.length} cliente(s) • ${totalProducts} produto(s) • ${createdAgreements} acordo(s) MGMV • ${createdClients} novo(s)`,
     );
