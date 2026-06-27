@@ -79,6 +79,7 @@ export type Database = {
       }
       clients: {
         Row: {
+          client_type: string
           created_at: string
           folder: string | null
           id: string
@@ -89,6 +90,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          client_type?: string
           created_at?: string
           folder?: string | null
           id?: string
@@ -99,6 +101,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          client_type?: string
           created_at?: string
           folder?: string | null
           id?: string
@@ -212,13 +215,143 @@ export type Database = {
         }
         Relationships: []
       }
+      mgmv_agreements: {
+        Row: {
+          client_id: string
+          client_name: string
+          client_phone: string
+          created_at: string
+          detection_log: Json | null
+          due_day: number | null
+          first_due_date: string | null
+          id: string
+          installment_value: number | null
+          installments_count: number | null
+          needs_review: boolean
+          next_due_date: string | null
+          original_notes: string | null
+          paid_installments: number
+          paid_value: number
+          pending_installments: number | null
+          remaining_value: number | null
+          source_file: string | null
+          source_folder: string | null
+          status: string
+          total_agreement_value: number | null
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          client_name?: string
+          client_phone?: string
+          created_at?: string
+          detection_log?: Json | null
+          due_day?: number | null
+          first_due_date?: string | null
+          id?: string
+          installment_value?: number | null
+          installments_count?: number | null
+          needs_review?: boolean
+          next_due_date?: string | null
+          original_notes?: string | null
+          paid_installments?: number
+          paid_value?: number
+          pending_installments?: number | null
+          remaining_value?: number | null
+          source_file?: string | null
+          source_folder?: string | null
+          status?: string
+          total_agreement_value?: number | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          client_name?: string
+          client_phone?: string
+          created_at?: string
+          detection_log?: Json | null
+          due_day?: number | null
+          first_due_date?: string | null
+          id?: string
+          installment_value?: number | null
+          installments_count?: number | null
+          needs_review?: boolean
+          next_due_date?: string | null
+          original_notes?: string | null
+          paid_installments?: number
+          paid_value?: number
+          pending_installments?: number | null
+          remaining_value?: number | null
+          source_file?: string | null
+          source_folder?: string | null
+          status?: string
+          total_agreement_value?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mgmv_agreements_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mgmv_installments: {
+        Row: {
+          agreement_id: string
+          amount: number | null
+          created_at: string
+          due_date: string | null
+          id: string
+          installment_number: number
+          paid_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          agreement_id: string
+          amount?: number | null
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          installment_number: number
+          paid_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          agreement_id?: string
+          amount?: number | null
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          installment_number?: number
+          paid_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mgmv_installments_agreement_id_fkey"
+            columns: ["agreement_id"]
+            isOneToOne: false
+            referencedRelation: "mgmv_agreements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           client_id: string
+          collection_eligible: boolean
           created_at: string
           due_date: string
           financial_status: string
           id: string
+          included_in_mgmv: boolean
+          mgmv_agreement_id: string | null
           name: string
           notes: string | null
           paid_value: number
@@ -230,10 +363,13 @@ export type Database = {
         }
         Insert: {
           client_id: string
+          collection_eligible?: boolean
           created_at?: string
           due_date?: string
           financial_status?: string
           id?: string
+          included_in_mgmv?: boolean
+          mgmv_agreement_id?: string | null
           name: string
           notes?: string | null
           paid_value?: number
@@ -245,10 +381,13 @@ export type Database = {
         }
         Update: {
           client_id?: string
+          collection_eligible?: boolean
           created_at?: string
           due_date?: string
           financial_status?: string
           id?: string
+          included_in_mgmv?: boolean
+          mgmv_agreement_id?: string | null
           name?: string
           notes?: string | null
           paid_value?: number
