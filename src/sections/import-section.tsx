@@ -79,7 +79,13 @@ interface NotionParseResult {
 
 interface NotionClientBlock {
   index: number;
-  client: { name: string; phone: string; phoneDisplay: string };
+  client: {
+    name: string;
+    phone: string;
+    phoneDisplay: string;
+    wasAutoCorrected?: boolean;
+    correctionReason?: string;
+  };
   products: NotionProduct[];
   notes: string;
   errors: string[];
@@ -151,11 +157,94 @@ const calculateDueDate = (status: FinancialStatus, registerDate: string | null) 
   return registerDate;
 };
 
-function extractClientFromTitle(title: string) {
-  const parts = title.split(/\s+-\s+/);
-  const name = parts[0]?.trim() || "";
-  const phoneRaw = parts.slice(1).join(" - ").trim();
-  return { name, phone: phoneRaw.replace(/\D/g, ""), phoneDisplay: phoneRaw };
+function cleanClientName(name: string) {
+  return String(name || "")
+    .replace(/\s+\d{2}$/, "")
+    .replace(/^~/, "")
+    .trim();
+}
+
+function formatBRPhone(digits: string) {
+  const d = String(digits || "").replace(/\D/g, "");
+  if (d.length === 11) return `${d.slice(0, 2)} ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `${d.slice(0, 2)} ${d.slice(2, 6)}-${d.slice(6)}`;
+  return d;
+}
+
+function findPossibleBrazilianPhone(digits: string) {
+  const value = String(digits || "");
+  const eleven = value.match(/\d{11}/);
+  if (eleven) return eleven[0];
+  const ten = value.match(/\d{10}/);
+  if (ten) return ten[0];
+  return null;
+}
+
+/**
+ * Extrai cliente do título do HTML/arquivo Notion, tentando recuperar telefone
+ * em casos comuns de erro de digitação. Ex.: "Julio Silva 11 - 98702-2518" →
+ * nome "Julio Silva" / telefone "11987022518".
+ */
+function extractClientFromTitle(title: string, fileName?: string) {
+  const rawTitle = String(title || "");
+  const rawFile = String(fileName || "").replace(/\.(html?|HTML?)$/i, "");
+  const rawSource = `${rawTitle} ${rawFile}`;
+
+  const titleParts = rawTitle.split(/\s+-\s+/);
+  let namePart = titleParts[0]?.trim() || "";
+  const phonePart = titleParts.slice(1).join(" - ").trim();
+
+  let phoneDigits = phonePart.replace(/\D/g, "");
+  let wasAutoCorrected = false;
+  let correctionReason: string | undefined;
+
+  // 1) Se o telefone (após o hífen) está incompleto, tentar recuperar o DDD
+  // que pode ter sido digitado no fim do nome. Ex.: "Julio Silva 11" - "98702-2518".
+  if (phoneDigits.length > 0 && phoneDigits.length < 10) {
+    const tail = namePart.match(/\b(\d{2})\s*$/);
+    if (tail) {
+      const combined = (tail[1] + phoneDigits).replace(/\D/g, "");
+      if (combined.length === 10 || combined.length === 11) {
+        phoneDigits = combined;
+        namePart = namePart.replace(/\s*\b\d{2}\s*$/, "").trim();
+        wasAutoCorrected = true;
+        correctionReason = "DDD recuperado do final do nome.";
+      }
+    }
+  }
+
+  // 2) Se ainda inválido, procurar qualquer telefone BR no título inteiro.
+  if (phoneDigits.length < 10 || phoneDigits.length > 11) {
+    const allDigits = rawTitle.replace(/\D/g, "");
+    const possible = findPossibleBrazilianPhone(allDigits);
+    if (possible) {
+      phoneDigits = possible;
+      wasAutoCorrected = true;
+      correctionReason = correctionReason ?? "Telefone recuperado do título.";
+    }
+  }
+
+  // 3) Última tentativa: olhar no nome do arquivo também.
+  if (phoneDigits.length < 10 || phoneDigits.length > 11) {
+    const allDigits = rawSource.replace(/\D/g, "");
+    const possible = findPossibleBrazilianPhone(allDigits);
+    if (possible) {
+      phoneDigits = possible;
+      wasAutoCorrected = true;
+      correctionReason = correctionReason ?? "Telefone recuperado do nome do arquivo.";
+    }
+  }
+
+  const cleanedName = cleanClientName(namePart);
+  const valid = phoneDigits.length === 10 || phoneDigits.length === 11;
+
+  return {
+    name: cleanedName,
+    phone: valid ? phoneDigits : phoneDigits, // mantém dígitos brutos p/ debug
+    phoneDisplay: valid ? formatBRPhone(phoneDigits) : phonePart || phoneDigits,
+    wasAutoCorrected: valid && wasAutoCorrected,
+    correctionReason: valid && wasAutoCorrected ? correctionReason : undefined,
+  };
 }
 
 function extractClientNotes(root: Element): string {
@@ -287,15 +376,23 @@ function parseProductsTable(table: Element): NotionProduct[] {
   return products;
 }
 
-function parseClientArticle(article: Element, index: number): NotionClientBlock {
+function parseClientArticle(
+  article: Element,
+  index: number,
+  fileName?: string,
+): NotionClientBlock {
   const errors: string[] = [];
   const title =
     article.querySelector(".page-title")?.textContent?.trim() ||
     article.querySelector("h1")?.textContent?.trim() ||
     "";
-  const client = extractClientFromTitle(title);
+  const client = extractClientFromTitle(title, fileName);
   if (!client.name) errors.push(`Cliente #${index}: nome não encontrado.`);
-  if (!client.phone) errors.push(`Cliente #${index}: telefone não encontrado.`);
+  if (!client.phone || client.phone.length < 10 || client.phone.length > 11) {
+    errors.push(
+      `Cliente #${index}: telefone inválido e não foi possível corrigir automaticamente.`,
+    );
+  }
   const table =
     article.querySelector("table.simple-table") || article.querySelector("table");
   let products: NotionProduct[] = [];
@@ -313,7 +410,7 @@ function parseClientArticle(article: Element, index: number): NotionClientBlock 
   };
 }
 
-function parseNotionHtml(html: string): NotionParseResult {
+function parseNotionHtml(html: string, fileName?: string): NotionParseResult {
   const doc = new DOMParser().parseFromString(html, "text/html");
   const errors: string[] = [];
   let articles = Array.from(doc.querySelectorAll("article.page"));
@@ -321,7 +418,7 @@ function parseNotionHtml(html: string): NotionParseResult {
     // fallback: treat the whole body as a single client article
     if (doc.body) articles = [doc.body as unknown as Element];
   }
-  const clients = articles.map((a, i) => parseClientArticle(a, i + 1));
+  const clients = articles.map((a, i) => parseClientArticle(a, i + 1, fileName));
   if (clients.length === 0) errors.push("Nenhum cliente encontrado no HTML.");
   return { clients, errors };
 }
@@ -348,7 +445,13 @@ interface ZipClientPreview {
   folderName: string;
   fileName: string;
   fullPath: string;
-  client: { name: string; phone: string; phoneDisplay: string };
+  client: {
+    name: string;
+    phone: string;
+    phoneDisplay: string;
+    wasAutoCorrected?: boolean;
+    correctionReason?: string;
+  };
   products: ZipProductPreview[];
   notes: string;
   mgmv: MGMVAgreement | null;
@@ -377,7 +480,8 @@ type ZipFilter =
   | "mgmv"
   | "semTelefone"
   | "semProdutos"
-  | "statusCorrigido";
+  | "statusCorrigido"
+  | "telefoneCorrigido";
 
 // =============================================================
 
@@ -612,7 +716,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           const fileIdx = i + idx;
           let parsed: NotionParseResult;
           try {
-            parsed = parseNotionHtml(file.htmlContent);
+            parsed = parseNotionHtml(file.htmlContent, file.fileName);
           } catch (err) {
             console.error("parseNotionHtml falhou em", file.fullPath, err);
             const raw = err instanceof Error ? err.message : String(err);
@@ -1531,7 +1635,8 @@ function ZipPreview({
       (s, e) => s + e.products.filter((p) => p.statusWarning).length,
       0,
     );
-    return { totalProducts, newClients, existing, duplicates, mgmv, errors, corrected };
+    const phoneCorrected = data.entries.filter((e) => e.client.wasAutoCorrected).length;
+    return { totalProducts, newClients, existing, duplicates, mgmv, errors, corrected, phoneCorrected };
   }, [data]);
 
   const filtered = useMemo(() => {
@@ -1555,6 +1660,8 @@ function ZipPreview({
           return e.products.length === 0;
         case "statusCorrigido":
           return e.products.some((p) => p.statusWarning);
+        case "telefoneCorrigido":
+          return !!e.client.wasAutoCorrected;
         default:
           return true;
       }
@@ -1603,6 +1710,7 @@ function ZipPreview({
     { key: "semTelefone", label: "Sem telefone" },
     { key: "semProdutos", label: "Sem produtos" },
     { key: "statusCorrigido", label: "Status corrigido" },
+    { key: "telefoneCorrigido", label: "Telefone corrigido" },
   ];
 
   return (
@@ -1747,6 +1855,16 @@ function ZipPreview({
                             </td>
                             <td className="py-3 pr-3">
                               <Tag variant={result.variant}>{result.label}</Tag>
+                              {e.client.wasAutoCorrected && !e.criticalError && (
+                                <div className="mt-1">
+                                  <Tag variant="warning">Corrigido automaticamente</Tag>
+                                </div>
+                              )}
+                              {e.client.correctionReason && !e.criticalError && (
+                                <div className="mt-1 text-[10px] text-muted-foreground">
+                                  {e.client.correctionReason}
+                                </div>
+                              )}
                               {e.errors.length > 0 && (
                                 <div className="mt-1 text-[10px] text-destructive">
                                   {e.errors.join("; ")}
