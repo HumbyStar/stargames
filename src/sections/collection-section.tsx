@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,7 +40,8 @@ type Period =
   | "personalizado"
   | "maximo";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50] as const;
+const DEFAULT_PAGE_SIZE = 50;
 
 export function CollectionSection({
   onScrollTo,
@@ -54,7 +55,9 @@ export function CollectionSection({
   const [period, setPeriod] = useState<Period>("todos");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+  const [visibleCount, setVisibleCount] = useState<number>(DEFAULT_PAGE_SIZE);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [payTarget, setPayTarget] = useState<{ id: string; remaining: number; productName: string } | null>(null);
   const [payAmount, setPayAmount] = useState("");
 
@@ -134,6 +137,30 @@ export function CollectionSection({
   }, [allRows, filter, period, customFrom, customTo]);
 
   const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+
+  // Reseta a janela visível ao mudar filtros/tamanho.
+  useEffect(() => {
+    setVisibleCount(pageSize);
+  }, [pageSize, filter, period, customFrom, customTo]);
+
+  const hasMore = visible.length < filtered.length;
+
+  // Lazy load por scroll infinito (mesma lógica de Clientes).
+  useEffect(() => {
+    if (!hasMore) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setVisibleCount((c) => c + pageSize);
+        }
+      },
+      { rootMargin: "400px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, pageSize, visible.length]);
 
   const totalAtraso =
     overdueProducts.reduce((a, p) => a + (p.totalValue - p.paidValue), 0) +
@@ -265,10 +292,7 @@ export function CollectionSection({
           {chips.map((c) => (
             <button
               key={c.id}
-              onClick={() => {
-                setFilter(c.id);
-                setVisibleCount(PAGE_SIZE);
-              }}
+              onClick={() => setFilter(c.id)}
               className={
                 "rounded-full px-3 py-1 text-xs font-medium transition-colors " +
                 (filter === c.id
@@ -285,35 +309,38 @@ export function CollectionSection({
                 <input
                   type="date"
                   value={customFrom}
-                  onChange={(e) => {
-                    setCustomFrom(e.target.value);
-                    setVisibleCount(PAGE_SIZE);
-                  }}
+                  onChange={(e) => setCustomFrom(e.target.value)}
                   className="h-9 rounded-md border border-input bg-background px-2 text-sm"
                 />
                 <span className="text-xs text-muted-foreground">até</span>
                 <input
                   type="date"
                   value={customTo}
-                  onChange={(e) => {
-                    setCustomTo(e.target.value);
-                    setVisibleCount(PAGE_SIZE);
-                  }}
+                  onChange={(e) => setCustomTo(e.target.value)}
                   className="h-9 rounded-md border border-input bg-background px-2 text-sm"
                 />
               </>
             )}
             <select
               value={period}
-              onChange={(e) => {
-                setPeriod(e.target.value as Period);
-                setVisibleCount(PAGE_SIZE);
-              }}
+              onChange={(e) => setPeriod(e.target.value as Period)}
               className="h-9 rounded-md border border-input bg-background px-2 text-sm"
             >
               {periodOptions.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              title="Máximo de linhas por carga"
+            >
+              {PAGE_SIZE_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  Máx. {n}
                 </option>
               ))}
             </select>
@@ -493,7 +520,7 @@ export function CollectionSection({
         </div>
 
         {filtered.length > 0 && (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+          <div className="mt-4 flex flex-col items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground sm:flex-row sm:justify-between">
             <span>
               Mostrando {Math.min(visible.length, filtered.length)} de {filtered.length} cobranças encontradas
               {period === "maximo" && filtered.length > 200 && (
@@ -502,14 +529,19 @@ export function CollectionSection({
                 </span>
               )}
             </span>
-            {visible.length < filtered.length && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-              >
-                Carregar mais
-              </Button>
+            {hasMore ? (
+              <div className="flex flex-col items-center gap-2 sm:items-end">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setVisibleCount((c) => c + pageSize)}
+                >
+                  Carregar mais {Math.min(pageSize, filtered.length - visible.length)}
+                </Button>
+                <div ref={sentinelRef} aria-hidden className="h-1 w-full" />
+              </div>
+            ) : (
+              <span>Todas as cobranças carregadas.</span>
             )}
           </div>
         )}
