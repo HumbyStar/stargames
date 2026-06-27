@@ -875,15 +875,29 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   }, []);
 
   const discardProgress = async () => {
-    if (progressRowId) {
-      try {
+    // Apaga TODOS os progressos do usuário, não apenas o atual — evita
+    // que outro registro órfão volte a aparecer como "importação interrompida".
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes.user?.id;
+      if (uid) {
+        await supabase.from("import_progress").delete().eq("user_id", uid);
+      } else if (progressRowId) {
         await supabase.from("import_progress").delete().eq("id", progressRowId);
-      } catch {
-        /* ignore */
       }
+    } catch {
+      /* ignore */
+    }
+    // Limpa também qualquer cache local de importação.
+    try {
+      const { clearImportRuntimeState } = await import("@/lib/db-sync");
+      clearImportRuntimeState();
+    } catch {
+      /* ignore */
     }
     setProgressRowId(null);
     setImportProgress(null);
+    toast.success("Progresso de importação descartado.");
   };
 
   const handleZipFile = async (file: File) => {
