@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
@@ -57,7 +57,6 @@ export function CollectionSection({
   const [customTo, setCustomTo] = useState("");
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [visibleCount, setVisibleCount] = useState<number>(DEFAULT_PAGE_SIZE);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [payTarget, setPayTarget] = useState<{ id: string; remaining: number; productName: string } | null>(null);
   const [payAmount, setPayAmount] = useState("");
 
@@ -144,23 +143,6 @@ export function CollectionSection({
   }, [pageSize, filter, period, customFrom, customTo]);
 
   const hasMore = visible.length < filtered.length;
-
-  // Lazy load por scroll infinito (mesma lógica de Clientes).
-  useEffect(() => {
-    if (!hasMore) return;
-    const el = sentinelRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          setVisibleCount((c) => c + pageSize);
-        }
-      },
-      { rootMargin: "400px 0px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [hasMore, pageSize, visible.length]);
 
   const totalAtraso =
     overdueProducts.reduce((a, p) => a + (p.totalValue - p.paidValue), 0) +
@@ -520,8 +502,8 @@ export function CollectionSection({
         </div>
 
         {filtered.length > 0 && (
-          <div className="mt-4 flex flex-col items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground sm:flex-row sm:justify-between">
-            <span>
+          <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
+            <span className="text-center">
               Mostrando {Math.min(visible.length, filtered.length)} de {filtered.length} cobranças encontradas
               {period === "maximo" && filtered.length > 200 && (
                 <span className="ml-2 text-amber-500">
@@ -530,16 +512,10 @@ export function CollectionSection({
               )}
             </span>
             {hasMore ? (
-              <div className="flex flex-col items-center gap-2 sm:items-end">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setVisibleCount((c) => c + pageSize)}
-                >
-                  Carregar mais {Math.min(pageSize, filtered.length - visible.length)}
-                </Button>
-                <div ref={sentinelRef} aria-hidden className="h-1 w-full" />
-              </div>
+              <LoadMoreButton
+                count={Math.min(pageSize, filtered.length - visible.length)}
+                onClick={() => setVisibleCount((c) => c + pageSize)}
+              />
             ) : (
               <span>Todas as cobranças carregadas.</span>
             )}
