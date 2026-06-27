@@ -437,6 +437,7 @@ interface ZipFileEntry {
 interface ZipProductPreview extends NotionProduct {
   tempId: string;
   duplicate: boolean;
+  duplicateAfterCorrection?: boolean;
   selected: boolean;
 }
 
@@ -456,6 +457,7 @@ interface ZipClientPreview {
   notes: string;
   mgmv: MGMVAgreement | null;
   existingClient: Client | undefined;
+  matchedAfterCorrection?: boolean;
   errors: string[];
   criticalError: boolean;
   selected: boolean;
