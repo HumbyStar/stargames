@@ -436,15 +436,28 @@ export function productCollectionStatus(p: Product): {
   label: string;
   variant: "danger" | "warning" | "neutral";
 } {
+  // Produtos incluídos em um acordo MGMV não são cobrados individualmente.
+  // A cobrança ativa passa a ser feita pelas parcelas do acordo, então
+  // exibimos uma tag informativa em vez de "MGMV vencido".
+  if (p.financialStatus === "MGMV")
+    return { label: "Incluído no MGMV", variant: "neutral" };
   if (p.financialStatus === "Reserva" && isOverdue(p.dueDate))
     return { label: "Reserva vencida", variant: "danger" };
   if (p.financialStatus === "Pendente" && isOverdue(p.dueDate))
     return { label: "Pendente vencido", variant: "danger" };
-  if (p.financialStatus === "MGMV" && isOverdue(p.dueDate))
-    return { label: "MGMV vencido", variant: "danger" };
   if (p.financialStatus === "Reserva") return { label: "Reserva", variant: "warning" };
   if (p.financialStatus === "Pendente") return { label: "Pendente", variant: "warning" };
   return { label: p.financialStatus, variant: "neutral" };
+}
+
+/**
+ * Data limite exibida no Histórico de Produtos.
+ * Para produtos incluídos no MGMV, o vencimento real vive nas parcelas do
+ * acordo — a coluna Limite passa a exibir "Acordo MGMV".
+ */
+export function getProductDisplayDueDate(p: Product): string {
+  if (p.financialStatus === "MGMV") return "Acordo MGMV";
+  return formatDateBR(p.dueDate);
 }
 
 // ============= MGMV (acordo consolidado por cliente) =============

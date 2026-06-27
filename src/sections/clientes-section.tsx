@@ -17,6 +17,7 @@ import {
   formatBRL,
   formatDateBR,
   getMGMVDisplay,
+  getProductDisplayDueDate,
   isOverdue,
   productCollectionStatus,
   useStore,
@@ -571,7 +572,7 @@ function ClientDrawer({
                     <td className="py-2 pr-3"><Tag variant={status.variant === "danger" ? "danger" : status.variant === "warning" ? "warning" : "neutral"}>{status.label}</Tag></td>
                     <td className="py-2 pr-3"><Tag>{p.situation}</Tag></td>
                     <td className="py-2 pr-3 text-muted-foreground">{formatDateBR(p.registerDate)}</td>
-                    <td className="py-2 pr-3 text-muted-foreground">{formatDateBR(p.dueDate)}</td>
+                     <td className="py-2 pr-3 text-muted-foreground">{getProductDisplayDueDate(p)}</td>
                     <td className="py-2 pr-3">
                       <div className="flex flex-wrap gap-1">
                         <Button size="sm" onClick={() => onRegisterPayment(p.id, remaining)}>Pagar</Button>
