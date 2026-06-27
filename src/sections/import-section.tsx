@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -499,6 +499,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   const [htmlText, setHtmlText] = useState("");
   const [zipData, setZipData] = useState<ZipPreviewData | null>(null);
   const [zipProcessing, setZipProcessing] = useState(false);
+  const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
 
   const handleZipFile = async (file: File) => {
     if (!file.name.toLowerCase().endsWith(".zip")) {
@@ -506,13 +507,22 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     }
     setZipProcessing(true);
     setZipData(null);
+    setZipProgress({ done: 0, total: 0 });
     try {
       const { default: JSZip } = await import("jszip");
-      const zip = await JSZip.loadAsync(file);
+      let zip;
+      try {
+        zip = await JSZip.loadAsync(file);
+      } catch (err) {
+        console.error("JSZip load error", err);
+        toast.error("Não foi possível abrir o ZIP. O arquivo pode estar corrompido ou protegido por senha.");
+        return;
+      }
       const htmlFiles: ZipFileEntry[] = [];
       const folders = new Set<string>();
       const globalErrors: string[] = [];
-      const promises: Promise<void>[] = [];
+      // Collect entries first (sync) so we can stream extraction in chunks.
+      const rawEntries: { path: string; fileName: string; folderName: string; entry: any }[] = [];
       zip.forEach((path, entry) => {
         if (entry.dir) return;
         const lower = path.toLowerCase();
@@ -521,41 +531,78 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         const fileName = parts[parts.length - 1];
         const folderName = parts.length > 1 ? parts.slice(0, -1).join("/") : "(raiz)";
         folders.add(folderName);
-        promises.push(
-          entry.async("string").then((content) => {
-            htmlFiles.push({ folderName, fileName, fullPath: path, htmlContent: content });
+        rawEntries.push({ path, fileName, folderName, entry });
+      });
+      setZipProgress({ done: 0, total: rawEntries.length });
+      // Extract in chunks of 25 so the UI stays responsive on big archives.
+      const CHUNK = 25;
+      for (let i = 0; i < rawEntries.length; i += CHUNK) {
+        const slice = rawEntries.slice(i, i + CHUNK);
+        await Promise.all(
+          slice.map(async (r) => {
+            try {
+              const content = await r.entry.async("string");
+              htmlFiles.push({
+                folderName: r.folderName,
+                fileName: r.fileName,
+                fullPath: r.path,
+                htmlContent: content,
+              });
+            } catch (err) {
+              console.error("Falha ao ler", r.path, err);
+              globalErrors.push(`Falha ao ler ${r.path}.`);
+            }
           }),
         );
-      });
-      await Promise.all(promises);
+        setZipProgress({ done: Math.min(i + CHUNK, rawEntries.length), total: rawEntries.length });
+        // Yield to the browser so the progress UI updates and we don't freeze the tab.
+        await new Promise((r) => setTimeout(r, 0));
+      }
       if (htmlFiles.length === 0) {
         globalErrors.push("Nenhum arquivo .html encontrado no ZIP.");
       }
       const entries: ZipClientPreview[] = [];
-      htmlFiles
-        .sort((a, b) => a.fullPath.localeCompare(b.fullPath))
-        .forEach((file, fileIdx) => {
-          const parsed = parseNotionHtml(file.htmlContent);
+      htmlFiles.sort((a, b) => a.fullPath.localeCompare(b.fullPath));
+      // Index existing products by clientId for O(1) duplicate lookups.
+      const productIndexByClient = new Map<string, Set<string>>();
+      products.forEach((p) => {
+        const key = `${p.name.trim().toLowerCase()}|${new Date(p.registerDate).toISOString().slice(0, 10)}`;
+        const set = productIndexByClient.get(p.clientId) ?? new Set<string>();
+        set.add(key);
+        productIndexByClient.set(p.clientId, set);
+      });
+      const clientByPhone = new Map<string, Client>();
+      clients.forEach((c) => {
+        const ph = c.phone.replace(/\D/g, "");
+        if (ph) clientByPhone.set(ph, c);
+      });
+      // Parse in chunks too — DOMParser on hundreds of HTML files blocks the UI.
+      for (let i = 0; i < htmlFiles.length; i += CHUNK) {
+        const slice = htmlFiles.slice(i, i + CHUNK);
+        slice.forEach((file, idx) => {
+          const fileIdx = i + idx;
+          let parsed: NotionParseResult;
+          try {
+            parsed = parseNotionHtml(file.htmlContent);
+          } catch (err) {
+            console.error("parseNotionHtml falhou em", file.fullPath, err);
+            globalErrors.push(`Erro ao interpretar ${file.fullPath}.`);
+            return;
+          }
           parsed.clients.forEach((block, blockIdx) => {
             const tempId = `zip-${fileIdx}-${blockIdx}-${Math.random().toString(36).slice(2, 8)}`;
-            const existingClient = block.client.phone
-              ? clients.find((c) => c.phone.replace(/\D/g, "") === block.client.phone)
-              : undefined;
+            const existingClient = block.client.phone ? clientByPhone.get(block.client.phone) : undefined;
             const errors = [...block.errors];
             if (!block.client.name) errors.push("Cliente sem nome.");
             if (!block.client.phone || block.client.phone.length < 10)
               errors.push("Telefone inválido ou ausente.");
             if (block.products.length === 0) errors.push("Sem produtos na tabela.");
             const productPreviews: ZipProductPreview[] = block.products.map((p, pIdx) => {
-              const dup =
-                !!existingClient &&
-                products.some(
-                  (existing) =>
-                    existing.clientId === existingClient.id &&
-                    existing.name.trim().toLowerCase() === p.product.trim().toLowerCase() &&
-                    (!p.registerDate ||
-                      new Date(existing.registerDate).toISOString().slice(0, 10) === p.registerDate),
-                );
+              let dup = false;
+              if (existingClient && p.registerDate) {
+                const set = productIndexByClient.get(existingClient.id);
+                dup = !!set?.has(`${p.product.trim().toLowerCase()}|${p.registerDate}`);
+              }
               return {
                 ...p,
                 tempId: `${tempId}-p${pIdx}`,
@@ -585,6 +632,9 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             });
           });
         });
+        // Yield to keep the UI alive during heavy parsing.
+        await new Promise((r) => setTimeout(r, 0));
+      }
       setZipData({
         folders,
         files: htmlFiles.length,
@@ -600,6 +650,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       toast.error("Falha ao ler o ZIP. Verifique o arquivo.");
     } finally {
       setZipProcessing(false);
+      setZipProgress(null);
     }
   };
 
