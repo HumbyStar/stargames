@@ -15,7 +15,7 @@ import {
   type MGMVDisplay,
 } from "@/lib/store";
 import { toast } from "sonner";
-import { MessageCircle, Maximize2, Minimize2 } from "lucide-react";
+import { MessageCircle, Maximize2, Minimize2, Filter as FilterIcon, Save, Trash2 } from "lucide-react";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { useSectionCompact } from "@/lib/use-section-compact";
@@ -46,6 +46,15 @@ type Period =
 const PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50] as const;
 const DEFAULT_PAGE_SIZE = 50;
 
+type SavedFilter = {
+  id: string;
+  name: string;
+  filter: Filter;
+  period: Period;
+  customFrom: string;
+  customTo: string;
+};
+
 export function CollectionSection({
   onScrollTo,
   initialFilter = "todos",
@@ -63,6 +72,14 @@ export function CollectionSection({
   const [compact, setCompact] = useSectionCompact("collection");
   const [payTarget, setPayTarget] = useState<{ id: string; remaining: number; productName: string } | null>(null);
   const [payAmount, setPayAmount] = useState("");
+  const [showFilters, setShowFilters] = useState(true);
+  const [savedFilters, setSavedFilters] = usePersistedState<SavedFilter[]>("collection.savedFilters", []);
+  const [activeSavedId, setActiveSavedId] = usePersistedState<string>("collection.activeSavedId", "");
+
+  const activeFilterCount =
+    (filter !== "todos" ? 1 : 0) +
+    (period !== "todos" ? 1 : 0) +
+    (period === "personalizado" && (customFrom || customTo) ? 1 : 0);
 
   const overdueProducts = useMemo(() => products.filter(shouldAppearInCollection), [products]);
 
@@ -274,22 +291,22 @@ export function CollectionSection({
       </div>
 
       <Card className="mt-6">
-        <div className="flex flex-wrap items-center gap-2">
-          {chips.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setFilter(c.id)}
-              className={
-                "rounded-full px-3 py-1 text-xs font-medium transition-colors " +
-                (filter === c.id
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-accent")
-              }
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowFilters((v) => !v)}
+              className="gap-1.5"
             >
-              {c.label}
-            </button>
-          ))}
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+              <FilterIcon className="h-4 w-4" />
+              Filtros
+              {activeFilterCount > 0 && (
+                <span className="ml-1 rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                  {activeFilterCount}
+                </span>
+              )}
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -300,47 +317,149 @@ export function CollectionSection({
               {compact ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
               {compact ? "Expandir" : "Compactar"}
             </Button>
-            {period === "personalizado" && (
-              <>
-                <input
-                  type="date"
-                  value={customFrom}
-                  onChange={(e) => setCustomFrom(e.target.value)}
-                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                />
-                <span className="text-xs text-muted-foreground">até</span>
-                <input
-                  type="date"
-                  value={customTo}
-                  onChange={(e) => setCustomTo(e.target.value)}
-                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                />
-              </>
+            {savedFilters.length > 0 && (
+              <select
+                value={activeSavedId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setActiveSavedId(id);
+                  const f = savedFilters.find((s) => s.id === id);
+                  if (f) {
+                    setFilter(f.filter);
+                    setPeriod(f.period);
+                    setCustomFrom(f.customFrom);
+                    setCustomTo(f.customTo);
+                    toast.success(`Filtro "${f.name}" aplicado`);
+                  }
+                }}
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                title="Filtros salvos"
+              >
+                <option value="">Filtros salvos…</option>
+                {savedFilters.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
             )}
-            <select
-              value={period}
-              onChange={(e) => setPeriod(e.target.value as Period)}
-              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-            >
-              {periodOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
-              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-              title="Máximo de linhas por carga"
-            >
-              {PAGE_SIZE_OPTIONS.map((n) => (
-                <option key={n} value={n}>
-                  Máx. {n}
-                </option>
-              ))}
-            </select>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                title="Máximo de linhas por carga"
+              >
+                {PAGE_SIZE_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    Máx. {n}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
+
+          {showFilters && (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                {chips.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setFilter(c.id)}
+                    className={
+                      "rounded-full px-3 py-1 text-xs font-medium transition-colors " +
+                      (filter === c.id
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-accent")
+                    }
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={period}
+                  onChange={(e) => setPeriod(e.target.value as Period)}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  {periodOptions.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                {period === "personalizado" && (
+                  <>
+                    <input
+                      type="date"
+                      value={customFrom}
+                      onChange={(e) => setCustomFrom(e.target.value)}
+                      className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                    />
+                    <span className="text-xs text-muted-foreground">até</span>
+                    <input
+                      type="date"
+                      value={customTo}
+                      onChange={(e) => setCustomTo(e.target.value)}
+                      className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                    />
+                  </>
+                )}
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const name = window.prompt("Nome do filtro:");
+                      if (!name || !name.trim()) return;
+                      const trimmed = name.trim();
+                      const existing = savedFilters.find((s) => s.name === trimmed);
+                      const snapshot = { filter, period, customFrom, customTo };
+                      if (existing) {
+                        const next = savedFilters.map((s) =>
+                          s.id === existing.id ? { ...existing, ...snapshot } : s,
+                        );
+                        setSavedFilters(next);
+                        setActiveSavedId(existing.id);
+                        toast.success(`Filtro "${trimmed}" atualizado`);
+                      } else {
+                        const id =
+                          (globalThis.crypto as Crypto | undefined)?.randomUUID?.() ??
+                          `f-${Date.now()}`;
+                        setSavedFilters([...savedFilters, { id, name: trimmed, ...snapshot }]);
+                        setActiveSavedId(id);
+                        toast.success(`Filtro "${trimmed}" salvo`);
+                      }
+                    }}
+                    className="gap-1.5"
+                  >
+                    <Save className="h-4 w-4" />
+                    Salvar filtro
+                  </Button>
+                  {activeSavedId && savedFilters.some((s) => s.id === activeSavedId) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const s = savedFilters.find((x) => x.id === activeSavedId);
+                        if (!s) return;
+                        if (!window.confirm(`Excluir filtro "${s.name}"?`)) return;
+                        setSavedFilters(savedFilters.filter((x) => x.id !== activeSavedId));
+                        setActiveSavedId("");
+                        toast.success("Filtro excluído");
+                      }}
+                      className="gap-1.5 text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Excluir
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="mt-4 overflow-x-auto">
