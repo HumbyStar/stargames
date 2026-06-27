@@ -20,6 +20,7 @@ import {
   calculateFinancialStatus,
   formatBRL,
   useStore,
+  getResetVersion,
   type Client,
   type FinancialStatus,
   type MGMVAgreement,
@@ -797,7 +798,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         total: state.folders.length,
         messages: state.messages.slice(-200),
         errors: state.errors.slice(-200),
-        stats: state.stats,
+        stats: { ...state.stats, resetVersion: getResetVersion() },
         done: state.done,
         started_at: state.startedAt,
       };
@@ -833,6 +834,15 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           .limit(1)
           .maybeSingle();
         if (error || !data || cancelled) return;
+        // Se a versão de reset mudou desde que esse progresso foi salvo,
+        // descartar silenciosamente — não é mais válido.
+        const stats = (data.stats as Record<string, unknown>) ?? {};
+        const progressResetVersion = String(stats.resetVersion ?? "");
+        const currentResetVersion = getResetVersion();
+        if (currentResetVersion && progressResetVersion !== currentResetVersion) {
+          void supabase.from("import_progress").delete().eq("id", data.id);
+          return;
+        }
         setProgressRowId(data.id);
         setImportProgress({
           fileHash: data.file_hash,
@@ -865,15 +875,29 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   }, []);
 
   const discardProgress = async () => {
-    if (progressRowId) {
-      try {
+    // Apaga TODOS os progressos do usuário, não apenas o atual — evita
+    // que outro registro órfão volte a aparecer como "importação interrompida".
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes.user?.id;
+      if (uid) {
+        await supabase.from("import_progress").delete().eq("user_id", uid);
+      } else if (progressRowId) {
         await supabase.from("import_progress").delete().eq("id", progressRowId);
-      } catch {
-        /* ignore */
       }
+    } catch {
+      /* ignore */
+    }
+    // Limpa também qualquer cache local de importação.
+    try {
+      const { clearImportRuntimeState } = await import("@/lib/db-sync");
+      clearImportRuntimeState();
+    } catch {
+      /* ignore */
     }
     setProgressRowId(null);
     setImportProgress(null);
+    toast.success("Progresso de importação descartado.");
   };
 
   const handleZipFile = async (file: File) => {

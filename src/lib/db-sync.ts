@@ -243,6 +243,87 @@ export function dbDeleteAllProducts(): void {
     });
 }
 
+/** Apaga acordos MGMV (parcelas caem em cascata via FK). */
+export function dbDeleteAllMGMV(): void {
+  void supabase
+    .from("mgmv_installments")
+    .delete()
+    .not("id", "is", null)
+    .then(({ error }) => {
+      if (error) logErr("deleteAllMGMVInstallments", error);
+    });
+  void supabase
+    .from("mgmv_agreements")
+    .delete()
+    .not("id", "is", null)
+    .then(({ error }) => {
+      if (error) logErr("deleteAllMGMVAgreements", error);
+    });
+}
+
+/** Apaga progresso de importação interrompida do usuário atual. */
+export function dbDeleteAllImportProgress(): void {
+  void (async () => {
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes.user?.id;
+      if (!uid) return;
+      const { error } = await supabase
+        .from("import_progress")
+        .delete()
+        .eq("user_id", uid);
+      if (error) logErr("deleteAllImportProgress", error);
+    } catch (err) {
+      logErr("deleteAllImportProgress", err);
+    }
+  })();
+}
+
+/**
+ * Limpa o estado runtime de importação no navegador (cache, preview, lote
+ * pendente, importação interrompida). Não toca no banco.
+ */
+export function clearImportRuntimeState(): void {
+  if (typeof window === "undefined") return;
+  const PREFIXES = [
+    "import.",
+    "import-",
+    "currentImportId",
+    "lastImportPreview",
+    "lastZipName",
+    "processedFiles",
+    "importProgress",
+    "interruptedImport",
+    "pendingImportBatches",
+    "commonClientsPreview",
+    "mgmvClientsPreview",
+  ];
+  try {
+    const ls = window.localStorage;
+    const toRemove: string[] = [];
+    for (let i = 0; i < ls.length; i++) {
+      const k = ls.key(i);
+      if (!k) continue;
+      if (PREFIXES.some((p) => k === p || k.startsWith(p))) toRemove.push(k);
+    }
+    for (const k of toRemove) ls.removeItem(k);
+  } catch {
+    /* ignore */
+  }
+  try {
+    const ss = window.sessionStorage;
+    const toRemove: string[] = [];
+    for (let i = 0; i < ss.length; i++) {
+      const k = ss.key(i);
+      if (!k) continue;
+      if (PREFIXES.some((p) => k === p || k.startsWith(p))) toRemove.push(k);
+    }
+    for (const k of toRemove) ss.removeItem(k);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function dbSaveSettings(patch: {
   preferences?: SystemPreferences;
   rules?: OperationalRules;
