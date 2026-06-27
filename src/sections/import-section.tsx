@@ -523,6 +523,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   const [zipData, setZipData] = useState<ZipPreviewData | null>(null);
   const [zipProcessing, setZipProcessing] = useState(false);
   const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
+  const [zipFailuresOpen, setZipFailuresOpen] = useState(false);
 
   const handleZipFile = async (file: File) => {
     if (!file.name.toLowerCase().endsWith(".zip")) {
