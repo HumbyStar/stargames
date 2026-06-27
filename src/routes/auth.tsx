@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -18,8 +19,10 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -31,14 +34,45 @@ function AuthPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) {
-      toast.error("Falha ao entrar", { description: error.message });
-      return;
+    try {
+      if (mode === "signup") {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/`,
+            data: { display_name: displayName || email.split("@")[0] },
+          },
+        });
+        if (error) {
+          toast.error("Falha ao cadastrar", { description: error.message });
+          return;
+        }
+        if (data.user) {
+          await supabase.from("profiles").upsert({
+            id: data.user.id,
+            display_name: displayName || email.split("@")[0],
+          });
+        }
+        if (data.session) {
+          toast.success("Conta criada!");
+          navigate({ to: "/", replace: true });
+        } else {
+          toast.success("Conta criada! Verifique seu e-mail para confirmar.");
+          setMode("signin");
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+          toast.error("Falha ao entrar", { description: error.message });
+          return;
+        }
+        toast.success("Bem-vindo!");
+        navigate({ to: "/", replace: true });
+      }
+    } finally {
+      setLoading(false);
     }
-    toast.success("Bem-vindo!");
-    navigate({ to: "/", replace: true });
   }
 
   return (
@@ -58,6 +92,48 @@ function AuthPage() {
           onSubmit={onSubmit}
           className="rounded-2xl border border-border bg-card/80 p-6 shadow-xl backdrop-blur space-y-4"
         >
+          <div className="grid grid-cols-2 gap-1 rounded-full bg-foreground/5 p-1 text-sm">
+            <button
+              type="button"
+              onClick={() => setMode("signin")}
+              className={cn(
+                "rounded-full py-1.5 font-medium transition-colors",
+                mode === "signin"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Entrar
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("signup")}
+              className={cn(
+                "rounded-full py-1.5 font-medium transition-colors",
+                mode === "signup"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Cadastrar
+            </button>
+          </div>
+
+          {mode === "signup" && (
+            <div className="space-y-2">
+              <Label htmlFor="displayName">Nome</Label>
+              <Input
+                id="displayName"
+                type="text"
+                autoComplete="name"
+                required
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Seu nome"
+              />
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="email">E-mail</Label>
             <Input
@@ -75,18 +151,23 @@ function AuthPage() {
             <Input
               id="password"
               type="password"
-              autoComplete="current-password"
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
               required
+              minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
             />
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Entrando..." : "Entrar"}
+            {loading
+              ? mode === "signup" ? "Cadastrando..." : "Entrando..."
+              : mode === "signup" ? "Criar conta" : "Entrar"}
           </Button>
           <p className="text-xs text-muted-foreground text-center">
-            Acesso restrito. Os usuários são criados pelo administrador.
+            {mode === "signup"
+              ? "Ao criar a conta você terá acesso completo ao painel."
+              : "Acesso restrito a usuários autorizados."}
           </p>
         </form>
       </div>

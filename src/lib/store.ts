@@ -118,6 +118,7 @@ interface State {
   importHistory: ImportHistoryEntry[];
   hydrated: boolean;
   hydrate: () => Promise<void>;
+  reset: () => void;
   openClient: (id: string | null) => void;
   addClient: (c: Omit<Client, "id">) => Client;
   updateClient: (id: string, patch: Partial<Omit<Client, "id">>) => void;
@@ -322,6 +323,19 @@ export const useStore = create<State>()((set, get) => ({
           });
         })();
         await hydratePromise;
+      },
+      reset: () => {
+        hydratePromise = null;
+        set({
+          clients: [],
+          products: [],
+          importHistory: [],
+          preferences: defaultPreferences,
+          rules: defaultRules,
+          security: defaultSecurity,
+          openClientId: null,
+          hydrated: false,
+        });
       },
       openClient: (id) => set({ openClientId: id }),
       addClient: (c) => {
