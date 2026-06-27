@@ -335,6 +335,28 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               {compact ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
               {compact ? "Expandir" : "Compactar"}
             </Button>
+            <div className="flex overflow-hidden rounded-md border border-input">
+              <button
+                onClick={() => setViewMode("paginado")}
+                className={
+                  "px-2.5 py-1 text-xs font-medium transition-colors " +
+                  (viewMode === "paginado" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-accent")
+                }
+                title="Paginação clássica"
+              >
+                Paginado
+              </button>
+              <button
+                onClick={() => setViewMode("infinito")}
+                className={
+                  "px-2.5 py-1 text-xs font-medium transition-colors " +
+                  (viewMode === "infinito" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-accent")
+                }
+                title="Scroll infinito + Carregar mais"
+              >
+                Infinito
+              </button>
+            </div>
           </div>
 
           {showFilters && (
