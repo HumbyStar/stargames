@@ -322,6 +322,16 @@ export function extractMGMVAgreementFromNotes(notes: string): MGMVAgreement | nu
   // Variações: "Pagou 2 parcelas", "quitou 3 parcelas".
   const pagouMatch = notes.match(/(?:pagou|quitou)\s+(\d+)\s*parcelas?/i);
   if (pagouMatch) paidCount = Math.max(paidCount, Number(pagouMatch[1]));
+  // Padrão por linha: cada linha do tipo "→ N Parcela ... paga|pago"
+  // representa UMA parcela quitada. Contamos os números distintos.
+  const perLineRegex =
+    /(?:^|\n)[^\n]*?\b(\d+)\s*[ªº]?\s*Parcela[^\n]*?\b(?:paga|pago|quitada|quitado)\b/gi;
+  const paidNumbers = new Set<number>();
+  for (const m of notes.matchAll(perLineRegex)) {
+    const n = Number(m[1]);
+    if (Number.isFinite(n) && n > 0) paidNumbers.add(n);
+  }
+  if (paidNumbers.size > 0) paidCount = Math.max(paidCount, paidNumbers.size);
   paidCount = Math.min(paidCount, count);
 
   const firstDueIso =
