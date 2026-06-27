@@ -30,6 +30,8 @@ import { ImportSection } from "@/sections/import-section";
 import { ConfiguracoesSection } from "@/sections/configuracoes-section";
 import { NotificationsPanel } from "@/components/notifications-panel";
 import { useNotifications } from "@/lib/notifications";
+import { HelpCenter } from "@/components/help-center";
+import { TutorialRunner } from "@/components/tutorial-runner";
 
 const navItems = [
   { id: "dashboard", label: "Dashboard" },
@@ -262,7 +264,7 @@ function FloatingNavbar() {
   }, []);
 
   return (
-    <nav className={cn("floating-navbar flex items-center gap-3 px-3 py-2 md:px-4", hidden && "navbar-hidden")}>
+    <nav data-tour="navbar" className={cn("floating-navbar flex items-center gap-3 px-3 py-2 md:px-4", hidden && "navbar-hidden")}>
       <a
         href="#dashboard"
         onClick={(e) => { e.preventDefault(); scrollToSection("dashboard"); }}
@@ -289,11 +291,14 @@ function FloatingNavbar() {
         ))}
       </div>
 
-      <SearchBox className="hidden md:block ml-3 flex-1 max-w-md transition-all duration-300 focus-within:scale-[1.02]" />
+      <div data-tour="global-search" className="hidden md:block ml-3 flex-1 max-w-md">
+        <SearchBox className="transition-all duration-300 focus-within:scale-[1.02]" />
+      </div>
 
       <div className="ml-auto flex items-center gap-1.5 md:gap-2 md:pl-2">
         <button
           onClick={openImport}
+          data-tour="upload-button"
           aria-label="Importar dados"
           title="Importar dados"
           className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all hover:-translate-y-0.5 hover:bg-primary/10 hover:text-primary"
@@ -302,6 +307,7 @@ function FloatingNavbar() {
         </button>
         <button
           onClick={openSettings}
+          data-tour="settings-button"
           aria-label="Configurações"
           title="Configurações"
           className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
@@ -326,6 +332,7 @@ function FloatingNavbar() {
         </button>
         <button
           onClick={openHelp}
+          data-tour="help-button"
           aria-label="Tutorial"
           title="Tutorial"
           className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
