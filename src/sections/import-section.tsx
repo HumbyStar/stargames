@@ -20,6 +20,7 @@ import {
   calculateFinancialStatus,
   formatBRL,
   useStore,
+  getResetVersion,
   type Client,
   type FinancialStatus,
   type MGMVAgreement,
