@@ -1645,6 +1645,7 @@ function ZipPreview({
   onToggleProduct,
   onToggleAll,
   onToggleFolder,
+  onCorrectionAction,
 }: {
   data: ZipPreviewData;
   onClear: () => void;
@@ -1653,6 +1654,7 @@ function ZipPreview({
   onToggleProduct: (entryId: string, productId: string, selected: boolean) => void;
   onToggleAll: (selected: boolean) => void;
   onToggleFolder: (folder: string, selected: boolean) => void;
+  onCorrectionAction: (id: string, action: "merge" | "skip") => void;
 }) {
   const [filter, setFilter] = useState<ZipFilter>("todos");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
