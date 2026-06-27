@@ -899,9 +899,14 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     let createdAgreements = 0;
     let ignoredDuplicates = 0;
     let errorEntries = 0;
+    let skippedAfterCorrection = 0;
     zipData.entries.forEach((entry) => {
       if (!entry.selected || entry.criticalError) {
         if (entry.criticalError) errorEntries++;
+        return;
+      }
+      if (entry.matchedAfterCorrection && entry.correctionAction === "skip") {
+        skippedAfterCorrection++;
         return;
       }
       let client = findClientByPhone(entry.client.phone);
