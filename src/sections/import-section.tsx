@@ -28,6 +28,7 @@ import {
 import { toast } from "sonner";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
+import { ImportProgressModal, type ImportProgressState } from "@/components/import-progress-modal";
 
 interface ParsedRow {
   line: number;
