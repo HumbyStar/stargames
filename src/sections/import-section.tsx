@@ -3,9 +3,18 @@ import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   calculateFinancialStatus,
   formatBRL,
   useStore,
+  type Client,
   type FinancialStatus,
   type MGMVAgreement,
   type Situation,
@@ -297,6 +306,58 @@ function parseNotionHtml(html: string): NotionParseResult {
 
 // =================================================================
 
+// =================== ZIP do Notion (tipos) ===================
+
+interface ZipFileEntry {
+  folderName: string;
+  fileName: string;
+  fullPath: string;
+  htmlContent: string;
+}
+
+interface ZipProductPreview extends NotionProduct {
+  tempId: string;
+  duplicate: boolean;
+  selected: boolean;
+}
+
+interface ZipClientPreview {
+  id: string;
+  folderName: string;
+  fileName: string;
+  fullPath: string;
+  client: { name: string; phone: string; phoneDisplay: string };
+  products: ZipProductPreview[];
+  notes: string;
+  mgmv: MGMVAgreement | null;
+  existingClient: Client | undefined;
+  errors: string[];
+  criticalError: boolean;
+  selected: boolean;
+}
+
+interface ZipPreviewData {
+  folders: Set<string>;
+  files: number;
+  entries: ZipClientPreview[];
+  globalErrors: string[];
+  zipName: string;
+}
+
+type ZipFilter =
+  | "todos"
+  | "prontos"
+  | "novos"
+  | "existentes"
+  | "erro"
+  | "duplicatas"
+  | "mgmv"
+  | "semTelefone"
+  | "semProdutos"
+  | "statusCorrigido";
+
+// =============================================================
+
 const normalizePhone = (p: string) => String(p ?? "").replace(/\D/g, "");
 const parseValue = (v: string | number | undefined | null) => {
   if (v === null || v === undefined || v === "") return NaN;
@@ -427,12 +488,249 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     openClient,
     updateClientNotes,
     setMGMVAgreement,
+    addImportHistory,
   } = useStore();
+  const products = useStore((s) => s.products);
+  const clients = useStore((s) => s.clients);
   const [tab, setTab] = useState("text");
   const [text, setText] = useState(SAMPLE_LIST);
   const [rows, setRows] = useState<ParsedRow[] | null>(null);
   const [notion, setNotion] = useState<NotionParseResult | null>(null);
   const [htmlText, setHtmlText] = useState("");
+  const [zipData, setZipData] = useState<ZipPreviewData | null>(null);
+  const [zipProcessing, setZipProcessing] = useState(false);
+
+  const handleZipFile = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith(".zip")) {
+      return toast.error("Envie um arquivo .zip");
+    }
+    setZipProcessing(true);
+    setZipData(null);
+    try {
+      const { default: JSZip } = await import("jszip");
+      const zip = await JSZip.loadAsync(file);
+      const htmlFiles: ZipFileEntry[] = [];
+      const folders = new Set<string>();
+      const globalErrors: string[] = [];
+      const promises: Promise<void>[] = [];
+      zip.forEach((path, entry) => {
+        if (entry.dir) return;
+        const lower = path.toLowerCase();
+        if (!lower.endsWith(".html") && !lower.endsWith(".htm")) return;
+        const parts = path.split("/");
+        const fileName = parts[parts.length - 1];
+        const folderName = parts.length > 1 ? parts.slice(0, -1).join("/") : "(raiz)";
+        folders.add(folderName);
+        promises.push(
+          entry.async("string").then((content) => {
+            htmlFiles.push({ folderName, fileName, fullPath: path, htmlContent: content });
+          }),
+        );
+      });
+      await Promise.all(promises);
+      if (htmlFiles.length === 0) {
+        globalErrors.push("Nenhum arquivo .html encontrado no ZIP.");
+      }
+      const entries: ZipClientPreview[] = [];
+      htmlFiles
+        .sort((a, b) => a.fullPath.localeCompare(b.fullPath))
+        .forEach((file, fileIdx) => {
+          const parsed = parseNotionHtml(file.htmlContent);
+          parsed.clients.forEach((block, blockIdx) => {
+            const tempId = `zip-${fileIdx}-${blockIdx}-${Math.random().toString(36).slice(2, 8)}`;
+            const existingClient = block.client.phone
+              ? clients.find((c) => c.phone.replace(/\D/g, "") === block.client.phone)
+              : undefined;
+            const errors = [...block.errors];
+            if (!block.client.name) errors.push("Cliente sem nome.");
+            if (!block.client.phone || block.client.phone.length < 10)
+              errors.push("Telefone inválido ou ausente.");
+            if (block.products.length === 0) errors.push("Sem produtos na tabela.");
+            const productPreviews: ZipProductPreview[] = block.products.map((p, pIdx) => {
+              const dup =
+                !!existingClient &&
+                products.some(
+                  (existing) =>
+                    existing.clientId === existingClient.id &&
+                    existing.name.trim().toLowerCase() === p.product.trim().toLowerCase() &&
+                    (!p.registerDate ||
+                      new Date(existing.registerDate).toISOString().slice(0, 10) === p.registerDate),
+                );
+              return {
+                ...p,
+                tempId: `${tempId}-p${pIdx}`,
+                duplicate: dup,
+                selected: true,
+              };
+            });
+            const mgmv = extractMGMVAgreementFromNotes(block.notes);
+            const criticalError =
+              !block.client.name ||
+              !block.client.phone ||
+              block.client.phone.length < 10 ||
+              block.products.length === 0;
+            entries.push({
+              id: tempId,
+              folderName: file.folderName,
+              fileName: file.fileName,
+              fullPath: file.fullPath,
+              client: block.client,
+              products: productPreviews,
+              notes: block.notes,
+              mgmv,
+              existingClient,
+              errors,
+              criticalError,
+              selected: !criticalError,
+            });
+          });
+        });
+      setZipData({
+        folders,
+        files: htmlFiles.length,
+        entries,
+        globalErrors,
+        zipName: file.name,
+      });
+      toast.success(
+        `${entries.length} cliente(s) lidos de ${htmlFiles.length} arquivo(s) em ${folders.size} pasta(s).`,
+      );
+    } catch (err) {
+      console.error(err);
+      toast.error("Falha ao ler o ZIP. Verifique o arquivo.");
+    } finally {
+      setZipProcessing(false);
+    }
+  };
+
+  const setEntrySelected = (id: string, selected: boolean) => {
+    setZipData((d) =>
+      d
+        ? { ...d, entries: d.entries.map((e) => (e.id === id ? { ...e, selected } : e)) }
+        : d,
+    );
+  };
+  const setProductSelected = (entryId: string, productId: string, selected: boolean) => {
+    setZipData((d) =>
+      d
+        ? {
+            ...d,
+            entries: d.entries.map((e) =>
+              e.id === entryId
+                ? {
+                    ...e,
+                    products: e.products.map((p) =>
+                      p.tempId === productId ? { ...p, selected } : p,
+                    ),
+                  }
+                : e,
+            ),
+          }
+        : d,
+    );
+  };
+  const setAllEntriesSelected = (selected: boolean) => {
+    setZipData((d) =>
+      d
+        ? {
+            ...d,
+            entries: d.entries.map((e) => ({
+              ...e,
+              selected: selected && !e.criticalError,
+            })),
+          }
+        : d,
+    );
+  };
+  const setFolderSelected = (folderName: string, selected: boolean) => {
+    setZipData((d) =>
+      d
+        ? {
+            ...d,
+            entries: d.entries.map((e) =>
+              e.folderName === folderName
+                ? { ...e, selected: selected && !e.criticalError }
+                : e,
+            ),
+          }
+        : d,
+    );
+  };
+
+  const confirmZipImport = () => {
+    if (!zipData) return;
+    const todayISO = new Date().toISOString();
+    let createdClients = 0;
+    let updatedClients = 0;
+    let createdProducts = 0;
+    let createdAgreements = 0;
+    let ignoredDuplicates = 0;
+    let errorEntries = 0;
+    zipData.entries.forEach((entry) => {
+      if (!entry.selected || entry.criticalError) {
+        if (entry.criticalError) errorEntries++;
+        return;
+      }
+      let client = findClientByPhone(entry.client.phone);
+      if (!client) {
+        client = addClient({
+          name: entry.client.name,
+          phone: entry.client.phoneDisplay || entry.client.phone,
+        });
+        createdClients++;
+      } else {
+        updatedClients++;
+      }
+      entry.products.forEach((p) => {
+        if (!p.selected || p.errors.length > 0 || !p.product) return;
+        if (p.duplicate) {
+          ignoredDuplicates++;
+          return;
+        }
+        const regISO = p.registerDate
+          ? new Date(`${p.registerDate}T12:00:00`).toISOString()
+          : todayISO;
+        const dueISO = p.dueDate
+          ? new Date(`${p.dueDate}T12:00:00`).toISOString()
+          : p.financialStatus === "Reserva"
+            ? new Date(new Date(regISO).getTime() + 30 * 86400000).toISOString()
+            : regISO;
+        addProduct({
+          clientId: client!.id,
+          name: p.product,
+          platform: p.platform || "—",
+          totalValue: p.totalValue,
+          paidValue: p.paidValue,
+          financialStatus: p.financialStatus,
+          situation: p.situation,
+          registerDate: regISO,
+          dueDate: dueISO,
+        });
+        createdProducts++;
+      });
+      if (entry.notes) {
+        const existing = client!.notes ? client!.notes + "\n\n" : "";
+        updateClientNotes(client!.id, existing + entry.notes);
+      }
+      if (entry.mgmv) {
+        setMGMVAgreement(client!.id, entry.mgmv);
+        createdAgreements++;
+      }
+    });
+    addImportHistory({
+      source: "HTML Notion",
+      file: zipData.zipName,
+      clientsCreated: createdClients,
+      productsAdded: createdProducts,
+      errors: errorEntries,
+      status: errorEntries > 0 ? "Com avisos" : "Concluído",
+    });
+    toast.success(
+      `ZIP importado: ${createdClients} novo(s) • ${updatedClients} atualizado(s) • ${createdProducts} produto(s) • ${createdAgreements} MGMV • ${ignoredDuplicates} duplicata(s) ignorada(s)`,
+    );
+    setZipData(null);
+    onScrollTo("clientes");
+  };
 
   const handleFile = async (file: File) => {
     const ext = file.name.toLowerCase().split(".").pop();
@@ -645,6 +943,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             <TabsList>
               <TabsTrigger value="text">Lista</TabsTrigger>
               <TabsTrigger value="html">HTML / Notion</TabsTrigger>
+              <TabsTrigger value="zip">ZIP Notion</TabsTrigger>
               <TabsTrigger value="csv">CSV</TabsTrigger>
               <TabsTrigger value="excel">Excel</TabsTrigger>
             </TabsList>
@@ -691,6 +990,29 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               </details>
             </TabsContent>
 
+            <TabsContent value="zip" className="mt-4 space-y-3" id="zip-import">
+              <div>
+                <h3 className="text-sm font-semibold">Importar ZIP do Notion</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Envie o arquivo ZIP contendo a pasta mãe exportada do Notion. O sistema irá ler o
+                  ZIP, localizar os arquivos HTML, extrair clientes e produtos, comparar duplicatas
+                  e mostrar uma prévia antes da importação.
+                </p>
+              </div>
+              <UploadArea
+                accept=".zip"
+                onFile={handleZipFile}
+                hint={
+                  zipProcessing
+                    ? "Lendo ZIP..."
+                    : "Arraste o ZIP exportado do Notion ou clique para selecionar"
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Nada é salvo nesta etapa. Apenas após confirmar a importação os dados são gravados.
+              </p>
+            </TabsContent>
+
             <TabsContent value="csv" className="mt-4 space-y-3">
               <UploadArea accept=".csv" onFile={handleFile} hint="Arraste um arquivo CSV ou clique para selecionar" />
               <div className="flex justify-end">
@@ -732,6 +1054,18 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           findClientByPhone={findClientByPhone}
           onConfirm={confirmNotionImport}
           onClear={() => { setNotion(null); setHtmlText(""); }}
+        />
+      )}
+
+      {zipData && (
+        <ZipPreview
+          data={zipData}
+          onClear={() => setZipData(null)}
+          onConfirm={confirmZipImport}
+          onToggleEntry={setEntrySelected}
+          onToggleProduct={setProductSelected}
+          onToggleAll={setAllEntriesSelected}
+          onToggleFolder={setFolderSelected}
         />
       )}
 
@@ -1015,6 +1349,408 @@ function NotionPreview({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// =================== ZIP Preview ===================
+
+function ZipPreview({
+  data,
+  onClear,
+  onConfirm,
+  onToggleEntry,
+  onToggleProduct,
+  onToggleAll,
+  onToggleFolder,
+}: {
+  data: ZipPreviewData;
+  onClear: () => void;
+  onConfirm: () => void;
+  onToggleEntry: (id: string, selected: boolean) => void;
+  onToggleProduct: (entryId: string, productId: string, selected: boolean) => void;
+  onToggleAll: (selected: boolean) => void;
+  onToggleFolder: (folder: string, selected: boolean) => void;
+}) {
+  const [filter, setFilter] = useState<ZipFilter>("todos");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const toggleExpand = (id: string) =>
+    setExpanded((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+
+  const stats = useMemo(() => {
+    const totalProducts = data.entries.reduce((s, e) => s + e.products.length, 0);
+    const newClients = data.entries.filter((e) => !e.existingClient && !e.criticalError).length;
+    const existing = data.entries.filter((e) => e.existingClient).length;
+    const duplicates = data.entries.reduce(
+      (s, e) => s + e.products.filter((p) => p.duplicate).length,
+      0,
+    );
+    const mgmv = data.entries.filter((e) => e.mgmv).length;
+    const errors = data.entries.filter((e) => e.criticalError).length;
+    const corrected = data.entries.reduce(
+      (s, e) => s + e.products.filter((p) => p.statusWarning).length,
+      0,
+    );
+    return { totalProducts, newClients, existing, duplicates, mgmv, errors, corrected };
+  }, [data]);
+
+  const filtered = useMemo(() => {
+    return data.entries.filter((e) => {
+      switch (filter) {
+        case "prontos":
+          return !e.criticalError;
+        case "novos":
+          return !e.existingClient && !e.criticalError;
+        case "existentes":
+          return !!e.existingClient;
+        case "erro":
+          return e.criticalError;
+        case "duplicatas":
+          return e.products.some((p) => p.duplicate);
+        case "mgmv":
+          return !!e.mgmv;
+        case "semTelefone":
+          return !e.client.phone || e.client.phone.length < 10;
+        case "semProdutos":
+          return e.products.length === 0;
+        case "statusCorrigido":
+          return e.products.some((p) => p.statusWarning);
+        default:
+          return true;
+      }
+    });
+  }, [data, filter]);
+
+  const byFolder = useMemo(() => {
+    const m = new Map<string, ZipClientPreview[]>();
+    data.entries.forEach((e) => {
+      const arr = m.get(e.folderName) ?? [];
+      arr.push(e);
+      m.set(e.folderName, arr);
+    });
+    return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [data]);
+
+  const selectedEntries = data.entries.filter((e) => e.selected && !e.criticalError);
+  const summary = useMemo(() => {
+    let newCount = 0;
+    let updateCount = 0;
+    let productCount = 0;
+    let mgmvCount = 0;
+    let dupCount = 0;
+    selectedEntries.forEach((e) => {
+      if (e.existingClient) updateCount++;
+      else newCount++;
+      e.products.forEach((p) => {
+        if (!p.selected) return;
+        if (p.duplicate) dupCount++;
+        else if (p.product && p.errors.length === 0) productCount++;
+      });
+      if (e.mgmv) mgmvCount++;
+    });
+    return { newCount, updateCount, productCount, mgmvCount, dupCount, errCount: stats.errors };
+  }, [selectedEntries, stats.errors]);
+
+  const filters: { key: ZipFilter; label: string }[] = [
+    { key: "todos", label: "Todos" },
+    { key: "prontos", label: "Prontos" },
+    { key: "novos", label: "Novos clientes" },
+    { key: "existentes", label: "Existentes" },
+    { key: "erro", label: "Com erro" },
+    { key: "duplicatas", label: "Duplicatas" },
+    { key: "mgmv", label: "MGMV" },
+    { key: "semTelefone", label: "Sem telefone" },
+    { key: "semProdutos", label: "Sem produtos" },
+    { key: "statusCorrigido", label: "Status corrigido" },
+  ];
+
+  return (
+    <div className="mt-6 space-y-4">
+      {data.globalErrors.length > 0 && (
+        <Card>
+          <ul className="list-disc space-y-1 pl-5 text-sm text-destructive">
+            {data.globalErrors.map((e, i) => <li key={i}>{e}</li>)}
+          </ul>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
+        <MetricCard label="Pastas" value={data.folders.size} status="primary" />
+        <MetricCard label="Arquivos HTML" value={data.files} />
+        <MetricCard label="Clientes detectados" value={data.entries.length} />
+        <MetricCard label="Produtos" value={stats.totalProducts} />
+        <MetricCard label="Novos clientes" value={stats.newClients} status="success" />
+        <MetricCard label="Existentes" value={stats.existing} />
+        <MetricCard label="MGMV" value={stats.mgmv} status={stats.mgmv > 0 ? "warning" : "default"} />
+        <MetricCard label="Duplicatas" value={stats.duplicates} status={stats.duplicates > 0 ? "warning" : "default"} />
+      </div>
+
+      <Card>
+        <div className="flex flex-wrap items-center gap-2">
+          {filters.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => setFilter(f.key)}
+              className={
+                "rounded-full border px-3 py-1 text-xs transition " +
+                (filter === f.key
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-background hover:bg-muted")
+              }
+            >
+              {f.label}
+            </button>
+          ))}
+          <div className="ml-auto flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => onToggleAll(true)}>
+              Selecionar todos
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => onToggleAll(false)}>
+              Limpar seleção
+            </Button>
+            <Button variant="outline" onClick={onClear}>Cancelar</Button>
+            <Button
+              onClick={() => setConfirmOpen(true)}
+              disabled={selectedEntries.length === 0}
+            >
+              Confirmar Importação
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      <div className="space-y-4">
+        {byFolder.map(([folder, entriesInFolder]) => {
+          const visible = entriesInFolder.filter((e) => filtered.includes(e));
+          if (visible.length === 0) return null;
+          const allSel = entriesInFolder.every((e) => e.selected || e.criticalError);
+          return (
+            <Card
+              key={folder}
+              title={`${folder} • ${visible.length} cliente(s)`}
+              action={
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onToggleFolder(folder, !allSel)}
+                  >
+                    {allSel ? "Desmarcar pasta" : "Selecionar pasta"}
+                  </Button>
+                </div>
+              }
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                      <th className="py-2 pr-3 font-medium">Sel</th>
+                      <th className="py-2 pr-3 font-medium">Arquivo</th>
+                      <th className="py-2 pr-3 font-medium">Cliente</th>
+                      <th className="py-2 pr-3 font-medium">Telefone</th>
+                      <th className="py-2 pr-3 font-medium">Produtos</th>
+                      <th className="py-2 pr-3 font-medium">Total</th>
+                      <th className="py-2 pr-3 font-medium">Pago</th>
+                      <th className="py-2 pr-3 font-medium">Restante</th>
+                      <th className="py-2 pr-3 font-medium">MGMV</th>
+                      <th className="py-2 pr-3 font-medium">Resultado</th>
+                      <th className="py-2 pr-3 font-medium"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visible.map((e) => {
+                      const totals = e.products.reduce(
+                        (s, p) => {
+                          s.total += p.totalValue;
+                          s.paid += p.paidValue;
+                          return s;
+                        },
+                        { total: 0, paid: 0 },
+                      );
+                      const remaining = Math.max(0, totals.total - totals.paid);
+                      const result = e.criticalError
+                        ? { label: "Erro", variant: "danger" as const }
+                        : e.existingClient
+                          ? { label: "Atualizar", variant: "success" as const }
+                          : { label: "Novo cliente", variant: "primary" as const };
+                      const isOpen = expanded.has(e.id);
+                      return (
+                        <>
+                          <tr key={e.id} className="border-b border-border/60">
+                            <td className="py-3 pr-3">
+                              <input
+                                type="checkbox"
+                                checked={e.selected}
+                                disabled={e.criticalError}
+                                onChange={(ev) => onToggleEntry(e.id, ev.target.checked)}
+                              />
+                            </td>
+                            <td className="py-3 pr-3 text-xs text-muted-foreground">{e.fileName}</td>
+                            <td className="py-3 pr-3">{e.client.name || "—"}</td>
+                            <td className="py-3 pr-3 font-mono text-xs text-muted-foreground">
+                              {e.client.phoneDisplay || e.client.phone || "—"}
+                            </td>
+                            <td className="py-3 pr-3 tabular-nums">{e.products.length}</td>
+                            <td className="py-3 pr-3 tabular-nums">{formatBRL(totals.total)}</td>
+                            <td className="py-3 pr-3 tabular-nums">{formatBRL(totals.paid)}</td>
+                            <td className="py-3 pr-3 tabular-nums">{formatBRL(remaining)}</td>
+                            <td className="py-3 pr-3">
+                              {e.mgmv ? (
+                                <Tag variant="warning">
+                                  {e.mgmv.installments.length}x {formatBRL(e.mgmv.installments[0]?.value ?? 0)}
+                                </Tag>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </td>
+                            <td className="py-3 pr-3">
+                              <Tag variant={result.variant}>{result.label}</Tag>
+                              {e.errors.length > 0 && (
+                                <div className="mt-1 text-[10px] text-destructive">
+                                  {e.errors.join("; ")}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-3 pr-3">
+                              <Button size="sm" variant="ghost" onClick={() => toggleExpand(e.id)}>
+                                {isOpen ? "Recolher" : "Expandir"}
+                              </Button>
+                            </td>
+                          </tr>
+                          {isOpen && (
+                            <tr key={e.id + "-x"} className="border-b border-border/60 bg-muted/20">
+                              <td colSpan={11} className="p-3">
+                                {e.products.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground">Sem produtos.</p>
+                                ) : (
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-xs">
+                                      <thead>
+                                        <tr className="border-b border-border text-left uppercase tracking-wide text-muted-foreground">
+                                          <th className="py-1 pr-2 font-medium">Sel</th>
+                                          <th className="py-1 pr-2 font-medium">Produto</th>
+                                          <th className="py-1 pr-2 font-medium">Plataforma</th>
+                                          <th className="py-1 pr-2 font-medium">Total</th>
+                                          <th className="py-1 pr-2 font-medium">Pago</th>
+                                          <th className="py-1 pr-2 font-medium">Restante</th>
+                                          <th className="py-1 pr-2 font-medium">Status orig.</th>
+                                          <th className="py-1 pr-2 font-medium">Status calc.</th>
+                                          <th className="py-1 pr-2 font-medium">Situação</th>
+                                          <th className="py-1 pr-2 font-medium">Cadastro</th>
+                                          <th className="py-1 pr-2 font-medium">Limite</th>
+                                          <th className="py-1 pr-2 font-medium">Dup.</th>
+                                          <th className="py-1 pr-2 font-medium">Aviso</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {e.products.map((p) => (
+                                          <tr key={p.tempId} className="border-b border-border/40 last:border-0">
+                                            <td className="py-2 pr-2">
+                                              <input
+                                                type="checkbox"
+                                                checked={p.selected}
+                                                onChange={(ev) =>
+                                                  onToggleProduct(e.id, p.tempId, ev.target.checked)
+                                                }
+                                              />
+                                            </td>
+                                            <td className="py-2 pr-2">{p.product || "—"}</td>
+                                            <td className="py-2 pr-2 text-muted-foreground">{p.platform || "—"}</td>
+                                            <td className="py-2 pr-2 tabular-nums">{formatBRL(p.totalValue)}</td>
+                                            <td className="py-2 pr-2 tabular-nums">{formatBRL(p.paidValue)}</td>
+                                            <td className="py-2 pr-2 tabular-nums">{formatBRL(p.remainingValue)}</td>
+                                            <td className="py-2 pr-2 text-muted-foreground">
+                                              {p.originalFinancialStatus ?? "—"}
+                                            </td>
+                                            <td className="py-2 pr-2">
+                                              <Tag
+                                                variant={
+                                                  p.financialStatus === "Pago"
+                                                    ? "success"
+                                                    : p.financialStatus === "Pendente"
+                                                      ? "danger"
+                                                      : "warning"
+                                                }
+                                              >
+                                                {p.financialStatus}
+                                              </Tag>
+                                            </td>
+                                            <td className="py-2 pr-2 text-muted-foreground">{p.situation}</td>
+                                            <td className="py-2 pr-2 text-muted-foreground">{p.registerDate ?? "—"}</td>
+                                            <td className="py-2 pr-2 text-muted-foreground">{p.dueDate ?? "—"}</td>
+                                            <td className="py-2 pr-2">
+                                              {p.duplicate ? (
+                                                <Tag variant="warning">Duplicata</Tag>
+                                              ) : (
+                                                <span className="text-muted-foreground">—</span>
+                                              )}
+                                            </td>
+                                            <td className="py-2 pr-2 text-[10px] text-amber-600 dark:text-amber-400">
+                                              {p.statusWarning ?? (p.warnings.length ? p.warnings.join("; ") : "—")}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                                {e.notes && (
+                                  <details className="mt-2 rounded-md border border-border bg-background p-2 text-xs">
+                                    <summary className="cursor-pointer font-medium">Observações</summary>
+                                    <pre className="mt-1 whitespace-pre-wrap text-xs">{e.notes}</pre>
+                                  </details>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Importação</DialogTitle>
+            <DialogDescription>
+              Os dados abaixo serão gravados no sistema. Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="space-y-1 text-sm">
+            <li>• {summary.newCount} cliente(s) novo(s) serão criados</li>
+            <li>• {summary.updateCount} cliente(s) existente(s) serão atualizados</li>
+            <li>• {summary.productCount} produto(s) serão adicionados</li>
+            <li>• {summary.mgmvCount} acordo(s) MGMV serão criados</li>
+            <li>• {summary.dupCount} duplicata(s) serão ignoradas</li>
+            <li>• {summary.errCount} registro(s) com erro não serão importados</li>
+          </ul>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                setConfirmOpen(false);
+                onConfirm();
+              }}
+            >
+              Confirmar Importação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
