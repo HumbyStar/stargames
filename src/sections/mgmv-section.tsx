@@ -8,7 +8,10 @@ import {
   useStore,
   type Client,
   type MGMVAgreement,
+  type MGMVInstallment,
 } from "@/lib/store";
+import { MgmvAiReviewModal } from "@/components/mgmv-ai-review-modal";
+import type { MgmvAiReviewSuggestion } from "@/lib/mgmv-ai-review.functions";
 
 type MgmvChip =
   | "todos"
@@ -90,10 +93,12 @@ export function MGMVSection({
 }: {
   onScrollTo: (id: string) => void;
 }) {
-  const { clients, products, openClient, payMGMVInstallment } = useStore();
+  const { clients, products, openClient, payMGMVInstallment, setMGMVAgreement } =
+    useStore();
   const [chip, setChip] = useState<MgmvChip>("todos");
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [aiTarget, setAiTarget] = useState<string | null>(null);
 
   const rows = useMemo<MgmvRow[]>(() => {
     const list: MgmvRow[] = [];
