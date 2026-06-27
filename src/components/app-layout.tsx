@@ -488,9 +488,7 @@ function GlobalModals() {
             <DialogTitle>Notificações</DialogTitle>
             <DialogDescription>Alertas e avisos recentes da operação.</DialogDescription>
           </DialogHeader>
-          <div className="py-6 text-center text-sm text-muted-foreground">
-            Nenhuma notificação no momento.
-          </div>
+          <NotificationsPanel onOpenClient={() => closeNotifications()} />
         </DialogContent>
       </Dialog>
     </>
