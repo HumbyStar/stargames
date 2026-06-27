@@ -7,6 +7,7 @@ import { useStore, isOverdue, shouldAppearInCollection, formatBRL } from "@/lib/
 import { useUiStore } from "@/lib/ui-store";
 import { ClientesSection } from "@/sections/clientes-section";
 import { CollectionSection } from "@/sections/collection-section";
+import { MGMVSection } from "@/sections/mgmv-section";
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
@@ -31,6 +32,7 @@ function OnePage() {
     <AppLayout>
       <DashboardSection onScrollTo={onScrollTo} />
       <ClientesSection onScrollTo={onScrollTo} />
+      <MGMVSection onScrollTo={onScrollTo} />
       <CollectionSection onScrollTo={onScrollTo} />
     </AppLayout>
   );
