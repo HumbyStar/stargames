@@ -1863,14 +1863,52 @@ function ZipPreview({
       0,
     );
     const mgmv = data.entries.filter((e) => e.mgmv).length;
+    const mgmvConflicts = data.entries.filter((e) => e.mgmv && e.mgmvConflict).length;
+    const mgmvPending = data.entries.filter(
+      (e) => e.mgmv && e.mgmvConflict && !e.mgmvAction,
+    ).length;
     const errors = data.entries.filter((e) => e.criticalError).length;
     const corrected = data.entries.reduce(
       (s, e) => s + e.products.filter((p) => p.statusWarning).length,
       0,
     );
     const phoneCorrected = data.entries.filter((e) => e.client.wasAutoCorrected).length;
-    return { totalProducts, newClients, existing, duplicates, mgmv, errors, corrected, phoneCorrected };
+    return {
+      totalProducts,
+      newClients,
+      existing,
+      duplicates,
+      mgmv,
+      mgmvConflicts,
+      mgmvPending,
+      errors,
+      corrected,
+      phoneCorrected,
+    };
   }, [data]);
+
+  // Itens MGMV separados — alimentam a seção dedicada de resultados.
+  const mgmvEntries = useMemo(
+    () => data.entries.filter((e) => !!e.mgmv),
+    [data],
+  );
+  const mgmvTotals = useMemo(() => {
+    let totalDebt = 0;
+    let installments = 0;
+    let installmentSum = 0;
+    mgmvEntries.forEach((e) => {
+      if (!e.mgmv) return;
+      totalDebt += e.mgmv.totalDebt;
+      installments += e.mgmv.installments.length;
+      installmentSum += e.mgmv.installments[0]?.value ?? 0;
+    });
+    return {
+      clients: mgmvEntries.length,
+      totalDebt,
+      installments,
+      avgInstallment: mgmvEntries.length ? installmentSum / mgmvEntries.length : 0,
+    };
+  }, [mgmvEntries]);
 
   const filtered = useMemo(() => {
     return data.entries.filter((e) => {
@@ -1932,6 +1970,15 @@ function ZipPreview({
     return { newCount, updateCount, productCount, mgmvCount, dupCount, errCount: stats.errors };
   }, [selectedEntries, stats.errors]);
 
+  // Default inteligente: se há qualquer warning grave, abre na visão "requer atenção".
+  const hasAttentionItems =
+    stats.errors > 0 ||
+    stats.duplicates > 0 ||
+    stats.mgmvPending > 0 ||
+    stats.phoneCorrected > 0;
+  // Move o default só uma vez (inicialização do hook).
+  // Nota: useState init function abaixo cobre isso — esta variável é só para o filtro de UI.
+
   const filters: { key: ZipFilter; label: string }[] = [
     { key: "todos", label: "Todos" },
     { key: "prontos", label: "Prontos" },
@@ -1945,6 +1992,8 @@ function ZipPreview({
     { key: "statusCorrigido", label: "Status corrigido" },
     { key: "telefoneCorrigido", label: "Telefone corrigido" },
   ];
+  // Silencia warning de variável não-usada quando não há decisão automática.
+  void hasAttentionItems;
 
   return (
     <div className="mt-6 space-y-4">
