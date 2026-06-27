@@ -704,6 +704,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   const {
     findClientByPhone,
     addClient,
+    updateClient,
     addProduct,
     openClient,
     updateClientNotes,
