@@ -1306,6 +1306,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           onToggleProduct={setProductSelected}
           onToggleAll={setAllEntriesSelected}
           onToggleFolder={setFolderSelected}
+          onCorrectionAction={setCorrectionAction}
         />
       )}
 
