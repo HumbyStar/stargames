@@ -39,6 +39,8 @@ export interface Client {
   phone: string;
   notes?: string;
   mgmv?: MGMVAgreement;
+  /** Pasta de origem (ex.: Notion ZIP) — usada para filtro/agrupamento. */
+  folder?: string;
 }
 
 export interface SystemPreferences {
