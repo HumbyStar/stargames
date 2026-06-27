@@ -177,9 +177,9 @@ export function ConfiguracoesSection() {
     setDangerOpen(true);
   };
 
-  const confirmDanger = () => {
+  const confirmDanger = async () => {
     if (!dangerAction || confirmText !== "EXCLUIR") return;
-    executeDangerAction(dangerAction);
+    await executeDangerAction(dangerAction);
     toast.success(`${dangerCatalog[dangerAction].title} concluída.`);
     setDangerOpen(false);
     setDangerAction(null);

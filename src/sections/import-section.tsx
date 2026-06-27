@@ -767,10 +767,12 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     updateClientNotes,
     setMGMVAgreement,
     addImportHistory,
+    persistConfirmedImport,
   } = useStore();
   const products = useStore((s) => s.products);
   const clients = useStore((s) => s.clients);
   const importHistory = useStore((s) => s.importHistory);
+  const hydrated = useStore((s) => s.hydrated);
   const [tab, setTab] = useState("text");
   const [text, setText] = useState(SAMPLE_LIST);
   const [rows, setRows] = useState<ParsedRow[] | null>(null);
@@ -819,6 +821,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
 
   // Ao montar, retoma uma importação não finalizada (se houver).
   useEffect(() => {
+    if (!hydrated) return;
     let cancelled = false;
     (async () => {
       try {
@@ -839,8 +842,14 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         const stats = (data.stats as Record<string, unknown>) ?? {};
         const progressResetVersion = String(stats.resetVersion ?? "");
         const currentResetVersion = getResetVersion();
-        if (currentResetVersion && progressResetVersion !== currentResetVersion) {
+        if (!progressResetVersion || (currentResetVersion && progressResetVersion !== currentResetVersion)) {
           void supabase.from("import_progress").delete().eq("id", data.id);
+          try {
+            const { clearImportRuntimeState } = await import("@/lib/db-sync");
+            clearImportRuntimeState();
+          } catch {
+            /* ignore */
+          }
           return;
         }
         setProgressRowId(data.id);
@@ -872,7 +881,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [hydrated]);
 
   const discardProgress = async () => {
     // Apaga TODOS os progressos do usuário, não apenas o atual — evita
@@ -1417,6 +1426,14 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       skippedDuplicates: stats.ignoredDuplicates,
       durationMs: Math.round(performance.now() - startedAt),
     });
+    const savedHistory = useStore.getState().importHistory[0];
+    if (savedHistory) {
+      await persistConfirmedImport({
+        clients: useStore.getState().clients,
+        products: useStore.getState().products,
+        history: savedHistory,
+      });
+    }
     let finalState: ImportProgressState | null = null;
     setImportProgress((prev) => {
       if (!prev) return prev;
@@ -1432,7 +1449,16 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       };
       return finalState;
     });
-    if (finalState) void persistProgress(finalState);
+    if (finalState) await persistProgress(finalState);
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes.user?.id;
+      if (uid) {
+        await supabase.from("import_progress").delete().eq("user_id", uid).eq("file_hash", zipData.fileHash);
+      }
+    } catch {
+      /* ignore */
+    }
     toast.success(
       `ZIP importado: ${stats.createdClients} novo(s) • ${stats.updatedClients} atualizado(s) • ${stats.createdProducts} produto(s) • ${stats.createdAgreements} MGMV novo(s)${stats.replacedAgreements ? ` • ${stats.replacedAgreements} MGMV substituído(s)` : ""} • ${stats.ignoredDuplicates} duplicata(s) ignorada(s)${stats.skippedAfterCorrection > 0 ? ` • ${stats.skippedAfterCorrection} pulado(s) por correção` : ""}`,
     );
@@ -1505,7 +1531,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     };
   }, [rows]);
 
-  const confirmImport = () => {
+  const confirmImport = async () => {
     if (!rows) return;
     const ready = rows.filter((r) => r.result === "Pronto");
     if (ready.length === 0) return toast.error("Nenhuma linha válida.");
@@ -1541,6 +1567,25 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         notes: r.notes,
       });
     });
+    const importSource = tab === "csv" ? "CSV" : tab === "excel" ? "Excel" : "Texto";
+    const fileHash = await sha1Hex(JSON.stringify(ready));
+    addImportHistory({
+      source: importSource,
+      file: importSource === "Texto" ? "importacao-manual.txt" : `importacao-${tab}`,
+      clientsCreated: createdClients,
+      productsAdded: ready.length,
+      errors: rows.length - ready.length,
+      status: rows.length - ready.length > 0 ? "Com avisos" : "Concluído",
+      fileHash,
+    });
+    const savedHistory = useStore.getState().importHistory[0];
+    if (savedHistory) {
+      await persistConfirmedImport({
+        clients: useStore.getState().clients,
+        products: useStore.getState().products,
+        history: savedHistory,
+      });
+    }
     toast.success(
       `${ready.length} registro(s) importados • ${createdClients} cliente(s) novos • ${rows.length - ready.length} erro(s) ignorados`,
     );
@@ -1549,7 +1594,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     onScrollTo("clientes");
   };
 
-  const confirmNotionImport = () => {
+  const confirmNotionImport = async () => {
     if (!notion) return;
     const usableClients = notion.clients.filter(
       (c) => c.client.phone && c.client.name && c.errors.length === 0,
@@ -1602,6 +1647,25 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         createdAgreements++;
       }
     });
+    const fileHash = await sha1Hex(htmlText || JSON.stringify(notion));
+    addImportHistory({
+      source: "HTML Notion",
+      file: "notion.html",
+      clientsCreated: createdClients,
+      productsAdded: totalProducts,
+      errors: notion.errors.length,
+      status: notion.errors.length > 0 ? "Com avisos" : "Concluído",
+      fileHash,
+      agreementsCreated: createdAgreements,
+    });
+    const savedHistory = useStore.getState().importHistory[0];
+    if (savedHistory) {
+      await persistConfirmedImport({
+        clients: useStore.getState().clients,
+        products: useStore.getState().products,
+        history: savedHistory,
+      });
+    }
     toast.success(
       `${usableClients.length} cliente(s) • ${totalProducts} produto(s) • ${createdAgreements} acordo(s) MGMV • ${createdClients} novo(s)`,
     );

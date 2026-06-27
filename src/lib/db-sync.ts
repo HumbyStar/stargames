@@ -208,9 +208,34 @@ export function dbUpsertProduct(p: Product): void {
 }
 
 export function dbInsertHistory(h: ImportHistoryEntry): void {
-  void supabase.from("import_history").insert(historyToRow(h)).then(({ error }) => {
+  void supabase.from("import_history").upsert(historyToRow(h)).then(({ error }) => {
     if (error) logErr("insertHistory", error);
   });
+}
+
+export async function dbUpsertHistoryAsync(h: ImportHistoryEntry): Promise<void> {
+  const { error } = await supabase.from("import_history").upsert(historyToRow(h));
+  if (error) logErr("upsertHistoryAsync", error);
+}
+
+export async function dbUpsertClientsAsync(clients: Client[]): Promise<void> {
+  if (clients.length === 0) return;
+  const rows = clients.map((c) => clientToRow(c));
+  const CHUNK = 200;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const { error } = await supabase.from("clients").upsert(rows.slice(i, i + CHUNK));
+    if (error) logErr("upsertClientsAsync", error);
+  }
+}
+
+export async function dbUpsertProductsAsync(products: Product[]): Promise<void> {
+  if (products.length === 0) return;
+  const rows = products.map((p) => productToRow(p));
+  const CHUNK = 200;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const { error } = await supabase.from("products").upsert(rows.slice(i, i + CHUNK));
+    if (error) logErr("upsertProductsAsync", error);
+  }
 }
 
 export function dbDeleteHistoryAll(): void {
@@ -223,6 +248,11 @@ export function dbDeleteHistoryAll(): void {
     });
 }
 
+export async function dbDeleteHistoryAllAsync(): Promise<void> {
+  const { error } = await supabase.from("import_history").delete().gte("date", "1900-01-01");
+  if (error) logErr("deleteHistoryAllAsync", error);
+}
+
 export function dbDeleteAllClients(): void {
   void supabase
     .from("clients")
@@ -233,6 +263,11 @@ export function dbDeleteAllClients(): void {
     });
 }
 
+export async function dbDeleteAllClientsAsync(): Promise<void> {
+  const { error } = await supabase.from("clients").delete().not("id", "is", null);
+  if (error) logErr("deleteAllClientsAsync", error);
+}
+
 export function dbDeleteAllProducts(): void {
   void supabase
     .from("products")
@@ -241,6 +276,11 @@ export function dbDeleteAllProducts(): void {
     .then(({ error }) => {
       if (error) logErr("deleteAllProducts", error);
     });
+}
+
+export async function dbDeleteAllProductsAsync(): Promise<void> {
+  const { error } = await supabase.from("products").delete().not("id", "is", null);
+  if (error) logErr("deleteAllProductsAsync", error);
 }
 
 /** Apaga acordos MGMV (parcelas caem em cascata via FK). */
@@ -261,6 +301,13 @@ export function dbDeleteAllMGMV(): void {
     });
 }
 
+export async function dbDeleteAllMGMVAsync(): Promise<void> {
+  const installments = await supabase.from("mgmv_installments").delete().not("id", "is", null);
+  if (installments.error) logErr("deleteAllMGMVInstallmentsAsync", installments.error);
+  const agreements = await supabase.from("mgmv_agreements").delete().not("id", "is", null);
+  if (agreements.error) logErr("deleteAllMGMVAgreementsAsync", agreements.error);
+}
+
 /** Apaga progresso de importação interrompida do usuário atual. */
 export function dbDeleteAllImportProgress(): void {
   void (async () => {
@@ -279,6 +326,18 @@ export function dbDeleteAllImportProgress(): void {
   })();
 }
 
+export async function dbDeleteAllImportProgressAsync(): Promise<void> {
+  try {
+    const { data: userRes } = await supabase.auth.getUser();
+    const uid = userRes.user?.id;
+    if (!uid) return;
+    const { error } = await supabase.from("import_progress").delete().eq("user_id", uid);
+    if (error) logErr("deleteAllImportProgressAsync", error);
+  } catch (err) {
+    logErr("deleteAllImportProgressAsync", err);
+  }
+}
+
 /**
  * Limpa o estado runtime de importação no navegador (cache, preview, lote
  * pendente, importação interrompida). Não toca no banco.
@@ -286,6 +345,7 @@ export function dbDeleteAllImportProgress(): void {
 export function clearImportRuntimeState(): void {
   if (typeof window === "undefined") return;
   const PREFIXES = [
+    "star-games-store",
     "import.",
     "import-",
     "currentImportId",
@@ -322,6 +382,18 @@ export function clearImportRuntimeState(): void {
   } catch {
     /* ignore */
   }
+  try {
+    const toRemove = Array.from(uiCache.keys()).filter((k) =>
+      PREFIXES.some((p) => k === p || k.startsWith(p)),
+    );
+    for (const k of toRemove) {
+      uiCache.delete(k);
+      const subs = uiSubs.get(k);
+      if (subs) for (const fn of subs) fn();
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 export function dbSaveSettings(patch: {
@@ -345,31 +417,10 @@ export function dbSaveSettings(patch: {
 const STORE_KEY = "star-games-store";
 const MIGRATION_FLAG = "__migratedFromLocalStorage_v1";
 
-interface LegacyPersistedState {
-  clients?: Client[];
-  products?: Product[];
-  importHistory?: ImportHistoryEntry[];
-  preferences?: SystemPreferences;
-  rules?: OperationalRules;
-  security?: SecuritySettings;
-}
-
-function readLegacyPersistedState(): LegacyPersistedState | null {
-  try {
-    if (typeof window === "undefined") return null;
-    const raw = window.localStorage.getItem(STORE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { state?: LegacyPersistedState };
-    return parsed?.state ?? null;
-  } catch {
-    return null;
-  }
-}
-
 function collectLegacyUiState(): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (typeof window === "undefined") return out;
-  const PREFIXES = ["collection.", "clientes.", "import."];
+  const PREFIXES = ["collection.", "clientes."];
   for (let i = 0; i < window.localStorage.length; i++) {
     const k = window.localStorage.key(i);
     if (!k) continue;
@@ -386,8 +437,9 @@ function collectLegacyUiState(): Record<string, unknown> {
 }
 
 /**
- * Migrates legacy data persisted by zustand `persist` (localStorage key
- * `star-games-store`) and the `usePersistedState` UI keys into the DB.
+ * Migrates only harmless legacy UI preferences into the DB.
+ * Domain data no longer comes from browser storage, because reset/import must
+ * always reflect the current backend state and never an old preview cache.
  *
  * Only runs once: writes a sentinel into `app_settings.ui_state` so future
  * boots skip it.
@@ -396,49 +448,7 @@ export async function migrateLocalStorageOnce(snapshot: DbSnapshot): Promise<DbS
   if (typeof window === "undefined") return snapshot;
   if ((snapshot.uiState as Record<string, unknown>)?.[MIGRATION_FLAG]) return snapshot;
 
-  const legacy = readLegacyPersistedState();
   const legacyUi = collectLegacyUiState();
-
-  const dbIsEmpty =
-    snapshot.clients.length === 0 &&
-    snapshot.products.length === 0 &&
-    snapshot.importHistory.length === 0;
-
-  let next: DbSnapshot = snapshot;
-
-  if (legacy && dbIsEmpty) {
-    const clientRows = (legacy.clients ?? []).map((c) => clientToRow(c));
-    const productRows = (legacy.products ?? []).map((p) => productToRow(p));
-    const historyRows = (legacy.importHistory ?? []).map((h) => historyToRow(h));
-
-    if (clientRows.length > 0) {
-      const { error } = await supabase.from("clients").upsert(clientRows);
-      if (error) logErr("migrate.clients", error);
-    }
-    if (productRows.length > 0) {
-      // Batch in chunks to avoid request-size issues.
-      const CHUNK = 200;
-      for (let i = 0; i < productRows.length; i += CHUNK) {
-        const slice = productRows.slice(i, i + CHUNK);
-        const { error } = await supabase.from("products").upsert(slice);
-        if (error) logErr("migrate.products", error);
-      }
-    }
-    if (historyRows.length > 0) {
-      const { error } = await supabase.from("import_history").insert(historyRows);
-      if (error) logErr("migrate.history", error);
-    }
-
-    next = {
-      ...next,
-      clients: (legacy.clients ?? []).slice(),
-      products: (legacy.products ?? []).slice(),
-      importHistory: (legacy.importHistory ?? []).slice(),
-      preferences: { ...next.preferences, ...(legacy.preferences ?? {}) },
-      rules: { ...next.rules, ...(legacy.rules ?? {}) },
-      security: { ...next.security, ...(legacy.security ?? {}) },
-    };
-  }
 
   const mergedUiState: Record<string, unknown> = {
     ...legacyUi,
@@ -450,16 +460,18 @@ export async function migrateLocalStorageOnce(snapshot: DbSnapshot): Promise<DbS
     id: "default",
     ui_state: mergedUiState,
   };
-  if (legacy?.preferences) settingsPatch.preferences = next.preferences;
-  if (legacy?.rules) settingsPatch.rules = next.rules;
-  if (legacy?.security) settingsPatch.security = next.security;
-
   const { error: settingsErr } = await supabase
     .from("app_settings")
     .upsert(settingsPatch as never);
   if (settingsErr) logErr("migrate.settings", settingsErr);
 
-  return { ...next, uiState: mergedUiState };
+  try {
+    window.localStorage.removeItem(STORE_KEY);
+  } catch {
+    /* ignore */
+  }
+
+  return { ...snapshot, uiState: mergedUiState };
 }
 
 // ============= UI state (per-key) =============
@@ -518,6 +530,19 @@ function scheduleFlush() {
         if (error) logErr("ui_state.flush", error);
       });
   }, 400);
+}
+
+export async function flushUiStateNow(): Promise<void> {
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  const snapshot: Record<string, unknown> = {};
+  for (const [k, v] of uiCache.entries()) snapshot[k] = v;
+  const { error } = await supabase
+    .from("app_settings")
+    .upsert({ id: "default", ui_state: snapshot } as never);
+  if (error) logErr("ui_state.flushNow", error);
 }
 
 export function setUiValue(key: string, value: unknown) {
