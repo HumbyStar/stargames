@@ -8,7 +8,10 @@ import {
   useStore,
   type Client,
   type MGMVAgreement,
+  type MGMVInstallment,
 } from "@/lib/store";
+import { MgmvAiReviewModal } from "@/components/mgmv-ai-review-modal";
+import type { MgmvAiReviewSuggestion } from "@/lib/mgmv-ai-review.functions";
 
 type MgmvChip =
   | "todos"
@@ -90,10 +93,12 @@ export function MGMVSection({
 }: {
   onScrollTo: (id: string) => void;
 }) {
-  const { clients, products, openClient, payMGMVInstallment } = useStore();
+  const { clients, products, openClient, payMGMVInstallment, setMGMVAgreement } =
+    useStore();
   const [chip, setChip] = useState<MgmvChip>("todos");
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [aiTarget, setAiTarget] = useState<string | null>(null);
 
   const rows = useMemo<MgmvRow[]>(() => {
     const list: MgmvRow[] = [];
@@ -312,6 +317,15 @@ export function MGMVSection({
                       </td>
                       <td className="px-3 py-2 text-right">
                         <div className="flex justify-end gap-1">
+                          {r.status === "Revisão necessária" && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => setAiTarget(r.client.id)}
+                            >
+                              Revisar com IA
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"
@@ -432,6 +446,66 @@ export function MGMVSection({
           </table>
         </div>
       </div>
+      {(() => {
+        if (!aiTarget) return null;
+        const row = rows.find((r) => r.client.id === aiTarget);
+        if (!row) return null;
+        const productsOfClient = products.filter(
+          (p) => p.clientId === row.client.id,
+        );
+        return (
+          <MgmvAiReviewModal
+            open={true}
+            onClose={() => setAiTarget(null)}
+            client={row.client}
+            agreement={row.agreement}
+            products={productsOfClient}
+            onApply={(s) => {
+              const next = applySuggestionToAgreement(row.agreement, s);
+              setMGMVAgreement(row.client.id, next);
+            }}
+          />
+        );
+      })()}
     </section>
   );
+}
+
+function applySuggestionToAgreement(
+  current: MGMVAgreement,
+  s: MgmvAiReviewSuggestion,
+): MGMVAgreement {
+  const N = s.installmentsCount ?? current.installments.length;
+  const V =
+    s.installmentValue ?? current.installments[0]?.value ?? 0;
+  const T = s.totalAgreementValue ?? N * V;
+  const P = Math.max(0, Math.min(N, s.paidInstallments ?? 0));
+
+  // Preserva dueDates existentes quando possível; novas parcelas herdam a última.
+  const existing = current.installments;
+  const fallbackDue =
+    existing[existing.length - 1]?.dueDate ??
+    current.startDate ??
+    new Date().toISOString();
+  const nowIso = new Date().toISOString();
+
+  const installments: MGMVInstallment[] = Array.from({ length: N }, (_, i) => {
+    const number = i + 1;
+    const prior = existing.find((x) => x.number === number);
+    const paid = number <= P;
+    return {
+      number,
+      total: N,
+      dueDate: prior?.dueDate ?? fallbackDue,
+      value: V,
+      paid,
+      paidAt: paid ? prior?.paidAt ?? nowIso : undefined,
+    };
+  });
+
+  return {
+    startDate: current.startDate,
+    totalDebt: T,
+    installments,
+  };
 }
