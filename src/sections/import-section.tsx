@@ -278,16 +278,49 @@ function extractClientNotes(root: Element): string {
 // opcionalmente "1º Pagamento -> 07/03/2025".
 export function extractMGMVAgreementFromNotes(notes: string): MGMVAgreement | null {
   if (!notes) return null;
+  const lower = notes.toLowerCase();
+  // Sinais soltos: precisamos de menção a MGMV/parcelas/dividido em.
+  const hasMgmvHint =
+    /mgmv/.test(lower) ||
+    /\bparcela(s)?\b/.test(lower) ||
+    /dividido\s+em/.test(lower);
+  if (!hasMgmvHint) return null;
+
   const totalMatch = notes.match(/TOTAL:\s*([\d.,]+)/i);
   const installmentsMatch = notes.match(/(\d+)\s*x\s*Parcelas?\s*de\s*([\d.,]+)/i);
+  // "50 dividido em 2x de 25 reais"
+  const dividedMatch = notes.match(
+    /([\d.,]+)\s*dividido\s+em\s+(\d+)\s*x\s*(?:de\s*)?([\d.,]+)/i,
+  );
   const firstPaymentMatch = notes.match(
     /1[ºo]?\s*Pagamento\s*[-–—>]+\s*(\d{2}\/\d{2}\/\d{4})/i,
   );
-  if (!totalMatch || !installmentsMatch) return null;
-  const totalDebt = normalizeMoney(totalMatch[1]);
-  const count = Number(installmentsMatch[1]);
-  const value = normalizeMoney(installmentsMatch[2]);
+
+  let totalDebt = 0;
+  let count = 0;
+  let value = 0;
+  if (totalMatch && installmentsMatch) {
+    totalDebt = normalizeMoney(totalMatch[1]);
+    count = Number(installmentsMatch[1]);
+    value = normalizeMoney(installmentsMatch[2]);
+  } else if (dividedMatch) {
+    totalDebt = normalizeMoney(dividedMatch[1]);
+    count = Number(dividedMatch[2]);
+    value = normalizeMoney(dividedMatch[3]);
+  } else if (installmentsMatch) {
+    count = Number(installmentsMatch[1]);
+    value = normalizeMoney(installmentsMatch[2]);
+    totalDebt = count * value;
+  }
   if (!totalDebt || !count || !value) return null;
+
+  // Detecta parcelas já pagas pelas observações.
+  let paidCount = 0;
+  if (/pago\s+primeira\s+parcela/i.test(notes)) paidCount = Math.max(paidCount, 1);
+  const pagasMatch = notes.match(/(\d+)\s*parcelas?\s*pagas?/i);
+  if (pagasMatch) paidCount = Math.max(paidCount, Number(pagasMatch[1]));
+  paidCount = Math.min(paidCount, count);
+
   const firstDueIso =
     firstPaymentMatch && normalizeDateBR(firstPaymentMatch[1])
       ? new Date(`${normalizeDateBR(firstPaymentMatch[1])}T12:00:00`).toISOString()
@@ -301,7 +334,7 @@ export function extractMGMVAgreementFromNotes(notes: string): MGMVAgreement | nu
       total: count,
       dueDate: d.toISOString(),
       value,
-      paid: false,
+      paid: idx < paidCount,
     };
   });
   return {
