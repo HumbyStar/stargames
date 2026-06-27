@@ -1701,9 +1701,15 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         state={importProgress}
         open={!!importProgress}
         onClose={() => {
+          // Limpa do banco se já terminou (não precisa mais retomar).
+          if (importProgress?.done && progressRowId) {
+            void supabase.from("import_progress").delete().eq("id", progressRowId);
+          }
+          setProgressRowId(null);
           setImportProgress(null);
-          onScrollTo("clientes");
+          if (importProgress?.done) onScrollTo("clientes");
         }}
+        onDiscard={discardProgress}
       />
 
       <Dialog open={zipFailuresOpen} onOpenChange={setZipFailuresOpen}>
