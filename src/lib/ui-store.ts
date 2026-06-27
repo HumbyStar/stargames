@@ -8,22 +8,28 @@ interface UiState {
   importOpen: boolean;
   settingsOpen: boolean;
   helpOpen: boolean;
+  notificationsOpen: boolean;
   openImport: () => void;
   closeImport: () => void;
   openSettings: () => void;
   closeSettings: () => void;
   openHelp: () => void;
   closeHelp: () => void;
+  openNotifications: () => void;
+  closeNotifications: () => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
   importOpen: false,
   settingsOpen: false,
   helpOpen: false,
+  notificationsOpen: false,
   openImport: () => set({ importOpen: true }),
   closeImport: () => set({ importOpen: false }),
   openSettings: () => set({ settingsOpen: true }),
   closeSettings: () => set({ settingsOpen: false }),
   openHelp: () => set({ helpOpen: true }),
   closeHelp: () => set({ helpOpen: false }),
+  openNotifications: () => set({ notificationsOpen: true }),
+  closeNotifications: () => set({ notificationsOpen: false }),
 }));
