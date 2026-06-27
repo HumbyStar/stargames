@@ -188,13 +188,13 @@ function NavLink({
         onClick();
       }}
       className={cn(
-        "rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
+        "rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 hover:-translate-y-0.5 active:scale-95",
         active
-          ? "bg-primary text-primary-foreground shadow-sm"
+          ? "bg-primary text-primary-foreground shadow-sm scale-105"
           : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground",
       )}
     >
-      {label}
+      <span className="inline-block transition-transform">{label}</span>
     </a>
   );
 }
@@ -261,12 +261,12 @@ function FloatingNavbar() {
       <a
         href="#dashboard"
         onClick={(e) => { e.preventDefault(); scrollToSection("dashboard"); }}
-        className="flex items-center gap-2 pl-2 pr-1"
+        className="group flex items-center gap-2 pl-2 pr-1 transition-transform duration-200 hover:-translate-y-0.5 active:scale-95"
       >
-        <div className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-primary to-[oklch(0.65_0.22_280)] text-primary-foreground font-bold shadow-md">
+        <div className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-primary to-[oklch(0.65_0.22_280)] text-primary-foreground font-bold shadow-md transition-all duration-300 group-hover:shadow-lg group-hover:rotate-6 group-hover:scale-110">
           S
         </div>
-        <div className="hidden lg:block leading-tight">
+        <div className="hidden lg:block leading-tight transition-all duration-200 group-hover:translate-x-0.5">
           <p className="text-sm font-semibold">Star Games</p>
           <p className="text-[10px] text-muted-foreground">Gestão Operacional</p>
         </div>
@@ -284,7 +284,7 @@ function FloatingNavbar() {
         ))}
       </div>
 
-      <SearchBox className="hidden md:block ml-3 flex-1 max-w-md" />
+      <SearchBox className="hidden md:block ml-3 flex-1 max-w-md transition-all duration-300 focus-within:scale-[1.02]" />
 
       <div className="ml-auto flex items-center gap-1.5 md:gap-2 md:pl-2">
         <button
@@ -299,9 +299,9 @@ function FloatingNavbar() {
           onClick={toggleTheme}
           aria-label={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
           title={isDark ? "Modo claro" : "Modo escuro"}
-          className="grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-colors"
+          className="group grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
         >
-          <span key={isDark ? "sun" : "moon"} className="inline-flex animate-in fade-in zoom-in-75 duration-200">
+          <span key={isDark ? "sun" : "moon"} className="inline-flex animate-in fade-in zoom-in-75 duration-300 group-hover:rotate-12 transition-transform">
             {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </span>
         </button>
@@ -309,15 +309,15 @@ function FloatingNavbar() {
           onClick={openHelp}
           aria-label="Ajuda"
           title="Central de Ajuda"
-          className="hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground hover:animate-pulse"
+          className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
         >
-          <HelpCircle className="size-4" />
+          <HelpCircle className="size-4 transition-transform duration-300 group-hover:scale-125 group-hover:animate-pulse" />
         </button>
         <button
           onClick={openSettings}
           aria-label="Configurações"
           title="Configurações"
-          className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+          className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
         >
           <Settings className="size-4 transition-transform duration-300 group-hover:rotate-90" />
         </button>
@@ -325,16 +325,18 @@ function FloatingNavbar() {
           onClick={handleSignOut}
           aria-label="Sair"
           title="Sair"
-          className="grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+          className="group grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-destructive/10 hover:text-destructive active:scale-90"
         >
-          <LogOut className="size-4" />
+          <LogOut className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
         </button>
         <button
-          className="md:hidden grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10"
+          className="group md:hidden grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 active:scale-90"
           onClick={() => setOpenMobile((v) => !v)}
           aria-label="Menu"
         >
-          {openMobile ? <X className="size-4" /> : <Menu className="size-4" />}
+          <span key={openMobile ? "x" : "menu"} className="inline-flex animate-in fade-in zoom-in-75 duration-200">
+            {openMobile ? <X className="size-4" /> : <Menu className="size-4" />}
+          </span>
         </button>
       </div>
 
