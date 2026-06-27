@@ -572,13 +572,23 @@ function ClientDrawer({
   onPayMGMVInstallment: (installmentNumber: number) => void;
 }) {
   const [notes, setNotes] = useState(client.notes ?? "");
-  const totalBought = products.reduce((a, p) => a + p.totalValue, 0);
-  const totalPaid = products.reduce((a, p) => a + p.paidValue, 0);
-  const totalRest = products
-    .filter((p) => p.situation === "Em Aberto")
-    .reduce((a, p) => a + (p.totalValue - p.paidValue), 0);
   const mgmv = getMGMVDisplay(client);
   const mgmvProducts = products.filter((p) => p.financialStatus === "MGMV");
+  const individualProducts = products.filter((p) => p.financialStatus !== "MGMV");
+  // Evita double-counting: produtos MGMV são consolidados no acordo.
+  // Total comprado = soma dos produtos individuais + valor total do acordo MGMV.
+  const individualBought = individualProducts.reduce((a, p) => a + p.totalValue, 0);
+  const individualPaid = individualProducts.reduce((a, p) => a + p.paidValue, 0);
+  const individualRest = individualProducts
+    .filter((p) => p.situation === "Em Aberto")
+    .reduce((a, p) => a + (p.totalValue - p.paidValue), 0);
+  const mgmvPaid = mgmv
+    ? mgmv.installmentValue * mgmv.installmentsPaid
+    : 0;
+  const mgmvRest = mgmv ? mgmv.remainingBalance : 0;
+  const totalBought = individualBought + (mgmv?.totalDebt ?? 0);
+  const totalPaid = individualPaid + mgmvPaid;
+  const totalRest = individualRest + mgmvRest;
   const pctPaid =
     mgmv && mgmv.installmentsTotal > 0
       ? Math.round((mgmv.installmentsPaid / mgmv.installmentsTotal) * 100)
