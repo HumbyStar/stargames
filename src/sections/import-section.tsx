@@ -1055,7 +1055,9 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                 onFile={handleZipFile}
                 hint={
                   zipProcessing
-                    ? "Lendo ZIP..."
+                    ? zipProgress && zipProgress.total > 0
+                      ? `Lendo ZIP... ${zipProgress.done}/${zipProgress.total} arquivos`
+                      : "Lendo ZIP..."
                     : "Arraste o ZIP exportado do Notion ou clique para selecionar"
                 }
               />
