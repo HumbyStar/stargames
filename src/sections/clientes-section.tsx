@@ -82,6 +82,11 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const [situationFilter, setSituationFilter] = useState("Todas");
   const [platformFilter, setPlatformFilter] = useState("Todas");
   const [periodFilter, setPeriodFilter] = useState("Todos");
+  const [folderFilter, setFolderFilter] = useState<string>("Todas");
+  const [pageSize, setPageSize] = useState<number>(25);
+  const [page, setPage] = useState(1);
+  const [compact, setCompact] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
 
   const drawerClientId = openClientId;
   const setDrawerClientId = (id: string | null) => openClient(id);
@@ -89,6 +94,14 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const [productModal, setProductModal] = useState<{ open: boolean; clientId?: string; product?: Product | null }>({ open: false });
 
   const drawerClient = clients.find((c) => c.id === drawerClientId) ?? null;
+
+  const folders = useMemo(() => {
+    const set = new Set<string>();
+    clients.forEach((c) => {
+      if (c.folder && c.folder.trim()) set.add(c.folder);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+  }, [clients]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -142,9 +155,46 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           if (periodFilter === "7" && diff > 7) return false;
           if (periodFilter === "30" && diff > 30) return false;
         }
+        if (folderFilter !== "Todas") {
+          if (folderFilter === "__sem__") {
+            if (r.client.folder) return false;
+          } else if (r.client.folder !== folderFilter) {
+            return false;
+          }
+        }
         return true;
       });
-  }, [clients, products, search, chip, financialFilter, situationFilter, platformFilter, periodFilter]);
+  }, [clients, products, search, chip, financialFilter, situationFilter, platformFilter, periodFilter, folderFilter]);
+
+  // Reseta a página quando filtros mudam.
+  useEffect(() => {
+    setPage(1);
+  }, [search, chip, financialFilter, situationFilter, platformFilter, periodFilter, folderFilter, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedRows = useMemo(
+    () => rows.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [rows, currentPage, pageSize],
+  );
+
+  const activeFilterCount =
+    (chip !== "todos" ? 1 : 0) +
+    (financialFilter !== "Todos" ? 1 : 0) +
+    (situationFilter !== "Todas" ? 1 : 0) +
+    (platformFilter !== "Todas" ? 1 : 0) +
+    (periodFilter !== "Todos" ? 1 : 0) +
+    (folderFilter !== "Todas" ? 1 : 0);
+
+  const clearFilters = () => {
+    setChip("todos");
+    setFinancialFilter("Todos");
+    setSituationFilter("Todas");
+    setPlatformFilter("Todas");
+    setPeriodFilter("Todos");
+    setFolderFilter("Todas");
+    setSearch("");
+  };
 
   const totalClients = clients.length;
   const clientesPendencia = clients.filter((c) =>
@@ -163,10 +213,14 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     { id: "reserva_vencida", label: "Reserva vencida" },
     { id: "pendente", label: "Pendente" },
     { id: "mgmv", label: "MGMV" },
+    { id: "mgmv_vencido", label: "MGMV vencido" },
+    { id: "mgmv_quitado", label: "MGMV quitado" },
     { id: "pago_aguardando", label: "Pago aguardando envio" },
     { id: "enviado", label: "Enviado" },
     { id: "desistiu", label: "Desistiu" },
     { id: "abandonou", label: "Abandonou" },
+    { id: "em_dia", label: "Em dia" },
+    { id: "sem_produtos", label: "Sem produtos" },
   ];
 
   const exportBase = () => {
