@@ -319,6 +319,9 @@ export function extractMGMVAgreementFromNotes(notes: string): MGMVAgreement | nu
   if (/pago\s+primeira\s+parcela/i.test(notes)) paidCount = Math.max(paidCount, 1);
   const pagasMatch = notes.match(/(\d+)\s*parcelas?\s*pagas?/i);
   if (pagasMatch) paidCount = Math.max(paidCount, Number(pagasMatch[1]));
+  // Variações: "Pagou 2 parcelas", "quitou 3 parcelas".
+  const pagouMatch = notes.match(/(?:pagou|quitou)\s+(\d+)\s*parcelas?/i);
+  if (pagouMatch) paidCount = Math.max(paidCount, Number(pagouMatch[1]));
   paidCount = Math.min(paidCount, count);
 
   const firstDueIso =

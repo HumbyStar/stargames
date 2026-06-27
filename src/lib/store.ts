@@ -52,6 +52,14 @@ export interface Client {
   mgmv?: MGMVAgreement;
   /** Pasta de origem (ex.: Notion ZIP) — usada para filtro/agrupamento. */
   folder?: string;
+  /**
+   * Classificação automática do importador.
+   * - "common": cliente comum (Seção Clientes)
+   * - "mgmv": cliente MGMV (Seção MGMV)
+   * Default = "common". Migrado automaticamente para "mgmv" quando o cliente
+   * recebe um acordo MGMV ativo.
+   */
+  clientType?: "common" | "mgmv";
 }
 
 export interface SystemPreferences {
@@ -436,7 +444,15 @@ export const useStore = create<State>()((set, get) => ({
       setMGMVAgreement: (clientId, agreement) =>
         set((s) => {
           const clients = s.clients.map((c) =>
-            c.id === clientId ? { ...c, mgmv: agreement } : c,
+            c.id === clientId
+              ? {
+                  ...c,
+                  mgmv: agreement,
+                  // Ao receber um acordo MGMV, o cliente é reclassificado
+                  // automaticamente. Ao remover o acordo, volta a ser comum.
+                  clientType: (agreement ? "mgmv" : "common") as "mgmv" | "common",
+                }
+              : c,
           );
           const updated = clients.find((c) => c.id === clientId);
           if (updated) dbUpsertClient(updated);

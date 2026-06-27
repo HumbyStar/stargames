@@ -24,6 +24,7 @@ export interface DbClientRow {
   notes: string | null;
   folder: string | null;
   mgmv: Json;
+  client_type?: string;
 }
 
 export interface DbProductRow {
@@ -64,6 +65,7 @@ export function rowToClient(r: DbClientRow): Client {
     notes: r.notes ?? undefined,
     folder: r.folder ?? undefined,
     mgmv: (r.mgmv as MGMVAgreement | null) ?? undefined,
+    clientType: r.client_type === "mgmv" ? "mgmv" : "common",
   };
 }
 
@@ -75,6 +77,7 @@ export function clientToRow(c: Client): DbClientRow {
     notes: c.notes ?? null,
     folder: c.folder ?? null,
     mgmv: (c.mgmv as unknown as Json) ?? null,
+    client_type: c.clientType ?? (c.mgmv ? "mgmv" : "common"),
   };
 }
 
