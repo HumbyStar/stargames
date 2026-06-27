@@ -1,13 +1,22 @@
 import { create } from "zustand";
 import {
   dbDeleteAllClients,
+  dbDeleteAllClientsAsync,
   dbDeleteAllProducts,
+  dbDeleteAllProductsAsync,
   dbDeleteAllMGMV,
+  dbDeleteAllMGMVAsync,
   dbDeleteAllImportProgress,
+  dbDeleteAllImportProgressAsync,
   clearImportRuntimeState,
   dbDeleteHistoryAll,
+  dbDeleteHistoryAllAsync,
   dbInsertHistory,
+  dbUpsertClientsAsync,
+  dbUpsertHistoryAsync,
+  dbUpsertProductsAsync,
   dbSaveSettings,
+  flushUiStateNow,
   dbUpsertClient,
   dbUpsertProduct,
   loadSnapshot,
@@ -149,7 +158,12 @@ interface State {
   setRules: (patch: Partial<OperationalRules>) => void;
   setSecurity: (patch: Partial<SecuritySettings>) => void;
   addImportHistory: (entry: Omit<ImportHistoryEntry, "id" | "date"> & { date?: string }) => void;
-  executeDangerAction: (action: DangerAction) => void;
+  persistConfirmedImport: (payload: {
+    clients: Client[];
+    products: Product[];
+    history: ImportHistoryEntry;
+  }) => Promise<void>;
+  executeDangerAction: (action: DangerAction) => Promise<void>;
 }
 
 const uid = () =>
@@ -314,7 +328,9 @@ export function getResetVersion(): string {
   return getUiValue<string>(RESET_VERSION_KEY, "");
 }
 function bumpResetVersion() {
-  setUiValue(RESET_VERSION_KEY, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  const version = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  setUiValue(RESET_VERSION_KEY, version);
+  return version;
 }
 
 export const useStore = create<State>()((set, get) => ({
@@ -511,56 +527,61 @@ export const useStore = create<State>()((set, get) => ({
             importHistory: [newEntry, ...s.importHistory].slice(0, 50),
           };
         }),
-      executeDangerAction: (action) =>
-        set((s) => {
-          switch (action) {
-            case "deleteImportedData":
-              dbDeleteHistoryAll();
-              dbDeleteAllImportProgress();
-              clearImportRuntimeState();
-              bumpResetVersion();
-              return { ...s, importHistory: [] };
-            case "deleteAllClients":
-              dbDeleteAllClients();
-              dbDeleteAllProducts();
-              dbDeleteAllMGMV();
-              dbDeleteAllImportProgress();
-              clearImportRuntimeState();
-              bumpResetVersion();
-              return { ...s, clients: [], products: [], openClientId: null };
-            case "deleteAllProducts":
-              dbDeleteAllProducts();
-              dbDeleteAllMGMV();
-              clearImportRuntimeState();
-              bumpResetVersion();
-              return { ...s, products: [] };
-            case "resetSystem":
-              dbDeleteAllClients();
-              dbDeleteAllProducts();
-              dbDeleteAllMGMV();
-              dbDeleteHistoryAll();
-              dbDeleteAllImportProgress();
-              clearImportRuntimeState();
-              bumpResetVersion();
-              dbSaveSettings({
-                preferences: defaultPreferences,
-                rules: defaultRules,
-                security: defaultSecurity,
-              });
-              return {
-                ...s,
-                clients: [],
-                products: [],
-                importHistory: [],
-                openClientId: null,
-                preferences: defaultPreferences,
-                rules: defaultRules,
-                security: defaultSecurity,
-              };
-            default:
-              return s;
-          }
-        }),
+      persistConfirmedImport: async ({ clients, products, history }) => {
+        await dbUpsertClientsAsync(clients);
+        await dbUpsertProductsAsync(products);
+        await dbUpsertHistoryAsync(history);
+      },
+      executeDangerAction: async (action) => {
+        clearImportRuntimeState();
+        bumpResetVersion();
+        await flushUiStateNow();
+
+        switch (action) {
+          case "deleteImportedData":
+            await dbDeleteAllImportProgressAsync();
+            await dbDeleteHistoryAllAsync();
+            set((s) => ({ ...s, importHistory: [] }));
+            return;
+          case "deleteAllClients":
+            await dbDeleteAllImportProgressAsync();
+            await dbDeleteAllMGMVAsync();
+            await dbDeleteAllProductsAsync();
+            await dbDeleteAllClientsAsync();
+            set((s) => ({ ...s, clients: [], products: [], openClientId: null }));
+            return;
+          case "deleteAllProducts":
+            await dbDeleteAllImportProgressAsync();
+            await dbDeleteAllMGMVAsync();
+            await dbDeleteAllProductsAsync();
+            set((s) => ({ ...s, products: [] }));
+            return;
+          case "resetSystem":
+            await dbDeleteAllImportProgressAsync();
+            await dbDeleteAllMGMVAsync();
+            await dbDeleteAllProductsAsync();
+            await dbDeleteAllClientsAsync();
+            await dbDeleteHistoryAllAsync();
+            dbSaveSettings({
+              preferences: defaultPreferences,
+              rules: defaultRules,
+              security: defaultSecurity,
+            });
+            set((s) => ({
+              ...s,
+              clients: [],
+              products: [],
+              importHistory: [],
+              openClientId: null,
+              preferences: defaultPreferences,
+              rules: defaultRules,
+              security: defaultSecurity,
+            }));
+            return;
+          default:
+            return;
+        }
+      },
 }));
 
 export const formatBRL = (n: number) =>
