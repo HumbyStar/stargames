@@ -15,13 +15,15 @@ import type {
 
 // ============= Row <-> State mappers =============
 
+import type { Json } from "@/integrations/supabase/types";
+
 export interface DbClientRow {
   id: string;
   name: string;
   phone: string;
   notes: string | null;
   folder: string | null;
-  mgmv: unknown;
+  mgmv: Json;
 }
 
 export interface DbProductRow {
@@ -29,8 +31,8 @@ export interface DbProductRow {
   client_id: string;
   name: string;
   platform: string;
-  total_value: number | string;
-  paid_value: number | string;
+  total_value: number;
+  paid_value: number;
   financial_status: string;
   situation: string;
   register_date: string;
@@ -72,7 +74,7 @@ export function clientToRow(c: Client): DbClientRow {
     phone: c.phone ?? "",
     notes: c.notes ?? null,
     folder: c.folder ?? null,
-    mgmv: c.mgmv ?? null,
+    mgmv: (c.mgmv as unknown as Json) ?? null,
   };
 }
 
