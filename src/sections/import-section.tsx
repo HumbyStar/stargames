@@ -111,19 +111,41 @@ const normalizeSituationBR = (s: string): Situation => {
 
 const normalizeDateBR = (s: string): string | null => {
   if (!s) return null;
-  const parts = s.trim().split("/");
-  if (parts.length === 3) {
-    const [d, m, y] = parts;
-    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  const trimmed = s.trim();
+  // Aceita "DD/MM/AAAA" ou "DD/MM/AA"; rejeita qualquer outra coisa.
+  const m = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+  if (!m) return null;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  let year = Number(m[3]);
+  if (m[3].length === 2) year = 2000 + year;
+  if (
+    !Number.isFinite(day) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(year) ||
+    day < 1 ||
+    day > 31 ||
+    month < 1 ||
+    month > 12 ||
+    year < 1900 ||
+    year > 2999
+  ) {
+    return null;
   }
-  return null;
+  const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  // Verifica se a data realmente existe (ex.: 31/02 inválido).
+  const probe = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(probe.getTime())) return null;
+  return iso;
 };
 
 const calculateDueDate = (status: FinancialStatus, registerDate: string | null) => {
   if (!registerDate) return null;
   if (status === "Reserva") {
     const d = new Date(`${registerDate}T12:00:00`);
+    if (Number.isNaN(d.getTime())) return registerDate;
     d.setDate(d.getDate() + 30);
+    if (Number.isNaN(d.getTime())) return registerDate;
     return d.toISOString().split("T")[0];
   }
   return registerDate;
