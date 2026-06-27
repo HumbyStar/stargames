@@ -266,13 +266,52 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
 
       <Card className="mt-6">
         <div className="space-y-4">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nome, telefone ou produto..."
-            className="h-10 w-full rounded-full border border-input bg-background px-4 text-sm outline-none focus:border-primary/40"
-          />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por nome, telefone ou produto..."
+                className="h-10 w-full rounded-full border border-input bg-background px-4 pr-10 text-sm outline-none focus:border-primary/40"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Limpar busca"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowFilters((v) => !v)}
+              className="gap-1.5"
+            >
+              <Filter className="h-4 w-4" />
+              Filtros
+              {activeFilterCount > 0 && (
+                <span className="ml-1 rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                  {activeFilterCount}
+                </span>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCompact((v) => !v)}
+              className="gap-1.5"
+              title={compact ? "Expandir linhas" : "Compactar linhas"}
+            >
+              {compact ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
+              {compact ? "Expandir" : "Compactar"}
+            </Button>
+          </div>
 
+          {showFilters && (
+          <>
           <div className="flex flex-wrap gap-2">
             {chips.map((c) => (
               <button
@@ -290,7 +329,22 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
             ))}
           </div>
 
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+            <div className="relative">
+              <Folder className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <select
+                value={folderFilter}
+                onChange={(e) => setFolderFilter(e.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-background pl-7 pr-2 text-sm"
+                title="Filtrar por pasta de origem"
+              >
+                <option value="Todas">Pasta (todas)</option>
+                <option value="__sem__">Sem pasta</option>
+                {folders.map((f) => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </div>
             <select value={financialFilter} onChange={(e) => setFinancialFilter(e.target.value)} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
               <option value="Todos">Status financeiro</option>
               <option>Pago</option><option>Reserva</option><option>Pendente</option><option>MGMV</option>
@@ -309,6 +363,19 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               <option>PS5</option><option>PS4</option><option>PS2</option><option>Xbox</option><option>Colecionável</option>
             </select>
           </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+            <div>
+              {rows.length} cliente(s) encontrado(s){activeFilterCount > 0 && ` • ${activeFilterCount} filtro(s) ativo(s)`}
+            </div>
+            {activeFilterCount > 0 && (
+              <button onClick={clearFilters} className="text-primary hover:underline">
+                Limpar filtros
+              </button>
+            )}
+          </div>
+          </>
+          )}
         </div>
 
         <div className="mt-5 overflow-x-auto">
