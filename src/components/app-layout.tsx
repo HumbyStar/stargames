@@ -36,6 +36,7 @@ import { TutorialRunner } from "@/components/tutorial-runner";
 const navItems = [
   { id: "dashboard", label: "Dashboard" },
   { id: "clientes", label: "Clientes" },
+  { id: "mgmv", label: "MGMV" },
   { id: "collection", label: "Collection" },
 ] as const;
 
