@@ -71,6 +71,22 @@ describe("extractMGMVAgreementFromNotes", () => {
     expect(a!.installments[2].paid).toBe(false);
   });
 
+  it("interpreta 'Pagou N parcelas' nas observações", () => {
+    const a = extractMGMVAgreementFromNotes(
+      "MGMV\nTOTAL: 200 (4x Parcelas de 50)\nPagou 3 parcelas",
+    );
+    expect(a).not.toBeNull();
+    expect(a!.installments.filter((i) => i.paid)).toHaveLength(3);
+  });
+
+  it("interpreta 'quitou N parcela' como variação de pagamento", () => {
+    const a = extractMGMVAgreementFromNotes(
+      "MGMV\n3x Parcelas de 40\nquitou 1 parcela",
+    );
+    expect(a).not.toBeNull();
+    expect(a!.installments.filter((i) => i.paid)).toHaveLength(1);
+  });
+
   it("não marca mais parcelas pagas do que o total", () => {
     const a = extractMGMVAgreementFromNotes(
       "MGMV\n2x Parcelas de 50\n9 parcelas pagas",
