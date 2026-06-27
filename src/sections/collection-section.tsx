@@ -730,17 +730,33 @@ export function CollectionSection({
                             variant="ghost"
                             title="Enviar mensagem no WhatsApp"
                             aria-label="Enviar mensagem no WhatsApp"
-                            onClick={() =>
-                              openWhatsApp(
-                                client.phone,
-                                client.name,
-                                productLabel,
-                                remaining,
-                                statusLabel,
-                                dueIso,
-                                late,
-                              )
-                            }
+                            onClick={() => {
+                              const firstName =
+                                (client.name || "").split(" ")[0] || client.name;
+                              const totalParcelas = next?.total ?? display.installmentsTotal;
+                              const parcelaAtual = next?.number ?? display.installmentsPaid + 1;
+                              const valorParcela = formatBRL(remaining);
+                              const vencimento = next ? formatDateBR(dueIso) : "—";
+                              const saldoRestante = formatBRL(display.remainingBalance);
+                              const message =
+                                `Olá, ${firstName}. Tudo bem?\n\n` +
+                                `Passando para lembrar sobre o seu acordo MGMV.\n\n` +
+                                `Parcela: ${parcelaAtual}/${totalParcelas}\n` +
+                                `Valor da parcela: ${valorParcela}\n` +
+                                `Vencimento: ${vencimento}\n` +
+                                `Saldo restante: ${saldoRestante}\n\n` +
+                                `Assim que conseguir, me envie o comprovante para atualizarmos seu acordo por aqui.`;
+                              const phone = formatPhoneIntl(client.phone);
+                              if (!phone) {
+                                toast.error("Cliente sem telefone válido.");
+                                return;
+                              }
+                              window.open(
+                                `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
+                                "_blank",
+                                "noopener,noreferrer",
+                              );
+                            }}
                           >
                             <MessageCircle className="h-4 w-4" />
                           </Button>
