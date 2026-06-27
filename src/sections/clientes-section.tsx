@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Folder, Filter, Maximize2, Minimize2, X } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,7 +37,11 @@ type ChipFilter =
   | "pago_aguardando"
   | "enviado"
   | "desistiu"
-  | "abandonou";
+  | "abandonou"
+  | "em_dia"
+  | "sem_produtos"
+  | "mgmv_vencido"
+  | "mgmv_quitado";
 
 function generalStatus(client: Client, products: Product[]): {
   label: string;
@@ -77,6 +82,11 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const [situationFilter, setSituationFilter] = useState("Todas");
   const [platformFilter, setPlatformFilter] = useState("Todas");
   const [periodFilter, setPeriodFilter] = useState("Todos");
+  const [folderFilter, setFolderFilter] = useState<string>("Todas");
+  const [pageSize, setPageSize] = useState<number>(25);
+  const [page, setPage] = useState(1);
+  const [compact, setCompact] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
 
   const drawerClientId = openClientId;
   const setDrawerClientId = (id: string | null) => openClient(id);
@@ -84,6 +94,14 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const [productModal, setProductModal] = useState<{ open: boolean; clientId?: string; product?: Product | null }>({ open: false });
 
   const drawerClient = clients.find((c) => c.id === drawerClientId) ?? null;
+
+  const folders = useMemo(() => {
+    const set = new Set<string>();
+    clients.forEach((c) => {
+      if (c.folder && c.folder.trim()) set.add(c.folder);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+  }, [clients]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -110,15 +128,22 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           if (!hit) return false;
         }
         if (chip !== "todos") {
+          const mgmvActive = r.client.mgmv && r.client.mgmv.installments.some((i) => !i.paid);
+          const mgmvOverdue = r.client.mgmv && r.client.mgmv.installments.some((i) => !i.paid && isOverdue(i.dueDate));
+          const mgmvQuitado = r.client.mgmv && r.client.mgmv.installments.every((i) => i.paid);
           const map: Record<ChipFilter, boolean> = {
             todos: true,
             reserva_vencida: r.status.label === "Reserva vencida",
             pendente: r.products.some((p) => p.financialStatus === "Pendente" && p.situation === "Em Aberto"),
-            mgmv: !!r.client.mgmv,
+            mgmv: !!mgmvActive,
+            mgmv_vencido: !!mgmvOverdue,
+            mgmv_quitado: !!mgmvQuitado,
             pago_aguardando: r.products.some((p) => p.financialStatus === "Pago" && p.situation === "Em Aberto"),
             enviado: r.products.some((p) => p.situation === "Enviado"),
             desistiu: r.products.some((p) => p.situation === "Desistiu"),
             abandonou: r.products.some((p) => p.situation === "Abandonou"),
+            em_dia: r.status.label === "Em dia",
+            sem_produtos: r.products.length === 0,
           };
           if (!map[chip]) return false;
         }
@@ -130,9 +155,46 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           if (periodFilter === "7" && diff > 7) return false;
           if (periodFilter === "30" && diff > 30) return false;
         }
+        if (folderFilter !== "Todas") {
+          if (folderFilter === "__sem__") {
+            if (r.client.folder) return false;
+          } else if (r.client.folder !== folderFilter) {
+            return false;
+          }
+        }
         return true;
       });
-  }, [clients, products, search, chip, financialFilter, situationFilter, platformFilter, periodFilter]);
+  }, [clients, products, search, chip, financialFilter, situationFilter, platformFilter, periodFilter, folderFilter]);
+
+  // Reseta a página quando filtros mudam.
+  useEffect(() => {
+    setPage(1);
+  }, [search, chip, financialFilter, situationFilter, platformFilter, periodFilter, folderFilter, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedRows = useMemo(
+    () => rows.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [rows, currentPage, pageSize],
+  );
+
+  const activeFilterCount =
+    (chip !== "todos" ? 1 : 0) +
+    (financialFilter !== "Todos" ? 1 : 0) +
+    (situationFilter !== "Todas" ? 1 : 0) +
+    (platformFilter !== "Todas" ? 1 : 0) +
+    (periodFilter !== "Todos" ? 1 : 0) +
+    (folderFilter !== "Todas" ? 1 : 0);
+
+  const clearFilters = () => {
+    setChip("todos");
+    setFinancialFilter("Todos");
+    setSituationFilter("Todas");
+    setPlatformFilter("Todas");
+    setPeriodFilter("Todos");
+    setFolderFilter("Todas");
+    setSearch("");
+  };
 
   const totalClients = clients.length;
   const clientesPendencia = clients.filter((c) =>
@@ -151,10 +213,14 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     { id: "reserva_vencida", label: "Reserva vencida" },
     { id: "pendente", label: "Pendente" },
     { id: "mgmv", label: "MGMV" },
+    { id: "mgmv_vencido", label: "MGMV vencido" },
+    { id: "mgmv_quitado", label: "MGMV quitado" },
     { id: "pago_aguardando", label: "Pago aguardando envio" },
     { id: "enviado", label: "Enviado" },
     { id: "desistiu", label: "Desistiu" },
     { id: "abandonou", label: "Abandonou" },
+    { id: "em_dia", label: "Em dia" },
+    { id: "sem_produtos", label: "Sem produtos" },
   ];
 
   const exportBase = () => {
@@ -200,13 +266,52 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
 
       <Card className="mt-6">
         <div className="space-y-4">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nome, telefone ou produto..."
-            className="h-10 w-full rounded-full border border-input bg-background px-4 text-sm outline-none focus:border-primary/40"
-          />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por nome, telefone ou produto..."
+                className="h-10 w-full rounded-full border border-input bg-background px-4 pr-10 text-sm outline-none focus:border-primary/40"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Limpar busca"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowFilters((v) => !v)}
+              className="gap-1.5"
+            >
+              <Filter className="h-4 w-4" />
+              Filtros
+              {activeFilterCount > 0 && (
+                <span className="ml-1 rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                  {activeFilterCount}
+                </span>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCompact((v) => !v)}
+              className="gap-1.5"
+              title={compact ? "Expandir linhas" : "Compactar linhas"}
+            >
+              {compact ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
+              {compact ? "Expandir" : "Compactar"}
+            </Button>
+          </div>
 
+          {showFilters && (
+          <>
           <div className="flex flex-wrap gap-2">
             {chips.map((c) => (
               <button
@@ -224,7 +329,22 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
             ))}
           </div>
 
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+            <div className="relative">
+              <Folder className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <select
+                value={folderFilter}
+                onChange={(e) => setFolderFilter(e.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-background pl-7 pr-2 text-sm"
+                title="Filtrar por pasta de origem"
+              >
+                <option value="Todas">Pasta (todas)</option>
+                <option value="__sem__">Sem pasta</option>
+                {folders.map((f) => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </div>
             <select value={financialFilter} onChange={(e) => setFinancialFilter(e.target.value)} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
               <option value="Todos">Status financeiro</option>
               <option>Pago</option><option>Reserva</option><option>Pendente</option><option>MGMV</option>
@@ -243,6 +363,19 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               <option>PS5</option><option>PS4</option><option>PS2</option><option>Xbox</option><option>Colecionável</option>
             </select>
           </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+            <div>
+              {rows.length} cliente(s) encontrado(s){activeFilterCount > 0 && ` • ${activeFilterCount} filtro(s) ativo(s)`}
+            </div>
+            {activeFilterCount > 0 && (
+              <button onClick={clearFilters} className="text-primary hover:underline">
+                Limpar filtros
+              </button>
+            )}
+          </div>
+          </>
+          )}
         </div>
 
         <div className="mt-5 overflow-x-auto">
@@ -256,41 +389,85 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                 <th className="py-2 pr-3 font-medium">Total Comprado</th>
                 <th className="py-2 pr-3 font-medium">Total em Aberto</th>
                 <th className="py-2 pr-3 font-medium">Última Compra</th>
-                <th className="py-2 pr-3 font-medium">Observações</th>
+                {!compact && <th className="py-2 pr-3 font-medium">Observações</th>}
                 <th className="py-2 pr-3 font-medium">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {pagedRows.map((r) => (
                 <tr key={r.client.id} className="border-b border-border/60 last:border-0">
-                  <td className="py-3 pr-3 font-medium">
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 font-medium"}>
                     <button onClick={() => setDrawerClientId(r.client.id)} className="text-left hover:text-primary">
                       {r.client.name}
+                      {r.client.folder && (
+                        <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
+                          <Folder className="h-2.5 w-2.5" />
+                          {r.client.folder}
+                        </span>
+                      )}
                     </button>
                   </td>
-                  <td className="py-3 pr-3 text-muted-foreground">{r.client.phone}</td>
-                  <td className="py-3 pr-3"><Tag variant={r.status.variant}>{r.status.label}</Tag></td>
-                  <td className="py-3 pr-3 tabular-nums">{r.products.length}</td>
-                  <td className="py-3 pr-3 tabular-nums">{formatBRL(r.totalPurchased)}</td>
-                  <td className="py-3 pr-3 tabular-nums font-medium">{formatBRL(r.totalOpen)}</td>
-                  <td className="py-3 pr-3 text-muted-foreground">{r.last ? formatDateBR(r.last) : "—"}</td>
-                  <td className="py-3 pr-3 max-w-[220px] truncate text-muted-foreground">{r.client.notes ?? "—"}</td>
-                  <td className="py-3 pr-3">
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 text-muted-foreground"}>{r.client.phone}</td>
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}><Tag variant={r.status.variant}>{r.status.label}</Tag></td>
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums"}>{r.products.length}</td>
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums"}>{formatBRL(r.totalPurchased)}</td>
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums font-medium"}>{formatBRL(r.totalOpen)}</td>
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 text-muted-foreground"}>{r.last ? formatDateBR(r.last) : "—"}</td>
+                  {!compact && (
+                    <td className="py-3 pr-3 max-w-[220px] truncate text-muted-foreground">{r.client.notes ?? "—"}</td>
+                  )}
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}>
                     <div className="flex flex-wrap gap-1.5">
                       <Button size="sm" variant="outline" onClick={() => setDrawerClientId(r.client.id)}>Abrir</Button>
-                      <Button size="sm" variant="ghost" onClick={() => setClientModal({ open: true, client: r.client })}>Editar</Button>
-                      <Button size="sm" onClick={() => setProductModal({ open: true, clientId: r.client.id })}>+ Produto</Button>
-                      <Button size="sm" variant="ghost" onClick={() => onScrollTo("collection")}>Cobrança</Button>
+                      {!compact && (
+                        <>
+                          <Button size="sm" variant="ghost" onClick={() => setClientModal({ open: true, client: r.client })}>Editar</Button>
+                          <Button size="sm" onClick={() => setProductModal({ open: true, clientId: r.client.id })}>+ Produto</Button>
+                          <Button size="sm" variant="ghost" onClick={() => onScrollTo("collection")}>Cobrança</Button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
               ))}
-              {rows.length === 0 && (
-                <tr><td colSpan={9} className="py-10 text-center text-muted-foreground">Nenhum cliente encontrado.</td></tr>
+              {pagedRows.length === 0 && (
+                <tr><td colSpan={compact ? 8 : 9} className="py-10 text-center text-muted-foreground">Nenhum cliente encontrado.</td></tr>
               )}
             </tbody>
           </table>
         </div>
+
+        {rows.length > 0 && (
+          <div className="mt-4 flex flex-col items-center justify-between gap-3 border-t border-border pt-3 text-xs text-muted-foreground sm:flex-row">
+            <div className="flex items-center gap-2">
+              <span>Mostrar</span>
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="h-7 rounded-md border border-input bg-background px-1.5 text-xs"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={250}>250</option>
+                <option value={rows.length}>Todos ({rows.length})</option>
+              </select>
+              <span>
+                {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, rows.length)} de {rows.length}
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setPage(1)}>«</Button>
+              <Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</Button>
+              <span className="px-2 tabular-nums">
+                {currentPage} / {totalPages}
+              </span>
+              <Button size="sm" variant="outline" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>›</Button>
+              <Button size="sm" variant="outline" disabled={currentPage >= totalPages} onClick={() => setPage(totalPages)}>»</Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Modal cliente em tela cheia */}

@@ -704,6 +704,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   const {
     findClientByPhone,
     addClient,
+    updateClient,
     addProduct,
     openClient,
     updateClientNotes,
@@ -1085,9 +1086,13 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         client = addClient({
           name: entry.client.name,
           phone: entry.client.phoneDisplay || entry.client.phone,
+          folder: entry.folderName,
         });
         createdClients++;
       } else {
+        if (!client.folder && entry.folderName && entry.folderName !== "(raiz)") {
+          updateClient(client.id, { folder: entry.folderName });
+        }
         updatedClients++;
       }
       entry.products.forEach((p) => {
