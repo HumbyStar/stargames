@@ -344,6 +344,10 @@ export const useStore = create<State>()((set, get) => ({
           let snap = await loadSnapshot();
           snap = await migrateLocalStorageOnce(snap);
           primeUiState(snap.uiState);
+          if (!getResetVersion()) {
+            bumpResetVersion();
+            void flushUiStateNow();
+          }
           set({
             clients: snap.clients,
             products: snap.products,
