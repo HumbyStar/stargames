@@ -233,7 +233,7 @@ export function MGMVSection({
         </div>
       </div>
 
-      <Card className="mt-4 overflow-hidden p-0">
+      <div className="mt-4 overflow-hidden rounded-xl border border-border bg-card shadow-xs">
         <div className="max-h-[640px] overflow-auto">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-card/95 backdrop-blur">
@@ -431,7 +431,7 @@ export function MGMVSection({
             </tbody>
           </table>
         </div>
-      </Card>
+      </div>
     </section>
   );
 }
