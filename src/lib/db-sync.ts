@@ -406,31 +406,10 @@ const STORE_KEY = "star-games-store";
 const MIGRATION_FLAG = "__migratedFromLocalStorage_v1";
 const RESET_VERSION_KEY = "import.resetVersion";
 
-interface LegacyPersistedState {
-  clients?: Client[];
-  products?: Product[];
-  importHistory?: ImportHistoryEntry[];
-  preferences?: SystemPreferences;
-  rules?: OperationalRules;
-  security?: SecuritySettings;
-}
-
-function readLegacyPersistedState(): LegacyPersistedState | null {
-  try {
-    if (typeof window === "undefined") return null;
-    const raw = window.localStorage.getItem(STORE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { state?: LegacyPersistedState };
-    return parsed?.state ?? null;
-  } catch {
-    return null;
-  }
-}
-
 function collectLegacyUiState(): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (typeof window === "undefined") return out;
-  const PREFIXES = ["collection.", "clientes.", "import."];
+  const PREFIXES = ["collection.", "clientes."];
   for (let i = 0; i < window.localStorage.length; i++) {
     const k = window.localStorage.key(i);
     if (!k) continue;
@@ -447,8 +426,9 @@ function collectLegacyUiState(): Record<string, unknown> {
 }
 
 /**
- * Migrates legacy data persisted by zustand `persist` (localStorage key
- * `star-games-store`) and the `usePersistedState` UI keys into the DB.
+ * Migrates only harmless legacy UI preferences into the DB.
+ * Domain data no longer comes from browser storage, because reset/import must
+ * always reflect the current backend state and never an old preview cache.
  *
  * Only runs once: writes a sentinel into `app_settings.ui_state` so future
  * boots skip it.
@@ -457,51 +437,7 @@ export async function migrateLocalStorageOnce(snapshot: DbSnapshot): Promise<DbS
   if (typeof window === "undefined") return snapshot;
   if ((snapshot.uiState as Record<string, unknown>)?.[MIGRATION_FLAG]) return snapshot;
 
-  const legacy = readLegacyPersistedState();
   const legacyUi = collectLegacyUiState();
-
-  const dbIsEmpty =
-    snapshot.clients.length === 0 &&
-    snapshot.products.length === 0 &&
-    snapshot.importHistory.length === 0;
-
-  let next: DbSnapshot = snapshot;
-
-  const resetAlreadyHappened = Boolean((snapshot.uiState as Record<string, unknown>)?.[RESET_VERSION_KEY]);
-
-  if (legacy && dbIsEmpty && !resetAlreadyHappened) {
-    const clientRows = (legacy.clients ?? []).map((c) => clientToRow(c));
-    const productRows = (legacy.products ?? []).map((p) => productToRow(p));
-    const historyRows = (legacy.importHistory ?? []).map((h) => historyToRow(h));
-
-    if (clientRows.length > 0) {
-      const { error } = await supabase.from("clients").upsert(clientRows);
-      if (error) logErr("migrate.clients", error);
-    }
-    if (productRows.length > 0) {
-      // Batch in chunks to avoid request-size issues.
-      const CHUNK = 200;
-      for (let i = 0; i < productRows.length; i += CHUNK) {
-        const slice = productRows.slice(i, i + CHUNK);
-        const { error } = await supabase.from("products").upsert(slice);
-        if (error) logErr("migrate.products", error);
-      }
-    }
-    if (historyRows.length > 0) {
-      const { error } = await supabase.from("import_history").insert(historyRows);
-      if (error) logErr("migrate.history", error);
-    }
-
-    next = {
-      ...next,
-      clients: (legacy.clients ?? []).slice(),
-      products: (legacy.products ?? []).slice(),
-      importHistory: (legacy.importHistory ?? []).slice(),
-      preferences: { ...next.preferences, ...(legacy.preferences ?? {}) },
-      rules: { ...next.rules, ...(legacy.rules ?? {}) },
-      security: { ...next.security, ...(legacy.security ?? {}) },
-    };
-  }
 
   const mergedUiState: Record<string, unknown> = {
     ...legacyUi,
@@ -513,16 +449,18 @@ export async function migrateLocalStorageOnce(snapshot: DbSnapshot): Promise<DbS
     id: "default",
     ui_state: mergedUiState,
   };
-  if (legacy?.preferences) settingsPatch.preferences = next.preferences;
-  if (legacy?.rules) settingsPatch.rules = next.rules;
-  if (legacy?.security) settingsPatch.security = next.security;
-
   const { error: settingsErr } = await supabase
     .from("app_settings")
     .upsert(settingsPatch as never);
   if (settingsErr) logErr("migrate.settings", settingsErr);
 
-  return { ...next, uiState: mergedUiState };
+  try {
+    window.localStorage.removeItem(STORE_KEY);
+  } catch {
+    /* ignore */
+  }
+
+  return { ...snapshot, uiState: mergedUiState };
 }
 
 // ============= UI state (per-key) =============
