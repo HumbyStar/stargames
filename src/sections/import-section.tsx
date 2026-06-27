@@ -2005,15 +2005,181 @@ function ZipPreview({
         </Card>
       )}
 
+      {data.alreadyImported && (
+        <Card>
+          <div className="text-sm">
+            <strong className="text-amber-600 dark:text-amber-400">Este ZIP já foi importado anteriormente</strong>
+            {data.previousImportDate && (
+              <span className="text-muted-foreground">
+                {" "}em {new Date(data.previousImportDate).toLocaleString("pt-BR")}
+              </span>
+            )}
+            . O sistema continuará detectando duplicatas item a item — você pode
+            seguir com a importação, mas revise antes de confirmar.
+          </div>
+          <div className="mt-1 font-mono text-[10px] text-muted-foreground">
+            sha1: {data.fileHash}
+          </div>
+        </Card>
+      )}
+
+      {data.errorGroups.length > 0 && (
+        <Card>
+          <div className="mb-2 text-sm font-semibold">
+            Falhas de leitura agrupadas por causa
+          </div>
+          <ul className="space-y-1 text-xs">
+            {data.errorGroups.slice(0, 6).map((g, i) => (
+              <li key={i} className="flex items-start justify-between gap-2">
+                <span className="text-destructive">{g.reason}</span>
+                <span className="shrink-0 text-muted-foreground">
+                  {g.paths.length} arquivo(s)
+                </span>
+              </li>
+            ))}
+          </ul>
+          {data.errorGroups.length > 6 && (
+            <div className="mt-1 text-[10px] text-muted-foreground">
+              + {data.errorGroups.length - 6} causa(s) adicional(is)…
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Métricas ordenadas por severidade: problemas primeiro, depois números frios. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
+        <MetricCard
+          label="Com erro"
+          value={stats.errors}
+          status={stats.errors > 0 ? "danger" : "default"}
+        />
+        <MetricCard
+          label="MGMV em conflito"
+          value={stats.mgmvConflicts}
+          status={stats.mgmvConflicts > 0 ? "danger" : "default"}
+        />
+        <MetricCard
+          label="Duplicatas"
+          value={stats.duplicates}
+          status={stats.duplicates > 0 ? "warning" : "default"}
+        />
+        <MetricCard
+          label="Telefone corrigido"
+          value={stats.phoneCorrected}
+          status={stats.phoneCorrected > 0 ? "warning" : "default"}
+        />
+        <MetricCard label="Novos clientes" value={stats.newClients} status="success" />
+        <MetricCard label="Existentes" value={stats.existing} />
+        <MetricCard label="Produtos" value={stats.totalProducts} />
+        <MetricCard label="Acordos MGMV" value={stats.mgmv} status={stats.mgmv > 0 ? "warning" : "default"} />
+      </div>
+
+      {/* ============= Seção dedicada de resultados MGMV ============= */}
+      {mgmvEntries.length > 0 && (
+        <Card>
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <div className="text-sm font-semibold">
+                MGMV detectados na extração
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Acordos parcelados identificados nas observações dos clientes.
+                A cobrança passa a ser feita pela parcela; os itens originais
+                viram informação.
+              </div>
+            </div>
+            {stats.mgmvPending > 0 && (
+              <Tag variant="danger">
+                {stats.mgmvPending} aguardando decisão
+              </Tag>
+            )}
+          </div>
+          <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+            <MetricCard label="Clientes em MGMV" value={mgmvTotals.clients} status="warning" />
+            <MetricCard label="Dívida total" value={formatBRL(mgmvTotals.totalDebt)} />
+            <MetricCard label="Parcelas no total" value={mgmvTotals.installments} />
+            <MetricCard
+              label="Parcela média"
+              value={formatBRL(mgmvTotals.avgInstallment)}
+            />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border text-left uppercase tracking-wide text-muted-foreground">
+                  <th className="py-2 pr-2 font-medium">Cliente</th>
+                  <th className="py-2 pr-2 font-medium">Telefone</th>
+                  <th className="py-2 pr-2 font-medium">Dívida</th>
+                  <th className="py-2 pr-2 font-medium">Parcelas</th>
+                  <th className="py-2 pr-2 font-medium">Valor parcela</th>
+                  <th className="py-2 pr-2 font-medium">Conflito</th>
+                  <th className="py-2 pr-2 font-medium">Decisão</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mgmvEntries.map((e) => {
+                  if (!e.mgmv) return null;
+                  const ins = e.mgmv.installments;
+                  return (
+                    <tr key={e.id} className="border-b border-border/40 last:border-0">
+                      <td className="py-2 pr-2">{e.client.name || "—"}</td>
+                      <td className="py-2 pr-2 font-mono text-muted-foreground">
+                        {e.client.phoneDisplay || "—"}
+                      </td>
+                      <td className="py-2 pr-2 tabular-nums">
+                        {formatBRL(e.mgmv.totalDebt)}
+                      </td>
+                      <td className="py-2 pr-2 tabular-nums">{ins.length}x</td>
+                      <td className="py-2 pr-2 tabular-nums">
+                        {formatBRL(ins[0]?.value ?? 0)}
+                      </td>
+                      <td className="py-2 pr-2">
+                        {e.mgmvConflict ? (
+                          <Tag variant="danger">
+                            {e.mgmvConflict.existingPaid}/{e.mgmvConflict.existingTotal} pagas
+                          </Tag>
+                        ) : e.existingClient?.mgmv ? (
+                          <Tag variant="warning">Substitui acordo</Tag>
+                        ) : (
+                          <Tag variant="success">Novo</Tag>
+                        )}
+                      </td>
+                      <td className="py-2 pr-2">
+                        {e.mgmvConflict ? (
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant={e.mgmvAction === "replace" ? "default" : "ghost"}
+                              onClick={() => onMgmvAction(e.id, "replace")}
+                            >
+                              Substituir
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={e.mgmvAction === "keep" ? "default" : "ghost"}
+                              onClick={() => onMgmvAction(e.id, "keep")}
+                            >
+                              Manter atual
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">Aplicar</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <MetricCard label="Pastas" value={data.folders.size} status="primary" />
         <MetricCard label="Arquivos HTML" value={data.files} />
         <MetricCard label="Clientes detectados" value={data.entries.length} />
-        <MetricCard label="Produtos" value={stats.totalProducts} />
-        <MetricCard label="Novos clientes" value={stats.newClients} status="success" />
-        <MetricCard label="Existentes" value={stats.existing} />
-        <MetricCard label="MGMV" value={stats.mgmv} status={stats.mgmv > 0 ? "warning" : "default"} />
-        <MetricCard label="Duplicatas" value={stats.duplicates} status={stats.duplicates > 0 ? "warning" : "default"} />
+        <MetricCard label="Status corrigido" value={stats.corrected} />
       </div>
 
       <Card>
