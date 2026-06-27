@@ -9,6 +9,7 @@ interface UiState {
   settingsOpen: boolean;
   helpOpen: boolean;
   notificationsOpen: boolean;
+  activeTutorialId: string | null;
   openImport: () => void;
   closeImport: () => void;
   openSettings: () => void;
@@ -17,6 +18,8 @@ interface UiState {
   closeHelp: () => void;
   openNotifications: () => void;
   closeNotifications: () => void;
+  startTutorial: (id: string) => void;
+  stopTutorial: () => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -24,6 +27,7 @@ export const useUiStore = create<UiState>((set) => ({
   settingsOpen: false,
   helpOpen: false,
   notificationsOpen: false,
+  activeTutorialId: null,
   openImport: () => set({ importOpen: true }),
   closeImport: () => set({ importOpen: false }),
   openSettings: () => set({ settingsOpen: true }),
@@ -32,4 +36,6 @@ export const useUiStore = create<UiState>((set) => ({
   closeHelp: () => set({ helpOpen: false }),
   openNotifications: () => set({ notificationsOpen: true }),
   closeNotifications: () => set({ notificationsOpen: false }),
+  startTutorial: (id) => set({ activeTutorialId: id }),
+  stopTutorial: () => set({ activeTutorialId: null }),
 }));
