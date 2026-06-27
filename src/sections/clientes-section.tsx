@@ -731,7 +731,15 @@ function ClientDrawer({
         </Card>
       )}
 
-      <Card title="Histórico de Produtos">
+      <Card
+        title={`Histórico de Produtos${mgmvProducts.length > 0 ? " — Individuais" : ""}`}
+      >
+        {mgmvProducts.length > 0 && (
+          <p className="mb-3 text-xs text-muted-foreground">
+            Itens do MGMV aparecem no card &ldquo;Itens incluídos no MGMV&rdquo; acima
+            e são cobrados pelas parcelas do acordo (sem cobrança individual).
+          </p>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -749,9 +757,10 @@ function ClientDrawer({
               </tr>
             </thead>
             <tbody>
-              {products.map((p) => {
+              {individualProducts.map((p) => {
                 const remaining = p.totalValue - p.paidValue;
                 const status = productCollectionStatus(p);
+                const isPaid = p.financialStatus === "Pago";
                 return (
                   <tr key={p.id} className="border-b border-border/60 last:border-0">
                     <td className="py-2 pr-3 font-medium">{p.name}</td>
@@ -765,9 +774,13 @@ function ClientDrawer({
                      <td className="py-2 pr-3 text-muted-foreground">{getProductDisplayDueDate(p)}</td>
                     <td className="py-2 pr-3">
                       <div className="flex flex-wrap gap-1">
-                        <Button size="sm" onClick={() => onRegisterPayment(p.id, remaining)}>Pagar</Button>
+                        {!isPaid && (
+                          <Button size="sm" onClick={() => onRegisterPayment(p.id, remaining)}>Pagar</Button>
+                        )}
                         <Button size="sm" variant="ghost" onClick={() => onEditProduct(p)}>Editar</Button>
-                        <Button size="sm" variant="outline" onClick={() => onMarkPaid(p)}>Pago</Button>
+                        {!isPaid && (
+                          <Button size="sm" variant="outline" onClick={() => onMarkPaid(p)}>Pago</Button>
+                        )}
                         <Button size="sm" variant="outline" onClick={() => onChangeSituation(p.id, "Enviado")}>Enviado</Button>
                         <Button size="sm" variant="ghost" onClick={() => onChangeSituation(p.id, "Desistiu")}>Desistiu</Button>
                         <Button size="sm" variant="ghost" onClick={() => onChangeSituation(p.id, "Abandonou")}>Abandonou</Button>
@@ -776,7 +789,7 @@ function ClientDrawer({
                   </tr>
                 );
               })}
-              {products.length === 0 && (
+              {individualProducts.length === 0 && (
                 <tr><td colSpan={10} className="py-6 text-center text-muted-foreground">Nenhum produto.</td></tr>
               )}
             </tbody>
