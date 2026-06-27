@@ -77,6 +77,16 @@ export interface ImportHistoryEntry {
   productsAdded: number;
   errors: number;
   status: ImportStatus;
+  /** sha1 do conteúdo do arquivo, para detectar re-importação. */
+  fileHash?: string;
+  /** Acordos MGMV aplicados nesta importação. */
+  agreementsCreated?: number;
+  /** Acordos MGMV existentes substituídos por decisão do operador. */
+  agreementsReplaced?: number;
+  /** Produtos ignorados por já existirem (duplicatas). */
+  skippedDuplicates?: number;
+  /** Tempo total da operação em ms. */
+  durationMs?: number;
 }
 
 export type DangerAction =

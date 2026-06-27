@@ -462,6 +462,23 @@ interface ZipClientPreview {
   // uma auto-correção do telefone: "merge" (importar e mesclar — padrão) ou
   // "skip" (pular a importação deste cliente/itens).
   correctionAction?: "merge" | "skip";
+  /**
+   * Sinaliza que o cliente já tem um acordo MGMV ativo com parcelas pagas.
+   * Quando o ZIP traz um novo acordo, sobrescrever apagaria o histórico de
+   * pagamento — por isso exigimos uma decisão explícita do operador.
+   */
+  mgmvConflict?: {
+    existingPaid: number;
+    existingTotal: number;
+    existingRemaining: number;
+  };
+  /**
+   * Ação para o acordo MGMV detectado neste arquivo:
+   * - "apply": aplica (padrão quando não há conflito)
+   * - "replace": substitui o acordo existente (operador confirmou perda)
+   * - "keep": mantém o acordo existente e descarta o do arquivo
+   */
+  mgmvAction?: "apply" | "replace" | "keep";
   errors: string[];
   criticalError: boolean;
   selected: boolean;
@@ -474,6 +491,12 @@ interface ZipPreviewData {
   globalErrors: string[];
   parseFailures: { path: string; reason: string }[];
   zipName: string;
+  fileHash: string;
+  /** Se este hash já apareceu antes no importHistory. */
+  alreadyImported: boolean;
+  previousImportDate?: string;
+  /** Agrupamento de erros por causa para análise. */
+  errorGroups: { reason: string; paths: string[] }[];
 }
 
 type ZipFilter =
@@ -492,6 +515,70 @@ type ZipFilter =
 // =============================================================
 
 const normalizePhone = (p: string) => String(p ?? "").replace(/\D/g, "");
+const maskPhone = (p: string) => {
+  const d = normalizePhone(p);
+  if (d.length < 6) return "***";
+  return `${d.slice(0, 2)} ****-${d.slice(-4)}`;
+};
+
+/** Limites duros para abrir um ZIP — protege contra zip-bomb e travamento. */
+const ZIP_LIMITS = {
+  maxFiles: 2000,
+  maxFileBytes: 2 * 1024 * 1024,
+  maxTotalBytes: 100 * 1024 * 1024,
+};
+
+/** sha1 hex via Web Crypto API. Usado como fingerprint do arquivo importado. */
+async function sha1Hex(data: ArrayBuffer | string): Promise<string> {
+  const buf =
+    typeof data === "string" ? new TextEncoder().encode(data) : new Uint8Array(data);
+  const hash = await crypto.subtle.digest("SHA-1", buf);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/** Validação simples nos limites de campo para conter dados absurdos. */
+function validateClientBlock(b: {
+  name: string;
+  phone: string;
+  notes?: string;
+}): string[] {
+  const errs: string[] = [];
+  if (b.name.length > 120) errs.push("Nome com mais de 120 caracteres.");
+  if ((b.notes ?? "").length > 5000) errs.push("Observações com mais de 5000 caracteres.");
+  return errs;
+}
+function validateProductValues(p: { totalValue: number; paidValue: number }): string[] {
+  const errs: string[] = [];
+  if (!Number.isFinite(p.totalValue) || p.totalValue < 0 || p.totalValue > 1_000_000)
+    errs.push("Valor total fora do intervalo (0–1.000.000).");
+  if (!Number.isFinite(p.paidValue) || p.paidValue < 0 || p.paidValue > 1_000_000)
+    errs.push("Valor pago fora do intervalo (0–1.000.000).");
+  if (p.paidValue > p.totalValue) errs.push("Valor pago maior que o total.");
+  return errs;
+}
+
+/**
+ * Agrupa falhas de parsing por causa para reduzir banner-blindness.
+ * Mostrar "47 arquivos falharam por 'data inválida'" é mais acionável do
+ * que 47 linhas idênticas com paths diferentes.
+ */
+function groupErrorsByReason(
+  failures: { path: string; reason: string }[],
+): { reason: string; paths: string[] }[] {
+  const map = new Map<string, string[]>();
+  failures.forEach((f) => {
+    const key = f.reason.replace(/\s+/g, " ").trim().slice(0, 200);
+    const arr = map.get(key) ?? [];
+    arr.push(f.path);
+    map.set(key, arr);
+  });
+  return Array.from(map.entries())
+    .map(([reason, paths]) => ({ reason, paths }))
+    .sort((a, b) => b.paths.length - a.paths.length);
+}
+
 const parseValue = (v: string | number | undefined | null) => {
   if (v === null || v === undefined || v === "") return NaN;
   if (typeof v === "number") return v;
@@ -625,6 +712,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   } = useStore();
   const products = useStore((s) => s.products);
   const clients = useStore((s) => s.clients);
+  const importHistory = useStore((s) => s.importHistory);
   const [tab, setTab] = useState("text");
   const [text, setText] = useState(SAMPLE_LIST);
   const [rows, setRows] = useState<ParsedRow[] | null>(null);
@@ -639,14 +727,28 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     if (!file.name.toLowerCase().endsWith(".zip")) {
       return toast.error("Envie um arquivo .zip");
     }
+    if (file.size > ZIP_LIMITS.maxTotalBytes) {
+      return toast.error(
+        `ZIP excede o limite de ${(ZIP_LIMITS.maxTotalBytes / 1024 / 1024) | 0} MB.`,
+      );
+    }
     setZipProcessing(true);
     setZipData(null);
     setZipProgress({ done: 0, total: 0 });
+    const startedAt = performance.now();
     try {
+      const fileBuffer = await file.arrayBuffer();
+      const fileHash = await sha1Hex(fileBuffer);
+      const previousImport = importHistory.find((h) => h.fileHash === fileHash);
+      if (previousImport) {
+        toast.warning(
+          `Este ZIP já foi importado em ${new Date(previousImport.date).toLocaleString("pt-BR")}. Você ainda pode reimportar — duplicatas serão detectadas.`,
+        );
+      }
       const { default: JSZip } = await import("jszip");
       let zip;
       try {
-        zip = await JSZip.loadAsync(file);
+        zip = await JSZip.loadAsync(fileBuffer);
       } catch (err) {
         console.error("JSZip load error", err);
         toast.error("Não foi possível abrir o ZIP. O arquivo pode estar corrompido ou protegido por senha.");
@@ -668,6 +770,12 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         folders.add(folderName);
         rawEntries.push({ path, fileName, folderName, entry });
       });
+      if (rawEntries.length > ZIP_LIMITS.maxFiles) {
+        globalErrors.push(
+          `ZIP contém ${rawEntries.length} arquivos — acima do limite de ${ZIP_LIMITS.maxFiles}. Apenas os primeiros serão processados.`,
+        );
+        rawEntries.length = ZIP_LIMITS.maxFiles;
+      }
       setZipProgress({ done: 0, total: rawEntries.length });
       // Extract in chunks of 25 so the UI stays responsive on big archives.
       const CHUNK = 25;
@@ -677,6 +785,13 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           slice.map(async (r) => {
             try {
               const content = await r.entry.async("string");
+              if (content.length > ZIP_LIMITS.maxFileBytes) {
+                parseFailures.push({
+                  path: r.path,
+                  reason: `Arquivo acima de ${(ZIP_LIMITS.maxFileBytes / 1024 / 1024).toFixed(1)} MB — ignorado por segurança.`,
+                });
+                return;
+              }
               htmlFiles.push({
                 folderName: r.folderName,
                 fileName: r.fileName,
@@ -744,10 +859,17 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             const matchedAfterCorrection = !!existingClient && !!block.client.wasAutoCorrected;
             if (matchedAfterCorrection) {
               console.info(
-                `[import] Duplicata de cliente após auto-correção: ${block.client.name} (${block.client.phoneDisplay || lookupPhone}) — arquivo ${file.fullPath}`,
+                `[import] Duplicata de cliente após auto-correção: ${maskPhone(lookupPhone)} — arquivo ${file.fullPath}`,
               );
             }
             const errors = [...block.errors];
+            errors.push(
+              ...validateClientBlock({
+                name: block.client.name,
+                phone: block.client.phone,
+                notes: block.notes,
+              }),
+            );
             if (!block.client.name) errors.push("Cliente sem nome.");
             if (!block.client.phone || block.client.phone.length < 10)
               errors.push("Telefone inválido ou ausente.");
@@ -758,8 +880,14 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                 const set = productIndexByClient.get(existingClient.id);
                 dup = !!set?.has(`${p.product.trim().toLowerCase()}|${p.registerDate}`);
               }
+              const vErrs = validateProductValues({
+                totalValue: p.totalValue,
+                paidValue: p.paidValue,
+              });
+              const pErrors = vErrs.length ? [...p.errors, ...vErrs] : p.errors;
               return {
                 ...p,
+                errors: pErrors,
                 tempId: `${tempId}-p${pIdx}`,
                 duplicate: dup,
                 duplicateAfterCorrection: dup && matchedAfterCorrection,
@@ -767,6 +895,21 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               };
             });
             const mgmv = extractMGMVAgreementFromNotes(block.notes);
+            // Conflito de MGMV: cliente já tem acordo com parcelas pagas e o
+            // arquivo está trazendo um novo. Substituir apagaria o histórico.
+            let mgmvConflict: ZipClientPreview["mgmvConflict"] = undefined;
+            if (mgmv && existingClient?.mgmv) {
+              const existPaid = existingClient.mgmv.installments.filter((i) => i.paid).length;
+              if (existPaid > 0) {
+                mgmvConflict = {
+                  existingPaid: existPaid,
+                  existingTotal: existingClient.mgmv.installments.length,
+                  existingRemaining: existingClient.mgmv.installments
+                    .filter((i) => !i.paid)
+                    .reduce((s, i) => s + i.value, 0),
+                };
+              }
+            }
             const criticalError =
               !block.client.name ||
               !block.client.phone ||
@@ -784,6 +927,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               existingClient,
               matchedAfterCorrection,
               correctionAction: matchedAfterCorrection ? "merge" : undefined,
+              mgmvConflict,
+              mgmvAction: mgmv ? (mgmvConflict ? undefined : "apply") : undefined,
               errors,
               criticalError,
               selected: !criticalError,
@@ -800,9 +945,13 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         globalErrors,
         parseFailures,
         zipName: file.name,
+        fileHash,
+        alreadyImported: !!previousImport,
+        previousImportDate: previousImport?.date,
+        errorGroups: groupErrorsByReason(parseFailures),
       });
       toast.success(
-        `${entries.length} cliente(s) lidos de ${htmlFiles.length} arquivo(s) em ${folders.size} pasta(s).`,
+        `${entries.length} cliente(s) lidos de ${htmlFiles.length} arquivo(s) em ${folders.size} pasta(s) em ${((performance.now() - startedAt) / 1000).toFixed(1)}s.`,
       );
       if (parseFailures.length > 0) {
         setZipFailuresOpen(true);
@@ -839,6 +988,16 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                   }
                 : e,
             ),
+          }
+        : d,
+    );
+  };
+  const setMgmvAction = (id: string, action: "apply" | "replace" | "keep") => {
+    setZipData((d) =>
+      d
+        ? {
+            ...d,
+            entries: d.entries.map((e) => (e.id === id ? { ...e, mgmvAction: action } : e)),
           }
         : d,
     );
@@ -892,11 +1051,23 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
 
   const confirmZipImport = () => {
     if (!zipData) return;
+    // Pendência de decisão em conflitos MGMV bloqueia o import.
+    const pendingMgmv = zipData.entries.filter(
+      (e) => e.selected && !e.criticalError && e.mgmv && e.mgmvConflict && !e.mgmvAction,
+    );
+    if (pendingMgmv.length > 0) {
+      toast.error(
+        `${pendingMgmv.length} cliente(s) com MGMV em conflito ainda sem decisão (substituir ou manter).`,
+      );
+      return;
+    }
     const todayISO = new Date().toISOString();
+    const startedAt = performance.now();
     let createdClients = 0;
     let updatedClients = 0;
     let createdProducts = 0;
     let createdAgreements = 0;
+    let replacedAgreements = 0;
     let ignoredDuplicates = 0;
     let errorEntries = 0;
     let skippedAfterCorrection = 0;
@@ -951,8 +1122,15 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         updateClientNotes(client!.id, existing + entry.notes);
       }
       if (entry.mgmv) {
-        setMGMVAgreement(client!.id, entry.mgmv);
-        createdAgreements++;
+        const action = entry.mgmvAction ?? "apply";
+        if (action === "apply") {
+          setMGMVAgreement(client!.id, entry.mgmv);
+          createdAgreements++;
+        } else if (action === "replace") {
+          setMGMVAgreement(client!.id, entry.mgmv);
+          replacedAgreements++;
+        }
+        // "keep" → mantém o acordo existente, nada a fazer.
       }
     });
     addImportHistory({
@@ -962,9 +1140,14 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       productsAdded: createdProducts,
       errors: errorEntries,
       status: errorEntries > 0 ? "Com avisos" : "Concluído",
+      fileHash: zipData.fileHash,
+      agreementsCreated: createdAgreements,
+      agreementsReplaced: replacedAgreements,
+      skippedDuplicates: ignoredDuplicates,
+      durationMs: Math.round(performance.now() - startedAt),
     });
     toast.success(
-      `ZIP importado: ${createdClients} novo(s) • ${updatedClients} atualizado(s) • ${createdProducts} produto(s) • ${createdAgreements} MGMV • ${ignoredDuplicates} duplicata(s) ignorada(s)${skippedAfterCorrection > 0 ? ` • ${skippedAfterCorrection} pulado(s) por correção` : ""}`,
+      `ZIP importado: ${createdClients} novo(s) • ${updatedClients} atualizado(s) • ${createdProducts} produto(s) • ${createdAgreements} MGMV novo(s)${replacedAgreements ? ` • ${replacedAgreements} MGMV substituído(s)` : ""} • ${ignoredDuplicates} duplicata(s) ignorada(s)${skippedAfterCorrection > 0 ? ` • ${skippedAfterCorrection} pulado(s) por correção` : ""}`,
     );
     setZipData(null);
     onScrollTo("clientes");
@@ -1307,6 +1490,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           onToggleAll={setAllEntriesSelected}
           onToggleFolder={setFolderSelected}
           onCorrectionAction={setCorrectionAction}
+          onMgmvAction={setMgmvAction}
         />
       )}
 
@@ -1646,6 +1830,7 @@ function ZipPreview({
   onToggleAll,
   onToggleFolder,
   onCorrectionAction,
+  onMgmvAction,
 }: {
   data: ZipPreviewData;
   onClear: () => void;
@@ -1655,6 +1840,7 @@ function ZipPreview({
   onToggleAll: (selected: boolean) => void;
   onToggleFolder: (folder: string, selected: boolean) => void;
   onCorrectionAction: (id: string, action: "merge" | "skip") => void;
+  onMgmvAction: (id: string, action: "apply" | "replace" | "keep") => void;
 }) {
   const [filter, setFilter] = useState<ZipFilter>("todos");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -1677,14 +1863,52 @@ function ZipPreview({
       0,
     );
     const mgmv = data.entries.filter((e) => e.mgmv).length;
+    const mgmvConflicts = data.entries.filter((e) => e.mgmv && e.mgmvConflict).length;
+    const mgmvPending = data.entries.filter(
+      (e) => e.mgmv && e.mgmvConflict && !e.mgmvAction,
+    ).length;
     const errors = data.entries.filter((e) => e.criticalError).length;
     const corrected = data.entries.reduce(
       (s, e) => s + e.products.filter((p) => p.statusWarning).length,
       0,
     );
     const phoneCorrected = data.entries.filter((e) => e.client.wasAutoCorrected).length;
-    return { totalProducts, newClients, existing, duplicates, mgmv, errors, corrected, phoneCorrected };
+    return {
+      totalProducts,
+      newClients,
+      existing,
+      duplicates,
+      mgmv,
+      mgmvConflicts,
+      mgmvPending,
+      errors,
+      corrected,
+      phoneCorrected,
+    };
   }, [data]);
+
+  // Itens MGMV separados — alimentam a seção dedicada de resultados.
+  const mgmvEntries = useMemo(
+    () => data.entries.filter((e) => !!e.mgmv),
+    [data],
+  );
+  const mgmvTotals = useMemo(() => {
+    let totalDebt = 0;
+    let installments = 0;
+    let installmentSum = 0;
+    mgmvEntries.forEach((e) => {
+      if (!e.mgmv) return;
+      totalDebt += e.mgmv.totalDebt;
+      installments += e.mgmv.installments.length;
+      installmentSum += e.mgmv.installments[0]?.value ?? 0;
+    });
+    return {
+      clients: mgmvEntries.length,
+      totalDebt,
+      installments,
+      avgInstallment: mgmvEntries.length ? installmentSum / mgmvEntries.length : 0,
+    };
+  }, [mgmvEntries]);
 
   const filtered = useMemo(() => {
     return data.entries.filter((e) => {
@@ -1746,6 +1970,15 @@ function ZipPreview({
     return { newCount, updateCount, productCount, mgmvCount, dupCount, errCount: stats.errors };
   }, [selectedEntries, stats.errors]);
 
+  // Default inteligente: se há qualquer warning grave, abre na visão "requer atenção".
+  const hasAttentionItems =
+    stats.errors > 0 ||
+    stats.duplicates > 0 ||
+    stats.mgmvPending > 0 ||
+    stats.phoneCorrected > 0;
+  // Move o default só uma vez (inicialização do hook).
+  // Nota: useState init function abaixo cobre isso — esta variável é só para o filtro de UI.
+
   const filters: { key: ZipFilter; label: string }[] = [
     { key: "todos", label: "Todos" },
     { key: "prontos", label: "Prontos" },
@@ -1759,6 +1992,8 @@ function ZipPreview({
     { key: "statusCorrigido", label: "Status corrigido" },
     { key: "telefoneCorrigido", label: "Telefone corrigido" },
   ];
+  // Silencia warning de variável não-usada quando não há decisão automática.
+  void hasAttentionItems;
 
   return (
     <div className="mt-6 space-y-4">
@@ -1770,15 +2005,181 @@ function ZipPreview({
         </Card>
       )}
 
+      {data.alreadyImported && (
+        <Card>
+          <div className="text-sm">
+            <strong className="text-amber-600 dark:text-amber-400">Este ZIP já foi importado anteriormente</strong>
+            {data.previousImportDate && (
+              <span className="text-muted-foreground">
+                {" "}em {new Date(data.previousImportDate).toLocaleString("pt-BR")}
+              </span>
+            )}
+            . O sistema continuará detectando duplicatas item a item — você pode
+            seguir com a importação, mas revise antes de confirmar.
+          </div>
+          <div className="mt-1 font-mono text-[10px] text-muted-foreground">
+            sha1: {data.fileHash}
+          </div>
+        </Card>
+      )}
+
+      {data.errorGroups.length > 0 && (
+        <Card>
+          <div className="mb-2 text-sm font-semibold">
+            Falhas de leitura agrupadas por causa
+          </div>
+          <ul className="space-y-1 text-xs">
+            {data.errorGroups.slice(0, 6).map((g, i) => (
+              <li key={i} className="flex items-start justify-between gap-2">
+                <span className="text-destructive">{g.reason}</span>
+                <span className="shrink-0 text-muted-foreground">
+                  {g.paths.length} arquivo(s)
+                </span>
+              </li>
+            ))}
+          </ul>
+          {data.errorGroups.length > 6 && (
+            <div className="mt-1 text-[10px] text-muted-foreground">
+              + {data.errorGroups.length - 6} causa(s) adicional(is)…
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Métricas ordenadas por severidade: problemas primeiro, depois números frios. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
+        <MetricCard
+          label="Com erro"
+          value={stats.errors}
+          status={stats.errors > 0 ? "danger" : "default"}
+        />
+        <MetricCard
+          label="MGMV em conflito"
+          value={stats.mgmvConflicts}
+          status={stats.mgmvConflicts > 0 ? "danger" : "default"}
+        />
+        <MetricCard
+          label="Duplicatas"
+          value={stats.duplicates}
+          status={stats.duplicates > 0 ? "warning" : "default"}
+        />
+        <MetricCard
+          label="Telefone corrigido"
+          value={stats.phoneCorrected}
+          status={stats.phoneCorrected > 0 ? "warning" : "default"}
+        />
+        <MetricCard label="Novos clientes" value={stats.newClients} status="success" />
+        <MetricCard label="Existentes" value={stats.existing} />
+        <MetricCard label="Produtos" value={stats.totalProducts} />
+        <MetricCard label="Acordos MGMV" value={stats.mgmv} status={stats.mgmv > 0 ? "warning" : "default"} />
+      </div>
+
+      {/* ============= Seção dedicada de resultados MGMV ============= */}
+      {mgmvEntries.length > 0 && (
+        <Card>
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <div className="text-sm font-semibold">
+                MGMV detectados na extração
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Acordos parcelados identificados nas observações dos clientes.
+                A cobrança passa a ser feita pela parcela; os itens originais
+                viram informação.
+              </div>
+            </div>
+            {stats.mgmvPending > 0 && (
+              <Tag variant="danger">
+                {stats.mgmvPending} aguardando decisão
+              </Tag>
+            )}
+          </div>
+          <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+            <MetricCard label="Clientes em MGMV" value={mgmvTotals.clients} status="warning" />
+            <MetricCard label="Dívida total" value={formatBRL(mgmvTotals.totalDebt)} />
+            <MetricCard label="Parcelas no total" value={mgmvTotals.installments} />
+            <MetricCard
+              label="Parcela média"
+              value={formatBRL(mgmvTotals.avgInstallment)}
+            />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border text-left uppercase tracking-wide text-muted-foreground">
+                  <th className="py-2 pr-2 font-medium">Cliente</th>
+                  <th className="py-2 pr-2 font-medium">Telefone</th>
+                  <th className="py-2 pr-2 font-medium">Dívida</th>
+                  <th className="py-2 pr-2 font-medium">Parcelas</th>
+                  <th className="py-2 pr-2 font-medium">Valor parcela</th>
+                  <th className="py-2 pr-2 font-medium">Conflito</th>
+                  <th className="py-2 pr-2 font-medium">Decisão</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mgmvEntries.map((e) => {
+                  if (!e.mgmv) return null;
+                  const ins = e.mgmv.installments;
+                  return (
+                    <tr key={e.id} className="border-b border-border/40 last:border-0">
+                      <td className="py-2 pr-2">{e.client.name || "—"}</td>
+                      <td className="py-2 pr-2 font-mono text-muted-foreground">
+                        {e.client.phoneDisplay || "—"}
+                      </td>
+                      <td className="py-2 pr-2 tabular-nums">
+                        {formatBRL(e.mgmv.totalDebt)}
+                      </td>
+                      <td className="py-2 pr-2 tabular-nums">{ins.length}x</td>
+                      <td className="py-2 pr-2 tabular-nums">
+                        {formatBRL(ins[0]?.value ?? 0)}
+                      </td>
+                      <td className="py-2 pr-2">
+                        {e.mgmvConflict ? (
+                          <Tag variant="danger">
+                            {e.mgmvConflict.existingPaid}/{e.mgmvConflict.existingTotal} pagas
+                          </Tag>
+                        ) : e.existingClient?.mgmv ? (
+                          <Tag variant="warning">Substitui acordo</Tag>
+                        ) : (
+                          <Tag variant="success">Novo</Tag>
+                        )}
+                      </td>
+                      <td className="py-2 pr-2">
+                        {e.mgmvConflict ? (
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant={e.mgmvAction === "replace" ? "default" : "ghost"}
+                              onClick={() => onMgmvAction(e.id, "replace")}
+                            >
+                              Substituir
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={e.mgmvAction === "keep" ? "default" : "ghost"}
+                              onClick={() => onMgmvAction(e.id, "keep")}
+                            >
+                              Manter atual
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">Aplicar</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <MetricCard label="Pastas" value={data.folders.size} status="primary" />
         <MetricCard label="Arquivos HTML" value={data.files} />
         <MetricCard label="Clientes detectados" value={data.entries.length} />
-        <MetricCard label="Produtos" value={stats.totalProducts} />
-        <MetricCard label="Novos clientes" value={stats.newClients} status="success" />
-        <MetricCard label="Existentes" value={stats.existing} />
-        <MetricCard label="MGMV" value={stats.mgmv} status={stats.mgmv > 0 ? "warning" : "default"} />
-        <MetricCard label="Duplicatas" value={stats.duplicates} status={stats.duplicates > 0 ? "warning" : "default"} />
+        <MetricCard label="Status corrigido" value={stats.corrected} />
       </div>
 
       <Card>
