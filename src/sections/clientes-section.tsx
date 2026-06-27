@@ -244,7 +244,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   };
 
   return (
-    <section id="clientes" className="one-page-section">
+    <section id="clientes" data-tour="clients-section" className="one-page-section">
       <PageHeader
         title="Clientes"
         description="Gerencie clientes, produtos, histórico de compras e situação financeira."
