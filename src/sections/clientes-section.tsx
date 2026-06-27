@@ -394,36 +394,80 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {pagedRows.map((r) => (
                 <tr key={r.client.id} className="border-b border-border/60 last:border-0">
-                  <td className="py-3 pr-3 font-medium">
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 font-medium"}>
                     <button onClick={() => setDrawerClientId(r.client.id)} className="text-left hover:text-primary">
                       {r.client.name}
+                      {r.client.folder && (
+                        <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
+                          <Folder className="h-2.5 w-2.5" />
+                          {r.client.folder}
+                        </span>
+                      )}
                     </button>
                   </td>
-                  <td className="py-3 pr-3 text-muted-foreground">{r.client.phone}</td>
-                  <td className="py-3 pr-3"><Tag variant={r.status.variant}>{r.status.label}</Tag></td>
-                  <td className="py-3 pr-3 tabular-nums">{r.products.length}</td>
-                  <td className="py-3 pr-3 tabular-nums">{formatBRL(r.totalPurchased)}</td>
-                  <td className="py-3 pr-3 tabular-nums font-medium">{formatBRL(r.totalOpen)}</td>
-                  <td className="py-3 pr-3 text-muted-foreground">{r.last ? formatDateBR(r.last) : "—"}</td>
-                  <td className="py-3 pr-3 max-w-[220px] truncate text-muted-foreground">{r.client.notes ?? "—"}</td>
-                  <td className="py-3 pr-3">
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 text-muted-foreground"}>{r.client.phone}</td>
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}><Tag variant={r.status.variant}>{r.status.label}</Tag></td>
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums"}>{r.products.length}</td>
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums"}>{formatBRL(r.totalPurchased)}</td>
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums font-medium"}>{formatBRL(r.totalOpen)}</td>
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 text-muted-foreground"}>{r.last ? formatDateBR(r.last) : "—"}</td>
+                  {!compact && (
+                    <td className="py-3 pr-3 max-w-[220px] truncate text-muted-foreground">{r.client.notes ?? "—"}</td>
+                  )}
+                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}>
                     <div className="flex flex-wrap gap-1.5">
                       <Button size="sm" variant="outline" onClick={() => setDrawerClientId(r.client.id)}>Abrir</Button>
-                      <Button size="sm" variant="ghost" onClick={() => setClientModal({ open: true, client: r.client })}>Editar</Button>
-                      <Button size="sm" onClick={() => setProductModal({ open: true, clientId: r.client.id })}>+ Produto</Button>
-                      <Button size="sm" variant="ghost" onClick={() => onScrollTo("collection")}>Cobrança</Button>
+                      {!compact && (
+                        <>
+                          <Button size="sm" variant="ghost" onClick={() => setClientModal({ open: true, client: r.client })}>Editar</Button>
+                          <Button size="sm" onClick={() => setProductModal({ open: true, clientId: r.client.id })}>+ Produto</Button>
+                          <Button size="sm" variant="ghost" onClick={() => onScrollTo("collection")}>Cobrança</Button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
               ))}
-              {rows.length === 0 && (
-                <tr><td colSpan={9} className="py-10 text-center text-muted-foreground">Nenhum cliente encontrado.</td></tr>
+              {pagedRows.length === 0 && (
+                <tr><td colSpan={compact ? 8 : 9} className="py-10 text-center text-muted-foreground">Nenhum cliente encontrado.</td></tr>
               )}
             </tbody>
           </table>
         </div>
+
+        {rows.length > 0 && (
+          <div className="mt-4 flex flex-col items-center justify-between gap-3 border-t border-border pt-3 text-xs text-muted-foreground sm:flex-row">
+            <div className="flex items-center gap-2">
+              <span>Mostrar</span>
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="h-7 rounded-md border border-input bg-background px-1.5 text-xs"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={250}>250</option>
+                <option value={rows.length}>Todos ({rows.length})</option>
+              </select>
+              <span>
+                {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, rows.length)} de {rows.length}
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setPage(1)}>«</Button>
+              <Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</Button>
+              <span className="px-2 tabular-nums">
+                {currentPage} / {totalPages}
+              </span>
+              <Button size="sm" variant="outline" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>›</Button>
+              <Button size="sm" variant="outline" disabled={currentPage >= totalPages} onClick={() => setPage(totalPages)}>»</Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Modal cliente em tela cheia */}
