@@ -823,6 +823,26 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         : d,
     );
   };
+  const setCorrectionAction = (id: string, action: "merge" | "skip") => {
+    setZipData((d) =>
+      d
+        ? {
+            ...d,
+            entries: d.entries.map((e) =>
+              e.id === id
+                ? {
+                    ...e,
+                    correctionAction: action,
+                    // Se o usuário escolher pular, desmarca a entry inteira
+                    // para que nenhum produto/MGMV deste cliente seja importado.
+                    selected: action === "skip" ? false : e.selected || !e.criticalError,
+                  }
+                : e,
+            ),
+          }
+        : d,
+    );
+  };
   const setProductSelected = (entryId: string, productId: string, selected: boolean) => {
     setZipData((d) =>
       d
