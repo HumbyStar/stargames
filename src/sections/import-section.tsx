@@ -707,14 +707,28 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     if (!file.name.toLowerCase().endsWith(".zip")) {
       return toast.error("Envie um arquivo .zip");
     }
+    if (file.size > ZIP_LIMITS.maxTotalBytes) {
+      return toast.error(
+        `ZIP excede o limite de ${(ZIP_LIMITS.maxTotalBytes / 1024 / 1024) | 0} MB.`,
+      );
+    }
     setZipProcessing(true);
     setZipData(null);
     setZipProgress({ done: 0, total: 0 });
+    const startedAt = performance.now();
     try {
+      const fileBuffer = await file.arrayBuffer();
+      const fileHash = await sha1Hex(fileBuffer);
+      const previousImport = importHistory.find((h) => h.fileHash === fileHash);
+      if (previousImport) {
+        toast.warning(
+          `Este ZIP já foi importado em ${new Date(previousImport.date).toLocaleString("pt-BR")}. Você ainda pode reimportar — duplicatas serão detectadas.`,
+        );
+      }
       const { default: JSZip } = await import("jszip");
       let zip;
       try {
-        zip = await JSZip.loadAsync(file);
+        zip = await JSZip.loadAsync(fileBuffer);
       } catch (err) {
         console.error("JSZip load error", err);
         toast.error("Não foi possível abrir o ZIP. O arquivo pode estar corrompido ou protegido por senha.");
