@@ -715,7 +715,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           const fileIdx = i + idx;
           let parsed: NotionParseResult;
           try {
-            parsed = parseNotionHtml(file.htmlContent);
+            parsed = parseNotionHtml(file.htmlContent, file.fileName);
           } catch (err) {
             console.error("parseNotionHtml falhou em", file.fullPath, err);
             const raw = err instanceof Error ? err.message : String(err);
