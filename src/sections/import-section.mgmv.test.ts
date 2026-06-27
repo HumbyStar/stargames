@@ -95,6 +95,23 @@ describe("extractMGMVAgreementFromNotes", () => {
     expect(a!.installments.filter((i) => i.paid)).toHaveLength(2);
   });
 
+  it("conta parcelas pagas listadas linha-a-linha com seta '→ N Parcela ... paga'", () => {
+    const notes = [
+      "MGMV:. 1.600 dividido em 5x de 320 reais",
+      "→ 1 Parcela de 320 reais paga dia 28 de Fevereiro",
+      "→ 2 Parcela de 320 reais paga dia 30 de Março",
+      "→ 3 Parcela de 320 reais paga dia 04 de Maio (referente a Abril)",
+      "→ 4 Parcela de 320 reais paga dia 29 de Maio",
+    ].join("\n");
+    const a = extractMGMVAgreementFromNotes(notes);
+    expect(a).not.toBeNull();
+    expect(a!.totalDebt).toBe(1600);
+    expect(a!.installments).toHaveLength(5);
+    expect(a!.installments[0].value).toBe(320);
+    expect(a!.installments.filter((i) => i.paid)).toHaveLength(4);
+    expect(a!.installments[4].paid).toBe(false);
+  });
+
   it("usa data do '1º Pagamento' como vencimento da primeira parcela", () => {
     const a = extractMGMVAgreementFromNotes(
       "MGMV\nTOTAL: 200 (4x Parcelas de 50)\n1º Pagamento -> 07/03/2025",
