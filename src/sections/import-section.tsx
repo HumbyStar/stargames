@@ -458,6 +458,10 @@ interface ZipClientPreview {
   mgmv: MGMVAgreement | null;
   existingClient: Client | undefined;
   matchedAfterCorrection?: boolean;
+  // Ação escolhida pelo usuário quando o cliente foi encontrado por causa de
+  // uma auto-correção do telefone: "merge" (importar e mesclar — padrão) ou
+  // "skip" (pular a importação deste cliente/itens).
+  correctionAction?: "merge" | "skip";
   errors: string[];
   criticalError: boolean;
   selected: boolean;
