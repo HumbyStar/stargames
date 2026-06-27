@@ -363,6 +363,7 @@ interface ZipPreviewData {
   files: number;
   entries: ZipClientPreview[];
   globalErrors: string[];
+  parseFailures: { path: string; reason: string }[];
   zipName: string;
 }
 
