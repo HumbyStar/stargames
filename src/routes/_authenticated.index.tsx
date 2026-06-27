@@ -4,10 +4,9 @@ import { AppLayout } from "@/components/app-layout";
 import { Alert, Card, MetricCard, PageHeader, StackedBar } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { useStore, isOverdue, shouldAppearInCollection, formatBRL } from "@/lib/store";
+import { useUiStore } from "@/lib/ui-store";
 import { ClientesSection } from "@/sections/clientes-section";
 import { CollectionSection } from "@/sections/collection-section";
-import { ImportSection } from "@/sections/import-section";
-import { ConfiguracoesSection } from "@/sections/configuracoes-section";
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
@@ -33,14 +32,13 @@ function OnePage() {
       <DashboardSection onScrollTo={onScrollTo} />
       <ClientesSection onScrollTo={onScrollTo} />
       <CollectionSection onScrollTo={onScrollTo} />
-      <ImportSection onScrollTo={onScrollTo} />
-      <ConfiguracoesSection />
     </AppLayout>
   );
 }
 
 function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) {
   const { clients, products } = useStore();
+  const openImport = useUiStore((s) => s.openImport);
 
   const overdueProducts = products.filter(shouldAppearInCollection);
   const reservasAtivas = products.filter(
@@ -95,7 +93,7 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
       </div>
 
       <div className="mt-6 flex flex-wrap gap-2">
-        <Button onClick={() => onScrollTo("import")}>Importar Dados</Button>
+        <Button onClick={openImport}>Importar Dados</Button>
         <Button variant="outline" onClick={() => onScrollTo("collection")}>Ver Cobranças</Button>
         <Button variant="outline" onClick={() => onScrollTo("clientes")}>Ver Clientes</Button>
       </div>

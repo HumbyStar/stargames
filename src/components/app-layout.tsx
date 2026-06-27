@@ -1,17 +1,37 @@
 import { Outlet, useNavigate } from "@tanstack/react-router";
-import { Search, Bell, HelpCircle, Menu, X, Sun, Moon, User, Package, LogOut } from "lucide-react";
+import {
+  Search,
+  HelpCircle,
+  Menu,
+  X,
+  Sun,
+  Moon,
+  User,
+  Package,
+  LogOut,
+  Upload,
+  Settings,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
+import { useUiStore } from "@/lib/ui-store";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ImportSection } from "@/sections/import-section";
+import { ConfiguracoesSection } from "@/sections/configuracoes-section";
 
 const navItems = [
   { id: "dashboard", label: "Dashboard" },
   { id: "clientes", label: "Clientes" },
   { id: "collection", label: "Collection" },
-  { id: "import", label: "Import" },
-  { id: "configuracoes", label: "Configurações" },
 ] as const;
 
 function scrollToSection(id: string) {
@@ -211,6 +231,10 @@ function FloatingNavbar() {
     navigate({ to: "/auth", replace: true });
   };
 
+  const openImport = useUiStore((s) => s.openImport);
+  const openSettings = useUiStore((s) => s.openSettings);
+  const openHelp = useUiStore((s) => s.openHelp);
+
   useEffect(() => {
     const onScroll = () => {
       setHidden(true);
@@ -260,24 +284,47 @@ function FloatingNavbar() {
         ))}
       </div>
 
-      <div className="ml-auto flex items-center gap-2">
-        <SearchBox className="hidden md:block w-56 lg:w-72" />
-        <button className="hidden md:grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground">
-          <HelpCircle className="size-4" />
-        </button>
-        <button className="hidden md:grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground">
-          <Bell className="size-4" />
+      <SearchBox className="hidden md:block ml-3 flex-1 max-w-md" />
+
+      <div className="ml-auto flex items-center gap-1.5 md:gap-2 md:pl-2">
+        <button
+          onClick={openImport}
+          aria-label="Importar dados"
+          title="Importar dados"
+          className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all hover:-translate-y-0.5 hover:bg-primary/10 hover:text-primary"
+        >
+          <Upload className="size-4 transition-transform group-hover:-translate-y-0.5" />
         </button>
         <button
           onClick={toggleTheme}
           aria-label={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
+          title={isDark ? "Modo claro" : "Modo escuro"}
           className="grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-colors"
         >
-          {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          <span key={isDark ? "sun" : "moon"} className="inline-flex animate-in fade-in zoom-in-75 duration-200">
+            {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          </span>
+        </button>
+        <button
+          onClick={openHelp}
+          aria-label="Ajuda"
+          title="Central de Ajuda"
+          className="hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground hover:animate-pulse"
+        >
+          <HelpCircle className="size-4" />
+        </button>
+        <button
+          onClick={openSettings}
+          aria-label="Configurações"
+          title="Configurações"
+          className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+        >
+          <Settings className="size-4 transition-transform duration-300 group-hover:rotate-90" />
         </button>
         <button
           onClick={handleSignOut}
           aria-label="Sair"
+          title="Sair"
           className="grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
         >
           <LogOut className="size-4" />
@@ -308,6 +355,17 @@ function FloatingNavbar() {
             </a>
           ))}
           <SearchBox className="mt-1 w-full" />
+          <div className="mt-1 grid grid-cols-3 gap-1">
+            <button onClick={() => { setOpenMobile(false); openImport(); }} className="flex items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs hover:bg-accent">
+              <Upload className="size-3.5" /> Importar
+            </button>
+            <button onClick={() => { setOpenMobile(false); openHelp(); }} className="flex items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs hover:bg-accent">
+              <HelpCircle className="size-3.5" /> Ajuda
+            </button>
+            <button onClick={() => { setOpenMobile(false); openSettings(); }} className="flex items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs hover:bg-accent">
+              <Settings className="size-3.5" /> Config.
+            </button>
+          </div>
         </div>
       )}
     </nav>
@@ -336,6 +394,68 @@ export function AppLayout({ children }: { children?: ReactNode }) {
     <div className="min-h-screen bg-background bg-gradient-to-b from-background via-background to-accent/30">
       <FloatingNavbar />
       <main className="page-container">{children ?? <Outlet />}</main>
+      <GlobalModals />
     </div>
+  );
+}
+
+function GlobalModals() {
+  const importOpen = useUiStore((s) => s.importOpen);
+  const closeImport = useUiStore((s) => s.closeImport);
+  const settingsOpen = useUiStore((s) => s.settingsOpen);
+  const closeSettings = useUiStore((s) => s.closeSettings);
+  const helpOpen = useUiStore((s) => s.helpOpen);
+  const closeHelp = useUiStore((s) => s.closeHelp);
+
+  // onScrollTo dentro dos modais: fecha o modal e rola até a seção alvo.
+  const handleScrollTo = (id: string) => {
+    closeImport();
+    closeSettings();
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
+  };
+
+  return (
+    <>
+      <Dialog open={importOpen} onOpenChange={(o) => (o ? null : closeImport())}>
+        <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Importação</DialogTitle>
+            <DialogDescription>Importe clientes e produtos em massa.</DialogDescription>
+          </DialogHeader>
+          <ImportSection onScrollTo={handleScrollTo} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={settingsOpen} onOpenChange={(o) => (o ? null : closeSettings())}>
+        <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Configurações</DialogTitle>
+            <DialogDescription>Preferências, regras e zona de perigo.</DialogDescription>
+          </DialogHeader>
+          <ConfiguracoesSection />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={helpOpen} onOpenChange={(o) => (o ? null : closeHelp())}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Central de Ajuda</DialogTitle>
+            <DialogDescription>
+              Em breve: tutorial guiado da operação.
+            </DialogDescription>
+          </DialogHeader>
+          <ol className="space-y-2 text-sm text-muted-foreground">
+            <li>1. Como importar clientes</li>
+            <li>2. Como revisar cobranças</li>
+            <li>3. Como abrir cliente</li>
+            <li>4. Como copiar mensagem de cobrança</li>
+            <li>5. Como usar configurações</li>
+          </ol>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
