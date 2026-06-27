@@ -15,9 +15,10 @@ import {
   type MGMVDisplay,
 } from "@/lib/store";
 import { toast } from "sonner";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, Maximize2, Minimize2 } from "lucide-react";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { usePersistedState } from "@/lib/use-persisted-state";
+import { useSectionCompact } from "@/lib/use-section-compact";
 import {
   Dialog,
   DialogContent,
@@ -59,6 +60,7 @@ export function CollectionSection({
   const [customTo, setCustomTo] = usePersistedState<string>("collection.customTo", "");
   const [pageSize, setPageSize] = usePersistedState<number>("collection.pageSize", DEFAULT_PAGE_SIZE);
   const [visibleCount, setVisibleCount] = useState<number>(DEFAULT_PAGE_SIZE);
+  const [compact, setCompact] = useSectionCompact("collection");
   const [payTarget, setPayTarget] = useState<{ id: string; remaining: number; productName: string } | null>(null);
   const [payAmount, setPayAmount] = useState("");
 
