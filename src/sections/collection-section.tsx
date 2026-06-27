@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { MessageCircle } from "lucide-react";
 import { LoadMoreButton } from "@/components/load-more-button";
+import { usePersistedState } from "@/lib/use-persisted-state";
 import {
   Dialog,
   DialogContent,
@@ -52,11 +53,11 @@ export function CollectionSection({
   initialFilter?: Filter;
 }) {
   const { clients, products, registerPayment, openClient, payMGMVInstallment } = useStore();
-  const [filter, setFilter] = useState<Filter>(initialFilter);
-  const [period, setPeriod] = useState<Period>("todos");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
-  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+  const [filter, setFilter] = usePersistedState<Filter>("collection.filter", initialFilter);
+  const [period, setPeriod] = usePersistedState<Period>("collection.period", "todos");
+  const [customFrom, setCustomFrom] = usePersistedState<string>("collection.customFrom", "");
+  const [customTo, setCustomTo] = usePersistedState<string>("collection.customTo", "");
+  const [pageSize, setPageSize] = usePersistedState<number>("collection.pageSize", DEFAULT_PAGE_SIZE);
   const [visibleCount, setVisibleCount] = useState<number>(DEFAULT_PAGE_SIZE);
   const [payTarget, setPayTarget] = useState<{ id: string; remaining: number; productName: string } | null>(null);
   const [payAmount, setPayAmount] = useState("");

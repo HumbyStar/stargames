@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Folder, Filter, Maximize2, Minimize2, X } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { LoadMoreButton } from "@/components/load-more-button";
+import { usePersistedState } from "@/lib/use-persisted-state";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -78,13 +79,13 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   } = useStore();
 
   const [search, setSearch] = useState("");
-  const [chip, setChip] = useState<ChipFilter>("todos");
-  const [financialFilter, setFinancialFilter] = useState("Todos");
-  const [situationFilter, setSituationFilter] = useState("Todas");
-  const [platformFilter, setPlatformFilter] = useState("Todas");
-  const [periodFilter, setPeriodFilter] = useState("Todos");
-  const [folderFilter, setFolderFilter] = useState<string>("Todas");
-  const [pageSize, setPageSize] = useState<number>(10);
+  const [chip, setChip] = usePersistedState<ChipFilter>("clientes.chip", "todos");
+  const [financialFilter, setFinancialFilter] = usePersistedState<string>("clientes.financial", "Todos");
+  const [situationFilter, setSituationFilter] = usePersistedState<string>("clientes.situation", "Todas");
+  const [platformFilter, setPlatformFilter] = usePersistedState<string>("clientes.platform", "Todas");
+  const [periodFilter, setPeriodFilter] = usePersistedState<string>("clientes.period", "Todos");
+  const [folderFilter, setFolderFilter] = usePersistedState<string>("clientes.folder", "Todas");
+  const [pageSize, setPageSize] = usePersistedState<number>("clientes.pageSize", 10);
   const [visibleCount, setVisibleCount] = useState<number>(10);
   const [compact, setCompact] = useState(false);
   const [showFilters, setShowFilters] = useState(true);
