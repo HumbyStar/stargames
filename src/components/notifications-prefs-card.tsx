@@ -24,13 +24,11 @@ export function NotificationsPrefsCard() {
   };
 
   return (
-    <Card
-      title={
-        <span className="inline-flex items-center gap-2">
-          <Bell className="size-4 text-primary" /> Notificações
-        </span>
-      }
-    >
+    <Card title="Notificações">
+      <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+        <Bell className="size-4 text-primary" />
+        Escolha quais alertas aparecem no sino da navbar.
+      </div>
       <div className="divide-y divide-border rounded-lg border border-border bg-background/40">
         {types.map((t) => (
           <div key={t} className="flex items-start justify-between gap-4 px-3 py-3">
