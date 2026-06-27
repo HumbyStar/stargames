@@ -24,7 +24,7 @@ export interface DbClientRow {
   notes: string | null;
   folder: string | null;
   mgmv: Json;
-  client_type?: string | null;
+  client_type?: string;
 }
 
 export interface DbProductRow {
