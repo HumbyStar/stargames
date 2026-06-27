@@ -1051,11 +1051,23 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
 
   const confirmZipImport = () => {
     if (!zipData) return;
+    // Pendência de decisão em conflitos MGMV bloqueia o import.
+    const pendingMgmv = zipData.entries.filter(
+      (e) => e.selected && !e.criticalError && e.mgmv && e.mgmvConflict && !e.mgmvAction,
+    );
+    if (pendingMgmv.length > 0) {
+      toast.error(
+        `${pendingMgmv.length} cliente(s) com MGMV em conflito ainda sem decisão (substituir ou manter).`,
+      );
+      return;
+    }
     const todayISO = new Date().toISOString();
+    const startedAt = performance.now();
     let createdClients = 0;
     let updatedClients = 0;
     let createdProducts = 0;
     let createdAgreements = 0;
+    let replacedAgreements = 0;
     let ignoredDuplicates = 0;
     let errorEntries = 0;
     let skippedAfterCorrection = 0;
@@ -1110,8 +1122,15 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         updateClientNotes(client!.id, existing + entry.notes);
       }
       if (entry.mgmv) {
-        setMGMVAgreement(client!.id, entry.mgmv);
-        createdAgreements++;
+        const action = entry.mgmvAction ?? "apply";
+        if (action === "apply") {
+          setMGMVAgreement(client!.id, entry.mgmv);
+          createdAgreements++;
+        } else if (action === "replace") {
+          setMGMVAgreement(client!.id, entry.mgmv);
+          replacedAgreements++;
+        }
+        // "keep" → mantém o acordo existente, nada a fazer.
       }
     });
     addImportHistory({
@@ -1121,9 +1140,14 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       productsAdded: createdProducts,
       errors: errorEntries,
       status: errorEntries > 0 ? "Com avisos" : "Concluído",
+      fileHash: zipData.fileHash,
+      agreementsCreated: createdAgreements,
+      agreementsReplaced: replacedAgreements,
+      skippedDuplicates: ignoredDuplicates,
+      durationMs: Math.round(performance.now() - startedAt),
     });
     toast.success(
-      `ZIP importado: ${createdClients} novo(s) • ${updatedClients} atualizado(s) • ${createdProducts} produto(s) • ${createdAgreements} MGMV • ${ignoredDuplicates} duplicata(s) ignorada(s)${skippedAfterCorrection > 0 ? ` • ${skippedAfterCorrection} pulado(s) por correção` : ""}`,
+      `ZIP importado: ${createdClients} novo(s) • ${updatedClients} atualizado(s) • ${createdProducts} produto(s) • ${createdAgreements} MGMV novo(s)${replacedAgreements ? ` • ${replacedAgreements} MGMV substituído(s)` : ""} • ${ignoredDuplicates} duplicata(s) ignorada(s)${skippedAfterCorrection > 0 ? ` • ${skippedAfterCorrection} pulado(s) por correção` : ""}`,
     );
     setZipData(null);
     onScrollTo("clientes");
