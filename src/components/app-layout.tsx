@@ -235,6 +235,7 @@ function FloatingNavbar() {
   const openImport = useUiStore((s) => s.openImport);
   const openSettings = useUiStore((s) => s.openSettings);
   const openHelp = useUiStore((s) => s.openHelp);
+  const openNotifications = useUiStore((s) => s.openNotifications);
 
   useEffect(() => {
     const onScroll = () => {
@@ -297,6 +298,31 @@ function FloatingNavbar() {
           <Upload className="size-4 transition-transform group-hover:-translate-y-0.5" />
         </button>
         <button
+          onClick={openSettings}
+          aria-label="Configurações"
+          title="Configurações"
+          className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+        >
+          <Settings className="size-4 transition-transform duration-300 group-hover:rotate-90" />
+        </button>
+        <button
+          onClick={openNotifications}
+          aria-label="Notificações"
+          title="Notificações"
+          className="group relative hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+        >
+          <Bell className="size-4 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
+          <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary animate-pulse" />
+        </button>
+        <button
+          onClick={openHelp}
+          aria-label="Tutorial"
+          title="Tutorial"
+          className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+        >
+          <HelpCircle className="size-4 transition-transform duration-300 group-hover:scale-125 group-hover:animate-pulse" />
+        </button>
+        <button
           onClick={toggleTheme}
           aria-label={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
           title={isDark ? "Modo claro" : "Modo escuro"}
@@ -305,22 +331,6 @@ function FloatingNavbar() {
           <span key={isDark ? "sun" : "moon"} className="inline-flex animate-in fade-in zoom-in-75 duration-300 group-hover:rotate-12 transition-transform">
             {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </span>
-        </button>
-        <button
-          onClick={openHelp}
-          aria-label="Ajuda"
-          title="Central de Ajuda"
-          className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
-        >
-          <HelpCircle className="size-4 transition-transform duration-300 group-hover:scale-125 group-hover:animate-pulse" />
-        </button>
-        <button
-          onClick={openSettings}
-          aria-label="Configurações"
-          title="Configurações"
-          className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
-        >
-          <Settings className="size-4 transition-transform duration-300 group-hover:rotate-90" />
         </button>
         <button
           onClick={handleSignOut}
