@@ -730,6 +730,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   const [zipProcessing, setZipProcessing] = useState(false);
   const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
   const [zipFailuresOpen, setZipFailuresOpen] = useState(false);
+  const [importProgress, setImportProgress] = useState<ImportProgressState | null>(null);
 
   const handleZipFile = async (file: File) => {
     if (!file.name.toLowerCase().endsWith(".zip")) {
@@ -1057,7 +1058,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     );
   };
 
-  const confirmZipImport = () => {
+  const confirmZipImport = async () => {
     if (!zipData) return;
     // Pendência de decisão em conflitos MGMV bloqueia o import.
     const pendingMgmv = zipData.entries.filter(
@@ -1071,21 +1072,45 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     }
     const todayISO = new Date().toISOString();
     const startedAt = performance.now();
-    let createdClients = 0;
-    let updatedClients = 0;
-    let createdProducts = 0;
-    let createdAgreements = 0;
-    let replacedAgreements = 0;
-    let ignoredDuplicates = 0;
-    let errorEntries = 0;
-    let skippedAfterCorrection = 0;
-    zipData.entries.forEach((entry) => {
+    const stats = {
+      createdClients: 0,
+      updatedClients: 0,
+      createdProducts: 0,
+      createdAgreements: 0,
+      replacedAgreements: 0,
+      ignoredDuplicates: 0,
+      errorEntries: 0,
+      skippedAfterCorrection: 0,
+    };
+
+    // Agrupa entradas por pasta para processamento lazy/calmo.
+    const byFolder = new Map<string, typeof zipData.entries>();
+    zipData.entries.forEach((e) => {
+      const key = e.folderName || "(raiz)";
+      if (!byFolder.has(key)) byFolder.set(key, []);
+      byFolder.get(key)!.push(e);
+    });
+    const folders = Array.from(byFolder.keys());
+
+    setImportProgress({
+      folders,
+      currentIdx: -1,
+      messages: [`📦 Abrindo ZIP "${zipData.zipName}"…`, `🗂️ ${folders.length} pasta(s) na esteira.`],
+      stats: { ...stats },
+      done: false,
+    });
+
+    const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+    // Respira antes de começar pra animação aparecer.
+    await wait(700);
+
+    const processEntry = (entry: typeof zipData.entries[number]) => {
       if (!entry.selected || entry.criticalError) {
-        if (entry.criticalError) errorEntries++;
+        if (entry.criticalError) stats.errorEntries++;
         return;
       }
       if (entry.matchedAfterCorrection && entry.correctionAction === "skip") {
-        skippedAfterCorrection++;
+        stats.skippedAfterCorrection++;
         return;
       }
       let client = findClientByPhone(entry.client.phone);
@@ -1095,17 +1120,17 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           phone: entry.client.phoneDisplay || entry.client.phone,
           folder: entry.folderName,
         });
-        createdClients++;
+        stats.createdClients++;
       } else {
         if (!client.folder && entry.folderName && entry.folderName !== "(raiz)") {
           updateClient(client.id, { folder: entry.folderName });
         }
-        updatedClients++;
+        stats.updatedClients++;
       }
       entry.products.forEach((p) => {
         if (!p.selected || p.errors.length > 0 || !p.product) return;
         if (p.duplicate) {
-          ignoredDuplicates++;
+          stats.ignoredDuplicates++;
           return;
         }
         const regISO = p.registerDate
@@ -1127,7 +1152,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           registerDate: regISO,
           dueDate: dueISO,
         });
-        createdProducts++;
+        stats.createdProducts++;
       });
       if (entry.notes) {
         const existing = client!.notes ? client!.notes + "\n\n" : "";
@@ -1137,32 +1162,80 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         const action = entry.mgmvAction ?? "apply";
         if (action === "apply") {
           setMGMVAgreement(client!.id, entry.mgmv);
-          createdAgreements++;
+          stats.createdAgreements++;
         } else if (action === "replace") {
           setMGMVAgreement(client!.id, entry.mgmv);
-          replacedAgreements++;
+          stats.replacedAgreements++;
         }
         // "keep" → mantém o acordo existente, nada a fazer.
       }
-    });
+    };
+
+    // Processa pasta por pasta com pausa pra animação respirar.
+    for (let i = 0; i < folders.length; i++) {
+      const folder = folders[i];
+      const entries = byFolder.get(folder)!;
+      setImportProgress((prev) =>
+        prev
+          ? {
+              ...prev,
+              currentIdx: i,
+              messages: [...prev.messages, `📂 Entrando em "${folder}" (${entries.length} cliente${entries.length === 1 ? "" : "s"})…`],
+            }
+          : prev,
+      );
+      await wait(500);
+      const before = { ...stats };
+      entries.forEach(processEntry);
+      const dC = stats.createdClients - before.createdClients;
+      const dU = stats.updatedClients - before.updatedClients;
+      const dP = stats.createdProducts - before.createdProducts;
+      setImportProgress((prev) =>
+        prev
+          ? {
+              ...prev,
+              stats: { ...stats },
+              messages: [
+                ...prev.messages,
+                `✅ "${folder}" — ${dC} novo(s), ${dU} atualizado(s), ${dP} produto(s).`,
+              ],
+            }
+          : prev,
+      );
+      await wait(450);
+    }
+
     addImportHistory({
       source: "HTML Notion",
       file: zipData.zipName,
-      clientsCreated: createdClients,
-      productsAdded: createdProducts,
-      errors: errorEntries,
-      status: errorEntries > 0 ? "Com avisos" : "Concluído",
+      clientsCreated: stats.createdClients,
+      productsAdded: stats.createdProducts,
+      errors: stats.errorEntries,
+      status: stats.errorEntries > 0 ? "Com avisos" : "Concluído",
       fileHash: zipData.fileHash,
-      agreementsCreated: createdAgreements,
-      agreementsReplaced: replacedAgreements,
-      skippedDuplicates: ignoredDuplicates,
+      agreementsCreated: stats.createdAgreements,
+      agreementsReplaced: stats.replacedAgreements,
+      skippedDuplicates: stats.ignoredDuplicates,
       durationMs: Math.round(performance.now() - startedAt),
     });
+    setImportProgress((prev) =>
+      prev
+        ? {
+            ...prev,
+            currentIdx: folders.length,
+            done: true,
+            stats: { ...stats },
+            messages: [
+              ...prev.messages,
+              `🏁 Concluído em ${((performance.now() - startedAt) / 1000).toFixed(1)}s.`,
+            ],
+          }
+        : prev,
+    );
     toast.success(
-      `ZIP importado: ${createdClients} novo(s) • ${updatedClients} atualizado(s) • ${createdProducts} produto(s) • ${createdAgreements} MGMV novo(s)${replacedAgreements ? ` • ${replacedAgreements} MGMV substituído(s)` : ""} • ${ignoredDuplicates} duplicata(s) ignorada(s)${skippedAfterCorrection > 0 ? ` • ${skippedAfterCorrection} pulado(s) por correção` : ""}`,
+      `ZIP importado: ${stats.createdClients} novo(s) • ${stats.updatedClients} atualizado(s) • ${stats.createdProducts} produto(s) • ${stats.createdAgreements} MGMV novo(s)${stats.replacedAgreements ? ` • ${stats.replacedAgreements} MGMV substituído(s)` : ""} • ${stats.ignoredDuplicates} duplicata(s) ignorada(s)${stats.skippedAfterCorrection > 0 ? ` • ${stats.skippedAfterCorrection} pulado(s) por correção` : ""}`,
     );
     setZipData(null);
-    onScrollTo("clientes");
   };
 
   const handleFile = async (file: File) => {
