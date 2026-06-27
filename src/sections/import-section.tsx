@@ -798,7 +798,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         total: state.folders.length,
         messages: state.messages.slice(-200),
         errors: state.errors.slice(-200),
-        stats: state.stats,
+        stats: { ...state.stats, resetVersion: getResetVersion() },
         done: state.done,
         started_at: state.startedAt,
       };
@@ -834,6 +834,15 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           .limit(1)
           .maybeSingle();
         if (error || !data || cancelled) return;
+        // Se a versão de reset mudou desde que esse progresso foi salvo,
+        // descartar silenciosamente — não é mais válido.
+        const stats = (data.stats as Record<string, unknown>) ?? {};
+        const progressResetVersion = String(stats.resetVersion ?? "");
+        const currentResetVersion = getResetVersion();
+        if (currentResetVersion && progressResetVersion !== currentResetVersion) {
+          void supabase.from("import_progress").delete().eq("id", data.id);
+          return;
+        }
         setProgressRowId(data.id);
         setImportProgress({
           fileHash: data.file_hash,
