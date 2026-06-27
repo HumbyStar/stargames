@@ -765,6 +765,13 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           slice.map(async (r) => {
             try {
               const content = await r.entry.async("string");
+              if (content.length > ZIP_LIMITS.maxFileBytes) {
+                parseFailures.push({
+                  path: r.path,
+                  reason: `Arquivo acima de ${(ZIP_LIMITS.maxFileBytes / 1024 / 1024).toFixed(1)} MB — ignorado por segurança.`,
+                });
+                return;
+              }
               htmlFiles.push({
                 folderName: r.folderName,
                 fileName: r.fileName,
