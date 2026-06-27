@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Folder, Filter, Maximize2, Minimize2, X } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -87,6 +87,10 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const [page, setPage] = useState(1);
   const [compact, setCompact] = useState(false);
   const [showFilters, setShowFilters] = useState(true);
+  const [viewMode, setViewMode] = useState<"paginado" | "infinito">("paginado");
+  const INFINITE_STEP = 50;
+  const [infiniteCount, setInfiniteCount] = useState(INFINITE_STEP);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const drawerClientId = openClientId;
   const setDrawerClientId = (id: string | null) => openClient(id);
@@ -169,14 +173,37 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   // Reseta a página quando filtros mudam.
   useEffect(() => {
     setPage(1);
+    setInfiniteCount(INFINITE_STEP);
   }, [search, chip, financialFilter, situationFilter, platformFilter, periodFilter, folderFilter, pageSize]);
 
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pagedRows = useMemo(
-    () => rows.slice((currentPage - 1) * pageSize, currentPage * pageSize),
-    [rows, currentPage, pageSize],
-  );
+  const pagedRows = useMemo(() => {
+    if (viewMode === "infinito") {
+      return rows.slice(0, Math.min(infiniteCount, rows.length));
+    }
+    return rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  }, [rows, currentPage, pageSize, viewMode, infiniteCount]);
+
+  const hasMoreInfinite = viewMode === "infinito" && pagedRows.length < rows.length;
+
+  // IntersectionObserver para auto-carregar mais ao chegar no rodapé.
+  useEffect(() => {
+    if (viewMode !== "infinito") return;
+    if (!hasMoreInfinite) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setInfiniteCount((c) => c + INFINITE_STEP);
+        }
+      },
+      { rootMargin: "400px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [viewMode, hasMoreInfinite, pagedRows.length]);
 
   const activeFilterCount =
     (chip !== "todos" ? 1 : 0) +
