@@ -45,6 +45,7 @@ import {
   type DangerAction,
   type ImportStatus,
 } from "@/lib/store";
+import { NotificationsPrefsCard } from "@/components/notifications-prefs-card";
 
 const dangerCatalog: Record<
   DangerAction,
@@ -448,6 +449,9 @@ export function ConfiguracoesSection() {
             </div>
           </div>
         </Card>
+
+        {/* Notificações */}
+        <NotificationsPrefsCard />
       </div>
 
       {/* Histórico de Importações */}
