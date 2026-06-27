@@ -458,6 +458,10 @@ interface ZipClientPreview {
   mgmv: MGMVAgreement | null;
   existingClient: Client | undefined;
   matchedAfterCorrection?: boolean;
+  // Ação escolhida pelo usuário quando o cliente foi encontrado por causa de
+  // uma auto-correção do telefone: "merge" (importar e mesclar — padrão) ou
+  // "skip" (pular a importação deste cliente/itens).
+  correctionAction?: "merge" | "skip";
   errors: string[];
   criticalError: boolean;
   selected: boolean;
@@ -779,6 +783,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               mgmv,
               existingClient,
               matchedAfterCorrection,
+              correctionAction: matchedAfterCorrection ? "merge" : undefined,
               errors,
               criticalError,
               selected: !criticalError,
@@ -815,6 +820,26 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     setZipData((d) =>
       d
         ? { ...d, entries: d.entries.map((e) => (e.id === id ? { ...e, selected } : e)) }
+        : d,
+    );
+  };
+  const setCorrectionAction = (id: string, action: "merge" | "skip") => {
+    setZipData((d) =>
+      d
+        ? {
+            ...d,
+            entries: d.entries.map((e) =>
+              e.id === id
+                ? {
+                    ...e,
+                    correctionAction: action,
+                    // Se o usuário escolher pular, desmarca a entry inteira
+                    // para que nenhum produto/MGMV deste cliente seja importado.
+                    selected: action === "skip" ? false : e.selected || !e.criticalError,
+                  }
+                : e,
+            ),
+          }
         : d,
     );
   };
@@ -874,9 +899,14 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     let createdAgreements = 0;
     let ignoredDuplicates = 0;
     let errorEntries = 0;
+    let skippedAfterCorrection = 0;
     zipData.entries.forEach((entry) => {
       if (!entry.selected || entry.criticalError) {
         if (entry.criticalError) errorEntries++;
+        return;
+      }
+      if (entry.matchedAfterCorrection && entry.correctionAction === "skip") {
+        skippedAfterCorrection++;
         return;
       }
       let client = findClientByPhone(entry.client.phone);
@@ -934,7 +964,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       status: errorEntries > 0 ? "Com avisos" : "Concluído",
     });
     toast.success(
-      `ZIP importado: ${createdClients} novo(s) • ${updatedClients} atualizado(s) • ${createdProducts} produto(s) • ${createdAgreements} MGMV • ${ignoredDuplicates} duplicata(s) ignorada(s)`,
+      `ZIP importado: ${createdClients} novo(s) • ${updatedClients} atualizado(s) • ${createdProducts} produto(s) • ${createdAgreements} MGMV • ${ignoredDuplicates} duplicata(s) ignorada(s)${skippedAfterCorrection > 0 ? ` • ${skippedAfterCorrection} pulado(s) por correção` : ""}`,
     );
     setZipData(null);
     onScrollTo("clientes");
@@ -1276,6 +1306,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           onToggleProduct={setProductSelected}
           onToggleAll={setAllEntriesSelected}
           onToggleFolder={setFolderSelected}
+          onCorrectionAction={setCorrectionAction}
         />
       )}
 
@@ -1614,6 +1645,7 @@ function ZipPreview({
   onToggleProduct,
   onToggleAll,
   onToggleFolder,
+  onCorrectionAction,
 }: {
   data: ZipPreviewData;
   onClear: () => void;
@@ -1622,6 +1654,7 @@ function ZipPreview({
   onToggleProduct: (entryId: string, productId: string, selected: boolean) => void;
   onToggleAll: (selected: boolean) => void;
   onToggleFolder: (folder: string, selected: boolean) => void;
+  onCorrectionAction: (id: string, action: "merge" | "skip") => void;
 }) {
   const [filter, setFilter] = useState<ZipFilter>("todos");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -1875,8 +1908,24 @@ function ZipPreview({
                                 </div>
                               )}
                               {e.matchedAfterCorrection && (
-                                <div className="mt-1">
+                                <div className="mt-1 space-y-1">
                                   <Tag variant="warning">Match após correção</Tag>
+                                  <div className="flex gap-1">
+                                    <Button
+                                      size="sm"
+                                      variant={e.correctionAction !== "skip" ? "default" : "ghost"}
+                                      onClick={() => onCorrectionAction(e.id, "merge")}
+                                    >
+                                      Mesclar
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant={e.correctionAction === "skip" ? "default" : "ghost"}
+                                      onClick={() => onCorrectionAction(e.id, "skip")}
+                                    >
+                                      Pular
+                                    </Button>
+                                  </div>
                                 </div>
                               )}
                               {e.client.correctionReason && !e.criticalError && (
