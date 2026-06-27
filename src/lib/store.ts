@@ -2,6 +2,9 @@ import { create } from "zustand";
 import {
   dbDeleteAllClients,
   dbDeleteAllProducts,
+  dbDeleteAllMGMV,
+  dbDeleteAllImportProgress,
+  clearImportRuntimeState,
   dbDeleteHistoryAll,
   dbInsertHistory,
   dbSaveSettings,
@@ -10,6 +13,8 @@ import {
   loadSnapshot,
   migrateLocalStorageOnce,
   primeUiState,
+  getUiValue,
+  setUiValue,
 } from "./db-sync";
 
 export type FinancialStatus = "Pago" | "Reserva" | "Pendente" | "MGMV";
@@ -503,18 +508,32 @@ export const useStore = create<State>()((set, get) => ({
           switch (action) {
             case "deleteImportedData":
               dbDeleteHistoryAll();
+              dbDeleteAllImportProgress();
+              clearImportRuntimeState();
+              bumpResetVersion();
               return { ...s, importHistory: [] };
             case "deleteAllClients":
               dbDeleteAllClients();
               dbDeleteAllProducts();
+              dbDeleteAllMGMV();
+              dbDeleteAllImportProgress();
+              clearImportRuntimeState();
+              bumpResetVersion();
               return { ...s, clients: [], products: [], openClientId: null };
             case "deleteAllProducts":
               dbDeleteAllProducts();
+              dbDeleteAllMGMV();
+              clearImportRuntimeState();
+              bumpResetVersion();
               return { ...s, products: [] };
             case "resetSystem":
               dbDeleteAllClients();
               dbDeleteAllProducts();
+              dbDeleteAllMGMV();
               dbDeleteHistoryAll();
+              dbDeleteAllImportProgress();
+              clearImportRuntimeState();
+              bumpResetVersion();
               dbSaveSettings({
                 preferences: defaultPreferences,
                 rules: defaultRules,
