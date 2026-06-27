@@ -3,11 +3,21 @@ import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   calculateFinancialStatus,
   formatBRL,
   useStore,
+  type Client,
   type FinancialStatus,
   type MGMVAgreement,
+  type Product,
   type Situation,
 } from "@/lib/store";
 import { toast } from "sonner";
@@ -427,12 +437,249 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     openClient,
     updateClientNotes,
     setMGMVAgreement,
+    addImportHistory,
   } = useStore();
+  const products = useStore((s) => s.products);
+  const clients = useStore((s) => s.clients);
   const [tab, setTab] = useState("text");
   const [text, setText] = useState(SAMPLE_LIST);
   const [rows, setRows] = useState<ParsedRow[] | null>(null);
   const [notion, setNotion] = useState<NotionParseResult | null>(null);
   const [htmlText, setHtmlText] = useState("");
+  const [zipData, setZipData] = useState<ZipPreviewData | null>(null);
+  const [zipProcessing, setZipProcessing] = useState(false);
+
+  const handleZipFile = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith(".zip")) {
+      return toast.error("Envie um arquivo .zip");
+    }
+    setZipProcessing(true);
+    setZipData(null);
+    try {
+      const { default: JSZip } = await import("jszip");
+      const zip = await JSZip.loadAsync(file);
+      const htmlFiles: ZipFileEntry[] = [];
+      const folders = new Set<string>();
+      const globalErrors: string[] = [];
+      const promises: Promise<void>[] = [];
+      zip.forEach((path, entry) => {
+        if (entry.dir) return;
+        const lower = path.toLowerCase();
+        if (!lower.endsWith(".html") && !lower.endsWith(".htm")) return;
+        const parts = path.split("/");
+        const fileName = parts[parts.length - 1];
+        const folderName = parts.length > 1 ? parts.slice(0, -1).join("/") : "(raiz)";
+        folders.add(folderName);
+        promises.push(
+          entry.async("string").then((content) => {
+            htmlFiles.push({ folderName, fileName, fullPath: path, htmlContent: content });
+          }),
+        );
+      });
+      await Promise.all(promises);
+      if (htmlFiles.length === 0) {
+        globalErrors.push("Nenhum arquivo .html encontrado no ZIP.");
+      }
+      const entries: ZipClientPreview[] = [];
+      htmlFiles
+        .sort((a, b) => a.fullPath.localeCompare(b.fullPath))
+        .forEach((file, fileIdx) => {
+          const parsed = parseNotionHtml(file.htmlContent);
+          parsed.clients.forEach((block, blockIdx) => {
+            const tempId = `zip-${fileIdx}-${blockIdx}-${Math.random().toString(36).slice(2, 8)}`;
+            const existingClient = block.client.phone
+              ? clients.find((c) => c.phone.replace(/\D/g, "") === block.client.phone)
+              : undefined;
+            const errors = [...block.errors];
+            if (!block.client.name) errors.push("Cliente sem nome.");
+            if (!block.client.phone || block.client.phone.length < 10)
+              errors.push("Telefone inválido ou ausente.");
+            if (block.products.length === 0) errors.push("Sem produtos na tabela.");
+            const productPreviews: ZipProductPreview[] = block.products.map((p, pIdx) => {
+              const dup =
+                !!existingClient &&
+                products.some(
+                  (existing) =>
+                    existing.clientId === existingClient.id &&
+                    existing.name.trim().toLowerCase() === p.product.trim().toLowerCase() &&
+                    (!p.registerDate ||
+                      new Date(existing.registerDate).toISOString().slice(0, 10) === p.registerDate),
+                );
+              return {
+                ...p,
+                tempId: `${tempId}-p${pIdx}`,
+                duplicate: dup,
+                selected: true,
+              };
+            });
+            const mgmv = extractMGMVAgreementFromNotes(block.notes);
+            const criticalError =
+              !block.client.name ||
+              !block.client.phone ||
+              block.client.phone.length < 10 ||
+              block.products.length === 0;
+            entries.push({
+              id: tempId,
+              folderName: file.folderName,
+              fileName: file.fileName,
+              fullPath: file.fullPath,
+              client: block.client,
+              products: productPreviews,
+              notes: block.notes,
+              mgmv,
+              existingClient,
+              errors,
+              criticalError,
+              selected: !criticalError,
+            });
+          });
+        });
+      setZipData({
+        folders,
+        files: htmlFiles.length,
+        entries,
+        globalErrors,
+        zipName: file.name,
+      });
+      toast.success(
+        `${entries.length} cliente(s) lidos de ${htmlFiles.length} arquivo(s) em ${folders.size} pasta(s).`,
+      );
+    } catch (err) {
+      console.error(err);
+      toast.error("Falha ao ler o ZIP. Verifique o arquivo.");
+    } finally {
+      setZipProcessing(false);
+    }
+  };
+
+  const setEntrySelected = (id: string, selected: boolean) => {
+    setZipData((d) =>
+      d
+        ? { ...d, entries: d.entries.map((e) => (e.id === id ? { ...e, selected } : e)) }
+        : d,
+    );
+  };
+  const setProductSelected = (entryId: string, productId: string, selected: boolean) => {
+    setZipData((d) =>
+      d
+        ? {
+            ...d,
+            entries: d.entries.map((e) =>
+              e.id === entryId
+                ? {
+                    ...e,
+                    products: e.products.map((p) =>
+                      p.tempId === productId ? { ...p, selected } : p,
+                    ),
+                  }
+                : e,
+            ),
+          }
+        : d,
+    );
+  };
+  const setAllEntriesSelected = (selected: boolean) => {
+    setZipData((d) =>
+      d
+        ? {
+            ...d,
+            entries: d.entries.map((e) => ({
+              ...e,
+              selected: selected && !e.criticalError,
+            })),
+          }
+        : d,
+    );
+  };
+  const setFolderSelected = (folderName: string, selected: boolean) => {
+    setZipData((d) =>
+      d
+        ? {
+            ...d,
+            entries: d.entries.map((e) =>
+              e.folderName === folderName
+                ? { ...e, selected: selected && !e.criticalError }
+                : e,
+            ),
+          }
+        : d,
+    );
+  };
+
+  const confirmZipImport = () => {
+    if (!zipData) return;
+    const todayISO = new Date().toISOString();
+    let createdClients = 0;
+    let updatedClients = 0;
+    let createdProducts = 0;
+    let createdAgreements = 0;
+    let ignoredDuplicates = 0;
+    let errorEntries = 0;
+    zipData.entries.forEach((entry) => {
+      if (!entry.selected || entry.criticalError) {
+        if (entry.criticalError) errorEntries++;
+        return;
+      }
+      let client = findClientByPhone(entry.client.phone);
+      if (!client) {
+        client = addClient({
+          name: entry.client.name,
+          phone: entry.client.phoneDisplay || entry.client.phone,
+        });
+        createdClients++;
+      } else {
+        updatedClients++;
+      }
+      entry.products.forEach((p) => {
+        if (!p.selected || p.errors.length > 0 || !p.product) return;
+        if (p.duplicate) {
+          ignoredDuplicates++;
+          return;
+        }
+        const regISO = p.registerDate
+          ? new Date(`${p.registerDate}T12:00:00`).toISOString()
+          : todayISO;
+        const dueISO = p.dueDate
+          ? new Date(`${p.dueDate}T12:00:00`).toISOString()
+          : p.financialStatus === "Reserva"
+            ? new Date(new Date(regISO).getTime() + 30 * 86400000).toISOString()
+            : regISO;
+        addProduct({
+          clientId: client!.id,
+          name: p.product,
+          platform: p.platform || "—",
+          totalValue: p.totalValue,
+          paidValue: p.paidValue,
+          financialStatus: p.financialStatus,
+          situation: p.situation,
+          registerDate: regISO,
+          dueDate: dueISO,
+        });
+        createdProducts++;
+      });
+      if (entry.notes) {
+        const existing = client!.notes ? client!.notes + "\n\n" : "";
+        updateClientNotes(client!.id, existing + entry.notes);
+      }
+      if (entry.mgmv) {
+        setMGMVAgreement(client!.id, entry.mgmv);
+        createdAgreements++;
+      }
+    });
+    addImportHistory({
+      source: "HTML Notion",
+      file: zipData.zipName,
+      clientsCreated: createdClients,
+      productsAdded: createdProducts,
+      errors: errorEntries,
+      status: errorEntries > 0 ? "Com avisos" : "Concluído",
+    });
+    toast.success(
+      `ZIP importado: ${createdClients} novo(s) • ${updatedClients} atualizado(s) • ${createdProducts} produto(s) • ${createdAgreements} MGMV • ${ignoredDuplicates} duplicata(s) ignorada(s)`,
+    );
+    setZipData(null);
+    onScrollTo("clientes");
+  };
 
   const handleFile = async (file: File) => {
     const ext = file.name.toLowerCase().split(".").pop();
@@ -645,6 +892,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             <TabsList>
               <TabsTrigger value="text">Lista</TabsTrigger>
               <TabsTrigger value="html">HTML / Notion</TabsTrigger>
+              <TabsTrigger value="zip">ZIP Notion</TabsTrigger>
               <TabsTrigger value="csv">CSV</TabsTrigger>
               <TabsTrigger value="excel">Excel</TabsTrigger>
             </TabsList>
@@ -691,6 +939,29 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               </details>
             </TabsContent>
 
+            <TabsContent value="zip" className="mt-4 space-y-3" id="zip-import">
+              <div>
+                <h3 className="text-sm font-semibold">Importar ZIP do Notion</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Envie o arquivo ZIP contendo a pasta mãe exportada do Notion. O sistema irá ler o
+                  ZIP, localizar os arquivos HTML, extrair clientes e produtos, comparar duplicatas
+                  e mostrar uma prévia antes da importação.
+                </p>
+              </div>
+              <UploadArea
+                accept=".zip"
+                onFile={handleZipFile}
+                hint={
+                  zipProcessing
+                    ? "Lendo ZIP..."
+                    : "Arraste o ZIP exportado do Notion ou clique para selecionar"
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Nada é salvo nesta etapa. Apenas após confirmar a importação os dados são gravados.
+              </p>
+            </TabsContent>
+
             <TabsContent value="csv" className="mt-4 space-y-3">
               <UploadArea accept=".csv" onFile={handleFile} hint="Arraste um arquivo CSV ou clique para selecionar" />
               <div className="flex justify-end">
@@ -732,6 +1003,18 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           findClientByPhone={findClientByPhone}
           onConfirm={confirmNotionImport}
           onClear={() => { setNotion(null); setHtmlText(""); }}
+        />
+      )}
+
+      {zipData && (
+        <ZipPreview
+          data={zipData}
+          onClear={() => setZipData(null)}
+          onConfirm={confirmZipImport}
+          onToggleEntry={setEntrySelected}
+          onToggleProduct={setProductSelected}
+          onToggleAll={setAllEntriesSelected}
+          onToggleFolder={setFolderSelected}
         />
       )}
 
