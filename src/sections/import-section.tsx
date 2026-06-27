@@ -839,10 +839,17 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             const matchedAfterCorrection = !!existingClient && !!block.client.wasAutoCorrected;
             if (matchedAfterCorrection) {
               console.info(
-                `[import] Duplicata de cliente após auto-correção: ${block.client.name} (${block.client.phoneDisplay || lookupPhone}) — arquivo ${file.fullPath}`,
+                `[import] Duplicata de cliente após auto-correção: ${maskPhone(lookupPhone)} — arquivo ${file.fullPath}`,
               );
             }
             const errors = [...block.errors];
+            errors.push(
+              ...validateClientBlock({
+                name: block.client.name,
+                phone: block.client.phone,
+                notes: block.notes,
+              }),
+            );
             if (!block.client.name) errors.push("Cliente sem nome.");
             if (!block.client.phone || block.client.phone.length < 10)
               errors.push("Telefone inválido ou ausente.");
@@ -853,8 +860,14 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                 const set = productIndexByClient.get(existingClient.id);
                 dup = !!set?.has(`${p.product.trim().toLowerCase()}|${p.registerDate}`);
               }
+              const vErrs = validateProductValues({
+                totalValue: p.totalValue,
+                paidValue: p.paidValue,
+              });
+              const pErrors = vErrs.length ? [...p.errors, ...vErrs] : p.errors;
               return {
                 ...p,
+                errors: pErrors,
                 tempId: `${tempId}-p${pIdx}`,
                 duplicate: dup,
                 duplicateAfterCorrection: dup && matchedAfterCorrection,
@@ -862,6 +875,21 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               };
             });
             const mgmv = extractMGMVAgreementFromNotes(block.notes);
+            // Conflito de MGMV: cliente já tem acordo com parcelas pagas e o
+            // arquivo está trazendo um novo. Substituir apagaria o histórico.
+            let mgmvConflict: ZipClientPreview["mgmvConflict"] = undefined;
+            if (mgmv && existingClient?.mgmv) {
+              const existPaid = existingClient.mgmv.installments.filter((i) => i.paid).length;
+              if (existPaid > 0) {
+                mgmvConflict = {
+                  existingPaid: existPaid,
+                  existingTotal: existingClient.mgmv.installments.length,
+                  existingRemaining: existingClient.mgmv.installments
+                    .filter((i) => !i.paid)
+                    .reduce((s, i) => s + i.value, 0),
+                };
+              }
+            }
             const criticalError =
               !block.client.name ||
               !block.client.phone ||
