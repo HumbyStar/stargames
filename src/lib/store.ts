@@ -52,6 +52,14 @@ export interface Client {
   mgmv?: MGMVAgreement;
   /** Pasta de origem (ex.: Notion ZIP) — usada para filtro/agrupamento. */
   folder?: string;
+  /**
+   * Classificação automática do importador.
+   * - "common": cliente comum (Seção Clientes)
+   * - "mgmv": cliente MGMV (Seção MGMV)
+   * Default = "common". Migrado automaticamente para "mgmv" quando o cliente
+   * recebe um acordo MGMV ativo.
+   */
+  clientType?: "common" | "mgmv";
 }
 
 export interface SystemPreferences {
