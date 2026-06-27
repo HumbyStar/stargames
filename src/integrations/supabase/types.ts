@@ -161,6 +161,57 @@ export type Database = {
         }
         Relationships: []
       }
+      import_progress: {
+        Row: {
+          created_at: string
+          current_idx: number
+          done: boolean
+          errors: Json
+          file_hash: string
+          folders: Json
+          id: string
+          messages: Json
+          started_at: string
+          stats: Json
+          total: number
+          updated_at: string
+          user_id: string
+          zip_name: string
+        }
+        Insert: {
+          created_at?: string
+          current_idx?: number
+          done?: boolean
+          errors?: Json
+          file_hash: string
+          folders?: Json
+          id?: string
+          messages?: Json
+          started_at?: string
+          stats?: Json
+          total?: number
+          updated_at?: string
+          user_id: string
+          zip_name: string
+        }
+        Update: {
+          created_at?: string
+          current_idx?: number
+          done?: boolean
+          errors?: Json
+          file_hash?: string
+          folders?: Json
+          id?: string
+          messages?: Json
+          started_at?: string
+          stats?: Json
+          total?: number
+          updated_at?: string
+          user_id?: string
+          zip_name?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           client_id: string
