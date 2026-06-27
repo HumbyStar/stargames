@@ -111,19 +111,41 @@ const normalizeSituationBR = (s: string): Situation => {
 
 const normalizeDateBR = (s: string): string | null => {
   if (!s) return null;
-  const parts = s.trim().split("/");
-  if (parts.length === 3) {
-    const [d, m, y] = parts;
-    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  const trimmed = s.trim();
+  // Aceita "DD/MM/AAAA" ou "DD/MM/AA"; rejeita qualquer outra coisa.
+  const m = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+  if (!m) return null;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  let year = Number(m[3]);
+  if (m[3].length === 2) year = 2000 + year;
+  if (
+    !Number.isFinite(day) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(year) ||
+    day < 1 ||
+    day > 31 ||
+    month < 1 ||
+    month > 12 ||
+    year < 1900 ||
+    year > 2999
+  ) {
+    return null;
   }
-  return null;
+  const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  // Verifica se a data realmente existe (ex.: 31/02 inválido).
+  const probe = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(probe.getTime())) return null;
+  return iso;
 };
 
 const calculateDueDate = (status: FinancialStatus, registerDate: string | null) => {
   if (!registerDate) return null;
   if (status === "Reserva") {
     const d = new Date(`${registerDate}T12:00:00`);
+    if (Number.isNaN(d.getTime())) return registerDate;
     d.setDate(d.getDate() + 30);
+    if (Number.isNaN(d.getTime())) return registerDate;
     return d.toISOString().split("T")[0];
   }
   return registerDate;
@@ -341,6 +363,7 @@ interface ZipPreviewData {
   files: number;
   entries: ZipClientPreview[];
   globalErrors: string[];
+  parseFailures: { path: string; reason: string }[];
   zipName: string;
 }
 
@@ -500,6 +523,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   const [zipData, setZipData] = useState<ZipPreviewData | null>(null);
   const [zipProcessing, setZipProcessing] = useState(false);
   const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
+  const [zipFailuresOpen, setZipFailuresOpen] = useState(false);
 
   const handleZipFile = async (file: File) => {
     if (!file.name.toLowerCase().endsWith(".zip")) {
@@ -521,6 +545,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       const htmlFiles: ZipFileEntry[] = [];
       const folders = new Set<string>();
       const globalErrors: string[] = [];
+      const parseFailures: { path: string; reason: string }[] = [];
       // Collect entries first (sync) so we can stream extraction in chunks.
       const rawEntries: { path: string; fileName: string; folderName: string; entry: any }[] = [];
       zip.forEach((path, entry) => {
@@ -551,6 +576,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             } catch (err) {
               console.error("Falha ao ler", r.path, err);
               globalErrors.push(`Falha ao ler ${r.path}.`);
+              parseFailures.push({
+                path: r.path,
+                reason: err instanceof Error ? err.message : String(err),
+              });
             }
           }),
         );
@@ -586,7 +615,13 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             parsed = parseNotionHtml(file.htmlContent);
           } catch (err) {
             console.error("parseNotionHtml falhou em", file.fullPath, err);
-            globalErrors.push(`Erro ao interpretar ${file.fullPath}.`);
+            const raw = err instanceof Error ? err.message : String(err);
+            const friendly =
+              raw.includes("Invalid time value")
+                ? "Data inválida em uma das linhas da tabela (formato esperado DD/MM/AAAA)."
+                : raw;
+            globalErrors.push(`Erro ao interpretar ${file.fullPath}: ${friendly}`);
+            parseFailures.push({ path: file.fullPath, reason: friendly });
             return;
           }
           parsed.clients.forEach((block, blockIdx) => {
@@ -640,11 +675,15 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         files: htmlFiles.length,
         entries,
         globalErrors,
+        parseFailures,
         zipName: file.name,
       });
       toast.success(
         `${entries.length} cliente(s) lidos de ${htmlFiles.length} arquivo(s) em ${folders.size} pasta(s).`,
       );
+      if (parseFailures.length > 0) {
+        setZipFailuresOpen(true);
+      }
     } catch (err) {
       console.error(err);
       toast.error("Falha ao ler o ZIP. Verifique o arquivo.");
@@ -1121,6 +1160,47 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           onToggleFolder={setFolderSelected}
         />
       )}
+
+      <Dialog open={zipFailuresOpen} onOpenChange={setZipFailuresOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {zipData?.parseFailures.length ?? 0} arquivo(s) não puderam ser lidos
+            </DialogTitle>
+            <DialogDescription>
+              Os arquivos abaixo foram ignorados na importação. Os demais foram processados
+              normalmente e estão na prévia.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[50vh] overflow-y-auto rounded-md border border-border">
+            <table className="w-full text-xs">
+              <thead className="bg-muted text-left text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Arquivo</th>
+                  <th className="px-3 py-2 font-medium">Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {zipData?.parseFailures.map((f, i) => (
+                  <tr key={i} className="border-t border-border align-top">
+                    <td className="px-3 py-2 font-mono text-[11px] break-all">{f.path}</td>
+                    <td className="px-3 py-2 text-destructive">{f.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Dica: o erro mais comum é uma data inválida na coluna "Data" da tabela do cliente
+            (use o formato DD/MM/AAAA). Corrija no Notion, reexporte e tente novamente.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setZipFailuresOpen(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {rows && (
         <div className="mt-6 space-y-4">
