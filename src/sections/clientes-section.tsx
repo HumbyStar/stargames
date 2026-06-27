@@ -486,7 +486,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           </table>
         </div>
 
-        {rows.length > 0 && (
+        {rows.length > 0 && viewMode === "paginado" && (
           <div className="mt-4 flex flex-col items-center justify-between gap-3 border-t border-border pt-3 text-xs text-muted-foreground sm:flex-row">
             <div className="flex items-center gap-2">
               <span>Mostrar</span>
@@ -515,6 +515,28 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               <Button size="sm" variant="outline" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>›</Button>
               <Button size="sm" variant="outline" disabled={currentPage >= totalPages} onClick={() => setPage(totalPages)}>»</Button>
             </div>
+          </div>
+        )}
+
+        {rows.length > 0 && viewMode === "infinito" && (
+          <div className="mt-4 flex flex-col items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
+            <div>
+              Exibindo {pagedRows.length} de {rows.length} cliente(s)
+            </div>
+            {hasMoreInfinite ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setInfiniteCount((c) => c + INFINITE_STEP)}
+                >
+                  Carregar mais {Math.min(INFINITE_STEP, rows.length - pagedRows.length)}
+                </Button>
+                <div ref={sentinelRef} aria-hidden className="h-1 w-full" />
+              </>
+            ) : (
+              <span>Todos os clientes carregados.</span>
+            )}
           </div>
         )}
       </Card>
