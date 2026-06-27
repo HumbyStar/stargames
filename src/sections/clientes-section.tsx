@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Folder, Filter, Maximize2, Minimize2, X } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,7 +37,11 @@ type ChipFilter =
   | "pago_aguardando"
   | "enviado"
   | "desistiu"
-  | "abandonou";
+  | "abandonou"
+  | "em_dia"
+  | "sem_produtos"
+  | "mgmv_vencido"
+  | "mgmv_quitado";
 
 function generalStatus(client: Client, products: Product[]): {
   label: string;
