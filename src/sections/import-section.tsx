@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { ImportProgressModal, type ImportProgressState } from "@/components/import-progress-modal";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ParsedRow {
   line: number;
@@ -731,6 +732,101 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
   const [zipFailuresOpen, setZipFailuresOpen] = useState(false);
   const [importProgress, setImportProgress] = useState<ImportProgressState | null>(null);
+  const [progressRowId, setProgressRowId] = useState<string | null>(null);
+
+  // Persiste o estado de progresso no banco (best-effort, não bloqueia a UI).
+  const persistProgress = async (state: ImportProgressState) => {
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes.user?.id;
+      if (!uid) return;
+      const payload = {
+        user_id: uid,
+        file_hash: state.fileHash,
+        zip_name: state.zipName,
+        folders: state.folders,
+        current_idx: state.currentIdx,
+        total: state.folders.length,
+        messages: state.messages.slice(-200),
+        errors: state.errors.slice(-200),
+        stats: state.stats,
+        done: state.done,
+        started_at: state.startedAt,
+      };
+      const { data, error } = await supabase
+        .from("import_progress")
+        .upsert(payload, { onConflict: "user_id,file_hash" })
+        .select("id")
+        .maybeSingle();
+      if (error) {
+        console.warn("[import_progress] upsert falhou", error.message);
+        return;
+      }
+      if (data?.id) setProgressRowId(data.id);
+    } catch (err) {
+      console.warn("[import_progress] erro inesperado", err);
+    }
+  };
+
+  // Ao montar, retoma uma importação não finalizada (se houver).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: userRes } = await supabase.auth.getUser();
+        const uid = userRes.user?.id;
+        if (!uid) return;
+        const { data, error } = await supabase
+          .from("import_progress")
+          .select("*")
+          .eq("user_id", uid)
+          .eq("done", false)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (error || !data || cancelled) return;
+        setProgressRowId(data.id);
+        setImportProgress({
+          fileHash: data.file_hash,
+          zipName: data.zip_name,
+          startedAt: data.started_at,
+          folders: (data.folders as string[]) ?? [],
+          currentIdx: data.current_idx ?? -1,
+          messages: (data.messages as string[]) ?? [],
+          errors: (data.errors as string[]) ?? [],
+          stats: (data.stats as ImportProgressState["stats"]) ?? {
+            createdClients: 0,
+            updatedClients: 0,
+            createdProducts: 0,
+            createdAgreements: 0,
+            replacedAgreements: 0,
+            ignoredDuplicates: 0,
+            errorEntries: 0,
+            skippedAfterCorrection: 0,
+          },
+          done: false,
+          resumed: true,
+        });
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const discardProgress = async () => {
+    if (progressRowId) {
+      try {
+        await supabase.from("import_progress").delete().eq("id", progressRowId);
+      } catch {
+        /* ignore */
+      }
+    }
+    setProgressRowId(null);
+    setImportProgress(null);
+  };
 
   const handleZipFile = async (file: File) => {
     if (!file.name.toLowerCase().endsWith(".zip")) {
@@ -1092,13 +1188,20 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     });
     const folders = Array.from(byFolder.keys());
 
-    setImportProgress({
+    const startedAtISO = new Date().toISOString();
+    const initialState: ImportProgressState = {
+      fileHash: zipData.fileHash,
+      zipName: zipData.zipName,
+      startedAt: startedAtISO,
       folders,
       currentIdx: -1,
       messages: [`📦 Abrindo ZIP "${zipData.zipName}"…`, `🗂️ ${folders.length} pasta(s) na esteira.`],
+      errors: [],
       stats: { ...stats },
       done: false,
-    });
+    };
+    setImportProgress(initialState);
+    void persistProgress(initialState);
 
     const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
     // Respira antes de começar pra animação aparecer.
@@ -1186,22 +1289,35 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       );
       await wait(500);
       const before = { ...stats };
-      entries.forEach(processEntry);
+      const folderErrors: string[] = [];
+      entries.forEach((entry) => {
+        try {
+          processEntry(entry);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          folderErrors.push(`${folder} › ${entry.client?.name ?? "?"}: ${msg}`);
+          stats.errorEntries++;
+        }
+      });
       const dC = stats.createdClients - before.createdClients;
       const dU = stats.updatedClients - before.updatedClients;
       const dP = stats.createdProducts - before.createdProducts;
-      setImportProgress((prev) =>
-        prev
-          ? {
-              ...prev,
-              stats: { ...stats },
-              messages: [
-                ...prev.messages,
-                `✅ "${folder}" — ${dC} novo(s), ${dU} atualizado(s), ${dP} produto(s).`,
-              ],
-            }
-          : prev,
-      );
+      let nextState: ImportProgressState | null = null;
+      setImportProgress((prev) => {
+        if (!prev) return prev;
+        nextState = {
+          ...prev,
+          currentIdx: i + 1,
+          stats: { ...stats },
+          messages: [
+            ...prev.messages,
+            `✅ "${folder}" — ${dC} novo(s), ${dU} atualizado(s), ${dP} produto(s).`,
+          ],
+          errors: [...prev.errors, ...folderErrors],
+        };
+        return nextState;
+      });
+      if (nextState) void persistProgress(nextState);
       await wait(450);
     }
 
@@ -1218,20 +1334,22 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       skippedDuplicates: stats.ignoredDuplicates,
       durationMs: Math.round(performance.now() - startedAt),
     });
-    setImportProgress((prev) =>
-      prev
-        ? {
-            ...prev,
-            currentIdx: folders.length,
-            done: true,
-            stats: { ...stats },
-            messages: [
-              ...prev.messages,
-              `🏁 Concluído em ${((performance.now() - startedAt) / 1000).toFixed(1)}s.`,
-            ],
-          }
-        : prev,
-    );
+    let finalState: ImportProgressState | null = null;
+    setImportProgress((prev) => {
+      if (!prev) return prev;
+      finalState = {
+        ...prev,
+        currentIdx: folders.length,
+        done: true,
+        stats: { ...stats },
+        messages: [
+          ...prev.messages,
+          `🏁 Concluído em ${((performance.now() - startedAt) / 1000).toFixed(1)}s.`,
+        ],
+      };
+      return finalState;
+    });
+    if (finalState) void persistProgress(finalState);
     toast.success(
       `ZIP importado: ${stats.createdClients} novo(s) • ${stats.updatedClients} atualizado(s) • ${stats.createdProducts} produto(s) • ${stats.createdAgreements} MGMV novo(s)${stats.replacedAgreements ? ` • ${stats.replacedAgreements} MGMV substituído(s)` : ""} • ${stats.ignoredDuplicates} duplicata(s) ignorada(s)${stats.skippedAfterCorrection > 0 ? ` • ${stats.skippedAfterCorrection} pulado(s) por correção` : ""}`,
     );
