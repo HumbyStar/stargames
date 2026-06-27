@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Folder, Filter, Maximize2, Minimize2, X } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
+import { LoadMoreButton } from "@/components/load-more-button";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -83,14 +84,10 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const [platformFilter, setPlatformFilter] = useState("Todas");
   const [periodFilter, setPeriodFilter] = useState("Todos");
   const [folderFilter, setFolderFilter] = useState<string>("Todas");
-  const [pageSize, setPageSize] = useState<number>(25);
-  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [visibleCount, setVisibleCount] = useState<number>(10);
   const [compact, setCompact] = useState(false);
   const [showFilters, setShowFilters] = useState(true);
-  const [viewMode, setViewMode] = useState<"paginado" | "infinito">("paginado");
-  const INFINITE_STEP = 50;
-  const [infiniteCount, setInfiniteCount] = useState(INFINITE_STEP);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const drawerClientId = openClientId;
   const setDrawerClientId = (id: string | null) => openClient(id);
@@ -170,40 +167,16 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
       });
   }, [clients, products, search, chip, financialFilter, situationFilter, platformFilter, periodFilter, folderFilter]);
 
-  // Reseta a página quando filtros mudam.
+  // Reseta a janela visível ao mudar filtros ou tamanho de carga.
   useEffect(() => {
-    setPage(1);
-    setInfiniteCount(INFINITE_STEP);
-  }, [search, chip, financialFilter, situationFilter, platformFilter, periodFilter, folderFilter, pageSize]);
+    setVisibleCount(pageSize);
+  }, [pageSize, search, chip, financialFilter, situationFilter, platformFilter, periodFilter, folderFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const pagedRows = useMemo(() => {
-    if (viewMode === "infinito") {
-      return rows.slice(0, Math.min(infiniteCount, rows.length));
-    }
-    return rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  }, [rows, currentPage, pageSize, viewMode, infiniteCount]);
-
-  const hasMoreInfinite = viewMode === "infinito" && pagedRows.length < rows.length;
-
-  // IntersectionObserver para auto-carregar mais ao chegar no rodapé.
-  useEffect(() => {
-    if (viewMode !== "infinito") return;
-    if (!hasMoreInfinite) return;
-    const el = sentinelRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          setInfiniteCount((c) => c + INFINITE_STEP);
-        }
-      },
-      { rootMargin: "400px 0px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [viewMode, hasMoreInfinite, pagedRows.length]);
+  const pagedRows = useMemo(
+    () => rows.slice(0, Math.min(visibleCount, rows.length)),
+    [rows, visibleCount],
+  );
+  const hasMore = pagedRows.length < rows.length;
 
   const activeFilterCount =
     (chip !== "todos" ? 1 : 0) +
