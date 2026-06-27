@@ -1,17 +1,37 @@
 import { Outlet, useNavigate } from "@tanstack/react-router";
-import { Search, Bell, HelpCircle, Menu, X, Sun, Moon, User, Package, LogOut } from "lucide-react";
+import {
+  Search,
+  HelpCircle,
+  Menu,
+  X,
+  Sun,
+  Moon,
+  User,
+  Package,
+  LogOut,
+  Upload,
+  Settings,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
+import { useUiStore } from "@/lib/ui-store";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ImportSection } from "@/sections/import-section";
+import { ConfiguracoesSection } from "@/sections/configuracoes-section";
 
 const navItems = [
   { id: "dashboard", label: "Dashboard" },
   { id: "clientes", label: "Clientes" },
   { id: "collection", label: "Collection" },
-  { id: "import", label: "Import" },
-  { id: "configuracoes", label: "Configurações" },
 ] as const;
 
 function scrollToSection(id: string) {
@@ -260,24 +280,47 @@ function FloatingNavbar() {
         ))}
       </div>
 
-      <div className="ml-auto flex items-center gap-2">
-        <SearchBox className="hidden md:block w-56 lg:w-72" />
-        <button className="hidden md:grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground">
-          <HelpCircle className="size-4" />
-        </button>
-        <button className="hidden md:grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground">
-          <Bell className="size-4" />
+      <SearchBox className="hidden md:block ml-3 flex-1 max-w-md" />
+
+      <div className="ml-auto flex items-center gap-1.5 md:gap-2 md:pl-2">
+        <button
+          onClick={openImport}
+          aria-label="Importar dados"
+          title="Importar dados"
+          className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all hover:-translate-y-0.5 hover:bg-primary/10 hover:text-primary"
+        >
+          <Upload className="size-4 transition-transform group-hover:-translate-y-0.5" />
         </button>
         <button
           onClick={toggleTheme}
           aria-label={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
+          title={isDark ? "Modo claro" : "Modo escuro"}
           className="grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-colors"
         >
-          {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          <span key={isDark ? "sun" : "moon"} className="inline-flex animate-in fade-in zoom-in-75 duration-200">
+            {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          </span>
+        </button>
+        <button
+          onClick={openHelp}
+          aria-label="Ajuda"
+          title="Central de Ajuda"
+          className="hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground hover:animate-pulse"
+        >
+          <HelpCircle className="size-4" />
+        </button>
+        <button
+          onClick={openSettings}
+          aria-label="Configurações"
+          title="Configurações"
+          className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+        >
+          <Settings className="size-4 transition-transform duration-300 group-hover:rotate-90" />
         </button>
         <button
           onClick={handleSignOut}
           aria-label="Sair"
+          title="Sair"
           className="grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
         >
           <LogOut className="size-4" />
@@ -308,6 +351,17 @@ function FloatingNavbar() {
             </a>
           ))}
           <SearchBox className="mt-1 w-full" />
+          <div className="mt-1 grid grid-cols-3 gap-1">
+            <button onClick={() => { setOpenMobile(false); openImport(); }} className="flex items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs hover:bg-accent">
+              <Upload className="size-3.5" /> Importar
+            </button>
+            <button onClick={() => { setOpenMobile(false); openHelp(); }} className="flex items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs hover:bg-accent">
+              <HelpCircle className="size-3.5" /> Ajuda
+            </button>
+            <button onClick={() => { setOpenMobile(false); openSettings(); }} className="flex items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs hover:bg-accent">
+              <Settings className="size-3.5" /> Config.
+            </button>
+          </div>
         </div>
       )}
     </nav>
