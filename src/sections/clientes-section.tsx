@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Folder, Filter, Maximize2, Minimize2, X } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
+import { LoadMoreButton } from "@/components/load-more-button";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -83,14 +84,10 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const [platformFilter, setPlatformFilter] = useState("Todas");
   const [periodFilter, setPeriodFilter] = useState("Todos");
   const [folderFilter, setFolderFilter] = useState<string>("Todas");
-  const [pageSize, setPageSize] = useState<number>(25);
-  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [visibleCount, setVisibleCount] = useState<number>(10);
   const [compact, setCompact] = useState(false);
   const [showFilters, setShowFilters] = useState(true);
-  const [viewMode, setViewMode] = useState<"paginado" | "infinito">("paginado");
-  const INFINITE_STEP = 50;
-  const [infiniteCount, setInfiniteCount] = useState(INFINITE_STEP);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const drawerClientId = openClientId;
   const setDrawerClientId = (id: string | null) => openClient(id);
@@ -170,40 +167,16 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
       });
   }, [clients, products, search, chip, financialFilter, situationFilter, platformFilter, periodFilter, folderFilter]);
 
-  // Reseta a página quando filtros mudam.
+  // Reseta a janela visível ao mudar filtros ou tamanho de carga.
   useEffect(() => {
-    setPage(1);
-    setInfiniteCount(INFINITE_STEP);
-  }, [search, chip, financialFilter, situationFilter, platformFilter, periodFilter, folderFilter, pageSize]);
+    setVisibleCount(pageSize);
+  }, [pageSize, search, chip, financialFilter, situationFilter, platformFilter, periodFilter, folderFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const pagedRows = useMemo(() => {
-    if (viewMode === "infinito") {
-      return rows.slice(0, Math.min(infiniteCount, rows.length));
-    }
-    return rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  }, [rows, currentPage, pageSize, viewMode, infiniteCount]);
-
-  const hasMoreInfinite = viewMode === "infinito" && pagedRows.length < rows.length;
-
-  // IntersectionObserver para auto-carregar mais ao chegar no rodapé.
-  useEffect(() => {
-    if (viewMode !== "infinito") return;
-    if (!hasMoreInfinite) return;
-    const el = sentinelRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          setInfiniteCount((c) => c + INFINITE_STEP);
-        }
-      },
-      { rootMargin: "400px 0px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [viewMode, hasMoreInfinite, pagedRows.length]);
+  const pagedRows = useMemo(
+    () => rows.slice(0, Math.min(visibleCount, rows.length)),
+    [rows, visibleCount],
+  );
+  const hasMore = pagedRows.length < rows.length;
 
   const activeFilterCount =
     (chip !== "todos" ? 1 : 0) +
@@ -335,28 +308,16 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               {compact ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
               {compact ? "Expandir" : "Compactar"}
             </Button>
-            <div className="flex overflow-hidden rounded-md border border-input">
-              <button
-                onClick={() => setViewMode("paginado")}
-                className={
-                  "px-2.5 py-1 text-xs font-medium transition-colors " +
-                  (viewMode === "paginado" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-accent")
-                }
-                title="Paginação clássica"
-              >
-                Paginado
-              </button>
-              <button
-                onClick={() => setViewMode("infinito")}
-                className={
-                  "px-2.5 py-1 text-xs font-medium transition-colors " +
-                  (viewMode === "infinito" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-accent")
-                }
-                title="Scroll infinito + Carregar mais"
-              >
-                Infinito
-              </button>
-            </div>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="h-9 rounded-md border border-input bg-background px-2 text-xs"
+              title="Máximo de linhas por carga"
+            >
+              {[10, 20, 30, 40, 50].map((n) => (
+                <option key={n} value={n}>Máx. {n}</option>
+              ))}
+            </select>
           </div>
 
           {showFilters && (
@@ -486,54 +447,14 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           </table>
         </div>
 
-        {rows.length > 0 && viewMode === "paginado" && (
-          <div className="mt-4 flex flex-col items-center justify-between gap-3 border-t border-border pt-3 text-xs text-muted-foreground sm:flex-row">
-            <div className="flex items-center gap-2">
-              <span>Mostrar</span>
-              <select
-                value={pageSize}
-                onChange={(e) => setPageSize(Number(e.target.value))}
-                className="h-7 rounded-md border border-input bg-background px-1.5 text-xs"
-              >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value={250}>250</option>
-                <option value={rows.length}>Todos ({rows.length})</option>
-              </select>
-              <span>
-                {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, rows.length)} de {rows.length}
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setPage(1)}>«</Button>
-              <Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</Button>
-              <span className="px-2 tabular-nums">
-                {currentPage} / {totalPages}
-              </span>
-              <Button size="sm" variant="outline" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>›</Button>
-              <Button size="sm" variant="outline" disabled={currentPage >= totalPages} onClick={() => setPage(totalPages)}>»</Button>
-            </div>
-          </div>
-        )}
-
-        {rows.length > 0 && viewMode === "infinito" && (
-          <div className="mt-4 flex flex-col items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
-            <div>
-              Exibindo {pagedRows.length} de {rows.length} cliente(s)
-            </div>
-            {hasMoreInfinite ? (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setInfiniteCount((c) => c + INFINITE_STEP)}
-                >
-                  Carregar mais {Math.min(INFINITE_STEP, rows.length - pagedRows.length)}
-                </Button>
-                <div ref={sentinelRef} aria-hidden className="h-1 w-full" />
-              </>
+        {rows.length > 0 && (
+          <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
+            <span>Exibindo {pagedRows.length} de {rows.length} cliente(s)</span>
+            {hasMore ? (
+              <LoadMoreButton
+                count={Math.min(pageSize, rows.length - pagedRows.length)}
+                onClick={() => setVisibleCount((c) => c + pageSize)}
+              />
             ) : (
               <span>Todos os clientes carregados.</span>
             )}
