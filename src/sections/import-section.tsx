@@ -445,7 +445,13 @@ interface ZipClientPreview {
   folderName: string;
   fileName: string;
   fullPath: string;
-  client: { name: string; phone: string; phoneDisplay: string };
+  client: {
+    name: string;
+    phone: string;
+    phoneDisplay: string;
+    wasAutoCorrected?: boolean;
+    correctionReason?: string;
+  };
   products: ZipProductPreview[];
   notes: string;
   mgmv: MGMVAgreement | null;
