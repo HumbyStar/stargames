@@ -73,7 +73,7 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
   const aberto = products.filter((p) => p.situation === "Em Aberto").length;
 
   return (
-    <section id="dashboard" className="one-page-section">
+    <section id="dashboard" data-tour="dashboard-section" className="one-page-section">
       <PageHeader
         title="Dashboard"
         description="Acompanhe os principais indicadores operacionais da Star Games."

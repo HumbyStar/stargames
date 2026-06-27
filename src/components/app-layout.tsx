@@ -452,7 +452,7 @@ function GlobalModals() {
   return (
     <>
       <Dialog open={importOpen} onOpenChange={(o) => (o ? null : closeImport())}>
-        <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto">
+        <DialogContent data-tour="import-modal" className="max-w-6xl max-h-[92vh] overflow-y-auto">
           <DialogHeader className="sr-only">
             <DialogTitle>Importação</DialogTitle>
             <DialogDescription>Importe clientes e produtos em massa.</DialogDescription>
@@ -462,7 +462,7 @@ function GlobalModals() {
       </Dialog>
 
       <Dialog open={settingsOpen} onOpenChange={(o) => (o ? null : closeSettings())}>
-        <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto">
+        <DialogContent data-tour="settings-modal" className="max-w-5xl max-h-[92vh] overflow-y-auto">
           <DialogHeader className="sr-only">
             <DialogTitle>Configurações</DialogTitle>
             <DialogDescription>Preferências, regras e zona de perigo.</DialogDescription>
@@ -472,20 +472,12 @@ function GlobalModals() {
       </Dialog>
 
       <Dialog open={helpOpen} onOpenChange={(o) => (o ? null : closeHelp())}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Tutorial</DialogTitle>
-            <DialogDescription>
-              Em breve: tutorial guiado da operação.
-            </DialogDescription>
+        <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Central de Ajuda</DialogTitle>
+            <DialogDescription>Tutoriais guiados visuais.</DialogDescription>
           </DialogHeader>
-          <ol className="space-y-2 text-sm text-muted-foreground">
-            <li>1. Como importar clientes</li>
-            <li>2. Como revisar cobranças</li>
-            <li>3. Como abrir cliente</li>
-            <li>4. Como copiar mensagem de cobrança</li>
-            <li>5. Como usar configurações</li>
-          </ol>
+          <HelpCenter />
         </DialogContent>
       </Dialog>
 
@@ -498,6 +490,8 @@ function GlobalModals() {
           <NotificationsPanel onOpenClient={() => closeNotifications()} />
         </DialogContent>
       </Dialog>
+
+      <TutorialRunner />
     </>
   );
 }
