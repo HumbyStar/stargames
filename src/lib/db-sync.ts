@@ -382,6 +382,18 @@ export function clearImportRuntimeState(): void {
   } catch {
     /* ignore */
   }
+  try {
+    const toRemove = Array.from(uiCache.keys()).filter((k) =>
+      PREFIXES.some((p) => k === p || k.startsWith(p)),
+    );
+    for (const k of toRemove) {
+      uiCache.delete(k);
+      const subs = uiSubs.get(k);
+      if (subs) for (const fn of subs) fn();
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 export function dbSaveSettings(patch: {
@@ -404,7 +416,6 @@ export function dbSaveSettings(patch: {
 
 const STORE_KEY = "star-games-store";
 const MIGRATION_FLAG = "__migratedFromLocalStorage_v1";
-const RESET_VERSION_KEY = "import.resetVersion";
 
 function collectLegacyUiState(): Record<string, unknown> {
   const out: Record<string, unknown> = {};
