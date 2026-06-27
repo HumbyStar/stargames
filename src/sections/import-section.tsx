@@ -1271,12 +1271,23 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           stats.ignoredDuplicates++;
           return;
         }
+        // Se o cliente tem um acordo MGMV aplicado nesta importação, qualquer
+        // produto ainda em aberto (Pendente/Reserva) é consolidado no acordo.
+        // Isso evita cobrança individual duplicada — a Collection trata pelo
+        // acordo. Produtos já Pagos preservam o status original.
+        const mgmvBeingApplied =
+          entry.mgmv &&
+          (entry.mgmvAction ?? "apply") !== "keep";
+        const effectiveStatus =
+          mgmvBeingApplied && p.financialStatus !== "Pago"
+            ? "MGMV"
+            : p.financialStatus;
         const regISO = p.registerDate
           ? new Date(`${p.registerDate}T12:00:00`).toISOString()
           : todayISO;
         const dueISO = p.dueDate
           ? new Date(`${p.dueDate}T12:00:00`).toISOString()
-          : p.financialStatus === "Reserva"
+          : effectiveStatus === "Reserva"
             ? new Date(new Date(regISO).getTime() + 30 * 86400000).toISOString()
             : regISO;
         addProduct({
@@ -1285,7 +1296,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           platform: p.platform || "—",
           totalValue: p.totalValue,
           paidValue: p.paidValue,
-          financialStatus: p.financialStatus,
+          financialStatus: effectiveStatus,
           situation: p.situation,
           registerDate: regISO,
           dueDate: dueISO,
