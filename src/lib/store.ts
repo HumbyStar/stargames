@@ -1,5 +1,16 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import {
+  dbDeleteAllClients,
+  dbDeleteAllProducts,
+  dbDeleteHistoryAll,
+  dbInsertHistory,
+  dbSaveSettings,
+  dbUpsertClient,
+  dbUpsertProduct,
+  loadSnapshot,
+  migrateLocalStorageOnce,
+  primeUiState,
+} from "./db-sync";
 
 export type FinancialStatus = "Pago" | "Reserva" | "Pendente" | "MGMV";
 export type Situation = "Em Aberto" | "Enviado" | "Desistiu" | "Abandonou" | "Resolvido";
@@ -105,6 +116,8 @@ interface State {
   rules: OperationalRules;
   security: SecuritySettings;
   importHistory: ImportHistoryEntry[];
+  hydrated: boolean;
+  hydrate: () => Promise<void>;
   openClient: (id: string | null) => void;
   addClient: (c: Omit<Client, "id">) => Client;
   updateClient: (id: string, patch: Partial<Omit<Client, "id">>) => void;
@@ -125,7 +138,10 @@ interface State {
   executeDangerAction: (action: DangerAction) => void;
 }
 
-const uid = () => Math.random().toString(36).slice(2, 10);
+const uid = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 /**
  * Regra única de status financeiro com base nos valores.
@@ -277,72 +293,115 @@ const seedImportHistory: ImportHistoryEntry[] = [
   },
 ];
 
-export const useStore = create<State>()(
-  persist(
-    (set, get) => ({
-      clients: seedClients,
-      products: seedProducts,
+let hydratePromise: Promise<void> | null = null;
+
+export const useStore = create<State>()((set, get) => ({
+      clients: [],
+      products: [],
       openClientId: null,
       preferences: defaultPreferences,
       rules: defaultRules,
       security: defaultSecurity,
-      importHistory: seedImportHistory,
+      importHistory: [],
+      hydrated: false,
+      hydrate: async () => {
+        if (get().hydrated) return;
+        if (hydratePromise) return hydratePromise;
+        hydratePromise = (async () => {
+          let snap = await loadSnapshot();
+          snap = await migrateLocalStorageOnce(snap);
+          primeUiState(snap.uiState);
+          set({
+            clients: snap.clients,
+            products: snap.products,
+            importHistory: snap.importHistory,
+            preferences: { ...defaultPreferences, ...snap.preferences },
+            rules: { ...defaultRules, ...snap.rules },
+            security: { ...defaultSecurity, ...snap.security },
+            hydrated: true,
+          });
+        })();
+        await hydratePromise;
+      },
       openClient: (id) => set({ openClientId: id }),
       addClient: (c) => {
         const client = { ...c, id: uid() };
         set((s) => ({ clients: [...s.clients, client] }));
+        dbUpsertClient(client);
         return client;
       },
       updateClient: (id, patch) =>
-        set((s) => ({
-          clients: s.clients.map((c) => (c.id === id ? { ...c, ...patch } : c)),
-        })),
+        set((s) => {
+          const clients = s.clients.map((c) => (c.id === id ? { ...c, ...patch } : c));
+          const updated = clients.find((c) => c.id === id);
+          if (updated) dbUpsertClient(updated);
+          return { clients };
+        }),
       findClientByPhone: (phone) =>
         get().clients.find((c) => c.phone.replace(/\D/g, "") === phone.replace(/\D/g, "")),
-      addProduct: (p) => set((s) => ({ products: [...s.products, { ...p, id: uid() }] })),
+      addProduct: (p) =>
+        set((s) => {
+          const prod = { ...p, id: uid() };
+          dbUpsertProduct(prod);
+          return { products: [...s.products, prod] };
+        }),
       updateProduct: (id, patch) =>
-        set((s) => ({
-          products: s.products.map((p) => (p.id === id ? { ...p, ...patch } : p)),
-        })),
+        set((s) => {
+          const products = s.products.map((p) => (p.id === id ? { ...p, ...patch } : p));
+          const updated = products.find((p) => p.id === id);
+          if (updated) dbUpsertProduct(updated);
+          return { products };
+        }),
       registerPayment: (productId, amount) =>
-        set((s) => ({
-          products: s.products.map((p) => {
+        set((s) => {
+          const products = s.products.map((p) => {
             if (p.id !== productId) return p;
             const paidValue = Math.min(p.totalValue, p.paidValue + amount);
             const nextStatus =
               p.financialStatus === "MGMV"
                 ? "MGMV"
                 : calculateFinancialStatus(p.totalValue, paidValue);
-            return {
-              ...p,
-              paidValue,
-              financialStatus: nextStatus,
-            };
-          }),
-        })),
+            return { ...p, paidValue, financialStatus: nextStatus };
+          });
+          const updated = products.find((p) => p.id === productId);
+          if (updated) dbUpsertProduct(updated);
+          return { products };
+        }),
       markResolved: (productId) =>
-        set((s) => ({
-          products: s.products.map((p) =>
-            p.id === productId ? { ...p, situation: "Resolvido" } : p,
-          ),
-        })),
+        set((s) => {
+          const products = s.products.map((p) =>
+            p.id === productId ? { ...p, situation: "Resolvido" as Situation } : p,
+          );
+          const updated = products.find((p) => p.id === productId);
+          if (updated) dbUpsertProduct(updated);
+          return { products };
+        }),
       setProductSituation: (productId, situation) =>
-        set((s) => ({
-          products: s.products.map((p) =>
+        set((s) => {
+          const products = s.products.map((p) =>
             p.id === productId ? { ...p, situation } : p,
-          ),
-        })),
+          );
+          const updated = products.find((p) => p.id === productId);
+          if (updated) dbUpsertProduct(updated);
+          return { products };
+        }),
       updateProductNotes: (productId, notes) =>
-        set((s) => ({
-          products: s.products.map((p) => (p.id === productId ? { ...p, notes } : p)),
-        })),
+        set((s) => {
+          const products = s.products.map((p) => (p.id === productId ? { ...p, notes } : p));
+          const updated = products.find((p) => p.id === productId);
+          if (updated) dbUpsertProduct(updated);
+          return { products };
+        }),
       updateClientNotes: (clientId, notes) =>
-        set((s) => ({
-          clients: s.clients.map((c) => (c.id === clientId ? { ...c, notes } : c)),
-        })),
+        set((s) => {
+          const clients = s.clients.map((c) => (c.id === clientId ? { ...c, notes } : c));
+          const updated = clients.find((c) => c.id === clientId);
+          if (updated) dbUpsertClient(updated);
+          return { clients };
+        }),
       payMGMVInstallment: (clientId, installmentNumber) =>
-        set((s) => ({
-          clients: s.clients.map((c) => {
+        set((s) => {
+          const clients = s.clients.map((c) => {
             if (c.id !== clientId || !c.mgmv) return c;
             return {
               ...c,
@@ -355,44 +414,82 @@ export const useStore = create<State>()(
                 ),
               },
             };
-          }),
-        })),
+          });
+          const updated = clients.find((c) => c.id === clientId);
+          if (updated) dbUpsertClient(updated);
+          return { clients };
+        }),
       setMGMVAgreement: (clientId, agreement) =>
-        set((s) => ({
-          clients: s.clients.map((c) =>
+        set((s) => {
+          const clients = s.clients.map((c) =>
             c.id === clientId ? { ...c, mgmv: agreement } : c,
-          ),
-        })),
+          );
+          const updated = clients.find((c) => c.id === clientId);
+          if (updated) dbUpsertClient(updated);
+          return { clients };
+        }),
       setPreferences: (patch) =>
-        set((s) => ({ preferences: { ...s.preferences, ...patch } })),
-      setRules: (patch) => set((s) => ({ rules: { ...s.rules, ...patch } })),
-      setSecurity: (patch) => set((s) => ({ security: { ...s.security, ...patch } })),
+        set((s) => {
+          const preferences = { ...s.preferences, ...patch };
+          dbSaveSettings({ preferences });
+          return { preferences };
+        }),
+      setRules: (patch) =>
+        set((s) => {
+          const rules = { ...s.rules, ...patch };
+          dbSaveSettings({ rules });
+          return { rules };
+        }),
+      setSecurity: (patch) =>
+        set((s) => {
+          const security = { ...s.security, ...patch };
+          dbSaveSettings({ security });
+          return { security };
+        }),
       addImportHistory: (entry) =>
-        set((s) => ({
-          importHistory: [
-            {
-              id: uid(),
-              date: entry.date ?? new Date().toISOString(),
-              source: entry.source,
-              file: entry.file,
-              clientsCreated: entry.clientsCreated,
-              productsAdded: entry.productsAdded,
-              errors: entry.errors,
-              status: entry.status,
-            },
-            ...s.importHistory,
-          ].slice(0, 50),
-        })),
+        set((s) => {
+          const newEntry: ImportHistoryEntry = {
+            id: uid(),
+            date: entry.date ?? new Date().toISOString(),
+            source: entry.source,
+            file: entry.file,
+            clientsCreated: entry.clientsCreated,
+            productsAdded: entry.productsAdded,
+            errors: entry.errors,
+            status: entry.status,
+            fileHash: entry.fileHash,
+            agreementsCreated: entry.agreementsCreated,
+            agreementsReplaced: entry.agreementsReplaced,
+            skippedDuplicates: entry.skippedDuplicates,
+            durationMs: entry.durationMs,
+          };
+          dbInsertHistory(newEntry);
+          return {
+            importHistory: [newEntry, ...s.importHistory].slice(0, 50),
+          };
+        }),
       executeDangerAction: (action) =>
         set((s) => {
           switch (action) {
             case "deleteImportedData":
+              dbDeleteHistoryAll();
               return { ...s, importHistory: [] };
             case "deleteAllClients":
+              dbDeleteAllClients();
+              dbDeleteAllProducts();
               return { ...s, clients: [], products: [], openClientId: null };
             case "deleteAllProducts":
+              dbDeleteAllProducts();
               return { ...s, products: [] };
             case "resetSystem":
+              dbDeleteAllClients();
+              dbDeleteAllProducts();
+              dbDeleteHistoryAll();
+              dbSaveSettings({
+                preferences: defaultPreferences,
+                rules: defaultRules,
+                security: defaultSecurity,
+              });
               return {
                 ...s,
                 clients: [],
@@ -407,14 +504,7 @@ export const useStore = create<State>()(
               return s;
           }
         }),
-    }),
-    {
-      name: "star-games-store",
-      version: 3,
-      migrate: (persisted: unknown) => migrateStoreV3(persisted) as State,
-    },
-  ),
-);
+}));
 
 export const formatBRL = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
