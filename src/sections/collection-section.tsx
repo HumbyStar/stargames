@@ -15,9 +15,10 @@ import {
   type MGMVDisplay,
 } from "@/lib/store";
 import { toast } from "sonner";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, Maximize2, Minimize2 } from "lucide-react";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { usePersistedState } from "@/lib/use-persisted-state";
+import { useSectionCompact } from "@/lib/use-section-compact";
 import {
   Dialog,
   DialogContent,
@@ -59,6 +60,7 @@ export function CollectionSection({
   const [customTo, setCustomTo] = usePersistedState<string>("collection.customTo", "");
   const [pageSize, setPageSize] = usePersistedState<number>("collection.pageSize", DEFAULT_PAGE_SIZE);
   const [visibleCount, setVisibleCount] = useState<number>(DEFAULT_PAGE_SIZE);
+  const [compact, setCompact] = useSectionCompact("collection");
   const [payTarget, setPayTarget] = useState<{ id: string; remaining: number; productName: string } | null>(null);
   const [payAmount, setPayAmount] = useState("");
 
@@ -288,6 +290,16 @@ export function CollectionSection({
             </button>
           ))}
           <div className="ml-auto flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCompact((v) => !v)}
+              className="gap-1.5"
+              title={compact ? "Expandir linhas" : "Compactar linhas"}
+            >
+              {compact ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
+              {compact ? "Expandir" : "Compactar"}
+            </Button>
             {period === "personalizado" && (
               <>
                 <input
@@ -364,30 +376,30 @@ export function CollectionSection({
                     : "Acordo MGMV";
                   return (
                     <tr key={`mgmv-${client.id}`} className="border-b border-border/60 last:border-0 bg-primary/[0.04]">
-                      <td className="py-3 pr-3 font-medium">{client.name}</td>
-                      <td className="py-3 pr-3 text-muted-foreground">{client.phone}</td>
-                      <td className="py-3 pr-3">{productLabel}</td>
-                      <td className="py-3 pr-3 text-muted-foreground">—</td>
-                      <td className="py-3 pr-3 tabular-nums">{formatBRL(display.totalDebt)}</td>
-                      <td className="py-3 pr-3 tabular-nums text-muted-foreground">
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 font-medium"}>{client.name}</td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 text-muted-foreground"}>{client.phone}</td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}>{productLabel}</td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 text-muted-foreground"}>—</td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums"}>{formatBRL(display.totalDebt)}</td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums text-muted-foreground"}>
                         {formatBRL(display.totalDebt - display.remainingBalance)}
                       </td>
-                      <td className="py-3 pr-3 tabular-nums font-medium">{formatBRL(remaining)}</td>
-                      <td className="py-3 pr-3">
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums font-medium"}>{formatBRL(remaining)}</td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}>
                         <Tag variant={display.hasOverdue ? "danger" : "warning"}>{statusLabel}</Tag>
                       </td>
-                      <td className="py-3 pr-3"><Tag>MGMV</Tag></td>
-                      <td className="py-3 pr-3 text-muted-foreground">
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}><Tag>MGMV</Tag></td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 text-muted-foreground"}>
                         {next ? formatDateBR(dueIso) : "—"}
                       </td>
-                      <td className="py-3 pr-3">
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}>
                         {display.hasOverdue ? (
                           <Tag variant={late > 7 ? "danger" : "warning"}>{late} dias</Tag>
                         ) : (
                           <span className="text-xs text-muted-foreground">no prazo</span>
                         )}
                       </td>
-                      <td className="py-3 pr-3">
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}>
                         <div className="flex flex-wrap gap-1.5">
                           <Button
                             size="sm"
@@ -442,18 +454,18 @@ export function CollectionSection({
                 const late = daysLate(p.dueDate);
                 return (
                   <tr key={`p-${p.id}-${idx}`} className="border-b border-border/60 last:border-0">
-                    <td className="py-3 pr-3 font-medium">{client?.name}</td>
-                    <td className="py-3 pr-3 text-muted-foreground">{client?.phone}</td>
-                    <td className="py-3 pr-3">{p.name}</td>
-                    <td className="py-3 pr-3 text-muted-foreground">{p.platform}</td>
-                    <td className="py-3 pr-3 tabular-nums">{formatBRL(p.totalValue)}</td>
-                    <td className="py-3 pr-3 tabular-nums text-muted-foreground">{formatBRL(p.paidValue)}</td>
-                    <td className="py-3 pr-3 tabular-nums font-medium">{formatBRL(remaining)}</td>
-                    <td className="py-3 pr-3"><Tag variant={status.variant === "danger" ? "danger" : status.variant === "warning" ? "warning" : "neutral"}>{status.label}</Tag></td>
-                    <td className="py-3 pr-3"><Tag>{p.situation}</Tag></td>
-                    <td className="py-3 pr-3 text-muted-foreground">{formatDateBR(p.dueDate)}</td>
-                    <td className="py-3 pr-3"><Tag variant={late > 7 ? "danger" : "warning"}>{late} dias</Tag></td>
-                    <td className="py-3 pr-3">
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 font-medium"}>{client?.name}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 text-muted-foreground"}>{client?.phone}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}>{p.name}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 text-muted-foreground"}>{p.platform}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums"}>{formatBRL(p.totalValue)}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums text-muted-foreground"}>{formatBRL(p.paidValue)}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 tabular-nums font-medium"}>{formatBRL(remaining)}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}><Tag variant={status.variant === "danger" ? "danger" : status.variant === "warning" ? "warning" : "neutral"}>{status.label}</Tag></td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}><Tag>{p.situation}</Tag></td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 text-muted-foreground"}>{formatDateBR(p.dueDate)}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}><Tag variant={late > 7 ? "danger" : "warning"}>{late} dias</Tag></td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3"}>
                       <div className="flex flex-wrap gap-1.5">
                         <Button
                           size="sm"
