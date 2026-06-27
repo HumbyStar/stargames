@@ -292,71 +292,71 @@ export function CollectionSection({
 
       <Card className="mt-6">
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowFilters((v) => !v)}
-              className="gap-1.5"
-            >
-              <FilterIcon className="h-4 w-4" />
-              Filtros
-              {activeFilterCount > 0 && (
-                <span className="ml-1 rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
-                  {activeFilterCount}
-                </span>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex flex-1 flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowFilters((v) => !v)}
+                className="gap-1.5"
+              >
+                <FilterIcon className="h-4 w-4" />
+                Filtros
+                {activeFilterCount > 0 && (
+                  <span className="ml-1 rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCompact((v) => !v)}
+                className="gap-1.5"
+                title={compact ? "Expandir linhas" : "Compactar linhas"}
+              >
+                {compact ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
+                {compact ? "Expandir" : "Compactar"}
+              </Button>
+              {savedFilters.length > 0 && (
+                <select
+                  value={activeSavedId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setActiveSavedId(id);
+                    const f = savedFilters.find((s) => s.id === id);
+                    if (f) {
+                      setFilter(f.filter);
+                      setPeriod(f.period);
+                      setCustomFrom(f.customFrom);
+                      setCustomTo(f.customTo);
+                      toast.success(`Filtro "${f.name}" aplicado`);
+                    }
+                  }}
+                  className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm"
+                  title="Filtros salvos"
+                >
+                  <option value="">Filtros salvos…</option>
+                  {savedFilters.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
               )}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCompact((v) => !v)}
-              className="gap-1.5"
-              title={compact ? "Expandir linhas" : "Compactar linhas"}
-            >
-              {compact ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
-              {compact ? "Expandir" : "Compactar"}
-            </Button>
-            {savedFilters.length > 0 && (
-              <select
-                value={activeSavedId}
-                onChange={(e) => {
-                  const id = e.target.value;
-                  setActiveSavedId(id);
-                  const f = savedFilters.find((s) => s.id === id);
-                  if (f) {
-                    setFilter(f.filter);
-                    setPeriod(f.period);
-                    setCustomFrom(f.customFrom);
-                    setCustomTo(f.customTo);
-                    toast.success(`Filtro "${f.name}" aplicado`);
-                  }
-                }}
-                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                title="Filtros salvos"
-              >
-                <option value="">Filtros salvos…</option>
-                {savedFilters.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            )}
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              <select
-                value={pageSize}
-                onChange={(e) => setPageSize(Number(e.target.value))}
-                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                title="Máximo de linhas por carga"
-              >
-                {PAGE_SIZE_OPTIONS.map((n) => (
-                  <option key={n} value={n}>
-                    Máx. {n}
-                  </option>
-                ))}
-              </select>
             </div>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              title="Máximo de linhas por carga"
+            >
+              {PAGE_SIZE_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  Máx. {n}
+                </option>
+              ))}
+            </select>
           </div>
 
           {showFilters && (
