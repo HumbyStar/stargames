@@ -1579,6 +1579,15 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         />
       )}
 
+      <ImportProgressModal
+        state={importProgress}
+        open={!!importProgress}
+        onClose={() => {
+          setImportProgress(null);
+          onScrollTo("clientes");
+        }}
+      />
+
       <Dialog open={zipFailuresOpen} onOpenChange={setZipFailuresOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
