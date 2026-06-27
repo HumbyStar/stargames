@@ -1616,6 +1616,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               <TabsTrigger value="zip">ZIP Notion</TabsTrigger>
               <TabsTrigger value="csv">CSV</TabsTrigger>
               <TabsTrigger value="excel">Excel</TabsTrigger>
+              <TabsTrigger value="manual">Cadastro manual</TabsTrigger>
             </TabsList>
 
             <TabsContent value="text" className="mt-4 space-y-3">
@@ -1697,6 +1698,45 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               <div className="flex justify-end">
                 <Button variant="outline" onClick={() => downloadModel("xlsx")}>Baixar modelo Excel</Button>
               </div>
+            </TabsContent>
+
+            <TabsContent value="manual" className="mt-4">
+              <ManualEntryForm
+                onConfirm={(entries) => {
+                  let savedClients = 0;
+                  let savedProducts = 0;
+                  for (const entry of entries) {
+                    const existing = findClientByPhone(entry.phone);
+                    const client = existing
+                      ? existing
+                      : addClient({
+                          name: entry.name,
+                          phone: entry.phone,
+                          notes: entry.notes || undefined,
+                        });
+                    if (!existing) savedClients++;
+                    for (const p of entry.products) {
+                      addProduct({
+                        clientId: client.id,
+                        name: p.name,
+                        platform: p.platform,
+                        totalValue: p.totalValue,
+                        paidValue: p.paidValue,
+                        financialStatus: calculateFinancialStatus(p.totalValue, p.paidValue),
+                        situation: p.situation,
+                        registerDate: p.date,
+                        dueDate: p.date,
+                        notes: p.notes || undefined,
+                      });
+                      savedProducts++;
+                    }
+                  }
+                  toast.success(
+                    `${savedClients} cliente(s) novo(s) • ${savedProducts} produto(s) cadastrado(s).`,
+                  );
+                  onScrollTo("clientes");
+                }}
+              />
             </TabsContent>
           </Tabs>
         </Card>
