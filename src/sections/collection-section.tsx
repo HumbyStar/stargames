@@ -16,6 +16,7 @@ import {
 } from "@/lib/store";
 import { toast } from "sonner";
 import { MessageCircle } from "lucide-react";
+import { LoadMoreButton } from "@/components/load-more-button";
 import {
   Dialog,
   DialogContent,
