@@ -2252,28 +2252,43 @@ function ZipPreview({
         </div>
       </Card>
 
-      <div className="space-y-4">
-        {byFolder.map(([folder, entriesInFolder]) => {
-          const visible = entriesInFolder.filter((e) => filteredIds.has(e.id));
-          if (visible.length === 0) return null;
+      <Accordion
+        type="single"
+        collapsible
+        value={openFolder}
+        onValueChange={(v) => setOpenFolder(v)}
+        className="space-y-4"
+      >
+        {visibleFolders.map(({ folder, entries: entriesInFolder, visible }) => {
           const allSel = entriesInFolder.every((e) => e.selected || e.criticalError);
+          const isOpenFolder = openFolder === folder;
           return (
-            <Card
+            <AccordionItem
               key={folder}
-              title={`${folder} • ${visible.length} cliente(s)`}
-              action={
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onToggleFolder(folder, !allSel)}
-                  >
-                    {allSel ? "Desmarcar pasta" : "Selecionar pasta"}
-                  </Button>
-                </div>
-              }
+              value={folder}
+              className="overflow-hidden rounded-xl border border-border bg-card shadow-xs"
             >
-              <div className="overflow-x-auto">
+              <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-2">
+                <AccordionTrigger className="flex-1 py-2 text-left text-sm font-semibold hover:no-underline">
+                  <span>
+                    {folder} <span className="text-muted-foreground font-normal">• {visible.length} cliente(s)</span>
+                  </span>
+                </AccordionTrigger>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    onToggleFolder(folder, !allSel);
+                  }}
+                >
+                  {allSel ? "Desmarcar pasta" : "Selecionar pasta"}
+                </Button>
+              </div>
+              <AccordionContent>
+                <div className="p-5">
+                  {isOpenFolder && (
+                  <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -2474,11 +2489,14 @@ function ZipPreview({
                     })}
                   </tbody>
                 </table>
-              </div>
-            </Card>
+                  </div>
+                  )}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
           );
         })}
-      </div>
+      </Accordion>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
