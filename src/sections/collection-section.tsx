@@ -15,7 +15,16 @@ import {
   type MGMVDisplay,
 } from "@/lib/store";
 import { toast } from "sonner";
-import { MessageCircle, Maximize2, Minimize2, Filter as FilterIcon, Save, Trash2 } from "lucide-react";
+import {
+  MessageCircle,
+  Maximize2,
+  Minimize2,
+  Filter as FilterIcon,
+  Save,
+  Trash2,
+  Folder,
+  X,
+} from "lucide-react";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { useSectionCompact } from "@/lib/use-section-compact";
@@ -75,11 +84,26 @@ export function CollectionSection({
   const [showFilters, setShowFilters] = useState(true);
   const [savedFilters, setSavedFilters] = usePersistedState<SavedFilter[]>("collection.savedFilters", []);
   const [activeSavedId, setActiveSavedId] = usePersistedState<string>("collection.activeSavedId", "");
+  const [search, setSearch] = useState("");
+  const [folderFilter, setFolderFilter] = usePersistedState<string>("collection.folder", "Todas");
+  const [financialFilter, setFinancialFilter] = usePersistedState<string>("collection.financial", "Todos");
+  const [situationFilter, setSituationFilter] = usePersistedState<string>("collection.situation", "Todas");
 
   const activeFilterCount =
     (filter !== "todos" ? 1 : 0) +
     (period !== "todos" ? 1 : 0) +
-    (period === "personalizado" && (customFrom || customTo) ? 1 : 0);
+    (period === "personalizado" && (customFrom || customTo) ? 1 : 0) +
+    (folderFilter !== "Todas" ? 1 : 0) +
+    (financialFilter !== "Todos" ? 1 : 0) +
+    (situationFilter !== "Todas" ? 1 : 0);
+
+  const folders = useMemo(() => {
+    const set = new Set<string>();
+    clients.forEach((c) => {
+      if (c.folder && c.folder.trim()) set.add(c.folder);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+  }, [clients]);
 
   const overdueProducts = useMemo(() => products.filter(shouldAppearInCollection), [products]);
 
@@ -110,6 +134,8 @@ export function CollectionSection({
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const endOfToday = startOfToday + 86400000;
+    const q = search.trim().toLowerCase();
+    const qDigits = q.replace(/\D/g, "");
     return allRows.filter((row) => {
       // Filtro por tipo
       if (filter === "reserva_vencida")
@@ -120,6 +146,53 @@ export function CollectionSection({
         if (row.kind !== "mgmv") return false;
       if (filter === "em_aberto")
         if (row.kind === "product" && row.product.situation !== "Em Aberto") return false;
+
+      // Filtros de pasta / status financeiro / situação
+      const rowClient =
+        row.kind === "mgmv" ? row.client : clients.find((c) => c.id === row.product.clientId);
+      if (folderFilter !== "Todas") {
+        if (folderFilter === "__sem__") {
+          if (rowClient?.folder) return false;
+        } else if (rowClient?.folder !== folderFilter) {
+          return false;
+        }
+      }
+      if (financialFilter !== "Todos") {
+        if (financialFilter === "MGMV") {
+          if (row.kind !== "mgmv") return false;
+        } else if (row.kind !== "product" || row.product.financialStatus !== financialFilter) {
+          return false;
+        }
+      }
+      if (situationFilter !== "Todas") {
+        if (row.kind !== "product" || row.product.situation !== situationFilter) return false;
+      }
+
+      // Busca textual
+      if (q) {
+        const productName = row.kind === "product" ? row.product.name : "Acordo MGMV";
+        const platform = row.kind === "product" ? row.product.platform : "";
+        const statusLabel =
+          row.kind === "product"
+            ? productCollectionStatus(row.product).label
+            : row.display.hasOverdue
+              ? "Parcela MGMV vencida"
+              : "Parcela MGMV";
+        const situation = row.kind === "product" ? row.product.situation : "MGMV";
+        const hay = [
+          rowClient?.name ?? "",
+          productName,
+          platform,
+          statusLabel,
+          situation,
+        ]
+          .join(" ")
+          .toLowerCase();
+        const phoneDigits = (rowClient?.phone ?? "").replace(/\D/g, "");
+        const matches =
+          hay.includes(q) || (qDigits.length > 0 && phoneDigits.includes(qDigits));
+        if (!matches) return false;
+      }
 
       // Data de referência para o filtro de período
       const refIso =
@@ -154,14 +227,14 @@ export function CollectionSection({
       }
       return true;
     });
-  }, [allRows, filter, period, customFrom, customTo]);
+  }, [allRows, filter, period, customFrom, customTo, search, folderFilter, financialFilter, situationFilter, clients]);
 
   const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
 
   // Reseta a janela visível ao mudar filtros/tamanho.
   useEffect(() => {
     setVisibleCount(pageSize);
-  }, [pageSize, filter, period, customFrom, customTo]);
+  }, [pageSize, filter, period, customFrom, customTo, search, folderFilter, financialFilter, situationFilter]);
 
   const hasMore = visible.length < filtered.length;
 
@@ -261,6 +334,73 @@ export function CollectionSection({
     setPayAmount(remaining.toFixed(2));
   };
 
+  const clearFilters = () => {
+    setFilter("todos");
+    setPeriod("todos");
+    setCustomFrom("");
+    setCustomTo("");
+    setFolderFilter("Todas");
+    setFinancialFilter("Todos");
+    setSituationFilter("Todas");
+    setSearch("");
+    setActiveSavedId("");
+  };
+
+  const saveCurrentFilter = () => {
+    const name = window.prompt("Nome do filtro:");
+    if (!name || !name.trim()) return;
+    const trimmed = name.trim();
+    const existing = savedFilters.find((s) => s.name === trimmed);
+    const snapshot = { filter, period, customFrom, customTo };
+    if (existing) {
+      const next = savedFilters.map((s) =>
+        s.id === existing.id ? { ...existing, ...snapshot } : s,
+      );
+      setSavedFilters(next);
+      setActiveSavedId(existing.id);
+      toast.success(`Filtro "${trimmed}" atualizado`);
+    } else {
+      const id =
+        (globalThis.crypto as Crypto | undefined)?.randomUUID?.() ?? `f-${Date.now()}`;
+      setSavedFilters([...savedFilters, { id, name: trimmed, ...snapshot }]);
+      setActiveSavedId(id);
+      toast.success(`Filtro "${trimmed}" salvo`);
+    }
+  };
+
+  const exportCobrancas = () => {
+    const header =
+      "cliente;telefone;produto;plataforma;total;pago;restante;status;situacao;data_limite;atraso\n";
+    const body = filtered
+      .map((row) => {
+        if (row.kind === "mgmv") {
+          const { client, display } = row;
+          const next = display.nextInstallment;
+          const dueIso = next?.dueDate ?? "";
+          const late = next ? daysLate(dueIso) : 0;
+          const remaining = next?.value ?? display.installmentValue;
+          const productLabel = next ? `Parcela ${next.number}/${next.total} — MGMV` : "Acordo MGMV";
+          const statusLabel = display.hasOverdue ? "Parcela MGMV vencida" : "Parcela MGMV";
+          return `${client.name};${client.phone};${productLabel};—;${display.totalDebt.toFixed(2)};${(display.totalDebt - display.remainingBalance).toFixed(2)};${remaining.toFixed(2)};${statusLabel};MGMV;${dueIso ? formatDateBR(dueIso) : ""};${late}`;
+        }
+        const p = row.product;
+        const client = clients.find((c) => c.id === p.clientId);
+        const status = productCollectionStatus(p);
+        const remaining = p.totalValue - p.paidValue;
+        const late = daysLate(p.dueDate);
+        return `${client?.name ?? ""};${client?.phone ?? ""};${p.name};${p.platform};${p.totalValue.toFixed(2)};${p.paidValue.toFixed(2)};${remaining.toFixed(2)};${status.label};${p.situation};${formatDateBR(p.dueDate)};${late}`;
+      })
+      .join("\n");
+    const blob = new Blob([header + body], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "cobrancas.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Cobranças exportadas");
+  };
+
   const confirmPayment = () => {
     if (!payTarget) return;
     const amount = Number(payAmount.replace(",", "."));
@@ -279,6 +419,16 @@ export function CollectionSection({
       <PageHeader
         title="Collection"
         description="Controle cobranças, inadimplências, reservas vencidas e acordos em atraso."
+        actions={
+          <>
+            <Button variant="outline" onClick={exportCobrancas}>
+              Exportar Cobranças
+            </Button>
+            <Button variant="outline" onClick={saveCurrentFilter}>
+              Salvar filtro
+            </Button>
+          </>
+        }
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
@@ -291,64 +441,53 @@ export function CollectionSection({
       </div>
 
       <Card className="mt-6">
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="flex flex-1 flex-wrap items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowFilters((v) => !v)}
-                className="gap-1.5"
-              >
-                <FilterIcon className="h-4 w-4" />
-                Filtros
-                {activeFilterCount > 0 && (
-                  <span className="ml-1 rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCompact((v) => !v)}
-                className="gap-1.5"
-                title={compact ? "Expandir linhas" : "Compactar linhas"}
-              >
-                {compact ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
-                {compact ? "Expandir" : "Compactar"}
-              </Button>
-              {savedFilters.length > 0 && (
-                <select
-                  value={activeSavedId}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    setActiveSavedId(id);
-                    const f = savedFilters.find((s) => s.id === id);
-                    if (f) {
-                      setFilter(f.filter);
-                      setPeriod(f.period);
-                      setCustomFrom(f.customFrom);
-                      setCustomTo(f.customTo);
-                      toast.success(`Filtro "${f.name}" aplicado`);
-                    }
-                  }}
-                  className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm"
-                  title="Filtros salvos"
+            <div className="relative flex-1">
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por cliente, telefone ou produto..."
+                className="h-10 w-full rounded-full border border-input bg-background px-4 pr-10 text-sm outline-none focus:border-primary/40"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Limpar busca"
                 >
-                  <option value="">Filtros salvos…</option>
-                  {savedFilters.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+                  <X className="h-4 w-4" />
+                </button>
               )}
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowFilters((v) => !v)}
+              className="gap-1.5"
+            >
+              <FilterIcon className="h-4 w-4" />
+              Filtros
+              {activeFilterCount > 0 && (
+                <span className="ml-1 rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                  {activeFilterCount}
+                </span>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCompact((v) => !v)}
+              className="gap-1.5"
+              title={compact ? "Expandir linhas" : "Compactar linhas"}
+            >
+              {compact ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
+              {compact ? "Expandir" : "Compactar"}
+            </Button>
             <select
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
-              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              className="h-9 rounded-md border border-input bg-background px-2 text-xs"
               title="Máximo de linhas por carga"
             >
               {PAGE_SIZE_OPTIONS.map((n) => (
@@ -361,7 +500,7 @@ export function CollectionSection({
 
           {showFilters && (
             <>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap gap-2">
                 {chips.map((c) => (
                   <button
                     key={c.id}
@@ -378,7 +517,44 @@ export function CollectionSection({
                 ))}
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                <div className="relative">
+                  <Folder className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <select
+                    value={folderFilter}
+                    onChange={(e) => setFolderFilter(e.target.value)}
+                    className="h-9 w-full rounded-md border border-input bg-background pl-7 pr-2 text-sm"
+                    title="Filtrar por pasta de origem"
+                  >
+                    <option value="Todas">Pasta (todas)</option>
+                    <option value="__sem__">Sem pasta</option>
+                    {folders.map((f) => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </select>
+                </div>
+                <select
+                  value={financialFilter}
+                  onChange={(e) => setFinancialFilter(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="Todos">Status financeiro</option>
+                  <option>Pago</option>
+                  <option>Reserva</option>
+                  <option>Pendente</option>
+                  <option>MGMV</option>
+                </select>
+                <select
+                  value={situationFilter}
+                  onChange={(e) => setSituationFilter(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="Todas">Situação</option>
+                  <option>Em Aberto</option>
+                  <option>Enviado</option>
+                  <option>Desistiu</option>
+                  <option>Abandonou</option>
+                </select>
                 <select
                   value={period}
                   onChange={(e) => setPeriod(e.target.value as Period)}
@@ -390,49 +566,56 @@ export function CollectionSection({
                     </option>
                   ))}
                 </select>
-                {period === "personalizado" && (
-                  <>
-                    <input
-                      type="date"
-                      value={customFrom}
-                      onChange={(e) => setCustomFrom(e.target.value)}
-                      className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                    />
-                    <span className="text-xs text-muted-foreground">até</span>
-                    <input
-                      type="date"
-                      value={customTo}
-                      onChange={(e) => setCustomTo(e.target.value)}
-                      className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                    />
-                  </>
-                )}
-                <div className="ml-auto flex flex-wrap items-center gap-2">
+              </div>
+
+              {period === "personalizado" && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="date"
+                    value={customFrom}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                    className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                  />
+                  <span className="text-xs text-muted-foreground">até</span>
+                  <input
+                    type="date"
+                    value={customTo}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                    className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                  />
+                </div>
+              )}
+
+              {savedFilters.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={activeSavedId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setActiveSavedId(id);
+                      const f = savedFilters.find((s) => s.id === id);
+                      if (f) {
+                        setFilter(f.filter);
+                        setPeriod(f.period);
+                        setCustomFrom(f.customFrom);
+                        setCustomTo(f.customTo);
+                        toast.success(`Filtro "${f.name}" aplicado`);
+                      }
+                    }}
+                    className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm"
+                    title="Filtros salvos"
+                  >
+                    <option value="">Filtros salvos…</option>
+                    {savedFilters.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => {
-                      const name = window.prompt("Nome do filtro:");
-                      if (!name || !name.trim()) return;
-                      const trimmed = name.trim();
-                      const existing = savedFilters.find((s) => s.name === trimmed);
-                      const snapshot = { filter, period, customFrom, customTo };
-                      if (existing) {
-                        const next = savedFilters.map((s) =>
-                          s.id === existing.id ? { ...existing, ...snapshot } : s,
-                        );
-                        setSavedFilters(next);
-                        setActiveSavedId(existing.id);
-                        toast.success(`Filtro "${trimmed}" atualizado`);
-                      } else {
-                        const id =
-                          (globalThis.crypto as Crypto | undefined)?.randomUUID?.() ??
-                          `f-${Date.now()}`;
-                        setSavedFilters([...savedFilters, { id, name: trimmed, ...snapshot }]);
-                        setActiveSavedId(id);
-                        toast.success(`Filtro "${trimmed}" salvo`);
-                      }
-                    }}
+                    onClick={saveCurrentFilter}
                     className="gap-1.5"
                   >
                     <Save className="h-4 w-4" />
@@ -457,6 +640,18 @@ export function CollectionSection({
                     </Button>
                   )}
                 </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                <div>
+                  {filtered.length} cobrança(s) encontrada(s)
+                  {activeFilterCount > 0 && ` • ${activeFilterCount} filtro(s) ativo(s)`}
+                </div>
+                {activeFilterCount > 0 && (
+                  <button onClick={clearFilters} className="text-primary hover:underline">
+                    Limpar filtros
+                  </button>
+                )}
               </div>
             </>
           )}
@@ -626,7 +821,9 @@ export function CollectionSection({
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={12} className="py-10 text-center text-sm text-muted-foreground">
-                    Nenhuma cobrança encontrada com os filtros atuais.
+                    {activeFilterCount > 0 || search
+                      ? "Nenhuma cobrança encontrada para os filtros selecionados."
+                      : "Nenhuma cobrança encontrada."}
                   </td>
                 </tr>
               )}
