@@ -118,6 +118,7 @@ interface State {
   importHistory: ImportHistoryEntry[];
   hydrated: boolean;
   hydrate: () => Promise<void>;
+  reset: () => void;
   openClient: (id: string | null) => void;
   addClient: (c: Omit<Client, "id">) => Client;
   updateClient: (id: string, patch: Partial<Omit<Client, "id">>) => void;
