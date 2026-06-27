@@ -324,6 +324,19 @@ export const useStore = create<State>()((set, get) => ({
         })();
         await hydratePromise;
       },
+      reset: () => {
+        hydratePromise = null;
+        set({
+          clients: [],
+          products: [],
+          importHistory: [],
+          preferences: defaultPreferences,
+          rules: defaultRules,
+          security: defaultSecurity,
+          openClientId: null,
+          hydrated: false,
+        });
+      },
       openClient: (id) => set({ openClientId: id }),
       addClient: (c) => {
         const client = { ...c, id: uid() };
