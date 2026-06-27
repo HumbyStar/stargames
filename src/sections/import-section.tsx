@@ -379,12 +379,14 @@ function parseProductsTable(table: Element): NotionProduct[] {
     if (!totalRaw) rowWarnings.push("Valor vazio (considerado 0).");
     const originalStatus = normalizeStatusBR(status ?? "");
     if (!status) rowWarnings.push('Status vazio (usado "Pendente").');
+    // MGMV pode chegar via coluna Status OU via coluna Situação.
+    const situationMentionsMgmv = /mgmv/i.test(String(situation ?? ""));
     const financialStatus =
-      originalStatus === "MGMV"
+      originalStatus === "MGMV" || situationMentionsMgmv
         ? "MGMV"
         : calculateFinancialStatus(totalValue, paidValue);
     let statusWarning: string | undefined;
-    if (financialStatus !== originalStatus) {
+    if (financialStatus !== originalStatus && !situationMentionsMgmv) {
       statusWarning =
         paidValue === 0
           ? "Valor pago é zero, portanto o status correto é Pendente."
