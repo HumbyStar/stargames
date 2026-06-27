@@ -925,9 +925,13 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         globalErrors,
         parseFailures,
         zipName: file.name,
+        fileHash,
+        alreadyImported: !!previousImport,
+        previousImportDate: previousImport?.date,
+        errorGroups: groupErrorsByReason(parseFailures),
       });
       toast.success(
-        `${entries.length} cliente(s) lidos de ${htmlFiles.length} arquivo(s) em ${folders.size} pasta(s).`,
+        `${entries.length} cliente(s) lidos de ${htmlFiles.length} arquivo(s) em ${folders.size} pasta(s) em ${((performance.now() - startedAt) / 1000).toFixed(1)}s.`,
       );
       if (parseFailures.length > 0) {
         setZipFailuresOpen(true);
