@@ -437,6 +437,7 @@ interface ZipFileEntry {
 interface ZipProductPreview extends NotionProduct {
   tempId: string;
   duplicate: boolean;
+  duplicateAfterCorrection?: boolean;
   selected: boolean;
 }
 
@@ -456,6 +457,7 @@ interface ZipClientPreview {
   notes: string;
   mgmv: MGMVAgreement | null;
   existingClient: Client | undefined;
+  matchedAfterCorrection?: boolean;
   errors: string[];
   criticalError: boolean;
   selected: boolean;
@@ -730,7 +732,17 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           }
           parsed.clients.forEach((block, blockIdx) => {
             const tempId = `zip-${fileIdx}-${blockIdx}-${Math.random().toString(36).slice(2, 8)}`;
-            const existingClient = block.client.phone ? clientByPhone.get(block.client.phone) : undefined;
+            // Sempre comparamos pelo telefone normalizado (corrigido) — mesmo
+            // que o título original viesse com erro de digitação, o phone aqui
+            // já reflete a versão auto-corrigida em dígitos puros.
+            const lookupPhone = (block.client.phone || "").replace(/\D/g, "");
+            const existingClient = lookupPhone ? clientByPhone.get(lookupPhone) : undefined;
+            const matchedAfterCorrection = !!existingClient && !!block.client.wasAutoCorrected;
+            if (matchedAfterCorrection) {
+              console.info(
+                `[import] Duplicata de cliente após auto-correção: ${block.client.name} (${block.client.phoneDisplay || lookupPhone}) — arquivo ${file.fullPath}`,
+              );
+            }
             const errors = [...block.errors];
             if (!block.client.name) errors.push("Cliente sem nome.");
             if (!block.client.phone || block.client.phone.length < 10)
@@ -746,6 +758,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                 ...p,
                 tempId: `${tempId}-p${pIdx}`,
                 duplicate: dup,
+                duplicateAfterCorrection: dup && matchedAfterCorrection,
                 selected: true,
               };
             });
@@ -765,6 +778,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               notes: block.notes,
               mgmv,
               existingClient,
+              matchedAfterCorrection,
               errors,
               criticalError,
               selected: !criticalError,
@@ -1860,6 +1874,11 @@ function ZipPreview({
                                   <Tag variant="warning">Corrigido automaticamente</Tag>
                                 </div>
                               )}
+                              {e.matchedAfterCorrection && (
+                                <div className="mt-1">
+                                  <Tag variant="warning">Match após correção</Tag>
+                                </div>
+                              )}
                               {e.client.correctionReason && !e.criticalError && (
                                 <div className="mt-1 text-[10px] text-muted-foreground">
                                   {e.client.correctionReason}
@@ -1940,7 +1959,9 @@ function ZipPreview({
                                             <td className="py-2 pr-2 text-muted-foreground">{p.dueDate ?? "—"}</td>
                                             <td className="py-2 pr-2">
                                               {p.duplicate ? (
-                                                <Tag variant="warning">Duplicata</Tag>
+                                                <Tag variant="warning">
+                                                  {p.duplicateAfterCorrection ? "Duplicata (após correção)" : "Duplicata"}
+                                                </Tag>
                                               ) : (
                                                 <span className="text-muted-foreground">—</span>
                                               )}
