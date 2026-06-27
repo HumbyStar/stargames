@@ -1161,6 +1161,47 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         />
       )}
 
+      <Dialog open={zipFailuresOpen} onOpenChange={setZipFailuresOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {zipData?.parseFailures.length ?? 0} arquivo(s) não puderam ser lidos
+            </DialogTitle>
+            <DialogDescription>
+              Os arquivos abaixo foram ignorados na importação. Os demais foram processados
+              normalmente e estão na prévia.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[50vh] overflow-y-auto rounded-md border border-border">
+            <table className="w-full text-xs">
+              <thead className="bg-muted text-left text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Arquivo</th>
+                  <th className="px-3 py-2 font-medium">Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {zipData?.parseFailures.map((f, i) => (
+                  <tr key={i} className="border-t border-border align-top">
+                    <td className="px-3 py-2 font-mono text-[11px] break-all">{f.path}</td>
+                    <td className="px-3 py-2 text-destructive">{f.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Dica: o erro mais comum é uma data inválida na coluna "Data" da tabela do cliente
+            (use o formato DD/MM/AAAA). Corrija no Notion, reexporte e tente novamente.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setZipFailuresOpen(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {rows && (
         <div className="mt-6 space-y-4">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
