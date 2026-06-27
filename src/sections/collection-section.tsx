@@ -415,7 +415,7 @@ export function CollectionSection({
   };
 
   return (
-    <section id="collection" className="one-page-section">
+    <section id="collection" data-tour="collection-section" className="one-page-section">
       <PageHeader
         title="Collection"
         description="Controle cobranças, inadimplências, reservas vencidas e acordos em atraso."
