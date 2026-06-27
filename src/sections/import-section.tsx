@@ -992,6 +992,16 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         : d,
     );
   };
+  const setMgmvAction = (id: string, action: "apply" | "replace" | "keep") => {
+    setZipData((d) =>
+      d
+        ? {
+            ...d,
+            entries: d.entries.map((e) => (e.id === id ? { ...e, mgmvAction: action } : e)),
+          }
+        : d,
+    );
+  };
   const setProductSelected = (entryId: string, productId: string, selected: boolean) => {
     setZipData((d) =>
       d
