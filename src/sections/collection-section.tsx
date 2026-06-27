@@ -76,6 +76,11 @@ export function CollectionSection({
   const [savedFilters, setSavedFilters] = usePersistedState<SavedFilter[]>("collection.savedFilters", []);
   const [activeSavedId, setActiveSavedId] = usePersistedState<string>("collection.activeSavedId", "");
 
+  const activeFilterCount =
+    (filter !== "todos" ? 1 : 0) +
+    (period !== "todos" ? 1 : 0) +
+    (period === "personalizado" && (customFrom || customTo) ? 1 : 0);
+
   const overdueProducts = useMemo(() => products.filter(shouldAppearInCollection), [products]);
 
   // Acordos MGMV consolidados (1 linha por cliente com acordo ativo + parcelas vencidas)
