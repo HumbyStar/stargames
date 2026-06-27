@@ -1850,6 +1850,16 @@ function ZipPreview({
                             </td>
                             <td className="py-3 pr-3">
                               <Tag variant={result.variant}>{result.label}</Tag>
+                              {e.client.wasAutoCorrected && !e.criticalError && (
+                                <div className="mt-1">
+                                  <Tag variant="warning">Corrigido automaticamente</Tag>
+                                </div>
+                              )}
+                              {e.client.correctionReason && !e.criticalError && (
+                                <div className="mt-1 text-[10px] text-muted-foreground">
+                                  {e.client.correctionReason}
+                                </div>
+                              )}
                               {e.errors.length > 0 && (
                                 <div className="mt-1 text-[10px] text-destructive">
                                   {e.errors.join("; ")}
