@@ -1480,6 +1480,7 @@ function ZipPreview({
       }
     });
   }, [data, filter]);
+  const filteredIds = useMemo(() => new Set(filtered.map((e) => e.id)), [filtered]);
 
   const byFolder = useMemo(() => {
     const m = new Map<string, ZipClientPreview[]>();
@@ -1582,7 +1583,7 @@ function ZipPreview({
 
       <div className="space-y-4">
         {byFolder.map(([folder, entriesInFolder]) => {
-          const visible = entriesInFolder.filter((e) => filtered.includes(e));
+          const visible = entriesInFolder.filter((e) => filteredIds.has(e.id));
           if (visible.length === 0) return null;
           const allSel = entriesInFolder.every((e) => e.selected || e.criticalError);
           return (
