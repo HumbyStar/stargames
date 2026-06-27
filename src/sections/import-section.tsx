@@ -1637,8 +1637,8 @@ function ZipPreview({
                           : { label: "Novo cliente", variant: "primary" as const };
                       const isOpen = expanded.has(e.id);
                       return (
-                        <>
-                          <tr key={e.id} className="border-b border-border/60">
+                        <Fragment key={e.id}>
+                          <tr className="border-b border-border/60">
                             <td className="py-3 pr-3">
                               <input
                                 type="checkbox"
@@ -1680,7 +1680,7 @@ function ZipPreview({
                             </td>
                           </tr>
                           {isOpen && (
-                            <tr key={e.id + "-x"} className="border-b border-border/60 bg-muted/20">
+                            <tr className="border-b border-border/60 bg-muted/20">
                               <td colSpan={11} className="p-3">
                                 {e.products.length === 0 ? (
                                   <p className="text-xs text-muted-foreground">Sem produtos.</p>
