@@ -1,15 +1,10 @@
 import { create } from "zustand";
 import {
-  dbDeleteAllClients,
   dbDeleteAllClientsAsync,
-  dbDeleteAllProducts,
   dbDeleteAllProductsAsync,
-  dbDeleteAllMGMV,
   dbDeleteAllMGMVAsync,
-  dbDeleteAllImportProgress,
   dbDeleteAllImportProgressAsync,
   clearImportRuntimeState,
-  dbDeleteHistoryAll,
   dbDeleteHistoryAllAsync,
   dbInsertHistory,
   dbUpsertClientsAsync,
