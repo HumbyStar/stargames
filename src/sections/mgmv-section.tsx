@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
+import { MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
   formatBRL,
