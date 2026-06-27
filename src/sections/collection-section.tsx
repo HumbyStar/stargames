@@ -15,7 +15,7 @@ import {
   type MGMVDisplay,
 } from "@/lib/store";
 import { toast } from "sonner";
-import { MessageCircle, Maximize2, Minimize2 } from "lucide-react";
+import { MessageCircle, Maximize2, Minimize2, Filter as FilterIcon, Save, Trash2 } from "lucide-react";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { useSectionCompact } from "@/lib/use-section-compact";
@@ -46,6 +46,15 @@ type Period =
 const PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50] as const;
 const DEFAULT_PAGE_SIZE = 50;
 
+type SavedFilter = {
+  id: string;
+  name: string;
+  filter: Filter;
+  period: Period;
+  customFrom: string;
+  customTo: string;
+};
+
 export function CollectionSection({
   onScrollTo,
   initialFilter = "todos",
@@ -63,6 +72,9 @@ export function CollectionSection({
   const [compact, setCompact] = useSectionCompact("collection");
   const [payTarget, setPayTarget] = useState<{ id: string; remaining: number; productName: string } | null>(null);
   const [payAmount, setPayAmount] = useState("");
+  const [showFilters, setShowFilters] = useState(true);
+  const [savedFilters, setSavedFilters] = usePersistedState<SavedFilter[]>("collection.savedFilters", []);
+  const [activeSavedId, setActiveSavedId] = usePersistedState<string>("collection.activeSavedId", "");
 
   const overdueProducts = useMemo(() => products.filter(shouldAppearInCollection), [products]);
 
