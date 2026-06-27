@@ -1765,7 +1765,7 @@ function ZipPreview({
                               </td>
                             </tr>
                           )}
-                        </>
+                        </Fragment>
                       );
                     })}
                   </tbody>
