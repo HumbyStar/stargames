@@ -389,7 +389,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                 <th className="py-2 pr-3 font-medium">Total Comprado</th>
                 <th className="py-2 pr-3 font-medium">Total em Aberto</th>
                 <th className="py-2 pr-3 font-medium">Última Compra</th>
-                <th className="py-2 pr-3 font-medium">Observações</th>
+                {!compact && <th className="py-2 pr-3 font-medium">Observações</th>}
                 <th className="py-2 pr-3 font-medium">Ações</th>
               </tr>
             </thead>
