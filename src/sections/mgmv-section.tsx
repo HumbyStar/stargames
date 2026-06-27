@@ -317,6 +317,15 @@ export function MGMVSection({
                       </td>
                       <td className="px-3 py-2 text-right">
                         <div className="flex justify-end gap-1">
+                          {r.status === "Revisão necessária" && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => setAiTarget(r.client.id)}
+                            >
+                              Revisar com IA
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"
