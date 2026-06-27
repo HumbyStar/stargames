@@ -964,7 +964,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       status: errorEntries > 0 ? "Com avisos" : "Concluído",
     });
     toast.success(
-      `ZIP importado: ${createdClients} novo(s) • ${updatedClients} atualizado(s) • ${createdProducts} produto(s) • ${createdAgreements} MGMV • ${ignoredDuplicates} duplicata(s) ignorada(s)`,
+      `ZIP importado: ${createdClients} novo(s) • ${updatedClients} atualizado(s) • ${createdProducts} produto(s) • ${createdAgreements} MGMV • ${ignoredDuplicates} duplicata(s) ignorada(s)${skippedAfterCorrection > 0 ? ` • ${skippedAfterCorrection} pulado(s) por correção` : ""}`,
     );
     setZipData(null);
     onScrollTo("clientes");
