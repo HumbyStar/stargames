@@ -231,6 +231,10 @@ function FloatingNavbar() {
     navigate({ to: "/auth", replace: true });
   };
 
+  const openImport = useUiStore((s) => s.openImport);
+  const openSettings = useUiStore((s) => s.openSettings);
+  const openHelp = useUiStore((s) => s.openHelp);
+
   useEffect(() => {
     const onScroll = () => {
       setHidden(true);
