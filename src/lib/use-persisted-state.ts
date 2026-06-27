@@ -1,35 +1,52 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  getUiValue,
+  isUiLoaded,
+  setUiValue,
+  subscribeUi,
+  whenUiLoaded,
+} from "./db-sync";
 
 /**
- * useState que persiste o valor em localStorage sob `key`.
- * Carrega o valor salvo no primeiro render do cliente (SSR-safe).
+ * Estado persistido no banco Lovable Cloud em `app_settings.ui_state`
+ * (chave por `key`). Antes da hidratação inicial usa o valor `initial`;
+ * depois espelha o valor salvo. Escritas são debounced e sincronizadas
+ * em background entre abas/componentes que compartilham a mesma chave.
  */
-export function usePersistedState<T>(key: string, initial: T): [T, React.Dispatch<React.SetStateAction<T>>] {
-  const [value, setValue] = useState<T>(initial);
-  const hydrated = useRef(false);
+export function usePersistedState<T>(
+  key: string,
+  initial: T,
+): [T, React.Dispatch<React.SetStateAction<T>>] {
+  const read = useCallback(() => getUiValue<T>(key, initial), [key, initial]);
+  const [value, setValueLocal] = useState<T>(() => (isUiLoaded() ? read() : initial));
 
-  // Hidrata a partir do localStorage no client (uma única vez).
+  // Atualiza o valor assim que a hidratação inicial terminar.
   useEffect(() => {
-    try {
-      const raw = typeof window !== "undefined" ? window.localStorage.getItem(key) : null;
-      if (raw != null) {
-        setValue(JSON.parse(raw) as T);
-      }
-    } catch {
-      // ignora JSON inválido ou storage indisponível
-    }
-    hydrated.current = true;
-  }, [key]);
+    let cancelled = false;
+    whenUiLoaded(() => {
+      if (cancelled) return;
+      setValueLocal(read());
+    });
+    const unsub = subscribeUi(key, () => {
+      setValueLocal(read());
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [key, read]);
 
-  // Salva mudanças após a hidratação para não sobrescrever o valor salvo.
-  useEffect(() => {
-    if (!hydrated.current) return;
-    try {
-      window.localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-      // storage cheio / indisponível
-    }
-  }, [key, value]);
+  const setValue: React.Dispatch<React.SetStateAction<T>> = useCallback(
+    (next) => {
+      setValueLocal((prev) => {
+        const computed =
+          typeof next === "function" ? (next as (p: T) => T)(prev) : next;
+        setUiValue(key, computed);
+        return computed;
+      });
+    },
+    [key],
+  );
 
   return [value, setValue];
 }
