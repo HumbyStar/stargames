@@ -480,7 +480,8 @@ type ZipFilter =
   | "mgmv"
   | "semTelefone"
   | "semProdutos"
-  | "statusCorrigido";
+  | "statusCorrigido"
+  | "telefoneCorrigido";
 
 // =============================================================
 
@@ -1634,7 +1635,8 @@ function ZipPreview({
       (s, e) => s + e.products.filter((p) => p.statusWarning).length,
       0,
     );
-    return { totalProducts, newClients, existing, duplicates, mgmv, errors, corrected };
+    const phoneCorrected = data.entries.filter((e) => e.client.wasAutoCorrected).length;
+    return { totalProducts, newClients, existing, duplicates, mgmv, errors, corrected, phoneCorrected };
   }, [data]);
 
   const filtered = useMemo(() => {
@@ -1658,6 +1660,8 @@ function ZipPreview({
           return e.products.length === 0;
         case "statusCorrigido":
           return e.products.some((p) => p.statusWarning);
+        case "telefoneCorrigido":
+          return !!e.client.wasAutoCorrected;
         default:
           return true;
       }
@@ -1706,6 +1710,7 @@ function ZipPreview({
     { key: "semTelefone", label: "Sem telefone" },
     { key: "semProdutos", label: "Sem produtos" },
     { key: "statusCorrigido", label: "Status corrigido" },
+    { key: "telefoneCorrigido", label: "Telefone corrigido" },
   ];
 
   return (
