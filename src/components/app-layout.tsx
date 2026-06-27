@@ -188,13 +188,13 @@ function NavLink({
         onClick();
       }}
       className={cn(
-        "rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
+        "rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 hover:-translate-y-0.5 active:scale-95",
         active
-          ? "bg-primary text-primary-foreground shadow-sm"
+          ? "bg-primary text-primary-foreground shadow-sm scale-105"
           : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground",
       )}
     >
-      {label}
+      <span className="inline-block transition-transform">{label}</span>
     </a>
   );
 }
