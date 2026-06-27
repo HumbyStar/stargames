@@ -14,7 +14,200 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      app_settings: {
+        Row: {
+          id: string
+          preferences: Json
+          rules: Json
+          security: Json
+          ui_state: Json
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          preferences?: Json
+          rules?: Json
+          security?: Json
+          ui_state?: Json
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          preferences?: Json
+          rules?: Json
+          security?: Json
+          ui_state?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      clients: {
+        Row: {
+          created_at: string
+          folder: string | null
+          id: string
+          mgmv: Json | null
+          name: string
+          notes: string | null
+          phone: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          folder?: string | null
+          id?: string
+          mgmv?: Json | null
+          name: string
+          notes?: string | null
+          phone?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          folder?: string | null
+          id?: string
+          mgmv?: Json | null
+          name?: string
+          notes?: string | null
+          phone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      import_history: {
+        Row: {
+          agreements_created: number | null
+          agreements_replaced: number | null
+          clients_created: number
+          created_at: string
+          date: string
+          duration_ms: number | null
+          errors: number
+          file: string
+          file_hash: string | null
+          id: string
+          products_added: number
+          skipped_duplicates: number | null
+          source: string
+          status: string
+        }
+        Insert: {
+          agreements_created?: number | null
+          agreements_replaced?: number | null
+          clients_created?: number
+          created_at?: string
+          date?: string
+          duration_ms?: number | null
+          errors?: number
+          file: string
+          file_hash?: string | null
+          id?: string
+          products_added?: number
+          skipped_duplicates?: number | null
+          source: string
+          status: string
+        }
+        Update: {
+          agreements_created?: number | null
+          agreements_replaced?: number | null
+          clients_created?: number
+          created_at?: string
+          date?: string
+          duration_ms?: number | null
+          errors?: number
+          file?: string
+          file_hash?: string | null
+          id?: string
+          products_added?: number
+          skipped_duplicates?: number | null
+          source?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          client_id: string
+          created_at: string
+          due_date: string
+          financial_status: string
+          id: string
+          name: string
+          notes: string | null
+          paid_value: number
+          platform: string
+          register_date: string
+          situation: string
+          total_value: number
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          due_date?: string
+          financial_status?: string
+          id?: string
+          name: string
+          notes?: string | null
+          paid_value?: number
+          platform?: string
+          register_date?: string
+          situation?: string
+          total_value?: number
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          due_date?: string
+          financial_status?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          paid_value?: number
+          platform?: string
+          register_date?: string
+          situation?: string
+          total_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saved_filters: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          payload: Json
+          scope: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          payload?: Json
+          scope: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          payload?: Json
+          scope?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
