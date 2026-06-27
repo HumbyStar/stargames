@@ -544,6 +544,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       const htmlFiles: ZipFileEntry[] = [];
       const folders = new Set<string>();
       const globalErrors: string[] = [];
+      const parseFailures: { path: string; reason: string }[] = [];
       // Collect entries first (sync) so we can stream extraction in chunks.
       const rawEntries: { path: string; fileName: string; folderName: string; entry: any }[] = [];
       zip.forEach((path, entry) => {
@@ -574,6 +575,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             } catch (err) {
               console.error("Falha ao ler", r.path, err);
               globalErrors.push(`Falha ao ler ${r.path}.`);
+              parseFailures.push({
+                path: r.path,
+                reason: err instanceof Error ? err.message : String(err),
+              });
             }
           }),
         );
@@ -609,7 +614,13 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             parsed = parseNotionHtml(file.htmlContent);
           } catch (err) {
             console.error("parseNotionHtml falhou em", file.fullPath, err);
-            globalErrors.push(`Erro ao interpretar ${file.fullPath}.`);
+            const raw = err instanceof Error ? err.message : String(err);
+            const friendly =
+              raw.includes("Invalid time value")
+                ? "Data inválida em uma das linhas da tabela (formato esperado DD/MM/AAAA)."
+                : raw;
+            globalErrors.push(`Erro ao interpretar ${file.fullPath}: ${friendly}`);
+            parseFailures.push({ path: file.fullPath, reason: friendly });
             return;
           }
           parsed.clients.forEach((block, blockIdx) => {
@@ -663,11 +674,15 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         files: htmlFiles.length,
         entries,
         globalErrors,
+        parseFailures,
         zipName: file.name,
       });
       toast.success(
         `${entries.length} cliente(s) lidos de ${htmlFiles.length} arquivo(s) em ${folders.size} pasta(s).`,
       );
+      if (parseFailures.length > 0) {
+        setZipFailuresOpen(true);
+      }
     } catch (err) {
       console.error(err);
       toast.error("Falha ao ler o ZIP. Verifique o arquivo.");
