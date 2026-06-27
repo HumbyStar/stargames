@@ -11,6 +11,7 @@ import {
   LogOut,
   Upload,
   Settings,
+  Bell,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
@@ -234,6 +235,7 @@ function FloatingNavbar() {
   const openImport = useUiStore((s) => s.openImport);
   const openSettings = useUiStore((s) => s.openSettings);
   const openHelp = useUiStore((s) => s.openHelp);
+  const openNotifications = useUiStore((s) => s.openNotifications);
 
   useEffect(() => {
     const onScroll = () => {
@@ -296,6 +298,31 @@ function FloatingNavbar() {
           <Upload className="size-4 transition-transform group-hover:-translate-y-0.5" />
         </button>
         <button
+          onClick={openSettings}
+          aria-label="Configurações"
+          title="Configurações"
+          className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+        >
+          <Settings className="size-4 transition-transform duration-300 group-hover:rotate-90" />
+        </button>
+        <button
+          onClick={openNotifications}
+          aria-label="Notificações"
+          title="Notificações"
+          className="group relative hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+        >
+          <Bell className="size-4 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
+          <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary animate-pulse" />
+        </button>
+        <button
+          onClick={openHelp}
+          aria-label="Tutorial"
+          title="Tutorial"
+          className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+        >
+          <HelpCircle className="size-4 transition-transform duration-300 group-hover:scale-125 group-hover:animate-pulse" />
+        </button>
+        <button
           onClick={toggleTheme}
           aria-label={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
           title={isDark ? "Modo claro" : "Modo escuro"}
@@ -304,22 +331,6 @@ function FloatingNavbar() {
           <span key={isDark ? "sun" : "moon"} className="inline-flex animate-in fade-in zoom-in-75 duration-300 group-hover:rotate-12 transition-transform">
             {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </span>
-        </button>
-        <button
-          onClick={openHelp}
-          aria-label="Ajuda"
-          title="Central de Ajuda"
-          className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
-        >
-          <HelpCircle className="size-4 transition-transform duration-300 group-hover:scale-125 group-hover:animate-pulse" />
-        </button>
-        <button
-          onClick={openSettings}
-          aria-label="Configurações"
-          title="Configurações"
-          className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
-        >
-          <Settings className="size-4 transition-transform duration-300 group-hover:rotate-90" />
         </button>
         <button
           onClick={handleSignOut}
@@ -408,6 +419,8 @@ function GlobalModals() {
   const closeSettings = useUiStore((s) => s.closeSettings);
   const helpOpen = useUiStore((s) => s.helpOpen);
   const closeHelp = useUiStore((s) => s.closeHelp);
+  const notificationsOpen = useUiStore((s) => s.notificationsOpen);
+  const closeNotifications = useUiStore((s) => s.closeNotifications);
 
   // onScrollTo dentro dos modais: fecha o modal e rola até a seção alvo.
   const handleScrollTo = (id: string) => {
@@ -444,7 +457,7 @@ function GlobalModals() {
       <Dialog open={helpOpen} onOpenChange={(o) => (o ? null : closeHelp())}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Central de Ajuda</DialogTitle>
+            <DialogTitle>Tutorial</DialogTitle>
             <DialogDescription>
               Em breve: tutorial guiado da operação.
             </DialogDescription>
@@ -456,6 +469,18 @@ function GlobalModals() {
             <li>4. Como copiar mensagem de cobrança</li>
             <li>5. Como usar configurações</li>
           </ol>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={notificationsOpen} onOpenChange={(o) => (o ? null : closeNotifications())}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Notificações</DialogTitle>
+            <DialogDescription>Alertas e avisos recentes da operação.</DialogDescription>
+          </DialogHeader>
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            Nenhuma notificação no momento.
+          </div>
         </DialogContent>
       </Dialog>
     </>
