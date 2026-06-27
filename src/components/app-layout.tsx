@@ -315,6 +315,23 @@ function FloatingNavbar() {
 }
 
 export function AppLayout({ children }: { children?: ReactNode }) {
+  const hydrated = useStore((s) => s.hydrated);
+  const hydrate = useStore((s) => s.hydrate);
+  useEffect(() => {
+    void hydrate();
+  }, [hydrate]);
+
+  if (!hydrated) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-background">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <div className="size-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="text-sm">Carregando dados…</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background bg-gradient-to-b from-background via-background to-accent/30">
       <FloatingNavbar />
