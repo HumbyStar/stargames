@@ -783,6 +783,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               mgmv,
               existingClient,
               matchedAfterCorrection,
+              correctionAction: matchedAfterCorrection ? "merge" : undefined,
               errors,
               criticalError,
               selected: !criticalError,
