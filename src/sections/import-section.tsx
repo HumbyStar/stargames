@@ -307,6 +307,58 @@ function parseNotionHtml(html: string): NotionParseResult {
 
 // =================================================================
 
+// =================== ZIP do Notion (tipos) ===================
+
+interface ZipFileEntry {
+  folderName: string;
+  fileName: string;
+  fullPath: string;
+  htmlContent: string;
+}
+
+interface ZipProductPreview extends NotionProduct {
+  tempId: string;
+  duplicate: boolean;
+  selected: boolean;
+}
+
+interface ZipClientPreview {
+  id: string;
+  folderName: string;
+  fileName: string;
+  fullPath: string;
+  client: { name: string; phone: string; phoneDisplay: string };
+  products: ZipProductPreview[];
+  notes: string;
+  mgmv: MGMVAgreement | null;
+  existingClient: Client | undefined;
+  errors: string[];
+  criticalError: boolean;
+  selected: boolean;
+}
+
+interface ZipPreviewData {
+  folders: Set<string>;
+  files: number;
+  entries: ZipClientPreview[];
+  globalErrors: string[];
+  zipName: string;
+}
+
+type ZipFilter =
+  | "todos"
+  | "prontos"
+  | "novos"
+  | "existentes"
+  | "erro"
+  | "duplicatas"
+  | "mgmv"
+  | "semTelefone"
+  | "semProdutos"
+  | "statusCorrigido";
+
+// =============================================================
+
 const normalizePhone = (p: string) => String(p ?? "").replace(/\D/g, "");
 const parseValue = (v: string | number | undefined | null) => {
   if (v === null || v === undefined || v === "") return NaN;
