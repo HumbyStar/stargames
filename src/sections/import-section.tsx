@@ -515,6 +515,50 @@ type ZipFilter =
 // =============================================================
 
 const normalizePhone = (p: string) => String(p ?? "").replace(/\D/g, "");
+const maskPhone = (p: string) => {
+  const d = normalizePhone(p);
+  if (d.length < 6) return "***";
+  return `${d.slice(0, 2)} ****-${d.slice(-4)}`;
+};
+
+/** Limites duros para abrir um ZIP — protege contra zip-bomb e travamento. */
+const ZIP_LIMITS = {
+  maxFiles: 2000,
+  maxFileBytes: 2 * 1024 * 1024,
+  maxTotalBytes: 100 * 1024 * 1024,
+};
+
+/** sha1 hex via Web Crypto API. Usado como fingerprint do arquivo importado. */
+async function sha1Hex(data: ArrayBuffer | string): Promise<string> {
+  const buf =
+    typeof data === "string" ? new TextEncoder().encode(data) : new Uint8Array(data);
+  const hash = await crypto.subtle.digest("SHA-1", buf);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/** Validação simples nos limites de campo para conter dados absurdos. */
+function validateClientBlock(b: {
+  name: string;
+  phone: string;
+  notes?: string;
+}): string[] {
+  const errs: string[] = [];
+  if (b.name.length > 120) errs.push("Nome com mais de 120 caracteres.");
+  if ((b.notes ?? "").length > 5000) errs.push("Observações com mais de 5000 caracteres.");
+  return errs;
+}
+function validateProductValues(p: { totalValue: number; paidValue: number }): string[] {
+  const errs: string[] = [];
+  if (!Number.isFinite(p.totalValue) || p.totalValue < 0 || p.totalValue > 1_000_000)
+    errs.push("Valor total fora do intervalo (0–1.000.000).");
+  if (!Number.isFinite(p.paidValue) || p.paidValue < 0 || p.paidValue > 1_000_000)
+    errs.push("Valor pago fora do intervalo (0–1.000.000).");
+  if (p.paidValue > p.totalValue) errs.push("Valor pago maior que o total.");
+  return errs;
+}
+
 const parseValue = (v: string | number | undefined | null) => {
   if (v === null || v === undefined || v === "") return NaN;
   if (typeof v === "number") return v;
