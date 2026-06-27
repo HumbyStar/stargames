@@ -419,6 +419,8 @@ function GlobalModals() {
   const closeSettings = useUiStore((s) => s.closeSettings);
   const helpOpen = useUiStore((s) => s.helpOpen);
   const closeHelp = useUiStore((s) => s.closeHelp);
+  const notificationsOpen = useUiStore((s) => s.notificationsOpen);
+  const closeNotifications = useUiStore((s) => s.closeNotifications);
 
   // onScrollTo dentro dos modais: fecha o modal e rola até a seção alvo.
   const handleScrollTo = (id: string) => {
@@ -455,7 +457,7 @@ function GlobalModals() {
       <Dialog open={helpOpen} onOpenChange={(o) => (o ? null : closeHelp())}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Central de Ajuda</DialogTitle>
+            <DialogTitle>Tutorial</DialogTitle>
             <DialogDescription>
               Em breve: tutorial guiado da operação.
             </DialogDescription>
@@ -467,6 +469,18 @@ function GlobalModals() {
             <li>4. Como copiar mensagem de cobrança</li>
             <li>5. Como usar configurações</li>
           </ol>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={notificationsOpen} onOpenChange={(o) => (o ? null : closeNotifications())}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Notificações</DialogTitle>
+            <DialogDescription>Alertas e avisos recentes da operação.</DialogDescription>
+          </DialogHeader>
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            Nenhuma notificação no momento.
+          </div>
         </DialogContent>
       </Dialog>
     </>
