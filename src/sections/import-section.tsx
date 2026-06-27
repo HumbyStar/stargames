@@ -559,6 +559,26 @@ function validateProductValues(p: { totalValue: number; paidValue: number }): st
   return errs;
 }
 
+/**
+ * Agrupa falhas de parsing por causa para reduzir banner-blindness.
+ * Mostrar "47 arquivos falharam por 'data inválida'" é mais acionável do
+ * que 47 linhas idênticas com paths diferentes.
+ */
+function groupErrorsByReason(
+  failures: { path: string; reason: string }[],
+): { reason: string; paths: string[] }[] {
+  const map = new Map<string, string[]>();
+  failures.forEach((f) => {
+    const key = f.reason.replace(/\s+/g, " ").trim().slice(0, 200);
+    const arr = map.get(key) ?? [];
+    arr.push(f.path);
+    map.set(key, arr);
+  });
+  return Array.from(map.entries())
+    .map(([reason, paths]) => ({ reason, paths }))
+    .sort((a, b) => b.paths.length - a.paths.length);
+}
+
 const parseValue = (v: string | number | undefined | null) => {
   if (v === null || v === undefined || v === "") return NaN;
   if (typeof v === "number") return v;
