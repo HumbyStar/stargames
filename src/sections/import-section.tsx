@@ -1874,6 +1874,11 @@ function ZipPreview({
                                   <Tag variant="warning">Corrigido automaticamente</Tag>
                                 </div>
                               )}
+                              {e.matchedAfterCorrection && (
+                                <div className="mt-1">
+                                  <Tag variant="warning">Match após correção</Tag>
+                                </div>
+                              )}
                               {e.client.correctionReason && !e.criticalError && (
                                 <div className="mt-1 text-[10px] text-muted-foreground">
                                   {e.client.correctionReason}
@@ -1954,7 +1959,9 @@ function ZipPreview({
                                             <td className="py-2 pr-2 text-muted-foreground">{p.dueDate ?? "—"}</td>
                                             <td className="py-2 pr-2">
                                               {p.duplicate ? (
-                                                <Tag variant="warning">Duplicata</Tag>
+                                                <Tag variant="warning">
+                                                  {p.duplicateAfterCorrection ? "Duplicata (após correção)" : "Duplicata"}
+                                                </Tag>
                                               ) : (
                                                 <span className="text-muted-foreground">—</span>
                                               )}
