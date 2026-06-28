@@ -395,6 +395,209 @@ export async function dbDeleteAllImportProgressAsync(): Promise<void> {
   }
 }
 
+// ============= MGMV relational sync =============
+
+/**
+ * Sincroniza o acordo MGMV oficial de UM cliente nas tabelas
+ * `mgmv_agreements` + `mgmv_installments`, e atualiza as flags MGMV
+ * dos produtos vinculados. Esta é a fonte oficial — sem registro aqui,
+ * o sistema NÃO mostra MGMV oficial em nenhuma tela.
+ *
+ * Convenção: o id do acordo é IGUAL ao id do cliente (relação 1:1).
+ */
+export async function dbSyncAgreementForClientAsync(client: Client): Promise<void> {
+  const agreementId = client.id;
+
+  if (!client.mgmv || client.mgmv.installments.length === 0) {
+    // Sem acordo → remove agreement (cascata apaga parcelas) e zera flags.
+    const del = await supabase.from("mgmv_agreements").delete().eq("id", agreementId);
+    if (del.error) logErr("syncAgreement.delete", del.error);
+    const resetFlags = await supabase
+      .from("products")
+      .update({
+        included_in_mgmv: false,
+        mgmv_agreement_id: null,
+        collection_eligible: true,
+      })
+      .eq("client_id", client.id);
+    if (resetFlags.error) logErr("syncAgreement.resetFlags", resetFlags.error);
+    return;
+  }
+
+  const ins = client.mgmv.installments;
+  const sorted = [...ins].sort((a, b) => a.number - b.number);
+  const paidCount = sorted.filter((i) => i.paid).length;
+  const installmentValue = sorted[0]?.value ?? 0;
+  const paidValue = sorted.filter((i) => i.paid).reduce((s, i) => s + (i.value || 0), 0);
+  const remainingValue = Math.max(0, (client.mgmv.totalDebt || 0) - paidValue);
+  const nextUnpaid = sorted.find((i) => !i.paid);
+  const firstDue = sorted[0]?.dueDate ?? null;
+
+  // Validação matemática para o flag needs_review.
+  const sumByInstallments = sorted.reduce((s, i) => s + (i.value || 0), 0);
+  const needsReview =
+    client.mgmv.totalDebt > 0 &&
+    Math.abs(sumByInstallments - client.mgmv.totalDebt) > 0.01;
+
+  const status = paidCount >= sorted.length ? "Quitado" : needsReview ? "Revisão necessária" : "Ativo";
+
+  const upAgreement = await supabase.from("mgmv_agreements").upsert({
+    id: agreementId,
+    client_id: client.id,
+    client_name: client.name,
+    client_phone: client.phone ?? "",
+    total_agreement_value: client.mgmv.totalDebt,
+    installments_count: sorted.length,
+    installment_value: installmentValue,
+    paid_installments: paidCount,
+    pending_installments: sorted.length - paidCount,
+    first_due_date: firstDue,
+    next_due_date: nextUnpaid?.dueDate ?? null,
+    paid_value: paidValue,
+    remaining_value: remainingValue,
+    status,
+    needs_review: needsReview,
+    source_folder: client.folder ?? null,
+    original_notes: client.notes ?? null,
+  } as never);
+  if (upAgreement.error) {
+    logErr("syncAgreement.upsert", upAgreement.error);
+    return;
+  }
+
+  // Substitui parcelas (estratégia simples: delete + insert).
+  const delIns = await supabase.from("mgmv_installments").delete().eq("agreement_id", agreementId);
+  if (delIns.error) logErr("syncAgreement.delInstallments", delIns.error);
+  if (sorted.length > 0) {
+    const rows = sorted.map((i) => ({
+      agreement_id: agreementId,
+      installment_number: i.number,
+      amount: i.value,
+      due_date: i.dueDate,
+      paid_at: i.paid ? (i.paidAt ?? new Date().toISOString()) : null,
+      status: i.paid ? "Paga" : "Pendente",
+    }));
+    const insIns = await supabase.from("mgmv_installments").insert(rows as never);
+    if (insIns.error) logErr("syncAgreement.insertInstallments", insIns.error);
+  }
+
+  // Atualiza flags dos produtos do cliente: produtos com financialStatus
+  // = 'MGMV' viram parte do acordo; demais saem do acordo.
+  const mgmvProducts = await supabase
+    .from("products")
+    .update({
+      included_in_mgmv: true,
+      mgmv_agreement_id: agreementId,
+      collection_eligible: false,
+    })
+    .eq("client_id", client.id)
+    .eq("financial_status", "MGMV");
+  if (mgmvProducts.error) logErr("syncAgreement.mgmvProducts", mgmvProducts.error);
+
+  const nonMgmvProducts = await supabase
+    .from("products")
+    .update({
+      included_in_mgmv: false,
+      mgmv_agreement_id: null,
+      collection_eligible: true,
+    })
+    .eq("client_id", client.id)
+    .neq("financial_status", "MGMV");
+  if (nonMgmvProducts.error) logErr("syncAgreement.nonMgmvProducts", nonMgmvProducts.error);
+}
+
+/** Fire-and-forget wrapper para chamadas de UI. */
+export function dbSyncAgreementForClient(client: Client): void {
+  void dbSyncAgreementForClientAsync(client);
+}
+
+/** Sincroniza acordos de vários clientes (usado pós-importação). */
+export async function dbSyncAgreementsBulkAsync(clients: Client[]): Promise<void> {
+  for (const c of clients) {
+    // Sequencial para preservar ordem de logs e evitar bursts de RLS.
+    // O volume aqui é pequeno (clientes MGMV de UM ZIP).
+    // eslint-disable-next-line no-await-in-loop
+    await dbSyncAgreementForClientAsync(c);
+  }
+}
+
+// ============= Diagnostics =============
+
+export interface ImportDiagnostics {
+  clientsCount: number;
+  productsCount: number;
+  agreementsCount: number;
+  installmentsCount: number;
+  /** Clientes marcados como MGMV mas sem registro em mgmv_agreements. */
+  mgmvClientsWithoutAgreement: number;
+  /** Produtos com included_in_mgmv = true mas sem mgmv_agreement_id. */
+  mgmvProductsWithoutAgreementId: number;
+  /** Linhas em import_progress (importações interrompidas) para o usuário. */
+  importProgressRows: number;
+  /** Última versão de reset registrada localmente. */
+  resetVersion: string;
+}
+
+export async function dbFetchDiagnostics(): Promise<ImportDiagnostics> {
+  const head = (q: ReturnType<typeof supabase.from>) =>
+    (q.select("*", { count: "exact", head: true }) as unknown as Promise<{ count: number | null; error: unknown }>);
+
+  const [c, p, a, i, mc, mp] = await Promise.all([
+    head(supabase.from("clients")),
+    head(supabase.from("products")),
+    head(supabase.from("mgmv_agreements")),
+    head(supabase.from("mgmv_installments")),
+    supabase.from("clients").select("id", { count: "exact", head: true }).eq("client_type", "mgmv"),
+    supabase
+      .from("products")
+      .select("id", { count: "exact", head: true })
+      .eq("included_in_mgmv", true)
+      .is("mgmv_agreement_id", null),
+  ]);
+
+  // Inconsistência: clientes MGMV sem agreement correspondente.
+  // Como o id do agreement = id do client, podemos contar via diff.
+  let mgmvClientsWithoutAgreement = 0;
+  try {
+    const [mgmvClients, allAgreements] = await Promise.all([
+      supabase.from("clients").select("id").eq("client_type", "mgmv"),
+      supabase.from("mgmv_agreements").select("client_id"),
+    ]);
+    const setA = new Set(((allAgreements.data ?? []) as Array<{ client_id: string }>).map((r) => r.client_id));
+    mgmvClientsWithoutAgreement = ((mgmvClients.data ?? []) as Array<{ id: string }>).filter(
+      (r) => !setA.has(r.id),
+    ).length;
+  } catch (err) {
+    logErr("diagnostics.mgmvWithoutAgreement", err);
+  }
+
+  let importProgressRows = 0;
+  try {
+    const { data: userRes } = await supabase.auth.getUser();
+    const uid = userRes.user?.id;
+    if (uid) {
+      const r = await supabase
+        .from("import_progress")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", uid);
+      importProgressRows = r.count ?? 0;
+    }
+  } catch (err) {
+    logErr("diagnostics.importProgress", err);
+  }
+
+  return {
+    clientsCount: c.count ?? 0,
+    productsCount: p.count ?? 0,
+    agreementsCount: a.count ?? 0,
+    installmentsCount: i.count ?? 0,
+    mgmvClientsWithoutAgreement: mgmvClientsWithoutAgreement || (mc.count ?? 0) - (a.count ?? 0),
+    mgmvProductsWithoutAgreementId: mp.count ?? 0,
+    importProgressRows,
+    resetVersion: getUiValue<string>("import.resetVersion", ""),
+  };
+}
+
 /**
  * Limpa o estado runtime de importação no navegador (cache, preview, lote
  * pendente, importação interrompida). Não toca no banco.
