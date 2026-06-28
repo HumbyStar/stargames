@@ -7,6 +7,7 @@ import type {
   OperationalRules,
   SecuritySettings,
   MGMVAgreement,
+  MGMVInstallment,
   FinancialStatus,
   Situation,
   ImportSource,
@@ -170,20 +171,76 @@ export interface DbSnapshot {
 }
 
 export async function loadSnapshot(): Promise<DbSnapshot> {
-  const [clientsRes, productsRes, historyRes, settingsRes] = await Promise.all([
+  const [clientsRes, productsRes, historyRes, settingsRes, agreementsRes, installmentsRes] = await Promise.all([
     supabase.from("clients").select("*"),
     supabase.from("products").select("*"),
     supabase.from("import_history").select("*").order("date", { ascending: false }).limit(50),
     supabase.from("app_settings").select("*").eq("id", "default").maybeSingle(),
+    supabase.from("mgmv_agreements").select("*"),
+    supabase.from("mgmv_installments").select("*"),
   ]);
   if (clientsRes.error) logErr("loadClients", clientsRes.error);
   if (productsRes.error) logErr("loadProducts", productsRes.error);
   if (historyRes.error) logErr("loadHistory", historyRes.error);
   if (settingsRes.error) logErr("loadSettings", settingsRes.error);
+  if (agreementsRes.error) logErr("loadAgreements", agreementsRes.error);
+  if (installmentsRes.error) logErr("loadInstallments", installmentsRes.error);
 
   const settings = settingsRes.data;
+
+  // Reconstrói cada acordo MGMV a partir das tabelas oficiais
+  // (mgmv_agreements + mgmv_installments). Esta é a ÚNICA fonte de verdade
+  // do MGMV — o jsonb legado em clients.mgmv é ignorado se não houver
+  // registro relacional correspondente.
+  const installmentsByAgreement = new Map<string, MGMVInstallment[]>();
+  for (const row of (installmentsRes.data ?? []) as Array<{
+    agreement_id: string;
+    installment_number: number;
+    amount: number | string | null;
+    due_date: string | null;
+    paid_at: string | null;
+    status: string;
+  }>) {
+    const list = installmentsByAgreement.get(row.agreement_id) ?? [];
+    list.push({
+      number: row.installment_number,
+      total: 0, // preenchido depois
+      value: Number(row.amount ?? 0) || 0,
+      dueDate: row.due_date ?? new Date().toISOString(),
+      paid: row.status === "Paga" || !!row.paid_at,
+      paidAt: row.paid_at ?? undefined,
+    });
+    installmentsByAgreement.set(row.agreement_id, list);
+  }
+  const agreementsByClient = new Map<string, MGMVAgreement>();
+  for (const row of (agreementsRes.data ?? []) as Array<{
+    id: string;
+    client_id: string;
+    total_agreement_value: number | string | null;
+    installments_count: number | null;
+    created_at: string;
+  }>) {
+    const ins = (installmentsByAgreement.get(row.id) ?? []).sort(
+      (a, b) => a.number - b.number,
+    );
+    const total = ins.length;
+    for (const i of ins) i.total = total;
+    agreementsByClient.set(row.client_id, {
+      startDate: row.created_at ?? new Date().toISOString(),
+      totalDebt: Number(row.total_agreement_value ?? 0) || 0,
+      installments: ins,
+    });
+  }
+
+  const clients = (clientsRes.data ?? []).map((r) => {
+    const c = rowToClient(r as unknown as DbClientRow);
+    const official = agreementsByClient.get(c.id);
+    // Fonte oficial: tabela relacional. Sem registro relacional → sem mgmv.
+    return { ...c, mgmv: official };
+  });
+
   return {
-    clients: (clientsRes.data ?? []).map((r) => rowToClient(r as unknown as DbClientRow)),
+    clients,
     products: (productsRes.data ?? []).map((r) => rowToProduct(r as unknown as DbProductRow)),
     importHistory: (historyRes.data ?? []).map((r) => rowToHistory(r as unknown as DbImportHistoryRow)),
     preferences: (settings?.preferences as Partial<SystemPreferences>) ?? {},
