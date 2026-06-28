@@ -171,6 +171,31 @@ export interface DbSnapshot {
 }
 
 export async function loadSnapshot(): Promise<DbSnapshot> {
+  type Page<T> = { data: T[] | null; error: unknown };
+  async function fetchAllRows<T = Record<string, unknown>>(
+    table: "clients" | "products" | "mgmv_agreements" | "mgmv_installments",
+    columns = "*",
+    pageSize = 1000,
+  ): Promise<Page<T>> {
+    const out: T[] = [];
+    let from = 0;
+    // Loop until a page returns fewer rows than the page size.
+    // Avoids the 1000-row default PostgREST cap silently truncating data.
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const res = await supabase
+        .from(table)
+        .select(columns)
+        .range(from, from + pageSize - 1);
+      if (res.error) return { data: null, error: res.error };
+      const rows = (res.data ?? []) as T[];
+      out.push(...rows);
+      if (rows.length < pageSize) break;
+      from += pageSize;
+    }
+    return { data: out, error: null };
+  }
+
   const [clientsRes, productsRes, historyRes, settingsRes, agreementsRes, installmentsRes] = await Promise.all([
     fetchAllRows<Record<string, unknown>>("clients", "*"),
     fetchAllRows<Record<string, unknown>>("products", "*"),
