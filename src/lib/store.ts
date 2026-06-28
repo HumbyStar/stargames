@@ -163,6 +163,8 @@ interface State {
     history: ImportHistoryEntry;
   }) => Promise<void>;
   executeDangerAction: (action: DangerAction) => Promise<void>;
+  fetchDiagnostics: () => Promise<ImportDiagnostics>;
+  clearImportCache: () => void;
 }
 
 const uid = () =>
