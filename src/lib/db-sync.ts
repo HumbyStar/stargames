@@ -174,7 +174,7 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
   const [clientsRes, productsRes, historyRes, settingsRes, agreementsRes, installmentsRes] = await Promise.all([
     supabase.from("clients").select("*"),
     supabase.from("products").select("*"),
-    supabase.from("import_history").select("*").order("date", { ascending: false }).limit(50),
+    supabase.from("import_history").select("*").order("date", { ascending: false }).limit(200),
     supabase.from("app_settings").select("*").eq("id", "default").maybeSingle(),
     supabase.from("mgmv_agreements").select("*"),
     supabase.from("mgmv_installments").select("*"),
