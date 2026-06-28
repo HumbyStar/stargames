@@ -48,6 +48,31 @@ import {
 } from "@/lib/store";
 import { NotificationsPrefsCard } from "@/components/notifications-prefs-card";
 
+function DiagBox({
+  label,
+  value,
+  status = "default",
+}: {
+  label: string;
+  value: number | string;
+  status?: "default" | "warning" | "danger";
+}) {
+  const ring =
+    status === "danger"
+      ? "border-destructive/50"
+      : status === "warning"
+        ? "border-amber-500/40"
+        : "border-border/60";
+  return (
+    <div className={`rounded-md border ${ring} bg-card/50 px-3 py-2`}>
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className="text-lg font-semibold">{value}</div>
+    </div>
+  );
+}
+
 const dangerCatalog: Record<
   DangerAction,
   { title: string; description: string; cta: string }
