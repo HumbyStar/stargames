@@ -171,13 +171,38 @@ export interface DbSnapshot {
 }
 
 export async function loadSnapshot(): Promise<DbSnapshot> {
+  type Page<T> = { data: T[] | null; error: unknown };
+  async function fetchAllRows<T = Record<string, unknown>>(
+    table: "clients" | "products" | "mgmv_agreements" | "mgmv_installments",
+    columns = "*",
+    pageSize = 1000,
+  ): Promise<Page<T>> {
+    const out: T[] = [];
+    let from = 0;
+    // Loop until a page returns fewer rows than the page size.
+    // Avoids the 1000-row default PostgREST cap silently truncating data.
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const res = await supabase
+        .from(table)
+        .select(columns)
+        .range(from, from + pageSize - 1);
+      if (res.error) return { data: null, error: res.error };
+      const rows = (res.data ?? []) as T[];
+      out.push(...rows);
+      if (rows.length < pageSize) break;
+      from += pageSize;
+    }
+    return { data: out, error: null };
+  }
+
   const [clientsRes, productsRes, historyRes, settingsRes, agreementsRes, installmentsRes] = await Promise.all([
-    supabase.from("clients").select("*"),
-    supabase.from("products").select("*"),
+    fetchAllRows<Record<string, unknown>>("clients", "*"),
+    fetchAllRows<Record<string, unknown>>("products", "*"),
     supabase.from("import_history").select("*").order("date", { ascending: false }).limit(200),
     supabase.from("app_settings").select("*").eq("id", "default").maybeSingle(),
-    supabase.from("mgmv_agreements").select("*"),
-    supabase.from("mgmv_installments").select("*"),
+    fetchAllRows<Record<string, unknown>>("mgmv_agreements", "*"),
+    fetchAllRows<Record<string, unknown>>("mgmv_installments", "*"),
   ]);
   if (clientsRes.error) logErr("loadClients", clientsRes.error);
   if (productsRes.error) logErr("loadProducts", productsRes.error);
@@ -232,7 +257,7 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
     });
   }
 
-  const clients = (clientsRes.data ?? []).map((r) => {
+  const clients = (clientsRes.data ?? []).map((r: Record<string, unknown>) => {
     const c = rowToClient(r as unknown as DbClientRow);
     const official = agreementsByClient.get(c.id);
     // Fonte oficial: tabela relacional. Sem registro relacional → sem mgmv.
@@ -241,8 +266,12 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
 
   return {
     clients,
-    products: (productsRes.data ?? []).map((r) => rowToProduct(r as unknown as DbProductRow)),
-    importHistory: (historyRes.data ?? []).map((r) => rowToHistory(r as unknown as DbImportHistoryRow)),
+    products: (productsRes.data ?? []).map((r: Record<string, unknown>) =>
+      rowToProduct(r as unknown as DbProductRow),
+    ),
+    importHistory: (historyRes.data ?? []).map((r: Record<string, unknown>) =>
+      rowToHistory(r as unknown as DbImportHistoryRow),
+    ),
     preferences: (settings?.preferences as Partial<SystemPreferences>) ?? {},
     rules: (settings?.rules as Partial<OperationalRules>) ?? {},
     security: (settings?.security as Partial<SecuritySettings>) ?? {},
