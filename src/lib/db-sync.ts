@@ -257,7 +257,7 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
     });
   }
 
-  const clients = (clientsRes.data ?? []).map((r) => {
+  const clients = (clientsRes.data ?? []).map((r: Record<string, unknown>) => {
     const c = rowToClient(r as unknown as DbClientRow);
     const official = agreementsByClient.get(c.id);
     // Fonte oficial: tabela relacional. Sem registro relacional → sem mgmv.
@@ -266,8 +266,12 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
 
   return {
     clients,
-    products: (productsRes.data ?? []).map((r) => rowToProduct(r as unknown as DbProductRow)),
-    importHistory: (historyRes.data ?? []).map((r) => rowToHistory(r as unknown as DbImportHistoryRow)),
+    products: (productsRes.data ?? []).map((r: Record<string, unknown>) =>
+      rowToProduct(r as unknown as DbProductRow),
+    ),
+    importHistory: (historyRes.data ?? []).map((r: Record<string, unknown>) =>
+      rowToHistory(r as unknown as DbImportHistoryRow),
+    ),
     preferences: (settings?.preferences as Partial<SystemPreferences>) ?? {},
     rules: (settings?.rules as Partial<OperationalRules>) ?? {},
     security: (settings?.security as Partial<SecuritySettings>) ?? {},
