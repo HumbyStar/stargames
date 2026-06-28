@@ -8,6 +8,7 @@ import { useUiStore } from "@/lib/ui-store";
 import { ClientesSection } from "@/sections/clientes-section";
 import { CollectionSection } from "@/sections/collection-section";
 import { MGMVSection } from "@/sections/mgmv-section";
+import { DashboardIntegrityCard } from "@/components/dashboard-integrity-card";
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
@@ -159,6 +160,10 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
             )}
           </div>
         </Card>
+      </div>
+
+      <div className="mt-6">
+        <DashboardIntegrityCard />
       </div>
     </section>
   );

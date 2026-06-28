@@ -166,6 +166,7 @@ interface State {
   executeDangerAction: (action: DangerAction) => Promise<void>;
   fetchDiagnostics: () => Promise<ImportDiagnostics>;
   clearImportCache: () => void;
+  refreshSnapshot: () => Promise<void>;
 }
 
 const uid = () =>
@@ -609,6 +610,18 @@ export const useStore = create<State>()((set, get) => ({
         clearImportRuntimeState();
         bumpResetVersion();
         void flushUiStateNow();
+      },
+      refreshSnapshot: async () => {
+        const snap = await loadSnapshot();
+        set({
+          clients: snap.clients,
+          products: snap.products,
+          importHistory: snap.importHistory,
+          preferences: { ...defaultPreferences, ...snap.preferences },
+          rules: { ...defaultRules, ...snap.rules },
+          security: { ...defaultSecurity, ...snap.security },
+          hydrated: true,
+        });
       },
 }));
 
