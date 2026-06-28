@@ -601,6 +601,12 @@ export const useStore = create<State>()((set, get) => ({
             return;
         }
       },
+      fetchDiagnostics: () => dbFetchDiagnostics(),
+      clearImportCache: () => {
+        clearImportRuntimeState();
+        bumpResetVersion();
+        void flushUiStateNow();
+      },
 }));
 
 export const formatBRL = (n: number) =>
