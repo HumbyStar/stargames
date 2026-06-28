@@ -172,12 +172,12 @@ export interface DbSnapshot {
 
 export async function loadSnapshot(): Promise<DbSnapshot> {
   const [clientsRes, productsRes, historyRes, settingsRes, agreementsRes, installmentsRes] = await Promise.all([
-    supabase.from("clients").select("*"),
-    supabase.from("products").select("*"),
+    fetchAllRows<Record<string, unknown>>("clients", "*"),
+    fetchAllRows<Record<string, unknown>>("products", "*"),
     supabase.from("import_history").select("*").order("date", { ascending: false }).limit(200),
     supabase.from("app_settings").select("*").eq("id", "default").maybeSingle(),
-    supabase.from("mgmv_agreements").select("*"),
-    supabase.from("mgmv_installments").select("*"),
+    fetchAllRows<Record<string, unknown>>("mgmv_agreements", "*"),
+    fetchAllRows<Record<string, unknown>>("mgmv_installments", "*"),
   ]);
   if (clientsRes.error) logErr("loadClients", clientsRes.error);
   if (productsRes.error) logErr("loadProducts", productsRes.error);
