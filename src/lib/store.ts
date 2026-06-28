@@ -166,6 +166,7 @@ interface State {
   executeDangerAction: (action: DangerAction) => Promise<void>;
   fetchDiagnostics: () => Promise<ImportDiagnostics>;
   clearImportCache: () => void;
+  refreshSnapshot: () => Promise<void>;
 }
 
 const uid = () =>
