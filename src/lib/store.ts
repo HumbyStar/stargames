@@ -535,8 +535,10 @@ export const useStore = create<State>()((set, get) => ({
             durationMs: entry.durationMs,
           };
           dbInsertHistory(newEntry);
+          // Mantém um buffer maior na memória — o banco preserva tudo;
+          // este slice é só pra UI não inflar indefinidamente.
           return {
-            importHistory: [newEntry, ...s.importHistory].slice(0, 50),
+            importHistory: [newEntry, ...s.importHistory].slice(0, 200),
           };
         }),
       persistConfirmedImport: async ({ clients, products, history }) => {
