@@ -975,8 +975,9 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         );
       }
       setZipProgress({ done: 0, total: rawEntries.length });
-      // Extract in chunks of 25 so the UI stays responsive on big archives.
-      const CHUNK = 25;
+      // Extrai em lotes para manter a UI responsiva em arquivos grandes.
+      // Lote maior em ZIPs grandes ajuda a throughput sem travar a aba.
+      const CHUNK = rawEntries.length > 1000 ? 100 : 50;
       for (let i = 0; i < rawEntries.length; i += CHUNK) {
         const slice = rawEntries.slice(i, i + CHUNK);
         await Promise.all(
