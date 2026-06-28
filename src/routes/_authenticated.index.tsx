@@ -84,6 +84,7 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
         <MetricCard label="Total Clientes" value={clients.length} />
+        <MetricCard label="Total Produtos" value={products.length} />
         <MetricCard label="Reservas Ativas" value={reservasAtivas} status="primary" />
         <MetricCard label="Reservas Vencidas" value={reservasVencidas} status="danger" />
         <MetricCard label="Pendências" value={pendencias} status="danger" />
