@@ -19,6 +19,10 @@ import {
   primeUiState,
   getUiValue,
   setUiValue,
+  dbSyncAgreementForClient,
+  dbSyncAgreementsBulkAsync,
+  dbFetchDiagnostics,
+  type ImportDiagnostics,
 } from "./db-sync";
 
 export type FinancialStatus = "Pago" | "Reserva" | "Pendente" | "MGMV";
@@ -466,7 +470,10 @@ export const useStore = create<State>()((set, get) => ({
             };
           });
           const updated = clients.find((c) => c.id === clientId);
-          if (updated) dbUpsertClient(updated);
+          if (updated) {
+            dbUpsertClient(updated);
+            dbSyncAgreementForClient(updated);
+          }
           return { clients };
         }),
       setMGMVAgreement: (clientId, agreement) =>
@@ -483,7 +490,10 @@ export const useStore = create<State>()((set, get) => ({
               : c,
           );
           const updated = clients.find((c) => c.id === clientId);
-          if (updated) dbUpsertClient(updated);
+          if (updated) {
+            dbUpsertClient(updated);
+            dbSyncAgreementForClient(updated);
+          }
           return { clients };
         }),
       setPreferences: (patch) =>
@@ -530,6 +540,14 @@ export const useStore = create<State>()((set, get) => ({
         await dbUpsertClientsAsync(clients);
         await dbUpsertProductsAsync(products);
         await dbUpsertHistoryAsync(history);
+        // Persistência oficial MGMV: para todo cliente com acordo, grava
+        // mgmv_agreements + mgmv_installments e atualiza flags dos produtos.
+        const mgmvClients = clients.filter(
+          (c) => c.mgmv && c.mgmv.installments.length > 0,
+        );
+        if (mgmvClients.length > 0) {
+          await dbSyncAgreementsBulkAsync(mgmvClients);
+        }
       },
       executeDangerAction: async (action) => {
         clearImportRuntimeState();
