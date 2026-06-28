@@ -12,6 +12,7 @@ import {
 } from "@/lib/store";
 import { MgmvAiReviewModal } from "@/components/mgmv-ai-review-modal";
 import type { MgmvAiReviewSuggestion } from "@/lib/mgmv-ai-review.functions";
+import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
 
 type MgmvChip =
   | "todos"
@@ -469,43 +470,4 @@ export function MGMVSection({
       })()}
     </section>
   );
-}
-
-function applySuggestionToAgreement(
-  current: MGMVAgreement,
-  s: MgmvAiReviewSuggestion,
-): MGMVAgreement {
-  const N = s.installmentsCount ?? current.installments.length;
-  const V =
-    s.installmentValue ?? current.installments[0]?.value ?? 0;
-  const T = s.totalAgreementValue ?? N * V;
-  const P = Math.max(0, Math.min(N, s.paidInstallments ?? 0));
-
-  // Preserva dueDates existentes quando possível; novas parcelas herdam a última.
-  const existing = current.installments;
-  const fallbackDue =
-    existing[existing.length - 1]?.dueDate ??
-    current.startDate ??
-    new Date().toISOString();
-  const nowIso = new Date().toISOString();
-
-  const installments: MGMVInstallment[] = Array.from({ length: N }, (_, i) => {
-    const number = i + 1;
-    const prior = existing.find((x) => x.number === number);
-    const paid = number <= P;
-    return {
-      number,
-      total: N,
-      dueDate: prior?.dueDate ?? fallbackDue,
-      value: V,
-      paid,
-      paidAt: paid ? prior?.paidAt ?? nowIso : undefined,
-    };
-  });
-
-  return {
-    startDate: current.startDate,
-    totalDebt: T,
-    installments,
-  };
 }
