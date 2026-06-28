@@ -44,6 +44,7 @@ import {
   formatDateBR,
   type DangerAction,
   type ImportStatus,
+  type ImportDiagnostics,
 } from "@/lib/store";
 import { NotificationsPrefsCard } from "@/components/notifications-prefs-card";
 
@@ -140,6 +141,29 @@ export function ConfiguracoesSection() {
   const setRules = useStore((s) => s.setRules);
   const setSecurity = useStore((s) => s.setSecurity);
   const executeDangerAction = useStore((s) => s.executeDangerAction);
+  const fetchDiagnostics = useStore((s) => s.fetchDiagnostics);
+  const clearImportCache = useStore((s) => s.clearImportCache);
+
+  const [diag, setDiag] = useState<ImportDiagnostics | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+
+  const refreshDiag = async () => {
+    setDiagLoading(true);
+    try {
+      const d = await fetchDiagnostics();
+      setDiag(d);
+    } catch (err) {
+      console.error(err);
+      toast.error("Não foi possível carregar o diagnóstico.");
+    } finally {
+      setDiagLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshDiag();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [prefDraft, setPrefDraft] = useState(preferences);
   const [rulesDraft, setRulesDraft] = useState(rules);
