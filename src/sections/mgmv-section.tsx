@@ -8,7 +8,6 @@ import {
   useStore,
   type Client,
   type MGMVAgreement,
-  type MGMVInstallment,
 } from "@/lib/store";
 import { MgmvAiReviewModal } from "@/components/mgmv-ai-review-modal";
 import type { MgmvAiReviewSuggestion } from "@/lib/mgmv-ai-review.functions";
