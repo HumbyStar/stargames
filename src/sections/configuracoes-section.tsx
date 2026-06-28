@@ -271,6 +271,82 @@ export function ConfiguracoesSection() {
         description="Gerencie preferências, regras operacionais, importações, segurança e manutenção do sistema."
       />
 
+      {/* Diagnóstico da Importação — leitura DIRETA das tabelas oficiais. */}
+      <Card title="Diagnóstico da Importação" className="mb-4">
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <DiagBox label="Clientes (banco)" value={diag?.clientsCount ?? "—"} />
+            <DiagBox label="Produtos (banco)" value={diag?.productsCount ?? "—"} />
+            <DiagBox
+              label="Acordos MGMV"
+              value={diag?.agreementsCount ?? "—"}
+              status={diag && diag.agreementsCount === 0 ? "warning" : "default"}
+            />
+            <DiagBox label="Parcelas MGMV" value={diag?.installmentsCount ?? "—"} />
+          </div>
+
+          <div className="grid gap-2 rounded-md border border-border/60 bg-card/50 p-3 text-xs">
+            <div className="flex items-center justify-between">
+              <span>Clientes MGMV sem acordo oficial</span>
+              <Tag
+                variant={
+                  diag && diag.mgmvClientsWithoutAgreement > 0 ? "danger" : "success"
+                }
+              >
+                {diag?.mgmvClientsWithoutAgreement ?? "—"}
+              </Tag>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Produtos marcados MGMV sem mgmv_agreement_id</span>
+              <Tag
+                variant={
+                  diag && diag.mgmvProductsWithoutAgreementId > 0 ? "danger" : "success"
+                }
+              >
+                {diag?.mgmvProductsWithoutAgreementId ?? "—"}
+              </Tag>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Importações interrompidas (import_progress)</span>
+              <Tag
+                variant={
+                  diag && diag.importProgressRows > 0 ? "warning" : "neutral"
+                }
+              >
+                {diag?.importProgressRows ?? "—"}
+              </Tag>
+            </div>
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span>Versão do reset (cache)</span>
+              <code className="text-[10px]">{diag?.resetVersion || "—"}</code>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" onClick={refreshDiag} disabled={diagLoading}>
+              {diagLoading ? "Atualizando…" : "Atualizar diagnóstico"}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                clearImportCache();
+                toast.success(
+                  "Cache temporário da importação limpo. Dados oficiais preservados.",
+                );
+                void refreshDiag();
+              }}
+            >
+              Limpar cache temporário da importação
+            </Button>
+            <p className="text-[11px] text-muted-foreground">
+              O botão limpa apenas o cache local (preview, progresso interrompido).
+              Não toca em clientes, produtos, acordos ou parcelas oficiais.
+            </p>
+          </div>
+        </div>
+      </Card>
+
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Preferências */}
         <Card title="Preferências do Sistema">
