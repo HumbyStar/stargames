@@ -19,7 +19,12 @@ import {
   primeUiState,
   getUiValue,
   setUiValue,
+  dbSyncAgreementForClient,
+  dbSyncAgreementsBulkAsync,
+  dbFetchDiagnostics,
 } from "./db-sync";
+import type { ImportDiagnostics } from "./db-sync";
+export type { ImportDiagnostics } from "./db-sync";
 
 export type FinancialStatus = "Pago" | "Reserva" | "Pendente" | "MGMV";
 export type Situation = "Em Aberto" | "Enviado" | "Desistiu" | "Abandonou" | "Resolvido";
@@ -159,6 +164,8 @@ interface State {
     history: ImportHistoryEntry;
   }) => Promise<void>;
   executeDangerAction: (action: DangerAction) => Promise<void>;
+  fetchDiagnostics: () => Promise<ImportDiagnostics>;
+  clearImportCache: () => void;
 }
 
 const uid = () =>
@@ -466,7 +473,10 @@ export const useStore = create<State>()((set, get) => ({
             };
           });
           const updated = clients.find((c) => c.id === clientId);
-          if (updated) dbUpsertClient(updated);
+          if (updated) {
+            dbUpsertClient(updated);
+            dbSyncAgreementForClient(updated);
+          }
           return { clients };
         }),
       setMGMVAgreement: (clientId, agreement) =>
@@ -483,7 +493,10 @@ export const useStore = create<State>()((set, get) => ({
               : c,
           );
           const updated = clients.find((c) => c.id === clientId);
-          if (updated) dbUpsertClient(updated);
+          if (updated) {
+            dbUpsertClient(updated);
+            dbSyncAgreementForClient(updated);
+          }
           return { clients };
         }),
       setPreferences: (patch) =>
@@ -530,6 +543,14 @@ export const useStore = create<State>()((set, get) => ({
         await dbUpsertClientsAsync(clients);
         await dbUpsertProductsAsync(products);
         await dbUpsertHistoryAsync(history);
+        // Persistência oficial MGMV: para todo cliente com acordo, grava
+        // mgmv_agreements + mgmv_installments e atualiza flags dos produtos.
+        const mgmvClients = clients.filter(
+          (c) => c.mgmv && c.mgmv.installments.length > 0,
+        );
+        if (mgmvClients.length > 0) {
+          await dbSyncAgreementsBulkAsync(mgmvClients);
+        }
       },
       executeDangerAction: async (action) => {
         clearImportRuntimeState();
@@ -580,6 +601,12 @@ export const useStore = create<State>()((set, get) => ({
           default:
             return;
         }
+      },
+      fetchDiagnostics: () => dbFetchDiagnostics(),
+      clearImportCache: () => {
+        clearImportRuntimeState();
+        bumpResetVersion();
+        void flushUiStateNow();
       },
 }));
 

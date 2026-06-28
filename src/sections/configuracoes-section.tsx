@@ -44,8 +44,34 @@ import {
   formatDateBR,
   type DangerAction,
   type ImportStatus,
+  type ImportDiagnostics,
 } from "@/lib/store";
 import { NotificationsPrefsCard } from "@/components/notifications-prefs-card";
+
+function DiagBox({
+  label,
+  value,
+  status = "default",
+}: {
+  label: string;
+  value: number | string;
+  status?: "default" | "warning" | "danger";
+}) {
+  const ring =
+    status === "danger"
+      ? "border-destructive/50"
+      : status === "warning"
+        ? "border-amber-500/40"
+        : "border-border/60";
+  return (
+    <div className={`rounded-md border ${ring} bg-card/50 px-3 py-2`}>
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className="text-lg font-semibold">{value}</div>
+    </div>
+  );
+}
 
 const dangerCatalog: Record<
   DangerAction,
@@ -140,6 +166,29 @@ export function ConfiguracoesSection() {
   const setRules = useStore((s) => s.setRules);
   const setSecurity = useStore((s) => s.setSecurity);
   const executeDangerAction = useStore((s) => s.executeDangerAction);
+  const fetchDiagnostics = useStore((s) => s.fetchDiagnostics);
+  const clearImportCache = useStore((s) => s.clearImportCache);
+
+  const [diag, setDiag] = useState<ImportDiagnostics | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+
+  const refreshDiag = async () => {
+    setDiagLoading(true);
+    try {
+      const d = await fetchDiagnostics();
+      setDiag(d);
+    } catch (err) {
+      console.error(err);
+      toast.error("Não foi possível carregar o diagnóstico.");
+    } finally {
+      setDiagLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshDiag();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [prefDraft, setPrefDraft] = useState(preferences);
   const [rulesDraft, setRulesDraft] = useState(rules);
@@ -246,6 +295,82 @@ export function ConfiguracoesSection() {
         title="Configurações"
         description="Gerencie preferências, regras operacionais, importações, segurança e manutenção do sistema."
       />
+
+      {/* Diagnóstico da Importação — leitura DIRETA das tabelas oficiais. */}
+      <Card title="Diagnóstico da Importação" className="mb-4">
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <DiagBox label="Clientes (banco)" value={diag?.clientsCount ?? "—"} />
+            <DiagBox label="Produtos (banco)" value={diag?.productsCount ?? "—"} />
+            <DiagBox
+              label="Acordos MGMV"
+              value={diag?.agreementsCount ?? "—"}
+              status={diag && diag.agreementsCount === 0 ? "warning" : "default"}
+            />
+            <DiagBox label="Parcelas MGMV" value={diag?.installmentsCount ?? "—"} />
+          </div>
+
+          <div className="grid gap-2 rounded-md border border-border/60 bg-card/50 p-3 text-xs">
+            <div className="flex items-center justify-between">
+              <span>Clientes MGMV sem acordo oficial</span>
+              <Tag
+                variant={
+                  diag && diag.mgmvClientsWithoutAgreement > 0 ? "danger" : "success"
+                }
+              >
+                {diag?.mgmvClientsWithoutAgreement ?? "—"}
+              </Tag>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Produtos marcados MGMV sem mgmv_agreement_id</span>
+              <Tag
+                variant={
+                  diag && diag.mgmvProductsWithoutAgreementId > 0 ? "danger" : "success"
+                }
+              >
+                {diag?.mgmvProductsWithoutAgreementId ?? "—"}
+              </Tag>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Importações interrompidas (import_progress)</span>
+              <Tag
+                variant={
+                  diag && diag.importProgressRows > 0 ? "warning" : "neutral"
+                }
+              >
+                {diag?.importProgressRows ?? "—"}
+              </Tag>
+            </div>
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span>Versão do reset (cache)</span>
+              <code className="text-[10px]">{diag?.resetVersion || "—"}</code>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" onClick={refreshDiag} disabled={diagLoading}>
+              {diagLoading ? "Atualizando…" : "Atualizar diagnóstico"}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                clearImportCache();
+                toast.success(
+                  "Cache temporário da importação limpo. Dados oficiais preservados.",
+                );
+                void refreshDiag();
+              }}
+            >
+              Limpar cache temporário da importação
+            </Button>
+            <p className="text-[11px] text-muted-foreground">
+              O botão limpa apenas o cache local (preview, progresso interrompido).
+              Não toca em clientes, produtos, acordos ou parcelas oficiais.
+            </p>
+          </div>
+        </div>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Preferências */}
