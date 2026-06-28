@@ -160,6 +160,34 @@ function logErr(scope: string, err: unknown) {
 
 // ============= Loaders =============
 
+/**
+ * Paginação genérica para contornar o teto padrão de 1000 linhas do PostgREST.
+ * Lê em páginas de `pageSize` (default 1000) até receber uma página menor.
+ * Exportado para testes.
+ */
+export type FetchAllPage<T> = { data: T[] | null; error: unknown };
+export async function fetchAllRows<T = Record<string, unknown>>(
+  table: "clients" | "products" | "mgmv_agreements" | "mgmv_installments",
+  columns = "*",
+  pageSize = 1000,
+): Promise<FetchAllPage<T>> {
+  const out: T[] = [];
+  let from = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const res = await supabase
+      .from(table)
+      .select(columns)
+      .range(from, from + pageSize - 1);
+    if (res.error) return { data: null, error: res.error };
+    const rows = (res.data ?? []) as T[];
+    out.push(...rows);
+    if (rows.length < pageSize) break;
+    from += pageSize;
+  }
+  return { data: out, error: null };
+}
+
 export interface DbSnapshot {
   clients: Client[];
   products: Product[];
