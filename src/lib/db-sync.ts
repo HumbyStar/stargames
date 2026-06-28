@@ -465,7 +465,9 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
     return;
   }
 
-  // Substitui parcelas (estratégia simples: delete + insert).
+  // Substitui parcelas (estratégia simples: delete + insert em lotes).
+  // Acordos podem ter dezenas/centenas de parcelas — envia em lotes para
+  // não estourar o payload do PostgREST e manter o sync resiliente.
   const delIns = await supabase.from("mgmv_installments").delete().eq("agreement_id", agreementId);
   if (delIns.error) logErr("syncAgreement.delInstallments", delIns.error);
   if (sorted.length > 0) {
@@ -477,8 +479,13 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
       paid_at: i.paid ? (i.paidAt ?? new Date().toISOString()) : null,
       status: i.paid ? "Paga" : "Pendente",
     }));
-    const insIns = await supabase.from("mgmv_installments").insert(rows as never);
-    if (insIns.error) logErr("syncAgreement.insertInstallments", insIns.error);
+    const CHUNK = 200;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const insIns = await supabase
+        .from("mgmv_installments")
+        .insert(rows.slice(i, i + CHUNK) as never);
+      if (insIns.error) logErr("syncAgreement.insertInstallments", insIns.error);
+    }
   }
 
   // Atualiza flags dos produtos do cliente: produtos com financialStatus
