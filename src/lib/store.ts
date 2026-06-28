@@ -22,8 +22,9 @@ import {
   dbSyncAgreementForClient,
   dbSyncAgreementsBulkAsync,
   dbFetchDiagnostics,
-  type ImportDiagnostics,
 } from "./db-sync";
+import type { ImportDiagnostics } from "./db-sync";
+export type { ImportDiagnostics } from "./db-sync";
 
 export type FinancialStatus = "Pago" | "Reserva" | "Pendente" | "MGMV";
 export type Situation = "Em Aberto" | "Enviado" | "Desistiu" | "Abandonou" | "Resolvido";
