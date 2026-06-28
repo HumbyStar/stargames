@@ -611,6 +611,18 @@ export const useStore = create<State>()((set, get) => ({
         bumpResetVersion();
         void flushUiStateNow();
       },
+      refreshSnapshot: async () => {
+        const snap = await loadSnapshot();
+        set({
+          clients: snap.clients,
+          products: snap.products,
+          importHistory: snap.importHistory,
+          preferences: { ...defaultPreferences, ...snap.preferences },
+          rules: { ...defaultRules, ...snap.rules },
+          security: { ...defaultSecurity, ...snap.security },
+          hydrated: true,
+        });
+      },
 }));
 
 export const formatBRL = (n: number) =>
