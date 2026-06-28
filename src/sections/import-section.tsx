@@ -578,11 +578,19 @@ const maskPhone = (p: string) => {
   return `${d.slice(0, 2)} ****-${d.slice(-4)}`;
 };
 
-/** Limites duros para abrir um ZIP — protege contra zip-bomb e travamento. */
+/**
+ * Tetos de sanidade para abrir um ZIP — existem APENAS para conter zip-bomb
+ * e travamento do navegador. Não são cortes de "primeiros N": quando o ZIP
+ * cabe nos tetos, todos os arquivos são processados em lotes (CHUNK abaixo).
+ * Volumes muito altos disparam aviso e processam mesmo assim.
+ */
 const ZIP_LIMITS = {
-  maxFiles: 2000,
-  maxFileBytes: 2 * 1024 * 1024,
-  maxTotalBytes: 100 * 1024 * 1024,
+  /** Apenas para alertar — não trunca mais. Importação processa todos. */
+  highVolumeFiles: 2000,
+  /** Por arquivo HTML individual (cliente). Notion exporta páginas grandes. */
+  maxFileBytes: 25 * 1024 * 1024,
+  /** ZIP inteiro. Acima disto o navegador costuma travar ao alocar buffer. */
+  maxTotalBytes: 500 * 1024 * 1024,
 };
 
 /** sha1 hex via Web Crypto API. Usado como fingerprint do arquivo importado. */
@@ -915,7 +923,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     }
     if (file.size > ZIP_LIMITS.maxTotalBytes) {
       return toast.error(
-        `ZIP excede o limite de ${(ZIP_LIMITS.maxTotalBytes / 1024 / 1024) | 0} MB.`,
+        `ZIP excede o teto de ${(ZIP_LIMITS.maxTotalBytes / 1024 / 1024) | 0} MB. Esse limite existe para o navegador não travar — para volumes ainda maiores, use a importação por backend (em breve).`,
       );
     }
     setZipProcessing(true);
@@ -956,11 +964,15 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         folders.add(folderName);
         rawEntries.push({ path, fileName, folderName, entry });
       });
-      if (rawEntries.length > ZIP_LIMITS.maxFiles) {
+      if (rawEntries.length > ZIP_LIMITS.highVolumeFiles) {
+        // Não corta mais. Apenas avisa que será processado em lotes.
         globalErrors.push(
-          `ZIP contém ${rawEntries.length} arquivos — acima do limite de ${ZIP_LIMITS.maxFiles}. Apenas os primeiros serão processados.`,
+          `Volume alto detectado: ${rawEntries.length} arquivos HTML. A importação será processada em lotes para evitar travamentos — pode levar alguns minutos. Não feche esta tela até concluir.`,
         );
-        rawEntries.length = ZIP_LIMITS.maxFiles;
+        toast.warning(
+          `Volume alto: ${rawEntries.length} arquivos. Processando em lotes…`,
+          { duration: 6000 },
+        );
       }
       setZipProgress({ done: 0, total: rawEntries.length });
       // Extract in chunks of 25 so the UI stays responsive on big archives.
