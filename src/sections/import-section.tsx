@@ -31,6 +31,8 @@ import { toast } from "sonner";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { ImportProgressModal, type ImportProgressState } from "@/components/import-progress-modal";
+import { ImportCard, ImportCardsGrid } from "@/components/import-cards";
+import { Users, ShieldCheck, Box, Wallet, AlertOctagon, Brain } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface ParsedRow {
