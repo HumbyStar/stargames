@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -20,7 +20,6 @@ import {
   ShieldCheck,
   Sparkles,
   Timer,
-  Trophy,
   UserPlus,
   Zap,
 } from "lucide-react";
