@@ -200,6 +200,8 @@ interface State {
   fetchDiagnostics: () => Promise<ImportDiagnostics>;
   clearImportCache: () => void;
   refreshSnapshot: () => Promise<void>;
+  findDuplicateClientGroups: () => DuplicateClientGroup[];
+  mergeDuplicateClients: () => Promise<MergeDuplicatesResult>;
 }
 
 export interface DuplicateClientGroup {
