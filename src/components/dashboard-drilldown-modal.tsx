@@ -314,10 +314,14 @@ export function DashboardDrilldownModal({
   cardId,
   onClose,
   onScrollTo,
+  origin,
+  onBackToConcierge,
 }: {
   cardId: DashboardCardId | null;
   onClose: () => void;
   onScrollTo: (id: string) => void;
+  origin?: string;
+  onBackToConcierge?: () => void;
 }) {
   const { clients, products, openClient, registerPayment, setProductSituation, payMGMVInstallment } =
     useStore();
