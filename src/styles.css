@@ -289,6 +289,13 @@
     0 0 0 4px rgba(255, 255, 255, 0.06);
   animation: tutorial-bob 2.6s ease-in-out infinite;
 }
+.tutorial-avatar-mascot {
+  background: radial-gradient(circle at 35% 30%, #fef3c7 0%, #fde047 55%, #f59e0b 100%);
+  padding: 2px;
+}
+.tutorial-avatar-mascot > img {
+  border-radius: 9999px;
+}
 .dark .tutorial-avatar-placeholder {
   border-color: #0f172a;
   box-shadow:
@@ -310,6 +317,48 @@
   transition: top 420ms cubic-bezier(0.22, 1, 0.36, 1),
     left 420ms cubic-bezier(0.22, 1, 0.36, 1);
   animation: tutorial-pop 220ms ease-out;
+}
+.tutorial-balloon::before,
+.tutorial-balloon::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background: var(--color-popover);
+  border: 1px solid color-mix(in oklch, var(--color-foreground) 12%, transparent);
+  transform: rotate(45deg);
+}
+.tutorial-balloon::after {
+  /* máscara para esconder a borda interna do tail */
+  border: none;
+  width: 18px;
+  height: 18px;
+}
+.tutorial-balloon[data-tail-side="left"]::before,
+.tutorial-balloon[data-tail-side="left"]::after {
+  left: -8px;
+  top: 24px;
+}
+.tutorial-balloon[data-tail-side="left"]::after {
+  left: -6px;
+  top: 23px;
+}
+.tutorial-balloon[data-tail-side="right"]::before,
+.tutorial-balloon[data-tail-side="right"]::after {
+  right: -8px;
+  top: 24px;
+}
+.tutorial-balloon[data-tail-side="right"]::after {
+  right: -6px;
+  top: 23px;
+}
+.tutorial-balloon[data-tail-side="bottom"]::before,
+.tutorial-balloon[data-tail-side="bottom"]::after {
+  left: 28px;
+  top: -8px;
+}
+.tutorial-balloon[data-tail-side="bottom"]::after {
+  top: -6px;
 }
 @keyframes tutorial-fade {
   from { opacity: 0; }
