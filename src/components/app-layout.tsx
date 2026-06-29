@@ -274,8 +274,41 @@ function FloatingNavbar() {
   const [navHover, setNavHover] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [navSize, setNavSize] = useState({ width: 0, height: 0 });
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
+  const navBorderPath = useMemo(() => {
+    const width = Math.max(navSize.width - 1.5, 0);
+    const height = Math.max(navSize.height - 1.5, 0);
+    const radius = Math.max(height / 2, 0);
+    if (!width || !height) return "";
+    return [
+      `M ${radius + 0.75} 0.75`,
+      `H ${width - radius + 0.75}`,
+      `A ${radius} ${radius} 0 0 1 ${width + 0.75} ${radius + 0.75}`,
+      `V ${height - radius + 0.75}`,
+      `A ${radius} ${radius} 0 0 1 ${width - radius + 0.75} ${height + 0.75}`,
+      `H ${radius + 0.75}`,
+      `A ${radius} ${radius} 0 0 1 0.75 ${height - radius + 0.75}`,
+      `V ${radius + 0.75}`,
+      `A ${radius} ${radius} 0 0 1 ${radius + 0.75} 0.75`,
+      "Z",
+    ].join(" ");
+  }, [navSize.height, navSize.width]);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const update = () => {
+      const { width, height } = nav.getBoundingClientRect();
+      setNavSize({ width, height });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(nav);
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     if (!searchOpen) return;
     const onDown = (e: MouseEvent) => {
@@ -358,22 +391,18 @@ function FloatingNavbar() {
         isCompact && "md:gap-2 md:py-2 md:px-3",
       )}
     >
-      {/* Looping border highlight that travels along the pill perimeter on hover */}
-      <svg
-        aria-hidden
-        className="nav-progress-ring pointer-events-none absolute inset-0 h-full w-full overflow-visible"
-        preserveAspectRatio="none"
-      >
-        <rect
-          x="0"
-          y="0"
-          width="100%"
-          height="100%"
-          rx="9999"
-          ry="9999"
-          pathLength={100}
-        />
-      </svg>
+      {/* Looping border highlight on the navbar container border itself */}
+      {navBorderPath && (
+        <svg
+          aria-hidden
+          className="nav-progress-ring pointer-events-none absolute overflow-visible"
+          viewBox={`0 0 ${navSize.width} ${navSize.height}`}
+          preserveAspectRatio="none"
+        >
+          <path className="nav-progress-track" d={navBorderPath} pathLength={100} />
+          <path className="nav-progress-runner" d={navBorderPath} pathLength={100} />
+        </svg>
+      )}
       <button
         type="button"
         onClick={openConcierge}
