@@ -275,10 +275,33 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <MetricCard label="Total de Clientes" value={totalClients} />
-        <MetricCard label="Clientes com Pendência" value={clientesPendencia} status="danger" />
-        <MetricCard label="Clientes em MGMV" value={clientesMGMV} status="primary" />
-        <MetricCard label="Pagos aguardando envio" value={pagosAgEnvio} status="success" />
+        <MetricCard
+          label="Total de Clientes"
+          value={totalClients}
+          onClick={() => applyCardFilter("todos")}
+          tooltip="Ver todos os clientes"
+        />
+        <MetricCard
+          label="Clientes com Pendência"
+          value={clientesPendencia}
+          status="danger"
+          onClick={() => applyCardFilter("pendente")}
+          tooltip="Ver clientes com pendência"
+        />
+        <MetricCard
+          label="Clientes em MGMV"
+          value={clientesMGMV}
+          status="primary"
+          onClick={() => applyCardFilter("mgmv")}
+          tooltip="Ver clientes em MGMV"
+        />
+        <MetricCard
+          label="Pagos aguardando envio"
+          value={pagosAgEnvio}
+          status="success"
+          onClick={() => applyCardFilter("pago_aguardando")}
+          tooltip="Ver pagos aguardando envio"
+        />
       </div>
 
       <Card className="mt-6">
