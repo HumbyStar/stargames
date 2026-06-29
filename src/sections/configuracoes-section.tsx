@@ -377,6 +377,91 @@ export function ConfiguracoesSection() {
         </div>
       </Card>
 
+      {/* Deduplicação de clientes */}
+      <Card title="Clientes duplicados" className="mb-4">
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Detecta clientes com o mesmo telefone (ou mesmo nome quando o
+            telefone está vazio) e unifica em um único cliente primário,
+            preservando produtos, acordos MGMV e observações.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Tag variant={duplicateGroups.length > 0 ? "warning" : "success"}>
+              {duplicateGroups.length} grupo(s) duplicado(s)
+            </Tag>
+            <Tag variant="neutral">
+              {duplicateGroups.reduce((s, g) => s + g.duplicateIds.length, 0)} cliente(s) a remover
+            </Tag>
+            <Tag variant="neutral">
+              {duplicateGroups.reduce((s, g) => s + g.productsToReassign, 0)} produto(s) a reatribuir
+            </Tag>
+          </div>
+
+          {duplicateGroups.length > 0 && (
+            <div className="max-h-48 overflow-auto rounded-md border border-border/60 bg-card/50 p-2 text-xs">
+              <ul className="space-y-1">
+                {duplicateGroups.slice(0, 50).map((g) => (
+                  <li key={g.key} className="flex items-center justify-between gap-2">
+                    <span className="truncate">
+                      <strong>{g.name}</strong>{" "}
+                      <span className="text-muted-foreground">({g.phone || "sem telefone"})</span>
+                    </span>
+                    <span className="text-muted-foreground">
+                      mantém 1 · remove {g.duplicateIds.length} · move {g.productsToReassign} prod
+                    </span>
+                  </li>
+                ))}
+                {duplicateGroups.length > 50 && (
+                  <li className="text-muted-foreground">
+                    … e mais {duplicateGroups.length - 50} grupo(s)
+                  </li>
+                )}
+              </ul>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="default"
+              disabled={duplicateGroups.length === 0 || mergeBusy}
+              onClick={async () => {
+                if (duplicateGroups.length === 0) return;
+                const total = duplicateGroups.reduce(
+                  (s, g) => s + g.duplicateIds.length,
+                  0,
+                );
+                if (
+                  !confirm(
+                    `Unificar ${duplicateGroups.length} grupo(s)? ${total} cliente(s) duplicado(s) serão removidos e seus produtos/acordos reatribuídos ao cliente primário. Esta ação não pode ser desfeita.`,
+                  )
+                )
+                  return;
+                setMergeBusy(true);
+                try {
+                  const r = await mergeDuplicateClients();
+                  toast.success(
+                    `Unificação concluída: ${r.groups} grupo(s), ${r.removed} cliente(s) removidos, ${r.reassignedProducts} produto(s) reatribuídos.`,
+                  );
+                  await refreshSnapshot();
+                  await refreshDiag();
+                } catch (err) {
+                  console.error(err);
+                  toast.error("Falha ao unificar duplicados.");
+                } finally {
+                  setMergeBusy(false);
+                }
+              }}
+            >
+              {mergeBusy ? "Unificando…" : "Unificar duplicados"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => void refreshSnapshot()}>
+              Recarregar lista
+            </Button>
+          </div>
+        </div>
+      </Card>
+
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Preferências */}
         <Card title="Preferências do Sistema">
