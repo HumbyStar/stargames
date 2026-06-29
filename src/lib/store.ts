@@ -528,6 +528,44 @@ export const useStore = create<State>()((set, get) => ({
           }
           return { clients };
         }),
+      applyAiReviewToAgreement: async (clientId, nextAgreement, meta) => {
+        const prevClient = get().clients.find((c) => c.id === clientId);
+        const prevAgreement = prevClient?.mgmv;
+        const reviewStatus: MGMVAgreement["reviewStatus"] =
+          meta.mathOk || meta.confirmedWithConflict ? "ai_reviewed" : "review_required";
+        const merged: MGMVAgreement = {
+          ...nextAgreement,
+          reviewStatus,
+          aiReviewed: reviewStatus === "ai_reviewed",
+          aiReviewAppliedAt:
+            reviewStatus === "ai_reviewed" ? new Date().toISOString() : prevAgreement?.aiReviewAppliedAt,
+          aiConfidence: meta.confidence,
+          aiReviewRawResult: meta.rawResult,
+        };
+        set((s) => ({
+          clients: s.clients.map((c) =>
+            c.id === clientId
+              ? { ...c, mgmv: merged, clientType: "mgmv" as "mgmv" | "common" }
+              : c,
+          ),
+        }));
+        const updated = get().clients.find((c) => c.id === clientId);
+        if (updated) {
+          dbUpsertClient(updated);
+          await dbSyncAgreementForClientAsync(updated);
+          await dbInsertMgmvReviewAuditLog({
+            clientId,
+            agreementId: clientId,
+            previousReviewStatus: prevAgreement?.reviewStatus ?? "review_required",
+            newReviewStatus: reviewStatus,
+            previousAgreement: prevAgreement,
+            newAgreement: merged,
+            confidence: meta.confidence,
+            confirmedWithConflict: !!meta.confirmedWithConflict,
+            mathOk: meta.mathOk,
+          });
+        }
+      },
       setPreferences: (patch) =>
         set((s) => {
           const preferences = { ...s.preferences, ...patch };
