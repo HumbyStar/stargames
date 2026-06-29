@@ -605,8 +605,21 @@ export function MGMVSection({
               })}
             </tbody>
           </table>
-        </div>
       </div>
+      {filtered.length > 0 && (
+        <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
+          <span>Exibindo {pagedRows.length} de {filtered.length} acordo(s)</span>
+          {hasMore ? (
+            <LoadMoreButton
+              count={Math.min(pageSize, filtered.length - pagedRows.length)}
+              onClick={() => setVisibleCount((c) => c + pageSize)}
+            />
+          ) : (
+            <span>Todos os acordos carregados.</span>
+          )}
+        </div>
+      )}
+      </>
       )}
       </Card>
       {(() => {
