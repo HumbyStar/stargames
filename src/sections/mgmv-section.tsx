@@ -32,7 +32,8 @@ type MgmvChip =
   | "revisado_ia"
   | "revisado_manual"
   | "vencem_hoje"
-  | "vencidos";
+  | "vencidos"
+  | "com_produtos_externos";
 
 interface MgmvRow {
   client: Client;
@@ -216,6 +217,10 @@ export function MGMVSection({
       0,
     );
     const saldoTotal = rows.reduce((s, r) => s + r.remainingValue, 0);
+    // Clientes MGMV que também compraram produtos comuns (fora do acordo).
+    const comProdutosExternos = rows.filter((r) =>
+      products.some((p) => p.clientId === r.client.id),
+    ).length;
     return {
       clientes: rows.length,
       ativos,
@@ -226,8 +231,9 @@ export function MGMVSection({
       revisadoManual,
       parcelasVencidas,
       saldoTotal,
+      comProdutosExternos,
     };
-  }, [rows]);
+  }, [rows, products]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -257,11 +263,13 @@ export function MGMVSection({
           return r.agreement.installments.some(
             (i) => !i.paid && isOverdue(i.dueDate),
           );
+        case "com_produtos_externos":
+          return products.some((p) => p.clientId === r.client.id);
         default:
           return true;
       }
     });
-  }, [rows, search, chip]);
+  }, [rows, search, chip, products]);
 
   useEffect(() => {
     setVisibleCount(pageSize);
@@ -283,6 +291,11 @@ export function MGMVSection({
     { id: "revisado_manual", label: "Revisado manualmente", count: stats.revisadoManual },
     { id: "vencem_hoje", label: "Vencem hoje" },
     { id: "vencidos", label: "Vencidos" },
+    {
+      id: "com_produtos_externos",
+      label: "Com produtos fora do MGMV",
+      count: stats.comProdutosExternos,
+    },
   ];
 
   return (
@@ -305,7 +318,7 @@ export function MGMVSection({
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-7">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
         <MetricCard
           label="Clientes MGMV"
           value={stats.clientes}
@@ -352,6 +365,13 @@ export function MGMVSection({
           value={formatBRL(stats.saldoTotal)}
           onClick={() => applyCardFilter("todos")}
           tooltip="Ver acordos com saldo restante"
+        />
+        <MetricCard
+          label="Com produtos externos"
+          value={stats.comProdutosExternos}
+          status={stats.comProdutosExternos > 0 ? "warning" : "default"}
+          onClick={() => applyCardFilter("com_produtos_externos")}
+          tooltip="Ver clientes MGMV que também compraram produtos fora do acordo"
         />
       </div>
 
