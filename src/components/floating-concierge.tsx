@@ -81,20 +81,15 @@ export function FloatingConcierge() {
       }}
       className={cn(
         "fixed right-4 md:right-6 z-40",
-        "group grid place-items-center rounded-full",
-        "size-12 md:size-14",
-        "bg-gradient-to-br from-primary/90 to-[oklch(0.65_0.22_280)]",
-        "shadow-xl ring-2 ring-primary/30",
-        "transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:ring-primary/60 active:scale-95",
+        "group transition-all duration-300 hover:-translate-y-1 active:scale-95",
         alert.count > 0 && "animate-pulse-soft",
       )}
     >
-      <span className="absolute inset-0 rounded-full bg-primary/20 blur-xl opacity-60 group-hover:opacity-100 transition-opacity" />
       <img
         src={mascotAsset.url}
         alt=""
         draggable={false}
-        className="relative size-9 md:size-11 rounded-full object-cover"
+        className="size-12 md:size-14 rounded-full object-cover shadow-xl ring-2 ring-primary/30 transition-all duration-300 group-hover:shadow-2xl group-hover:ring-primary/60"
       />
       {alert.count > 0 && (
         <span
