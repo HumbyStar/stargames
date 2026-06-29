@@ -269,19 +269,16 @@ export function MGMVSection({
       <PageHeader
         title="MGMV"
         description="Controle acordos MGMV, parcelas, vencimentos, saldos e clientes agrupados."
+        actions={
+          <Button
+            variant="outline"
+            disabled={reprocessing}
+            onClick={reprocessFromNotes}
+          >
+            {reprocessing ? "Reprocessando…" : "Reprocessar MGMV por observações"}
+          </Button>
+        }
       />
-
-      <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
-        <ListExpansionToggle section="mgmv" />
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={reprocessing}
-          onClick={reprocessFromNotes}
-        >
-          {reprocessing ? "Reprocessando…" : "Reprocessar MGMV por observações"}
-        </Button>
-      </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-7">
         <MetricCard label="Clientes MGMV" value={stats.clientes} status="primary" />
@@ -305,48 +302,68 @@ export function MGMVSection({
         <MetricCard label="Saldo total" value={formatBRL(stats.saldoTotal)} />
       </div>
 
-      <div className="mt-6 flex flex-wrap items-center gap-2">
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar cliente, telefone…"
-          className="h-9 w-full max-w-xs rounded-full border border-border bg-background/60 px-4 text-sm outline-none transition focus:border-primary/40"
-        />
-        <div className="flex flex-wrap gap-1">
-          {chips.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setChip(c.id)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
-                chip === c.id
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-foreground/5 text-muted-foreground hover:bg-foreground/10"
-              }`}
-            >
-              {c.label}
-              {typeof c.count === "number" && (
-                <span className="ml-1 opacity-70">({c.count})</span>
+      <Card className="mt-6">
+        <div className="space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar cliente, telefone…"
+                className="h-10 w-full rounded-full border border-input bg-background px-4 pr-10 text-sm outline-none focus:border-primary/40"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Limpar busca"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               )}
-            </button>
-          ))}
-        </div>
-      </div>
+            </div>
+            <ListExpansionToggle section="mgmv" />
+          </div>
 
-      {!listExpanded && (
-        <MinimizedListCard
-          section="mgmv"
-          title="Lista MGMV minimizada"
-          lines={[
-            `${filtered.length} acordo(s) encontrado(s)`,
-            stats.revisao > 0
-              ? `${stats.revisao} em revisão necessária`
-              : "Nenhum em revisão necessária",
-            `Saldo total: ${formatBRL(stats.saldoTotal)}`,
-          ]}
-        />
-      )}
-      {listExpanded && (
+          <div className="flex flex-wrap gap-2">
+            {chips.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setChip(c.id)}
+                className={
+                  "rounded-full px-3 py-1 text-xs font-medium transition-colors " +
+                  (chip === c.id
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-accent")
+                }
+              >
+                {c.label}
+                {typeof c.count === "number" && (
+                  <span className="ml-1 opacity-70">({c.count})</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+            <div>{filtered.length} acordo(s) encontrado(s)</div>
+          </div>
+        </div>
+
+        {!listExpanded && (
+          <MinimizedListCard
+            section="mgmv"
+            title="Lista MGMV minimizada"
+            lines={[
+              `${filtered.length} acordo(s) encontrado(s)`,
+              stats.revisao > 0
+                ? `${stats.revisao} em revisão necessária`
+                : "Nenhum em revisão necessária",
+              `Saldo total: ${formatBRL(stats.saldoTotal)}`,
+            ]}
+          />
+        )}
+        {listExpanded && (
       <div className="mt-4 overflow-hidden rounded-xl border border-border bg-card shadow-xs">
         <div className="max-h-[640px] overflow-auto">
           <table className="w-full text-sm">
