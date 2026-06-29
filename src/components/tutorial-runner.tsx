@@ -170,6 +170,12 @@ export function TutorialRunner() {
     balloonLeft = window.innerWidth / 2 - balloonWidth / 2;
   }
 
+  const tailSide: "left" | "right" | "bottom" = isMobile
+    ? "bottom"
+    : balloonLeft >= avatarLeft
+      ? "left"
+      : "right";
+
   const content = (
     <div className="tutorial-root" role="dialog" aria-modal="true" aria-label={`Tutorial: ${tutorial.title}`}>
       <div className="tutorial-overlay" onClick={handleSkip} />
@@ -193,6 +199,7 @@ export function TutorialRunner() {
       {/* Balão */}
       <div
         className="tutorial-balloon"
+        data-tail-side={tailSide}
         style={
           isMobile
             ? { bottom: 16, left: 16, right: 16, width: "auto", top: "auto" }
@@ -201,7 +208,7 @@ export function TutorialRunner() {
       >
         <div className="flex items-center justify-between gap-2">
           <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Passo {stepIndex + 1} de {tutorial.steps.length}
+            {tutorial.title} · Passo {stepIndex + 1}/{tutorial.steps.length}
           </span>
           <button
             onClick={handleSkip}

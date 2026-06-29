@@ -1,5 +1,6 @@
 import { Star } from "lucide-react";
 import { cn } from "@/lib/utils";
+import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 
 export type TutorialAvatarExpression = "happy" | "pointing" | "thinking" | "warning" | "success";
 
@@ -10,20 +11,34 @@ export type TutorialAvatarProps = {
   className?: string;
 };
 
+const DEFAULT_MASCOT_URL = mascotAsset.url;
+
 /**
- * Placeholder do mascote do tutorial.
- * Hoje renderiza um círculo amarelo com uma estrela ao centro.
- * Quando `imageUrl` for informado, basta passar a URL para trocar pelo retrato real.
+ * Mascote do tutorial guiado.
+ * Por padrão usa o personagem oficial; aceita `imageUrl` para sobrescrever.
  */
-export function TutorialAvatar({ imageUrl, expression = "happy", size = 76, className }: TutorialAvatarProps) {
+export function TutorialAvatar({
+  imageUrl = DEFAULT_MASCOT_URL,
+  expression = "happy",
+  size = 76,
+  className,
+}: TutorialAvatarProps) {
   if (imageUrl) {
     return (
       <div
-        className={cn("tutorial-avatar-placeholder overflow-hidden", className)}
+        className={cn(
+          "tutorial-avatar-placeholder tutorial-avatar-mascot overflow-hidden",
+          className,
+        )}
         style={{ width: size, height: size }}
         data-expression={expression}
       >
-        <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+        <img
+          src={imageUrl}
+          alt=""
+          className="h-full w-full object-cover"
+          draggable={false}
+        />
       </div>
     );
   }
