@@ -612,6 +612,8 @@ function GlobalModals() {
   const closeHelp = useUiStore((s) => s.closeHelp);
   const notificationsOpen = useUiStore((s) => s.notificationsOpen);
   const closeNotifications = useUiStore((s) => s.closeNotifications);
+  const financeOpen = useUiStore((s) => s.financeOpen);
+  const closeFinance = useUiStore((s) => s.closeFinance);
 
   // onScrollTo dentro dos modais: fecha o modal e rola até a seção alvo.
   const handleScrollTo = (id: string) => {
@@ -662,6 +664,16 @@ function GlobalModals() {
             <DialogDescription>Alertas e avisos recentes da operação.</DialogDescription>
           </DialogHeader>
           <NotificationsPanel onOpenClient={() => closeNotifications()} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={financeOpen} onOpenChange={(o) => (o ? null : closeFinance())}>
+        <DialogContent className="max-w-[95vw] xl:max-w-7xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Finanças</DialogTitle>
+            <DialogDescription>Dashboard financeiro consolidado.</DialogDescription>
+          </DialogHeader>
+          <FinanceDashboard />
         </DialogContent>
       </Dialog>
 
