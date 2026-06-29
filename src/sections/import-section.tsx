@@ -1906,6 +1906,20 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               </div>
             </TabsContent>
 
+            <TabsContent value="list-groups" className="mt-4 space-y-3">
+              <div className="rounded-md border border-dashed border-border bg-muted/20 p-4 text-sm">
+                <h3 className="text-sm font-semibold">Importar por lista colada</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Para listas no formato <code>Grupo 1:</code> seguido de linhas{" "}
+                  <code>Nome - Telefone - Produto - Plataforma - Valor - Status</code>. Abre um
+                  preview dedicado com cards, filtros e revisão por IA antes de salvar.
+                </p>
+                <div className="mt-3 flex justify-end">
+                  <Button onClick={() => setListModalOpen(true)}>Abrir importação por lista</Button>
+                </div>
+              </div>
+            </TabsContent>
+
             <TabsContent value="html" className="mt-4 space-y-3">
               <UploadArea
                 accept=".html,.htm"
