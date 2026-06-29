@@ -17,6 +17,7 @@ import {
   Sparkles,
   Wallet,
   CircleDollarSign,
+  KanbanSquare,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ComponentType, SVGProps } from "react";
@@ -51,6 +52,7 @@ const navItems: ReadonlyArray<{
 }> = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "clientes", label: "Clientes", icon: Users },
+  { id: "equipe", label: "Equipe", icon: KanbanSquare },
   { id: "mgmv", label: "MGMV", icon: Sparkles },
   { id: "collection", label: "Collection", icon: Wallet },
 ];
@@ -271,6 +273,7 @@ function FloatingNavbar() {
   );
   const [navHover, setNavHover] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -324,6 +327,13 @@ function FloatingNavbar() {
         if (el && el.offsetTop <= probe) current = item.id;
       }
       setActiveSection(current);
+      // Glass mode com histerese: ativa após 32px, desativa abaixo de 8px.
+      setScrolled((prev) => {
+        const top = container.scrollTop;
+        if (!prev && top > 32) return true;
+        if (prev && top < 8) return false;
+        return prev;
+      });
     };
     container.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
@@ -340,6 +350,7 @@ function FloatingNavbar() {
       data-tour="navbar"
       data-mode={isCompact ? "compact" : "full"}
       data-progress={navHover ? "loop" : "false"}
+      data-scrolled={scrolled ? "true" : "false"}
       onMouseEnter={() => setNavHover(true)}
       onMouseLeave={() => setNavHover(false)}
       className={cn(
