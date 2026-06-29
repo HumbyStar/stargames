@@ -288,7 +288,7 @@
   animation: nav-ring-pulse-out 3000ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 .floating-navbar[data-progress="leaving"] .nav-progress-runner {
-  animation: nav-runner-fill-perimeter 3000ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: nav-runner-fill-perimeter 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 @keyframes nav-progress-trace {
   from { stroke-dashoffset: 0; }
