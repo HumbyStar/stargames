@@ -355,6 +355,7 @@ function FloatingNavbar() {
   const openConcierge = useUiStore((s) => s.openConcierge);
   const openFinance = useUiStore((s) => s.openFinance);
   const { unreadCount } = useNotifications();
+  const { visibleIds, config: navbarCfg } = useNavbarConfig();
 
   useEffect(() => {
     const clearNavExitTimer = () => {
