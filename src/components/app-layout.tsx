@@ -358,10 +358,10 @@ function FloatingNavbar() {
         isCompact && "md:gap-2 md:py-2 md:px-3",
       )}
     >
-      {/* Looping border highlight that travels along the pill perimeter on hover */}
+      {/* Looping border highlight on the navbar container border itself */}
       <svg
         aria-hidden
-        className="nav-progress-ring pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+        className="nav-progress-ring pointer-events-none absolute overflow-visible"
         preserveAspectRatio="none"
       >
         <rect
@@ -369,8 +369,8 @@ function FloatingNavbar() {
           y="0"
           width="100%"
           height="100%"
-          rx="9999"
-          ry="9999"
+          rx="29"
+          ry="29"
           pathLength={100}
         />
       </svg>

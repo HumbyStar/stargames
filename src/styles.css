@@ -239,25 +239,25 @@
     0 18px 60px color-mix(in oklch, var(--color-foreground) 18%, transparent);
 }
 
-/* Looping highlight that travels along the navbar's actual pill border.
-   Uses an SVG <rect> with pathLength=100 so the dash math is in % units,
-   independent of the navbar's real perimeter. */
+/* Looping highlight attached to the outer navbar background/border. */
 .nav-progress-ring {
+  position: absolute;
   opacity: 0;
-  /* Inset the SVG so the centered stroke sits ON the navbar's actual border. */
   inset: 1px;
   width: calc(100% - 2px);
   height: calc(100% - 2px);
+  z-index: 0;
   transition: opacity 250ms ease;
-  filter: drop-shadow(0 0 8px color-mix(in oklch, var(--color-primary) 70%, transparent));
+  filter: drop-shadow(0 0 7px color-mix(in oklch, var(--color-primary) 65%, transparent));
 }
 .nav-progress-ring > rect {
   fill: none;
   stroke: color-mix(in oklch, var(--color-primary) 95%, transparent);
   stroke-width: 2;
   stroke-linecap: round;
-  /* Visible arc = 22% of the perimeter; the rest is gap. */
-  stroke-dasharray: 22 78;
+  vector-effect: non-scaling-stroke;
+  /* Short highlight segment so it reads as the navbar border running, not a bar over items. */
+  stroke-dasharray: 8 92;
   stroke-dashoffset: 0;
 }
 .floating-navbar[data-progress="loop"] .nav-progress-ring {
@@ -296,6 +296,8 @@
   transition: opacity 400ms ease, filter 400ms ease;
 }
 .floating-navbar > *:not(.nav-progress-ring) {
+  position: relative;
+  z-index: 1;
   transition: opacity 300ms ease, filter 300ms ease;
 }
 
