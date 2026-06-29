@@ -43,7 +43,7 @@ export const listUsers = createServerFn({ method: "GET" })
       .in("user_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
     const { data: profilesRows } = await supabaseAdmin
       .from("profiles")
-      .select("id, full_name")
+      .select("id, display_name")
       .in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
 
     const rolesByUser = new Map<string, AppRole[]>();
@@ -53,7 +53,7 @@ export const listUsers = createServerFn({ method: "GET" })
       rolesByUser.set(r.user_id, arr);
     }
     const profileByUser = new Map<string, string | null>();
-    for (const p of profilesRows ?? []) profileByUser.set(p.id, (p as any).full_name ?? null);
+    for (const p of profilesRows ?? []) profileByUser.set(p.id, p.display_name ?? null);
 
     return usersData.users.map<AdminUserRow>((u) => ({
       id: u.id,
@@ -90,9 +90,9 @@ export const createUser = createServerFn({ method: "POST" })
 
     const uid = created.user.id;
     if (data.fullName) {
-      await supabaseAdmin.from("profiles").upsert({ id: uid, full_name: data.fullName });
+      await supabaseAdmin.from("profiles").upsert({ id: uid, display_name: data.fullName });
     }
-    const rows = Array.from(new Set(data.roles)).map((role) => ({ user_id: uid, role }));
+    const rows = Array.from(new Set(data.roles)).map((role) => ({ user_id: uid, role: role as AppRole }));
     const { error: insErr } = await supabaseAdmin.from("user_roles").insert(rows);
     if (insErr) throw new Error(insErr.message);
     return { id: uid };
