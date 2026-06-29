@@ -31,6 +31,8 @@ import { toast } from "sonner";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { ImportProgressModal, type ImportProgressState } from "@/components/import-progress-modal";
+import { ImportCard, ImportCardsGrid } from "@/components/import-cards";
+import { Users, ShieldCheck, Box, Wallet, AlertOctagon, Brain } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface ParsedRow {
@@ -1940,9 +1942,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               <div>
                 <h3 className="text-sm font-semibold">Importar ZIP do Notion</h3>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Envie o arquivo ZIP contendo a pasta mãe exportada do Notion. O sistema irá ler o
-                  ZIP, localizar os arquivos HTML, extrair clientes e produtos, comparar duplicatas
-                  e mostrar uma prévia antes da importação.
+                  Processamento em lotes. Nada é salvo antes da prévia.
                 </p>
               </div>
               <UploadArea
@@ -2400,6 +2400,92 @@ function NotionPreview({
 
 // =================== ZIP Preview ===================
 
+function CompareCommonVsMgmv({ data }: { data: ZipPreviewData }) {
+  const stats = useMemo(() => {
+    let commonClients = 0;
+    let mgmvClients = 0;
+    let commonProducts = 0;
+    let mgmvProducts = 0;
+    let commonValue = 0;
+    let mgmvValue = 0;
+    let reviewPending = 0;
+    let aiReviewed = 0;
+    for (const e of data.entries) {
+      if (e.criticalError) continue;
+      const isMgmv = !!e.mgmv;
+      if (isMgmv) {
+        mgmvClients += 1;
+        mgmvProducts += e.products.length;
+        mgmvValue += e.products.reduce((s, p) => s + (p.totalValue || 0), 0);
+        if (e.mgmvConflict && !e.mgmvAction) reviewPending += 1;
+        // Heurística leve: se houver action aplicada e sem conflito, considera revisado.
+        if (e.mgmvAction && !e.mgmvConflict) aiReviewed += 1;
+      } else {
+        commonClients += 1;
+        commonProducts += e.products.length;
+        commonValue += e.products.reduce((s, p) => s + (p.totalValue || 0), 0);
+      }
+    }
+    const totalClients = commonClients + mgmvClients;
+    const commonPct = totalClients > 0 ? Math.round((commonClients / totalClients) * 100) : 0;
+    const mgmvPct = totalClients > 0 ? 100 - commonPct : 0;
+    return {
+      commonClients,
+      mgmvClients,
+      commonProducts,
+      mgmvProducts,
+      commonValue,
+      mgmvValue,
+      reviewPending,
+      aiReviewed,
+      commonPct,
+      mgmvPct,
+    };
+  }, [data]);
+
+  return (
+    <div className="grid gap-3 lg:grid-cols-2">
+      <div className="rounded-xl border-2 border-sky-500/30 bg-sky-500/[0.03] p-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <Users className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+            Clientes comuns
+          </div>
+          <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-700 dark:text-sky-300">
+            {stats.commonPct}%
+          </span>
+        </div>
+        <ImportCardsGrid className="sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
+          <ImportCard icon={Users} title="Clientes" value={stats.commonClients} tone="common" />
+          <ImportCard icon={Box} title="Produtos" value={stats.commonProducts} tone="common" />
+          <ImportCard icon={Wallet} title="Valor total" value={formatBRL(stats.commonValue)} tone="common" />
+        </ImportCardsGrid>
+      </div>
+      <div className="rounded-xl border-2 border-amber-500/40 bg-amber-500/[0.04] p-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <ShieldCheck className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            Clientes MGMV
+          </div>
+          <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+            {stats.mgmvPct}%
+          </span>
+        </div>
+        <ImportCardsGrid className="sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
+          <ImportCard icon={ShieldCheck} title="Acordos" value={stats.mgmvClients} tone="mgmv" />
+          <ImportCard icon={Wallet} title="Dívida MGMV" value={formatBRL(stats.mgmvValue)} tone="mgmv" />
+          <ImportCard
+            icon={stats.reviewPending > 0 ? AlertOctagon : Brain}
+            title={stats.reviewPending > 0 ? "Revisão necessária" : "Revisados c/ IA"}
+            value={stats.reviewPending > 0 ? stats.reviewPending : stats.aiReviewed}
+            tone={stats.reviewPending > 0 ? "danger" : "success"}
+          />
+        </ImportCardsGrid>
+      </div>
+    </div>
+  );
+}
+
 function ZipPreview({
   data,
   onClear,
@@ -2648,6 +2734,9 @@ function ZipPreview({
           )}
         </Card>
       )}
+
+      {/* Comparativo Clientes comuns x Clientes MGMV */}
+      <CompareCommonVsMgmv data={data} />
 
       {/* Métricas ordenadas por severidade: problemas primeiro, depois números frios. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">

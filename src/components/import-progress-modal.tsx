@@ -10,16 +10,21 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   AlertTriangle,
-  Folder,
-  FolderCheck,
+  AlertOctagon,
+  Box,
+  Copy,
   FolderOpen,
-  PackageCheck,
+  PhoneCall,
+  RefreshCcw,
+  ShieldCheck,
   Sparkles,
   Timer,
   Trophy,
-  User,
+  UserPlus,
   Zap,
 } from "lucide-react";
+import { ImportCard, ImportCardsGrid } from "@/components/import-cards";
+import { ImportConveyor } from "@/components/import-conveyor";
 
 export type ImportProgressState = {
   fileHash: string;
@@ -95,6 +100,9 @@ export function ImportProgressModal({
   const pct = total === 0 ? 100 : Math.min(100, Math.round((processed / total) * 100));
   const currentFolder = idx >= 0 && idx < total ? state.folders[idx] : null;
   const tip = FUN_TIPS[(Math.max(idx, 0)) % FUN_TIPS.length];
+  const conveyorState: "processing" | "done" | "cancelled" =
+    state.done ? "done" : state.resumed ? "cancelled" : "processing";
+  const running = !state.done && !state.resumed;
 
   const startedMs = new Date(state.startedAt).getTime();
   const elapsedMs = Math.max(0, now - startedMs);
@@ -105,7 +113,7 @@ export function ImportProgressModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o && (state.done || state.resumed)) onClose(); }}>
-      <DialogContent className="max-w-xl" onInteractOutside={(e) => { if (!state.done) e.preventDefault(); }}>
+      <DialogContent className="max-w-3xl" onInteractOutside={(e) => { if (!state.done) e.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {state.done ? (
@@ -119,84 +127,47 @@ export function ImportProgressModal({
               ? "Importação concluída!"
               : state.resumed
                 ? "Importação interrompida"
-                : "Importando suas pastas…"}
+                : "Processando em lotes…"}
           </DialogTitle>
           <DialogDescription>
             {state.done
-              ? "Tudo certo. Veja o resumo abaixo."
+              ? "Tudo certo."
               : state.resumed
                 ? <>A última importação de <span className="font-medium text-foreground">{state.zipName}</span> não terminou. Reenvie o ZIP para continuar — duplicatas serão detectadas automaticamente.</>
               : currentFolder
-                ? <>Processando <span className="font-medium text-foreground">{currentFolder}</span> — {tip}</>
+                ? <>Lote atual: <span className="font-medium text-foreground">{currentFolder}</span> — {tip}</>
                 : "Preparando a esteira…"}
           </DialogDescription>
         </DialogHeader>
 
-        {/* Esteira animada */}
-        <div className="relative h-28 overflow-hidden rounded-lg border bg-gradient-to-b from-muted/40 to-muted/10">
-          {/* Trilhos da esteira */}
-          <div className="absolute inset-x-0 bottom-3 h-3 rounded bg-foreground/10" />
-          <div className="absolute inset-x-0 bottom-3 h-3 overflow-hidden rounded">
-            <div
-              className="h-full w-[200%] opacity-60"
-              style={{
-                backgroundImage:
-                  "repeating-linear-gradient(90deg, hsl(var(--foreground)/0.15) 0 10px, transparent 10px 20px)",
-                animation: state.done || state.resumed ? "none" : "conveyor-belt 1.2s linear infinite",
-              }}
-            />
-          </div>
-
-          {/* Carga: pastas que passam */}
-          <div className="absolute inset-x-0 bottom-6 flex items-end">
-            <div
-              className="flex gap-6 px-4 will-change-transform"
-              style={{
-                animation: state.done || state.resumed ? "none" : "conveyor-load 5s linear infinite",
-              }}
-            >
-              {Array.from({ length: 10 }).map((_, i) => {
-                const Icon = i % 3 === 0 ? User : i % 3 === 1 ? Folder : PackageCheck;
-                return (
-                  <div key={i} className="flex h-12 w-12 items-center justify-center rounded-md bg-card shadow-sm border">
-                    <Icon className="h-6 w-6 text-primary" />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Spotlight da pasta atual */}
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-full bg-background/90 px-3 py-1 text-xs font-medium shadow-sm border">
-            {state.done ? (
-              <>
-                <FolderCheck className="h-4 w-4 text-emerald-500" />
-                {total} pasta{total === 1 ? "" : "s"} processada{total === 1 ? "" : "s"}
-              </>
-            ) : (
-              <>
-                <FolderOpen className="h-4 w-4 text-primary" />
-                {processed} / {total || 1}
-              </>
-            )}
-          </div>
-        </div>
+        {/* Esteira animada contínua */}
+        <ImportConveyor running={running} state={conveyorState} />
 
         {/* Barra de progresso */}
         <div className="space-y-1">
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>Lote {Math.min(processed + (state.done ? 0 : 1), Math.max(total, 1))} de {Math.max(total, 1)}</span>
+            <span>{pct}%</span>
+          </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
             <div
               className="h-full bg-primary transition-all duration-500 ease-out"
               style={{ width: `${pct}%` }}
             />
           </div>
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{pct}%</span>
-            <span>
-              {state.stats.createdClients + state.stats.updatedClients} clientes • {state.stats.createdProducts} produtos
-            </span>
-          </div>
         </div>
+
+        {/* Cards de métricas */}
+        <ImportCardsGrid className="lg:grid-cols-4 xl:grid-cols-4">
+          <ImportCard icon={FolderOpen} title="Pastas" value={total} hint={`${processed} processadas`} tone="info" />
+          <ImportCard icon={UserPlus} title="Clientes novos" value={state.stats.createdClients} tone="common" />
+          <ImportCard icon={RefreshCcw} title="Atualizados" value={state.stats.updatedClients} tone="neutral" />
+          <ImportCard icon={Box} title="Produtos" value={state.stats.createdProducts} tone="common" />
+          <ImportCard icon={ShieldCheck} title="Acordos MGMV" value={state.stats.createdAgreements} hint={state.stats.replacedAgreements ? `${state.stats.replacedAgreements} substituídos` : undefined} tone="mgmv" />
+          <ImportCard icon={Copy} title="Duplicatas" value={state.stats.ignoredDuplicates} tone="warning" />
+          <ImportCard icon={PhoneCall} title="Telefones corrigidos" value={state.stats.skippedAfterCorrection} tone="success" />
+          <ImportCard icon={AlertOctagon} title="Erros" value={state.stats.errorEntries} tone={state.stats.errorEntries > 0 ? "danger" : "neutral"} />
+        </ImportCardsGrid>
 
         {/* Métricas: tempo decorrido, taxa, ETA */}
         <div className="grid grid-cols-3 gap-2 text-xs">
@@ -254,16 +225,6 @@ export function ImportProgressModal({
           </DialogFooter>
         )}
 
-        <style>{`
-          @keyframes conveyor-belt {
-            0% { transform: translateX(0); }
-            100% { transform: translateX(-20px); }
-          }
-          @keyframes conveyor-load {
-            0% { transform: translateX(100%); }
-            100% { transform: translateX(-50%); }
-          }
-        `}</style>
       </DialogContent>
     </Dialog>
   );
