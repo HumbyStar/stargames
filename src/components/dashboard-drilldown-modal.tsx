@@ -400,6 +400,12 @@ export function DashboardDrilldownModal({
         <DialogHeader>
           <DialogTitle>{config.title}</DialogTitle>
           <DialogDescription>{config.description}</DialogDescription>
+          {origin ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <Tag variant="primary">Origem: {origin}</Tag>
+              <Tag variant="neutral">Filtro ativo: {config.title}</Tag>
+            </div>
+          ) : null}
         </DialogHeader>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-y border-border py-3">
