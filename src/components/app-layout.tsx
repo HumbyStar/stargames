@@ -238,13 +238,13 @@ function NavLink({
     >
       <Icon
         className={cn(
-          "transition-all duration-300 shrink-0",
+          "transition-all duration-[700ms] ease-[cubic-bezier(0.32,0.72,0,1)] shrink-0",
           compact ? "size-4" : "size-3.5 opacity-80",
         )}
       />
       <span
         className={cn(
-          "overflow-hidden whitespace-nowrap transition-all duration-300",
+          "overflow-hidden whitespace-nowrap transition-all duration-[700ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
           compact ? "max-w-0 opacity-0" : "max-w-[140px] opacity-100",
         )}
       >
@@ -384,13 +384,13 @@ function FloatingNavbar() {
           alt=""
           draggable={false}
           className={cn(
-            "rounded-full object-cover ring-1 ring-primary/30 shadow-md transition-all duration-300 group-hover:shadow-lg group-hover:rotate-6 group-hover:scale-110",
+            "rounded-full object-cover ring-1 ring-primary/30 shadow-md transition-all duration-[700ms] ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:shadow-lg group-hover:rotate-6 group-hover:scale-110",
             isCompact ? "size-7" : "size-9",
           )}
         />
         <div
           className={cn(
-            "hidden lg:block leading-tight transition-all duration-300 group-hover:translate-x-0.5 overflow-hidden",
+            "hidden lg:block leading-tight transition-all duration-[700ms] ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-0.5 overflow-hidden",
             isCompact ? "max-w-0 opacity-0" : "max-w-[180px] opacity-100",
           )}
         >
@@ -401,7 +401,7 @@ function FloatingNavbar() {
 
       <div
         className={cn(
-          "hidden md:flex items-center gap-1 rounded-full bg-foreground/5 transition-all duration-300",
+          "hidden md:flex items-center gap-1 rounded-full bg-foreground/5 transition-all duration-[700ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
           isCompact ? "p-0.5" : "p-1",
         )}
       >
@@ -421,7 +421,7 @@ function FloatingNavbar() {
       <div
         data-tour="global-search"
         className={cn(
-          "hidden md:block ml-3 transition-all duration-300",
+          "hidden md:block ml-3 transition-all duration-[700ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
           isCompact ? "w-0 ml-1 overflow-hidden opacity-0 pointer-events-none" : "flex-1 max-w-md opacity-100",
         )}
       >
