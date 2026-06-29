@@ -6,6 +6,11 @@ import { usePersistedState } from "@/lib/use-persisted-state";
 import { useSectionCompact } from "@/lib/use-section-compact";
 import { Button } from "@/components/ui/button";
 import {
+  ListExpansionToggle,
+  MinimizedListCard,
+} from "@/components/list-expansion";
+import { useListExpansion } from "@/lib/list-expansion";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
