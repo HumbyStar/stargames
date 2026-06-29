@@ -275,6 +275,8 @@ function FloatingNavbar() {
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const expandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoveredRef = useRef(false);
+  const pointerRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const anchorTargetRef = useRef<Element | null>(null);
   useEffect(() => {
     hoveredRef.current = hovered;
   }, [hovered]);
@@ -328,6 +330,33 @@ function FloatingNavbar() {
     return () => container.removeEventListener("scroll", onScroll);
   }, []);
 
+  const clearAnchorShift = () => {
+    if (navRef.current) navRef.current.style.setProperty("--nav-shift", "0px");
+    anchorTargetRef.current = null;
+  };
+
+  const applyAnchorShift = () => {
+    const target = anchorTargetRef.current;
+    const nav = navRef.current;
+    if (!target || !nav) return;
+    // wait two frames for the expand layout to settle
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const rect = (target as HTMLElement).getBoundingClientRect();
+        if (rect.width === 0) return;
+        const center = rect.left + rect.width / 2;
+        const current = parseFloat(nav.style.getPropertyValue("--nav-shift") || "0");
+        const delta = pointerRef.current.x - center + current;
+        // clamp so navbar doesn't run off-screen
+        const navRect = nav.getBoundingClientRect();
+        const maxShift = Math.max(0, window.innerWidth - navRect.right + current - 12);
+        const minShift = Math.min(0, -navRect.left + current + 12);
+        const clamped = Math.max(minShift, Math.min(maxShift, delta));
+        nav.style.setProperty("--nav-shift", `${clamped}px`);
+      });
+    });
+  };
+
   useEffect(() => {
     let raf = 0;
     let lastInside = false;
@@ -338,7 +367,15 @@ function FloatingNavbar() {
       expandTimerRef.current = setTimeout(() => {
         expandTimerRef.current = null;
         setExpanding(false);
+        // capture the element under the cursor as the anchor
+        const el = document.elementFromPoint(
+          pointerRef.current.x,
+          pointerRef.current.y,
+        );
+        anchorTargetRef.current =
+          el?.closest("a,button,input") ?? null;
         setHovered(true);
+        applyAnchorShift();
       }, 3000);
     };
     const cancelExpandIntent = () => {
@@ -357,13 +394,17 @@ function FloatingNavbar() {
         startExpandIntent();
       } else {
         cancelExpandIntent();
-        hoverTimeoutRef.current = setTimeout(() => setHovered(false), 450);
+        hoverTimeoutRef.current = setTimeout(() => {
+          setHovered(false);
+          clearAnchorShift();
+        }, 450);
       }
     };
     const onMove = (e: MouseEvent) => {
       if (raf) return;
       const x = e.clientX;
       const y = e.clientY;
+      pointerRef.current = { x, y };
       raf = requestAnimationFrame(() => {
         raf = 0;
         const rect = navRef.current?.getBoundingClientRect();
@@ -409,6 +450,13 @@ function FloatingNavbar() {
     }
     setExpanding(false);
     setHovered(true);
+    // anchor on the clicked element if any
+    const el = document.elementFromPoint(
+      pointerRef.current.x,
+      pointerRef.current.y,
+    );
+    anchorTargetRef.current = el?.closest("a,button,input") ?? null;
+    applyAnchorShift();
   };
 
   const expandAndFocusSearch = () => {
