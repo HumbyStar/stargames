@@ -1942,9 +1942,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               <div>
                 <h3 className="text-sm font-semibold">Importar ZIP do Notion</h3>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Envie o arquivo ZIP contendo a pasta mãe exportada do Notion. O sistema irá ler o
-                  ZIP, localizar os arquivos HTML, extrair clientes e produtos, comparar duplicatas
-                  e mostrar uma prévia antes da importação.
+                  Processamento em lotes. Nada é salvo antes da prévia.
                 </p>
               </div>
               <UploadArea
