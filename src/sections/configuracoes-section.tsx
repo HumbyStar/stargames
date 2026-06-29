@@ -48,6 +48,7 @@ import {
   type ImportDiagnostics,
 } from "@/lib/store";
 import { NotificationsPrefsCard } from "@/components/notifications-prefs-card";
+import { NavbarSettingsCard } from "@/components/navbar-settings-card";
 
 function DiagBox({
   label,
