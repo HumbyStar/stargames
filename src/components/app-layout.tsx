@@ -34,6 +34,7 @@ import { HelpCenter } from "@/components/help-center";
 import { TutorialRunner } from "@/components/tutorial-runner";
 import { ConciergeModal } from "@/components/concierge-modal";
 import { FloatingConcierge } from "@/components/floating-concierge";
+import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 
 const navItems = [
   { id: "dashboard", label: "Dashboard" },
@@ -281,9 +282,12 @@ function FloatingNavbar() {
         title="Concierge Operacional"
         className="group flex items-center gap-2 pl-2 pr-1 transition-transform duration-200 hover:-translate-y-0.5 active:scale-95"
       >
-        <div className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-primary to-[oklch(0.65_0.22_280)] text-primary-foreground font-bold shadow-md transition-all duration-300 group-hover:shadow-lg group-hover:rotate-6 group-hover:scale-110">
-          S
-        </div>
+        <img
+          src={mascotAsset.url}
+          alt=""
+          draggable={false}
+          className="size-9 rounded-full object-cover ring-1 ring-primary/30 shadow-md transition-all duration-300 group-hover:shadow-lg group-hover:rotate-6 group-hover:scale-110"
+        />
         <div className="hidden lg:block leading-tight transition-all duration-200 group-hover:translate-x-0.5">
           <p className="text-sm font-semibold">Star Games</p>
           <p className="text-[10px] text-muted-foreground">Gestão Operacional</p>
