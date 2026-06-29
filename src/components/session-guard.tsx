@@ -2,9 +2,17 @@ import { useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { heartbeatSession, releaseSession } from "@/lib/session-guard.functions";
+import { claimSession, heartbeatSession, releaseSession } from "@/lib/session-guard.functions";
 
 export const SESSION_ID_KEY = "sg_active_session_id";
+
+function generateSessionId() {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `s_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
 
 /** Mantém o heartbeat da sessão e expulsa caso outro login assuma a conta. */
 export function SessionGuard({ children }: { children: React.ReactNode }) {
@@ -32,7 +40,24 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
         sessionId = localStorage.getItem(SESSION_ID_KEY);
       } catch {}
       if (!sessionId) {
-        await evict("Sessão sem identificador. Faça login novamente.");
+        // Sessão pré-existente sem identificador local — reivindica em vez de expulsar.
+        const newId = generateSessionId();
+        try {
+          const res = await claimSession({ data: { sessionId: newId, force: true } });
+          if (res.ok) {
+            try {
+              localStorage.setItem(SESSION_ID_KEY, newId);
+            } catch {}
+            return;
+          }
+          if (res.reason === "no_internal_access") {
+            await evict(
+              "Sua conta não tem acesso interno. Procure um administrador para liberar.",
+            );
+          }
+        } catch {
+          // Rede instável — tenta de novo no próximo ciclo.
+        }
         return;
       }
       try {
