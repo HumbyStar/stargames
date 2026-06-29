@@ -270,7 +270,8 @@ export function MGMVSection({
         description="Controle acordos MGMV, parcelas, vencimentos, saldos e clientes agrupados."
       />
 
-      <div className="mb-3 flex justify-end">
+      <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+        <ListExpansionToggle section="mgmv" />
         <Button
           size="sm"
           variant="outline"
