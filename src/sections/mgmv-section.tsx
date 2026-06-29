@@ -12,6 +12,8 @@ import {
 import { MgmvAiReviewModal } from "@/components/mgmv-ai-review-modal";
 import type { MgmvAiReviewSuggestion } from "@/lib/mgmv-ai-review.functions";
 import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
+import { extractMGMVAgreementFromNotes } from "@/sections/import-section";
+import { toast } from "sonner";
 
 type MgmvChip =
   | "todos"
@@ -99,6 +101,46 @@ export function MGMVSection({
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [aiTarget, setAiTarget] = useState<string | null>(null);
+  const [reprocessing, setReprocessing] = useState(false);
+
+  const reprocessFromNotes = () => {
+    setReprocessing(true);
+    let updated = 0;
+    let unchanged = 0;
+    for (const c of clients) {
+      if (!c.notes) continue;
+      const parsed = extractMGMVAgreementFromNotes(c.notes);
+      if (!parsed) continue;
+      // Preserva startDate original quando já houver acordo
+      const next: MGMVAgreement = {
+        ...parsed,
+        startDate: c.mgmv?.startDate ?? parsed.startDate,
+      };
+      // Mescla: se a parcela existente já estava paga e o parser não capturou
+      // data, mantém a data de pagamento anterior.
+      if (c.mgmv) {
+        next.installments = next.installments.map((ni) => {
+          const prev = c.mgmv!.installments.find((p) => p.number === ni.number);
+          if (!prev) return ni;
+          if (prev.paid && !ni.paid) {
+            return { ...ni, paid: true, paidAt: prev.paidAt };
+          }
+          if (ni.paid && !ni.paidAt && prev.paidAt) {
+            return { ...ni, paidAt: prev.paidAt };
+          }
+          return ni;
+        });
+      }
+      setMGMVAgreement(c.id, next);
+      updated++;
+    }
+    setReprocessing(false);
+    unchanged = rows.length - updated;
+    toast.success(
+      `Reprocessamento concluído: ${updated} acordo(s) atualizado(s).` +
+        (unchanged > 0 ? ` ${unchanged} sem mudanças.` : ""),
+    );
+  };
 
   const rows = useMemo<MgmvRow[]>(() => {
     const list: MgmvRow[] = [];
@@ -187,6 +229,17 @@ export function MGMVSection({
         title="MGMV"
         description="Controle acordos MGMV, parcelas, vencimentos, saldos e clientes agrupados."
       />
+
+      <div className="mb-3 flex justify-end">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={reprocessing}
+          onClick={reprocessFromNotes}
+        >
+          {reprocessing ? "Reprocessando…" : "Reprocessar MGMV por observações"}
+        </Button>
+      </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-7">
         <MetricCard label="Clientes MGMV" value={stats.clientes} status="primary" />
