@@ -86,20 +86,42 @@ export const createUser = createServerFn({ method: "POST" })
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+    // Verificação de duplicidade: rejeita antes de criar para não disparar
+    // erros confusos do gotrue e evitar travas de permissões.
+    const targetEmail = data.email.toLowerCase();
+    const { data: existingList, error: listErr } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+    if (listErr) throw new Error(listErr.message);
+    const duplicate = existingList.users.find((u) => (u.email ?? "").toLowerCase() === targetEmail);
+    if (duplicate) {
+      throw new Error(
+        `Já existe um usuário com este e-mail (${data.email}). Edite o usuário existente em vez de criar outro.`,
+      );
+    }
+
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
       password: data.password,
       email_confirm: true,
       user_metadata: { full_name: data.fullName ?? null },
     });
-    if (error || !created.user) throw new Error(error?.message ?? "Falha ao criar usuário");
+    if (error || !created.user) {
+      const msg = error?.message ?? "Falha ao criar usuário";
+      if (/already|registered|exists/i.test(msg)) {
+        throw new Error(`Já existe um usuário com este e-mail (${data.email}).`);
+      }
+      throw new Error(msg);
+    }
 
     const uid = created.user.id;
     if (data.fullName) {
       await supabaseAdmin.from("profiles").upsert({ id: uid, display_name: data.fullName });
     }
     const rows = Array.from(new Set(data.roles)).map((role) => ({ user_id: uid, role: role as AppRole }));
-    const { error: insErr } = await supabaseAdmin.from("user_roles").insert(rows);
+    // upsert idempotente com base na restrição UNIQUE(user_id, role) — evita
+    // duplicidade caso a função seja reexecutada.
+    const { error: insErr } = await supabaseAdmin
+      .from("user_roles")
+      .upsert(rows, { onConflict: "user_id,role", ignoreDuplicates: true });
     if (insErr) throw new Error(insErr.message);
     return { id: uid };
   });
@@ -116,9 +138,14 @@ export const updateUserRoles = createServerFn({ method: "POST" })
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const desired = Array.from(new Set(data.roles));
+    if (desired.length === 0) {
+      throw new Error("É necessário atribuir pelo menos um perfil interno ao usuário.");
+    }
     await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
     const rows = desired.map((role) => ({ user_id: data.userId, role }));
-    const { error } = await supabaseAdmin.from("user_roles").insert(rows);
+    const { error } = await supabaseAdmin
+      .from("user_roles")
+      .upsert(rows, { onConflict: "user_id,role", ignoreDuplicates: true });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
