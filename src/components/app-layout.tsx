@@ -279,7 +279,7 @@ function FloatingNavbar() {
   const [navSize, setNavSize] = useState({ width: 0, height: 0 });
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
-  const navExitTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const navExitTimerRef = useRef<number | null>(null);
   const navBorderPath = useMemo(() => {
     // Desenha o path exatamente sobre a borda do pill da navbar.
     // Inset = metade da stroke-width (2px), então 1px de cada lado.
