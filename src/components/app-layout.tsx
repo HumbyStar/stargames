@@ -386,10 +386,10 @@ function FloatingNavbar() {
       setNavProgress("false");
       setNavDimmed(true);
       navExitTimerRef.current = null;
-    }, 3000);
+    }, navbarCfg.animation.leaveMs);
 
     return clearNavExitTimer;
-  }, [navHover, scrolled]);
+  }, [navHover, scrolled, navbarCfg.animation.leaveMs]);
 
   useEffect(() => {
     return () => {
