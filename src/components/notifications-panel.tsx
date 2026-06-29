@@ -8,11 +8,13 @@ export function NotificationsPanel({ onOpenClient }: { onOpenClient?: (clientId:
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
   const openClient = useStore((s) => s.openClient);
 
-  if (notifications.length === 0) {
+  const visible = notifications.filter((n) => !n.read);
+
+  if (visible.length === 0) {
     return (
       <div className="grid place-items-center gap-2 py-10 text-sm text-muted-foreground">
         <BellIcon className="size-8 opacity-60" />
-        Nenhuma notificação no momento.
+        Nenhuma notificação não lida.
       </div>
     );
   }
@@ -21,8 +23,7 @@ export function NotificationsPanel({ onOpenClient }: { onOpenClient?: (clientId:
     <div className="space-y-3">
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>
-          {unreadCount > 0 ? `${unreadCount} não lida(s)` : "Todas lidas"} ·{" "}
-          {notifications.length} no total
+          {unreadCount} não lida(s) · {notifications.length} no total
         </span>
         {unreadCount > 0 && (
           <Button size="sm" variant="ghost" className="h-7 gap-1.5" onClick={markAllRead}>
@@ -30,15 +31,12 @@ export function NotificationsPanel({ onOpenClient }: { onOpenClient?: (clientId:
           </Button>
         )}
       </div>
-      <ul className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
-        {notifications.map((n) => (
+      <ul className="space-y-2">
+        {visible.map((n) => (
           <li
             key={n.id}
             className={cn(
-              "group flex items-start gap-3 rounded-lg border p-3 transition",
-              n.read
-                ? "border-border bg-background/40 opacity-70"
-                : "border-border bg-accent/30 hover:bg-accent/50",
+              "group flex items-start gap-3 rounded-lg border border-border bg-accent/30 p-3 transition hover:bg-accent/50 animate-fade-in",
             )}
           >
             <span
@@ -47,12 +45,11 @@ export function NotificationsPanel({ onOpenClient }: { onOpenClient?: (clientId:
                 n.severity === "danger" && "bg-destructive",
                 n.severity === "warning" && "bg-amber-500",
                 n.severity === "info" && "bg-primary",
-                n.read && "opacity-40",
               )}
             />
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-2">
-                <p className={cn("truncate text-sm", n.read ? "font-normal" : "font-semibold")}>
+                <p className="truncate text-sm font-semibold">
                   {n.title}
                 </p>
                 <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -80,16 +77,14 @@ export function NotificationsPanel({ onOpenClient }: { onOpenClient?: (clientId:
                     Abrir cliente
                   </Button>
                 )}
-                {!n.read && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 gap-1 text-xs"
-                    onClick={() => markRead(n.id)}
-                  >
-                    <Check className="size-3" /> Marcar como lida
-                  </Button>
-                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 gap-1 text-xs"
+                  onClick={() => markRead(n.id)}
+                >
+                  <Check className="size-3" /> Marcar como lida
+                </Button>
               </div>
             </div>
           </li>
