@@ -239,54 +239,43 @@
     0 18px 60px color-mix(in oklch, var(--color-foreground) 18%, transparent);
 }
 
-/* Circular progress ring around the compact navbar while waiting to expand */
-@property --nav-progress {
-  syntax: "<percentage>";
-  inherits: false;
-  initial-value: 0%;
-}
+/* Looping highlight that travels along the navbar's actual pill border.
+   Uses an SVG <rect> with pathLength=100 so the dash math is in % units,
+   independent of the navbar's real perimeter. */
 .nav-progress-ring {
   opacity: 0;
-  padding: 1.5px;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0deg,
-    color-mix(in oklch, var(--color-primary) 90%, transparent) 90deg,
-    color-mix(in oklch, var(--color-primary) 60%, transparent) 150deg,
-    transparent 200deg,
-    transparent 360deg
-  );
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  filter: drop-shadow(0 0 10px color-mix(in oklch, var(--color-primary) 70%, transparent));
   transition: opacity 250ms ease;
+  filter: drop-shadow(0 0 8px color-mix(in oklch, var(--color-primary) 65%, transparent));
 }
-.floating-navbar[data-progress="true"] .nav-progress-ring {
-  opacity: 1;
-  background: conic-gradient(
-    from -90deg,
-    color-mix(in oklch, var(--color-primary) 90%, transparent) var(--nav-progress, 0%),
-    transparent 0
-  );
-  animation: nav-progress-fill 3000ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+.nav-progress-ring > rect {
+  fill: none;
+  stroke: color-mix(in oklch, var(--color-primary) 90%, transparent);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  /* Visible arc = 22 of 100 units; the rest is the gap. */
+  stroke-dasharray: 22 78;
+  stroke-dashoffset: 0;
 }
 .floating-navbar[data-progress="loop"] .nav-progress-ring {
   opacity: 1;
-  animation: nav-progress-spin 2400ms linear infinite;
+}
+.floating-navbar[data-progress="loop"] .nav-progress-ring > rect {
+  animation: nav-progress-trace 2400ms linear infinite;
+}
+.floating-navbar[data-progress="true"] .nav-progress-ring {
+  opacity: 1;
+}
+.floating-navbar[data-progress="true"] .nav-progress-ring > rect {
+  stroke-dasharray: 0 100;
+  animation: nav-progress-fill 3000ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+@keyframes nav-progress-trace {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -100; }
 }
 @keyframes nav-progress-fill {
-  from { --nav-progress: 0%; }
-  to { --nav-progress: 100%; }
-}
-@keyframes nav-progress-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from { stroke-dasharray: 0 100; }
+  to { stroke-dasharray: 100 0; }
 }
 
 /* Glass / fade ao rolar a página: navbar fica translúcida e ícones embaçados.

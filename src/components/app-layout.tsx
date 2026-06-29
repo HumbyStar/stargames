@@ -358,11 +358,22 @@ function FloatingNavbar() {
         isCompact && "md:gap-2 md:py-2 md:px-3",
       )}
     >
-      {/* Looping conic glow that runs while the cursor is over the navbar */}
-      <span
+      {/* Looping border highlight that travels along the pill perimeter on hover */}
+      <svg
         aria-hidden
-        className="nav-progress-ring pointer-events-none absolute inset-0 rounded-full"
-      />
+        className="nav-progress-ring pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+        preserveAspectRatio="none"
+      >
+        <rect
+          x="0"
+          y="0"
+          width="100%"
+          height="100%"
+          rx="9999"
+          ry="9999"
+          pathLength={100}
+        />
+      </svg>
       <button
         type="button"
         onClick={openConcierge}
