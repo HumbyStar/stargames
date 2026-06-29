@@ -324,33 +324,16 @@ function FloatingNavbar() {
     return () => container.removeEventListener("scroll", onScroll);
   }, []);
 
+  const setHoverNow = (next: boolean) => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    if (next) setHovered(true);
+    else hoverTimeoutRef.current = setTimeout(() => setHovered(false), 500);
+  };
   useEffect(() => {
-    const setHoverNow = (next: boolean) => {
-      if (hoverTimeoutRef.current) {
-        clearTimeout(hoverTimeoutRef.current);
-        hoverTimeoutRef.current = null;
-      }
-      if (next) {
-        setHovered(true);
-      } else {
-        hoverTimeoutRef.current = setTimeout(() => setHovered(false), 500);
-      }
-    };
-    const onMove = (e: MouseEvent) => {
-      if (window.innerWidth < 768) return;
-      const inNav = navRef.current?.getBoundingClientRect();
-      const insideNav =
-        inNav &&
-        e.clientX >= inNav.left &&
-        e.clientX <= inNav.right &&
-        e.clientY >= inNav.top &&
-        e.clientY <= inNav.bottom;
-      if (insideNav || e.clientY < 110) setHoverNow(true);
-      else setHoverNow(false);
-    };
-    window.addEventListener("mousemove", onMove, { passive: true });
     return () => {
-      window.removeEventListener("mousemove", onMove);
       if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     };
   }, []);
@@ -375,6 +358,8 @@ function FloatingNavbar() {
       ref={navRef}
       data-tour="navbar"
       data-mode={isCompact ? "compact" : "full"}
+      onMouseEnter={() => setHoverNow(true)}
+      onMouseLeave={() => setHoverNow(false)}
       onFocus={() => setNavFocusWithin(true)}
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) {
