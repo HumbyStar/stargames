@@ -24,6 +24,7 @@ import {
   type Client,
   type FinancialStatus,
   type MGMVAgreement,
+  type MGMVInstallment,
   type Situation,
 } from "@/lib/store";
 import { toast } from "sonner";
@@ -165,6 +166,99 @@ const calculateDueDate = (status: FinancialStatus, registerDate: string | null) 
   }
   return registerDate;
 };
+
+// ---- Helpers MGMV ----
+const ORDINAL_WORDS: Record<string, number> = {
+  primeira: 1,
+  segunda: 2,
+  terceira: 3,
+  quarta: 4,
+  quinta: 5,
+  sexta: 6,
+  setima: 7,
+  oitava: 8,
+  nona: 9,
+  decima: 10,
+};
+
+const MONTH_NAMES: Record<string, number> = {
+  janeiro: 0,
+  fevereiro: 1,
+  marco: 2,
+  abril: 3,
+  maio: 4,
+  junho: 5,
+  julho: 6,
+  agosto: 7,
+  setembro: 8,
+  outubro: 9,
+  novembro: 10,
+  dezembro: 11,
+};
+
+function stripAccents(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+/** Soma `months` mantendo o mesmo dia; se o mês destino não tiver o dia,
+ * usa o último dia válido (ex.: 31/01 + 1 mês = 28/02 ou 29/02). */
+export function addMonthsClampDay(base: Date, months: number): Date {
+  const y = base.getFullYear();
+  const m = base.getMonth();
+  const d = base.getDate();
+  const target = new Date(y, m + months, 1, 12, 0, 0);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(d, lastDay));
+  return target;
+}
+
+/** Procura uma data BR num trecho de texto.
+ * Aceita "DD/MM/AAAA", "DD-MM-AAAA" e "dia DD de MES (de AAAA)?".
+ * Sem ano, usa `refYear`. Retorna ISO ou undefined. */
+export function extractPaymentDate(
+  fragment: string,
+  refYear: number,
+): string | undefined {
+  // DD/MM/YYYY ou DD-MM-YYYY ou DD/MM/YY
+  const numeric = fragment.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{2}|\d{4})/);
+  if (numeric) {
+    const iso = normalizeDateBR(
+      `${numeric[1]}/${numeric[2]}/${numeric[3].length === 2 ? "20" + numeric[3] : numeric[3]}`,
+    );
+    if (iso) return new Date(`${iso}T12:00:00`).toISOString();
+  }
+  // "dia DD de MES (de AAAA)?"
+  const named = fragment.match(
+    /dia\s+(\d{1,2})\s+de\s+([A-Za-zÀ-ÿ]+)(?:\s+de\s+(\d{4}))?/i,
+  );
+  if (named) {
+    const day = Number(named[1]);
+    const monthKey = stripAccents(named[2]);
+    const month = MONTH_NAMES[monthKey];
+    if (Number.isFinite(day) && month !== undefined) {
+      const year = named[3] ? Number(named[3]) : refYear;
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      const safeDay = Math.min(day, lastDay);
+      return new Date(year, month, safeDay, 12, 0, 0).toISOString();
+    }
+  }
+  return undefined;
+}
+
+/** Ano de referência: usa o primeiro ano de 4 dígitos achado nas notas
+ * (incluindo o do "1º Pagamento"), senão o ano corrente. */
+export function inferReferenceYear(notes: string, firstPaymentRaw?: string): number {
+  if (firstPaymentRaw) {
+    const m = firstPaymentRaw.match(/\d{4}/);
+    if (m) return Number(m[0]);
+  }
+  const m = notes.match(/\b(20\d{2})\b/);
+  if (m) return Number(m[1]);
+  return new Date().getFullYear();
+}
 
 function cleanClientName(name: string) {
   return String(name || "")
@@ -315,42 +409,109 @@ export function extractMGMVAgreementFromNotes(notes: string): MGMVAgreement | nu
   }
   if (!totalDebt || !count || !value) return null;
 
-  // Detecta parcelas já pagas pelas observações.
-  let paidCount = 0;
-  if (/pago\s+primeira\s+parcela/i.test(notes)) paidCount = Math.max(paidCount, 1);
-  const pagasMatch = notes.match(/(\d+)\s*parcelas?\s*pagas?/i);
-  if (pagasMatch) paidCount = Math.max(paidCount, Number(pagasMatch[1]));
-  // Variações: "Pagou 2 parcelas", "quitou 3 parcelas".
-  const pagouMatch = notes.match(/(?:pagou|quitou)\s+(\d+)\s*parcelas?/i);
-  if (pagouMatch) paidCount = Math.max(paidCount, Number(pagouMatch[1]));
-  // Padrão por linha: cada linha do tipo "→ N Parcela ... paga|pago"
-  // representa UMA parcela quitada. Contamos os números distintos.
-  const perLineRegex =
-    /(?:^|\n)[^\n]*?\b(\d+)\s*[ªº]?\s*Parcela[^\n]*?\b(?:paga|pago|quitada|quitado)\b/gi;
-  const paidNumbers = new Set<number>();
-  for (const m of notes.matchAll(perLineRegex)) {
-    const n = Number(m[1]);
-    if (Number.isFinite(n) && n > 0) paidNumbers.add(n);
-  }
-  if (paidNumbers.size > 0) paidCount = Math.max(paidCount, paidNumbers.size);
-  paidCount = Math.min(paidCount, count);
+  // ---- Detecta parcelas pagas + datas individuais ----
+  // paidByNumber[N] = ISO date | undefined (paga sem data)
+  const paidByNumber = new Map<number, string | undefined>();
+  const refYear = inferReferenceYear(notes, firstPaymentMatch?.[1]);
 
+  // 1) Linhas com número explícito: "→ 2 Parcela ... paga dia 29 de Maio"
+  //    ou "2ª parcela paga dia 29/05/2026"
+  const perLineNum =
+    /(\d+)\s*[ªº]?\s*Parcela[^\n]*?\b(?:paga|pago|quitada|quitado)\b[^\n]*/gi;
+  for (const m of notes.matchAll(perLineNum)) {
+    const n = Number(m[1]);
+    if (Number.isFinite(n) && n > 0) {
+      const date = extractPaymentDate(m[0], refYear);
+      if (!paidByNumber.has(n) || (date && !paidByNumber.get(n))) {
+        paidByNumber.set(n, date);
+      }
+    }
+  }
+
+  // 2) Linhas com ordinal por extenso: "Primeira parcela paga dia 30 de Abril"
+  //    "pagou segunda parcela", "segunda paga dia 29 de Maio".
+  const perLineOrd =
+    /(primeira|segunda|terceira|quarta|quinta|sexta|s[ée]tima|oitava|nona|d[ée]cima)[^\n]*?(?:\bparcela\b)?[^\n]*?\b(?:paga|pago|quitada|quitado)\b[^\n]*/gi;
+  for (const m of notes.matchAll(perLineOrd)) {
+    const n = ORDINAL_WORDS[stripAccents(m[1])];
+    if (n && n <= count) {
+      const date = extractPaymentDate(m[0], refYear);
+      if (!paidByNumber.has(n) || (date && !paidByNumber.get(n))) {
+        paidByNumber.set(n, date);
+      }
+    }
+  }
+  // "pagou primeira parcela" / "pagou a segunda" — captura sem exigir "parcela" após
+  const pagouOrdRe =
+    /pagou\s+(?:a\s+)?(primeira|segunda|terceira|quarta|quinta|sexta|s[ée]tima|oitava|nona|d[ée]cima)/gi;
+  for (const m of notes.matchAll(pagouOrdRe)) {
+    const n = ORDINAL_WORDS[stripAccents(m[1])];
+    if (n && n <= count && !paidByNumber.has(n)) paidByNumber.set(n, undefined);
+  }
+
+  // 3) Bulk: "2 parcelas pagas", "Pagou 3 parcelas", "quitou 1 parcela".
+  let bulkPaidCount = 0;
+  if (/pago\s+primeira\s+parcela/i.test(notes)) bulkPaidCount = Math.max(bulkPaidCount, 1);
+  const pagasMatch = notes.match(/(\d+)\s*parcelas?\s*pagas?/i);
+  if (pagasMatch) bulkPaidCount = Math.max(bulkPaidCount, Number(pagasMatch[1]));
+  const pagouMatch = notes.match(/(?:pagou|quitou)\s+(\d+)\s*parcelas?/i);
+  if (pagouMatch) bulkPaidCount = Math.max(bulkPaidCount, Number(pagouMatch[1]));
+  bulkPaidCount = Math.min(bulkPaidCount, count);
+  if (paidByNumber.size === 0 && bulkPaidCount > 0) {
+    for (let i = 1; i <= bulkPaidCount; i++) paidByNumber.set(i, undefined);
+  } else if (paidByNumber.size < bulkPaidCount) {
+    // garante que o total quitado é pelo menos bulkPaidCount, preenchendo
+    // sequencialmente os números ainda não marcados.
+    let n = 1;
+    while (paidByNumber.size < bulkPaidCount && n <= count) {
+      if (!paidByNumber.has(n)) paidByNumber.set(n, undefined);
+      n++;
+    }
+  }
+
+  // ---- Datas de vencimento ----
   const firstDueIso =
     firstPaymentMatch && normalizeDateBR(firstPaymentMatch[1])
       ? new Date(`${normalizeDateBR(firstPaymentMatch[1])}T12:00:00`).toISOString()
-      : new Date().toISOString();
-  const start = new Date(firstDueIso);
-  const installments = Array.from({ length: count }, (_, idx) => {
-    const d = new Date(start);
-    d.setMonth(d.getMonth() + idx);
-    return {
-      number: idx + 1,
+      : null;
+
+  // Última parcela paga com data (regra do próximo vencimento).
+  let lastPaidDate: Date | null = null;
+  let lastPaidNumber = 0;
+  for (const [n, iso] of paidByNumber.entries()) {
+    if (iso && n > lastPaidNumber) {
+      lastPaidNumber = n;
+      lastPaidDate = new Date(iso);
+    }
+  }
+
+  // Calcula a base de vencimento para a primeira parcela pendente.
+  // Regra: lastPaid + 1 mês (mesmo dia, clampado). Fallback: firstDueIso, depois hoje.
+  const installments: MGMVInstallment[] = [];
+  for (let i = 1; i <= count; i++) {
+    const paidIso = paidByNumber.get(i);
+    const paid = paidByNumber.has(i);
+    let dueIso: string;
+    if (paid && paidIso) {
+      dueIso = paidIso;
+    } else if (lastPaidDate && i > lastPaidNumber) {
+      const offset = i - lastPaidNumber;
+      dueIso = addMonthsClampDay(lastPaidDate, offset).toISOString();
+    } else if (firstDueIso) {
+      dueIso = addMonthsClampDay(new Date(firstDueIso), i - 1).toISOString();
+    } else {
+      dueIso = addMonthsClampDay(new Date(), i - 1).toISOString();
+    }
+    installments.push({
+      number: i,
       total: count,
-      dueDate: d.toISOString(),
+      dueDate: dueIso,
       value,
-      paid: idx < paidCount,
-    };
-  });
+      paid,
+      paidAt: paid ? paidIso : undefined,
+    });
+  }
+
   return {
     startDate: new Date().toISOString(),
     totalDebt,
