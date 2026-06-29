@@ -129,6 +129,7 @@ export function MGMVSection({
   const [expanded, setExpanded] = useState<string | null>(null);
   const [aiTarget, setAiTarget] = useState<string | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
+  const { expanded: listExpanded } = useListExpansion("mgmv");
 
   const reprocessFromNotes = () => {
     setReprocessing(true);
