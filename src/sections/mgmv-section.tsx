@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
+import { LoadMoreButton } from "@/components/load-more-button";
+import { usePersistedState } from "@/lib/use-persisted-state";
 import {
   formatBRL,
   formatDateBR,
@@ -131,6 +133,8 @@ export function MGMVSection({
   const [aiTarget, setAiTarget] = useState<string | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
   const { expanded: listExpanded } = useListExpansion("mgmv");
+  const [pageSize, setPageSize] = usePersistedState<number>("mgmv.pageSize", 10);
+  const [visibleCount, setVisibleCount] = useState<number>(10);
 
   const reprocessFromNotes = () => {
     setReprocessing(true);
@@ -247,6 +251,16 @@ export function MGMVSection({
       }
     });
   }, [rows, search, chip]);
+
+  useEffect(() => {
+    setVisibleCount(pageSize);
+  }, [pageSize, search, chip]);
+
+  const pagedRows = useMemo(
+    () => filtered.slice(0, Math.min(visibleCount, filtered.length)),
+    [filtered, visibleCount],
+  );
+  const hasMore = pagedRows.length < filtered.length;
 
   const chips: { id: MgmvChip; label: string; count?: number }[] = [
     { id: "todos", label: "Todos", count: stats.clientes },
