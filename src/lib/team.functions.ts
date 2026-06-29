@@ -138,6 +138,14 @@ export const createTask = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => createTaskSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    // Reforço: se atribui a outra pessoa, valida escada empresarial
+    if (data.assignee_id && data.assignee_id !== userId) {
+      const { data: ok } = await supabase.rpc("can_assign_to", {
+        _assigner: userId,
+        _assignee: data.assignee_id,
+      });
+      if (!ok) throw new Error("Você não tem permissão para atribuir tarefas a esse usuário.");
+    }
     const payload = {
       title: data.title,
       description: data.description ?? null,
@@ -192,6 +200,19 @@ export const updateTask = createServerFn({ method: "POST" })
       .maybeSingle();
     if (getErr) throw new Error(getErr.message);
     if (!existing) throw new Error("Tarefa não encontrada.");
+    // Se está mudando o responsável, valida escada
+    if (
+      data.assignee_id !== undefined &&
+      data.assignee_id !== null &&
+      data.assignee_id !== userId &&
+      data.assignee_id !== (existing as any).assignee_id
+    ) {
+      const { data: ok } = await supabase.rpc("can_assign_to", {
+        _assigner: userId,
+        _assignee: data.assignee_id,
+      });
+      if (!ok) throw new Error("Você não tem permissão para atribuir tarefas a esse usuário.");
+    }
 
     const patch: Record<string, unknown> = {};
     if (data.title !== undefined) patch.title = data.title;
