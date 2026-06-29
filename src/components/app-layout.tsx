@@ -566,6 +566,7 @@ function FloatingNavbar() {
         </div>
       )}
     </nav>
+    </TooltipProvider>
   );
 }
 
