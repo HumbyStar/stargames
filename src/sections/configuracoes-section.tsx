@@ -670,6 +670,9 @@ export function ConfiguracoesSection() {
 
         {/* Notificações */}
         <NotificationsPrefsCard />
+
+        {/* Navbar — reordenação, ocultar ícones, tempos de animação */}
+        <NavbarSettingsCard />
       </div>
 
       {/* Histórico de Importações */}
