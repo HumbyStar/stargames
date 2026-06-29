@@ -199,8 +199,17 @@ export function TutorialRunner() {
       ? "left"
       : "right";
 
+  const rootVars = highlightStyle
+    ? ({
+        "--th-top": `${highlightStyle.top}px`,
+        "--th-left": `${highlightStyle.left}px`,
+        "--th-w": `${highlightStyle.width}px`,
+        "--th-h": `${highlightStyle.height}px`,
+      } as React.CSSProperties)
+    : undefined;
+
   const content = (
-    <div className="tutorial-root" role="dialog" aria-modal="true" aria-label={`Tutorial: ${tutorial.title}`}>
+    <div className="tutorial-root" role="dialog" aria-modal="true" aria-label={`Tutorial: ${tutorial.title}`} style={rootVars}>
       <div className="tutorial-overlay" onClick={handleSkip} />
 
       {highlightStyle && (
