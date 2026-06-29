@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { MetricCard, PageHeader, Tag } from "@/components/ui-bits";
+import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
   formatBRL,
@@ -19,6 +19,7 @@ import type { MgmvAiReviewSuggestion } from "@/lib/mgmv-ai-review.functions";
 import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
 import { extractMGMVAgreementFromNotes } from "@/sections/import-section";
 import { toast } from "sonner";
+import { X } from "lucide-react";
 
 type MgmvChip =
   | "todos"
