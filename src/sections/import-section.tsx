@@ -2744,26 +2744,56 @@ function ZipPreview({
           label="Com erro"
           value={stats.errors}
           status={stats.errors > 0 ? "danger" : "default"}
+          onClick={() => setFilter("erro")}
+          tooltip="Ver registros com erro"
         />
         <MetricCard
           label="MGMV em conflito"
           value={stats.mgmvConflicts}
           status={stats.mgmvConflicts > 0 ? "danger" : "default"}
+          onClick={() => setFilter("mgmv")}
+          tooltip="Ver acordos MGMV em conflito"
         />
         <MetricCard
           label="Duplicatas"
           value={stats.duplicates}
           status={stats.duplicates > 0 ? "warning" : "default"}
+          onClick={() => setFilter("duplicatas")}
+          tooltip="Ver possíveis duplicatas"
         />
         <MetricCard
           label="Telefone corrigido"
           value={stats.phoneCorrected}
           status={stats.phoneCorrected > 0 ? "warning" : "default"}
+          onClick={() => setFilter("telefoneCorrigido")}
+          tooltip="Ver clientes com telefone corrigido"
         />
-        <MetricCard label="Novos clientes" value={stats.newClients} status="success" />
-        <MetricCard label="Existentes" value={stats.existing} />
-        <MetricCard label="Produtos" value={stats.totalProducts} />
-        <MetricCard label="Acordos MGMV" value={stats.mgmv} status={stats.mgmv > 0 ? "warning" : "default"} />
+        <MetricCard
+          label="Novos clientes"
+          value={stats.newClients}
+          status="success"
+          onClick={() => setFilter("novos")}
+          tooltip="Ver novos clientes detectados"
+        />
+        <MetricCard
+          label="Existentes"
+          value={stats.existing}
+          onClick={() => setFilter("existentes")}
+          tooltip="Ver clientes já existentes"
+        />
+        <MetricCard
+          label="Produtos"
+          value={stats.totalProducts}
+          onClick={() => setFilter("prontos")}
+          tooltip="Ver registros prontos"
+        />
+        <MetricCard
+          label="Acordos MGMV"
+          value={stats.mgmv}
+          status={stats.mgmv > 0 ? "warning" : "default"}
+          onClick={() => setFilter("mgmv")}
+          tooltip="Ver acordos MGMV detectados"
+        />
       </div>
 
       {/* ============= Seção dedicada de resultados MGMV ============= */}
@@ -2787,7 +2817,13 @@ function ZipPreview({
             )}
           </div>
           <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <MetricCard label="Clientes em MGMV" value={mgmvTotals.clients} status="warning" />
+            <MetricCard
+              label="Clientes em MGMV"
+              value={mgmvTotals.clients}
+              status="warning"
+              onClick={() => setFilter("mgmv")}
+              tooltip="Ver clientes em MGMV detectados"
+            />
             <MetricCard label="Dívida total" value={formatBRL(mgmvTotals.totalDebt)} />
             <MetricCard label="Parcelas no total" value={mgmvTotals.installments} />
             <MetricCard
@@ -2870,8 +2906,18 @@ function ZipPreview({
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <MetricCard label="Pastas" value={data.folders.size} status="primary" />
         <MetricCard label="Arquivos HTML" value={data.files} />
-        <MetricCard label="Clientes detectados" value={data.entries.length} />
-        <MetricCard label="Status corrigido" value={stats.corrected} />
+        <MetricCard
+          label="Clientes detectados"
+          value={data.entries.length}
+          onClick={() => setFilter("todos")}
+          tooltip="Ver todos os clientes detectados"
+        />
+        <MetricCard
+          label="Status corrigido"
+          value={stats.corrected}
+          onClick={() => setFilter("statusCorrigido")}
+          tooltip="Ver registros com status corrigido"
+        />
       </div>
 
       <Card>
