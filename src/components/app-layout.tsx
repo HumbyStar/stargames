@@ -12,13 +12,19 @@ import {
   Upload,
   Settings,
   Bell,
+  LayoutDashboard,
+  Users,
+  Sparkles,
+  Wallet,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { ComponentType, SVGProps } from "react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -36,12 +42,16 @@ import { ConciergeModal } from "@/components/concierge-modal";
 import { FloatingConcierge } from "@/components/floating-concierge";
 import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 
-const navItems = [
-  { id: "dashboard", label: "Dashboard" },
-  { id: "clientes", label: "Clientes" },
-  { id: "mgmv", label: "MGMV" },
-  { id: "collection", label: "Collection" },
-] as const;
+const navItems: ReadonlyArray<{
+  id: string;
+  label: string;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+}> = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "clientes", label: "Clientes", icon: Users },
+  { id: "mgmv", label: "MGMV", icon: Sparkles },
+  { id: "collection", label: "Collection", icon: Wallet },
+];
 
 function scrollToSection(id: string) {
   const el = document.getElementById(id);
