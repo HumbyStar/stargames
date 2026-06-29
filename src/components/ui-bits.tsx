@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { ChevronRight } from "lucide-react";
 
 type Status = "default" | "primary" | "success" | "danger" | "warning";
 
@@ -8,11 +9,15 @@ export function MetricCard({
   value,
   status = "default",
   hint,
+  onClick,
+  tooltip,
 }: {
   label: string;
   value: string | number;
   status?: Status;
   hint?: string;
+  onClick?: () => void;
+  tooltip?: string;
 }) {
   const valueClass = {
     default: "text-foreground",
@@ -21,6 +26,28 @@ export function MetricCard({
     danger: "text-destructive",
     warning: "text-[color:var(--warning-foreground)]",
   }[status];
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title={tooltip ?? `Ver ${label.toLowerCase()}`}
+        className={cn(
+          "group relative w-full text-left rounded-xl border border-border bg-card p-4 shadow-xs cursor-pointer transition-all",
+          "hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md hover:shadow-primary/10",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        )}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+          <ChevronRight className="size-4 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+        </div>
+        <p className={cn("mt-2 text-2xl font-semibold tabular-nums", valueClass)}>{value}</p>
+        {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+      </button>
+    );
+  }
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
