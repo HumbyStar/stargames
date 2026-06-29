@@ -48,6 +48,7 @@ import {
   type ImportDiagnostics,
 } from "@/lib/store";
 import { NotificationsPrefsCard } from "@/components/notifications-prefs-card";
+import { NavbarSettingsCard } from "@/components/navbar-settings-card";
 
 function DiagBox({
   label,
@@ -669,6 +670,9 @@ export function ConfiguracoesSection() {
 
         {/* Notificações */}
         <NotificationsPrefsCard />
+
+        {/* Navbar — reordenação, ocultar ícones, tempos de animação */}
+        <NavbarSettingsCard />
       </div>
 
       {/* Histórico de Importações */}

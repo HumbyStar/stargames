@@ -171,6 +171,9 @@
   top: 18px;
   left: 50%;
   --nav-shift: 0px;
+  --nav-anim-hover: 700ms;
+  --nav-anim-leave: 3000ms;
+  --nav-anim-ring: 2400ms;
   transform: translateX(calc(-50% + var(--nav-shift))) translateY(0);
   width: calc(100% - 32px);
   max-width: 1280px;
@@ -180,10 +183,10 @@
   border: 1px solid color-mix(in oklch, var(--color-foreground) 12%, transparent);
   box-shadow: 0 18px 60px color-mix(in oklch, var(--color-foreground) 18%, transparent);
   transition:
-    top 700ms cubic-bezier(0.32, 0.72, 0, 1),
-    max-width 700ms cubic-bezier(0.32, 0.72, 0, 1),
-    padding 700ms cubic-bezier(0.32, 0.72, 0, 1),
-    transform 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    top var(--nav-anim-hover) cubic-bezier(0.32, 0.72, 0, 1),
+    max-width var(--nav-anim-hover) cubic-bezier(0.32, 0.72, 0, 1),
+    padding var(--nav-anim-hover) cubic-bezier(0.32, 0.72, 0, 1),
+    transform var(--nav-anim-hover) cubic-bezier(0.32, 0.72, 0, 1),
     background 500ms ease,
     box-shadow 500ms ease,
     backdrop-filter 500ms ease,
@@ -223,9 +226,9 @@
 /* Full-mode hover: glowing primary border, soft fade */
 .floating-navbar[data-mode="full"] {
   transition:
-    top 700ms cubic-bezier(0.32, 0.72, 0, 1),
-    max-width 700ms cubic-bezier(0.32, 0.72, 0, 1),
-    padding 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    top var(--nav-anim-hover) cubic-bezier(0.32, 0.72, 0, 1),
+    max-width var(--nav-anim-hover) cubic-bezier(0.32, 0.72, 0, 1),
+    padding var(--nav-anim-hover) cubic-bezier(0.32, 0.72, 0, 1),
     background 500ms ease,
     box-shadow 600ms ease,
     backdrop-filter 500ms ease,
@@ -274,7 +277,7 @@
   opacity: 1;
 }
 .floating-navbar[data-progress="loop"] .nav-progress-runner {
-  animation: nav-progress-trace 2400ms linear infinite;
+  animation: nav-progress-trace var(--nav-anim-ring) linear infinite;
 }
 .floating-navbar[data-progress="true"] .nav-progress-ring,
 .floating-navbar[data-progress="leaving"] .nav-progress-ring {
@@ -282,10 +285,10 @@
 }
 .floating-navbar[data-progress="true"] .nav-progress-runner {
   stroke-dasharray: 0 100;
-  animation: nav-progress-fill 3000ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  animation: nav-progress-fill var(--nav-anim-leave) cubic-bezier(0.32, 0.72, 0, 1) forwards;
 }
 .floating-navbar[data-progress="leaving"] .nav-progress-ring {
-  animation: nav-ring-pulse-out 3000ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: nav-ring-pulse-out var(--nav-anim-leave) cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 .floating-navbar[data-progress="leaving"] .nav-progress-runner {
   animation: nav-runner-fill-perimeter 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
@@ -299,17 +302,17 @@
   border-color: color-mix(in oklch, var(--color-foreground) 6%, transparent);
   box-shadow: 0 8px 24px color-mix(in oklch, var(--color-foreground) 8%, transparent);
   transition:
-    background 3000ms cubic-bezier(0.22, 1, 0.36, 1),
-    backdrop-filter 3000ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 3000ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 3000ms cubic-bezier(0.22, 1, 0.36, 1);
+    background var(--nav-anim-leave) cubic-bezier(0.22, 1, 0.36, 1),
+    backdrop-filter var(--nav-anim-leave) cubic-bezier(0.22, 1, 0.36, 1),
+    border-color var(--nav-anim-leave) cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow var(--nav-anim-leave) cubic-bezier(0.22, 1, 0.36, 1);
 }
 .floating-navbar[data-progress="leaving"] > *:not(.nav-progress-ring) {
   opacity: 0.42;
   filter: blur(0.5px);
   transition:
-    opacity 3000ms cubic-bezier(0.22, 1, 0.36, 1),
-    filter 3000ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity var(--nav-anim-leave) cubic-bezier(0.22, 1, 0.36, 1),
+    filter var(--nav-anim-leave) cubic-bezier(0.22, 1, 0.36, 1);
 }
 @keyframes nav-progress-trace {
   from { stroke-dashoffset: 0; }
@@ -385,6 +388,18 @@
   .floating-navbar[data-progress="leaving"] .nav-progress-ring {
     opacity: 0.6;
   }
+}
+/* User opted-out animations (Configurações → Navbar). */
+.floating-navbar[data-anim="off"],
+.floating-navbar[data-anim="off"] * {
+  transition-duration: 0.001ms !important;
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+}
+.floating-navbar[data-anim="off"] .nav-progress-runner {
+  animation: none !important;
+  stroke-dasharray: none;
+  opacity: 0;
 }
 .page-container {
   max-width: 1440px;
