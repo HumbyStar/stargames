@@ -132,9 +132,20 @@ export function MGMVSection({
   const [expanded, setExpanded] = useState<string | null>(null);
   const [aiTarget, setAiTarget] = useState<string | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
-  const { expanded: listExpanded } = useListExpansion("mgmv");
+  const { expanded: listExpanded, expand: expandList } = useListExpansion("mgmv");
   const [pageSize, setPageSize] = usePersistedState<number>("mgmv.pageSize", 10);
   const [visibleCount, setVisibleCount] = useState<number>(10);
+
+  /**
+   * Aplica filtro a partir do clique em um card de resumo, mantendo o
+   * contexto da seção MGMV. Garante que a lista esteja expandida e
+   * limpa a busca livre para o usuário enxergar o subconjunto.
+   */
+  const applyCardFilter = (next: MgmvChip) => {
+    setChip(next);
+    setSearch("");
+    if (!listExpanded) expandList();
+  };
 
   const reprocessFromNotes = () => {
     setReprocessing(true);
