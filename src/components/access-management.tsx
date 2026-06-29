@@ -61,10 +61,27 @@ import {
   type AppRole,
 } from "@/lib/permissions.functions";
 
-const ROLES: AppRole[] = ["admin", "manager", "operator", "viewer"];
+const ROLES: AppRole[] = [
+  "admin_master",
+  "admin",
+  "gerente",
+  "manager",
+  "supervisor",
+  "funcionario",
+  "envio",
+  "mgmv",
+  "operator",
+  "viewer",
+];
 const ROLE_LABELS: Record<AppRole, string> = {
+  admin_master: "Admin Master",
   admin: "Administrador",
-  manager: "Gerente",
+  gerente: "Gerente",
+  manager: "Gerente (legado)",
+  supervisor: "Supervisor",
+  funcionario: "Funcionário",
+  envio: "Envio",
+  mgmv: "MGMV",
   operator: "Operador",
   viewer: "Leitor",
 };
@@ -80,6 +97,14 @@ const ALL_PERMISSIONS: AppPermission[] = [
   "finance.view",
   "settings.view",
   "users.manage",
+  "team.view",
+  "team.assign.all",
+  "team.assign.team",
+  "team.task.update_own",
+  "team.task.comment",
+  "punch.clock",
+  "shipping.mark_sent",
+  "mgmv.register_product",
 ];
 const PERM_LABELS: Record<AppPermission, string> = {
   "dashboard.view": "Ver dashboard",
@@ -93,6 +118,14 @@ const PERM_LABELS: Record<AppPermission, string> = {
   "finance.view": "Ver finanças",
   "settings.view": "Ver configurações",
   "users.manage": "Gerenciar usuários",
+  "team.view": "Ver equipe",
+  "team.assign.all": "Atribuir tarefas a qualquer pessoa",
+  "team.assign.team": "Atribuir tarefas à própria equipe",
+  "team.task.update_own": "Atualizar próprias tarefas",
+  "team.task.comment": "Comentar em tarefas",
+  "punch.clock": "Registrar ponto",
+  "shipping.mark_sent": "Marcar envio de produto",
+  "mgmv.register_product": "Cadastrar produto MGMV",
 };
 
 function randomPassword(len = 14) {

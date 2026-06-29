@@ -494,6 +494,136 @@ export type Database = {
         }
         Relationships: []
       }
+      team_task_activity: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          id: string
+          payload: Json | null
+          task_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          task_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_task_activity_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "team_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_task_comments: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          id: string
+          kind: string
+          task_id: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          created_at?: string
+          id?: string
+          kind?: string
+          task_id: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_task_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "team_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_tasks: {
+        Row: {
+          assignee_id: string | null
+          checklist: Json
+          client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          due_at: string | null
+          id: string
+          position: number
+          priority: string
+          product_id: string | null
+          started_at: string | null
+          status: string
+          tags: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assignee_id?: string | null
+          checklist?: Json
+          client_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          due_at?: string | null
+          id?: string
+          position?: number
+          priority?: string
+          product_id?: string | null
+          started_at?: string | null
+          status?: string
+          tags?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assignee_id?: string | null
+          checklist?: Json
+          client_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          due_at?: string | null
+          id?: string
+          position?: number
+          priority?: string
+          product_id?: string | null
+          started_at?: string | null
+          status?: string
+          tags?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -521,6 +651,11 @@ export type Database = {
     }
     Functions: {
       bootstrap_first_admin: { Args: never; Returns: boolean }
+      can_assign_to: {
+        Args: { _assignee: string; _assigner: string }
+        Returns: boolean
+      }
+      can_view_team_tasks: { Args: { _user_id: string }; Returns: boolean }
       has_permission: {
         Args: {
           _permission: Database["public"]["Enums"]["app_permission"]
@@ -549,7 +684,25 @@ export type Database = {
         | "finance.view"
         | "settings.view"
         | "users.manage"
-      app_role: "admin" | "manager" | "operator" | "viewer"
+        | "team.view"
+        | "team.assign.all"
+        | "team.assign.team"
+        | "team.task.update_own"
+        | "team.task.comment"
+        | "punch.clock"
+        | "shipping.mark_sent"
+        | "mgmv.register_product"
+      app_role:
+        | "admin"
+        | "manager"
+        | "operator"
+        | "viewer"
+        | "admin_master"
+        | "gerente"
+        | "supervisor"
+        | "funcionario"
+        | "envio"
+        | "mgmv"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -689,8 +842,27 @@ export const Constants = {
         "finance.view",
         "settings.view",
         "users.manage",
+        "team.view",
+        "team.assign.all",
+        "team.assign.team",
+        "team.task.update_own",
+        "team.task.comment",
+        "punch.clock",
+        "shipping.mark_sent",
+        "mgmv.register_product",
       ],
-      app_role: ["admin", "manager", "operator", "viewer"],
+      app_role: [
+        "admin",
+        "manager",
+        "operator",
+        "viewer",
+        "admin_master",
+        "gerente",
+        "supervisor",
+        "funcionario",
+        "envio",
+        "mgmv",
+      ],
     },
   },
 } as const

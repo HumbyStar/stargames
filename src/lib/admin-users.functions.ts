@@ -3,8 +3,14 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import type { AppRole } from "./permissions.functions";
 
-const ROLES: AppRole[] = ["admin", "manager", "operator", "viewer"];
-const roleSchema = z.enum(["admin", "manager", "operator", "viewer"]);
+const ROLES: AppRole[] = [
+  "admin_master","admin","gerente","manager","supervisor",
+  "funcionario","envio","mgmv","operator","viewer",
+];
+const roleSchema = z.enum([
+  "admin_master","admin","gerente","manager","supervisor",
+  "funcionario","envio","mgmv","operator","viewer",
+]);
 
 async function assertAdmin(ctx: { supabase: any; userId: string }) {
   const { data, error } = await ctx.supabase.rpc("has_role", {
