@@ -13,14 +13,17 @@ import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 import {
   AlertTriangle,
   ArrowUp,
-  Clock,
+  Bell,
+  ChevronRight,
   CreditCard,
+  Lightbulb,
+  Link2,
   Loader2,
   Mic,
   MicOff,
   Package,
+  ShieldCheck,
   Sparkles,
-  Truck,
   User,
   UserPlus,
   X,
@@ -51,13 +54,10 @@ type QuickAction = {
 };
 
 const QUICK_ACTIONS: QuickAction[] = [
-  { id: "view-pending", label: "Ver pendentes", description: "Pendências em aberto.", icon: AlertTriangle, cardId: "pending", tone: "warning" },
-  { id: "view-overdue", label: "Reservas vencidas", description: "Reservas e remarcadas vencendo.", icon: Clock, cardId: "overdue-reservations", tone: "danger" },
-  { id: "charge", label: "Cobrar cliente", description: "Cobranças comuns elegíveis.", icon: CreditCard, cardId: "pending", tone: "primary" },
-  { id: "paid-awaiting", label: "Pagos ag. envio", description: "Pagos prontos para envio.", icon: Truck, cardId: "paid-awaiting-shipment", tone: "success" },
-  { id: "mgmv-quick", label: "MGMV em atraso", description: "Parcelas MGMV vencidas.", icon: Sparkles, cardId: "mgmv-overdue", tone: "primary" },
-  { id: "new-client", label: "Cadastrar cliente", description: "Abrir novo cliente.", icon: UserPlus, custom: "new-client", tone: "neutral" },
-  { id: "add-product", label: "Adicionar produto", description: "Vincular produto a cliente.", icon: Package, custom: "add-product", tone: "neutral" },
+  { id: "new-client", label: "Cadastrar cliente", description: "Abrir novo cliente.", icon: UserPlus, custom: "new-client", tone: "primary" },
+  { id: "add-product", label: "Adicionar produto", description: "Vincular produto a cliente.", icon: Package, custom: "add-product", tone: "primary" },
+  { id: "charge", label: "Cobrar cliente", description: "Cobranças elegíveis.", icon: CreditCard, cardId: "pending", tone: "primary" },
+  { id: "view-pending", label: "Ver pendentes", description: "Pendências em aberto.", icon: AlertTriangle, cardId: "pending", tone: "primary" },
 ];
 
 const TONE_CLASS: Record<QuickAction["tone"], string> = {
