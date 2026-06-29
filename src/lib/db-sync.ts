@@ -485,6 +485,17 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
 
   const status = paidCount >= sorted.length ? "Quitado" : needsReview ? "Revisão necessária" : "Ativo";
 
+  // Status de revisão (SEPARADO do status financeiro acima).
+  // Preserva ai_reviewed/manually_reviewed quando já marcados; senão deriva
+  // de needsReview (divergência matemática) ou cai em 'none'.
+  const preservedReview =
+    client.mgmv.reviewStatus === "ai_reviewed" ||
+    client.mgmv.reviewStatus === "manually_reviewed"
+      ? client.mgmv.reviewStatus
+      : null;
+  const reviewStatus: NonNullable<MGMVAgreement["reviewStatus"]> =
+    preservedReview ?? (needsReview ? "review_required" : "none");
+
   const upAgreement = await supabase.from("mgmv_agreements").upsert({
     id: agreementId,
     client_id: client.id,
@@ -501,6 +512,11 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
     remaining_value: remainingValue,
     status,
     needs_review: needsReview,
+    review_status: reviewStatus,
+    ai_reviewed: !!client.mgmv.aiReviewed,
+    ai_review_applied_at: client.mgmv.aiReviewAppliedAt ?? null,
+    ai_confidence: client.mgmv.aiConfidence ?? null,
+    ai_review_raw_result: (client.mgmv.aiReviewRawResult ?? null) as never,
     source_folder: client.folder ?? null,
     original_notes: client.notes ?? null,
   } as never);
