@@ -33,6 +33,7 @@ import { useNotifications } from "@/lib/notifications";
 import { HelpCenter } from "@/components/help-center";
 import { TutorialRunner } from "@/components/tutorial-runner";
 import { ConciergeModal } from "@/components/concierge-modal";
+import { FloatingConcierge } from "@/components/floating-concierge";
 
 const navItems = [
   { id: "dashboard", label: "Dashboard" },
@@ -435,6 +436,7 @@ export function AppLayout({ children }: { children?: ReactNode }) {
       <FloatingNavbar />
       <main className="page-container">{children ?? <Outlet />}</main>
       <GlobalModals />
+      <FloatingConcierge />
     </div>
   );
 }
