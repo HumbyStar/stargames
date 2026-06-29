@@ -392,7 +392,7 @@ function FloatingNavbar() {
       }}
       className={cn(
         "floating-navbar flex items-center gap-3 px-3 py-2 md:px-4",
-        isCompact && "md:gap-1 md:py-1.5",
+        isCompact && "md:gap-2 md:py-2 md:px-3",
       )}
     >
       <button
