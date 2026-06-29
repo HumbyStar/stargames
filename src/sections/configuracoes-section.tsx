@@ -176,6 +176,7 @@ export function ConfiguracoesSection() {
   const [diag, setDiag] = useState<ImportDiagnostics | null>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [mergeBusy, setMergeBusy] = useState(false);
+  const [accessOpen, setAccessOpen] = useState(false);
   const duplicateGroups = findDuplicateClientGroups();
 
   const refreshDiag = async () => {
