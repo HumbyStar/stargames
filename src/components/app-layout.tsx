@@ -459,6 +459,12 @@ function FloatingNavbar() {
       data-progress={navProgress}
       data-scrolled={scrolled ? "true" : "false"}
       data-dimmed={navDimmed ? "true" : "false"}
+      data-anim={navbarCfg.animation.disabled ? "off" : "on"}
+      style={{
+        ["--nav-anim-hover" as string]: `${navbarCfg.animation.hoverMs}ms`,
+        ["--nav-anim-leave" as string]: `${navbarCfg.animation.leaveMs}ms`,
+        ["--nav-anim-ring" as string]: `${navbarCfg.animation.ringMs}ms`,
+      }}
       onMouseEnter={() => setNavHover(true)}
       onMouseLeave={() => setNavHover(false)}
       onPointerEnter={() => setNavHover(true)}
