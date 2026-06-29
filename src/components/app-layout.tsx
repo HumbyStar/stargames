@@ -12,13 +12,19 @@ import {
   Upload,
   Settings,
   Bell,
+  LayoutDashboard,
+  Users,
+  Sparkles,
+  Wallet,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { ComponentType, SVGProps } from "react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -36,12 +42,16 @@ import { ConciergeModal } from "@/components/concierge-modal";
 import { FloatingConcierge } from "@/components/floating-concierge";
 import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 
-const navItems = [
-  { id: "dashboard", label: "Dashboard" },
-  { id: "clientes", label: "Clientes" },
-  { id: "mgmv", label: "MGMV" },
-  { id: "collection", label: "Collection" },
-] as const;
+const navItems: ReadonlyArray<{
+  id: string;
+  label: string;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+}> = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "clientes", label: "Clientes", icon: Users },
+  { id: "mgmv", label: "MGMV", icon: Sparkles },
+  { id: "collection", label: "Collection", icon: Wallet },
+];
 
 function scrollToSection(id: string) {
   const el = document.getElementById(id);
@@ -51,7 +61,15 @@ function scrollToSection(id: string) {
   el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function SearchBox({ className }: { className?: string }) {
+function SearchBox({
+  className,
+  inputRef,
+  onFocusChange,
+}: {
+  className?: string;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
+  onFocusChange?: (focused: boolean) => void;
+}) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -121,12 +139,17 @@ function SearchBox({ className }: { className?: string }) {
       <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
       <input
         type="search"
+        ref={inputRef}
         value={query}
         onChange={(e) => {
           setQuery(e.target.value);
           setOpen(true);
         }}
-        onFocus={() => query && setOpen(true)}
+        onFocus={() => {
+          onFocusChange?.(true);
+          if (query) setOpen(true);
+        }}
+        onBlur={() => onFocusChange?.(false)}
         onKeyDown={(e) => {
           if (!open || results.length === 0) return;
           if (e.key === "ArrowDown") {
@@ -186,39 +209,72 @@ function NavLink({
   label,
   active,
   onClick,
+  compact,
+  Icon,
 }: {
   id: string;
   label: string;
   active: boolean;
   onClick: () => void;
+  compact: boolean;
+  Icon: ComponentType<SVGProps<SVGSVGElement>>;
 }) {
-  return (
+  const anchor = (
     <a
       href={`#${id}`}
       onClick={(e) => {
         e.preventDefault();
         onClick();
       }}
+      aria-label={label}
+      title={compact ? label : undefined}
       className={cn(
-        "rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 hover:-translate-y-0.5 active:scale-95",
+        "flex items-center gap-2 rounded-full text-sm font-medium transition-all duration-300 hover:-translate-y-0.5 active:scale-95",
+        compact ? "size-8 justify-center px-0 py-0" : "px-4 py-1.5",
         active
-          ? "bg-primary text-primary-foreground shadow-sm scale-105"
+          ? "bg-primary text-primary-foreground shadow-sm"
           : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground",
       )}
     >
-      <span className="inline-block transition-transform">{label}</span>
+      <Icon
+        className={cn(
+          "transition-all duration-300 shrink-0",
+          compact ? "size-4" : "size-3.5 opacity-80",
+        )}
+      />
+      <span
+        className={cn(
+          "overflow-hidden whitespace-nowrap transition-all duration-300",
+          compact ? "max-w-0 opacity-0" : "max-w-[140px] opacity-100",
+        )}
+      >
+        {label}
+      </span>
     </a>
+  );
+  if (!compact) return anchor;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{anchor}</TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
 function FloatingNavbar() {
-  const [hidden, setHidden] = useState(false);
   const [openMobile, setOpenMobile] = useState(false);
   const [activeSection, setActiveSection] = useState<string>("dashboard");
   const [isDark, setIsDark] = useState(() =>
     typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
   );
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [scrolled, setScrolled] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [navFocusWithin, setNavFocusWithin] = useState(false);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const navRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -254,9 +310,7 @@ function FloatingNavbar() {
     const container = document.querySelector<HTMLElement>(".page-container");
     if (!container) return;
     const onScroll = () => {
-      setHidden(true);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      timeoutRef.current = setTimeout(() => setHidden(false), 350);
+      setScrolled(container.scrollTop > 40);
       const probe = container.scrollTop + 200;
       let current = navItems[0].id as string;
       for (const item of navItems) {
@@ -267,14 +321,72 @@ function FloatingNavbar() {
     };
     container.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
+    return () => container.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const setHoverNow = (next: boolean) => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+      }
+      if (next) {
+        setHovered(true);
+      } else {
+        hoverTimeoutRef.current = setTimeout(() => setHovered(false), 500);
+      }
+    };
+    const onMove = (e: MouseEvent) => {
+      if (window.innerWidth < 768) return;
+      const inNav = navRef.current?.getBoundingClientRect();
+      const insideNav =
+        inNav &&
+        e.clientX >= inNav.left &&
+        e.clientX <= inNav.right &&
+        e.clientY >= inNav.top &&
+        e.clientY <= inNav.bottom;
+      if (insideNav || e.clientY < 110) setHoverNow(true);
+      else setHoverNow(false);
+    };
+    window.addEventListener("mousemove", onMove, { passive: true });
     return () => {
-      container.removeEventListener("scroll", onScroll);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      window.removeEventListener("mousemove", onMove);
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     };
   }, []);
 
+  const isCompact =
+    scrolled &&
+    !hovered &&
+    !searchExpanded &&
+    !searchFocused &&
+    !navFocusWithin;
+
+  const expandAndFocusSearch = () => {
+    setSearchExpanded(true);
+    requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+    });
+  };
+
   return (
-    <nav data-tour="navbar" className={cn("floating-navbar flex items-center gap-3 px-3 py-2 md:px-4", hidden && "navbar-hidden")}>
+    <TooltipProvider delayDuration={150}>
+    <nav
+      ref={navRef}
+      data-tour="navbar"
+      data-mode={isCompact ? "compact" : "full"}
+      onFocus={() => setNavFocusWithin(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          setNavFocusWithin(false);
+          setSearchExpanded(false);
+        }
+      }}
+      className={cn(
+        "floating-navbar flex items-center gap-3 px-3 py-2 md:px-4",
+        isCompact && "md:gap-1 md:py-1.5",
+      )}
+    >
       <button
         type="button"
         onClick={openConcierge}
@@ -286,29 +398,69 @@ function FloatingNavbar() {
           src={mascotAsset.url}
           alt=""
           draggable={false}
-          className="size-9 rounded-full object-cover ring-1 ring-primary/30 shadow-md transition-all duration-300 group-hover:shadow-lg group-hover:rotate-6 group-hover:scale-110"
+          className={cn(
+            "rounded-full object-cover ring-1 ring-primary/30 shadow-md transition-all duration-300 group-hover:shadow-lg group-hover:rotate-6 group-hover:scale-110",
+            isCompact ? "size-7" : "size-9",
+          )}
         />
-        <div className="hidden lg:block leading-tight transition-all duration-200 group-hover:translate-x-0.5">
+        <div
+          className={cn(
+            "hidden lg:block leading-tight transition-all duration-300 group-hover:translate-x-0.5 overflow-hidden",
+            isCompact ? "max-w-0 opacity-0" : "max-w-[180px] opacity-100",
+          )}
+        >
           <p className="text-sm font-semibold">Star Games</p>
           <p className="text-[10px] text-muted-foreground">Gestão Operacional</p>
         </div>
       </button>
 
-      <div className="hidden md:flex items-center gap-1 rounded-full bg-foreground/5 p-1">
+      <div
+        className={cn(
+          "hidden md:flex items-center gap-1 rounded-full bg-foreground/5 transition-all duration-300",
+          isCompact ? "p-0.5" : "p-1",
+        )}
+      >
         {navItems.map((i) => (
           <NavLink
             key={i.id}
             id={i.id}
             label={i.label}
+            Icon={i.icon}
             active={activeSection === i.id}
             onClick={() => scrollToSection(i.id)}
+            compact={isCompact}
           />
         ))}
       </div>
 
-      <div data-tour="global-search" className="hidden md:block ml-3 flex-1 max-w-md">
-        <SearchBox className="transition-all duration-300 focus-within:scale-[1.02]" />
+      <div
+        data-tour="global-search"
+        className={cn(
+          "hidden md:block ml-3 transition-all duration-300",
+          isCompact ? "w-0 ml-1 overflow-hidden opacity-0 pointer-events-none" : "flex-1 max-w-md opacity-100",
+        )}
+      >
+        <SearchBox
+          inputRef={searchInputRef}
+          onFocusChange={setSearchFocused}
+          className="transition-all duration-300 focus-within:scale-[1.02]"
+        />
       </div>
+      {isCompact && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={expandAndFocusSearch}
+              aria-label="Buscar"
+              className="hidden md:grid size-8 place-items-center rounded-full text-muted-foreground transition-all hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90 animate-in fade-in zoom-in-90 duration-200"
+            >
+              <Search className="size-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Buscar</TooltipContent>
+        </Tooltip>
+      )}
 
       <div className="ml-auto flex items-center gap-1.5 md:gap-2 md:pl-2">
         <button
@@ -414,6 +566,7 @@ function FloatingNavbar() {
         </div>
       )}
     </nav>
+    </TooltipProvider>
   );
 }
 
