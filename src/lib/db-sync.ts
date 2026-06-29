@@ -439,6 +439,49 @@ export async function dbDeleteAllImportProgressAsync(): Promise<void> {
   }
 }
 
+// ============= Client merge (deduplicação) =============
+
+/** Reatribui produtos de uma lista de clientes para um cliente primário. */
+export async function dbReassignProductsClientAsync(
+  fromIds: string[],
+  toId: string,
+): Promise<void> {
+  if (fromIds.length === 0) return;
+  const CHUNK = 100;
+  for (let i = 0; i < fromIds.length; i += CHUNK) {
+    const slice = fromIds.slice(i, i + CHUNK);
+    const { error } = await supabase
+      .from("products")
+      .update({ client_id: toId })
+      .in("client_id", slice);
+    if (error) logErr("reassignProductsClient", error);
+  }
+}
+
+/** Move um acordo MGMV (id é igual ao client_id antigo) para o cliente primário. */
+export async function dbReassignAgreementClientAsync(
+  fromId: string,
+  toId: string,
+): Promise<void> {
+  // Atualiza FK e o próprio id do acordo para manter a convenção 1:1 com o cliente.
+  const { error } = await supabase
+    .from("mgmv_agreements")
+    .update({ id: toId, client_id: toId })
+    .eq("client_id", fromId);
+  if (error) logErr("reassignAgreementClient", error);
+}
+
+/** Apaga clientes pelos ids informados. */
+export async function dbDeleteClientsByIdsAsync(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const CHUNK = 100;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK);
+    const { error } = await supabase.from("clients").delete().in("id", slice);
+    if (error) logErr("deleteClientsByIds", error);
+  }
+}
+
 // ============= MGMV relational sync =============
 
 /**
