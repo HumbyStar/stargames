@@ -325,6 +325,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               {compact ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
               {compact ? "Expandir" : "Compactar"}
             </Button>
+            <ListExpansionToggle section="clients" />
             <select
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
