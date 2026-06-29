@@ -274,8 +274,23 @@ function FloatingNavbar() {
   const [navHover, setNavHover] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [navSize, setNavSize] = useState({ width: 0, height: 0 });
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const update = () => {
+      const { width, height } = nav.getBoundingClientRect();
+      setNavSize({ width, height });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(nav);
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     if (!searchOpen) return;
     const onDown = (e: MouseEvent) => {
@@ -359,21 +374,24 @@ function FloatingNavbar() {
       )}
     >
       {/* Looping border highlight on the navbar container border itself */}
-      <svg
-        aria-hidden
-        className="nav-progress-ring pointer-events-none absolute overflow-visible"
-        preserveAspectRatio="none"
-      >
-        <rect
-          x="1"
-          y="1"
-          width="calc(100% - 2px)"
-          height="calc(100% - 2px)"
-          rx="50%"
-          ry="50%"
-          pathLength={100}
-        />
-      </svg>
+      {navSize.width > 0 && navSize.height > 0 && (
+        <svg
+          aria-hidden
+          className="nav-progress-ring pointer-events-none absolute overflow-visible"
+          viewBox={`0 0 ${navSize.width} ${navSize.height}`}
+          preserveAspectRatio="none"
+        >
+          <rect
+            x="1"
+            y="1"
+            width={Math.max(navSize.width - 2, 0)}
+            height={Math.max(navSize.height - 2, 0)}
+            rx={Math.max(navSize.height / 2 - 1, 0)}
+            ry={Math.max(navSize.height / 2 - 1, 0)}
+            pathLength={100}
+          />
+        </svg>
+      )}
       <button
         type="button"
         onClick={openConcierge}
