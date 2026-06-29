@@ -1689,17 +1689,17 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     }
   };
 
-  const validateText = () => {
-    if (!text.trim()) return toast.error("Cole os dados para validar.");
-    const raw = /<[a-z][\s\S]*>/i.test(text) ? parseHTMLList(text) : parseTextList(text);
-    const parsed = validateRows(raw, findClientByPhone);
-    setRows(parsed);
-    toast.success(`${parsed.length} linha(s) processadas`);
-  };
-
   const [aiLoading, setAiLoading] = useState(false);
-  const analyzeWithAI = async () => {
-    if (!text.trim()) return toast.error("Cole os dados para analisar.");
+  const validateText = async () => {
+    if (!text.trim()) return toast.error("Cole os dados para validar.");
+    // HTML continua com parser dedicado; texto puro vai direto para a IA.
+    if (/<[a-z][\s\S]*>/i.test(text)) {
+      const raw = parseHTMLList(text);
+      const parsed = validateRows(raw, findClientByPhone);
+      setRows(parsed);
+      toast.success(`${parsed.length} linha(s) processadas`);
+      return;
+    }
     setAiLoading(true);
     try {
       const { rows: aiRows } = await analyzeListWithAI({ data: { text } });
@@ -1946,16 +1946,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                   A IA lê cada linha do nome até o status, ignora linhas de grupo/vazias e corrige automaticamente erros comuns.
                 </p>
                 <div className="flex flex-wrap justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={analyzeWithAI}
-                    disabled={aiLoading}
-                    title="Analisa cada linha com IA, identifica vários clientes por linha e corrige erros comuns"
-                  >
+                  <Button onClick={validateText} disabled={aiLoading}>
                     <Brain className="size-4" />
-                    {aiLoading ? "Analisando com IA..." : "Analisar com IA"}
+                    {aiLoading ? "Analisando com IA..." : "Validar Importação"}
                   </Button>
-                  <Button onClick={validateText} disabled={aiLoading}>Validar Importação</Button>
                 </div>
               </div>
             </TabsContent>
