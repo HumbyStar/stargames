@@ -515,6 +515,11 @@ export function DashboardDrilldownModal({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Fechar</Button>
+          {onBackToConcierge ? (
+            <Button variant="outline" onClick={onBackToConcierge}>
+              Voltar ao Concierge
+            </Button>
+          ) : null}
           <Button onClick={goToSection}>
             Ver na seção correspondente
             <ArrowRight className="size-4" />
