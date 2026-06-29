@@ -168,9 +168,14 @@ export function ConfiguracoesSection() {
   const executeDangerAction = useStore((s) => s.executeDangerAction);
   const fetchDiagnostics = useStore((s) => s.fetchDiagnostics);
   const clearImportCache = useStore((s) => s.clearImportCache);
+  const findDuplicateClientGroups = useStore((s) => s.findDuplicateClientGroups);
+  const mergeDuplicateClients = useStore((s) => s.mergeDuplicateClients);
+  const refreshSnapshot = useStore((s) => s.refreshSnapshot);
 
   const [diag, setDiag] = useState<ImportDiagnostics | null>(null);
   const [diagLoading, setDiagLoading] = useState(false);
+  const [mergeBusy, setMergeBusy] = useState(false);
+  const duplicateGroups = findDuplicateClientGroups();
 
   const refreshDiag = async () => {
     setDiagLoading(true);
