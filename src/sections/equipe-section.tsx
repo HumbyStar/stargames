@@ -39,6 +39,9 @@ import { PageHeader } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { TeamPunch } from "@/components/team-punch";
+import { TeamDashboard } from "@/components/team-dashboard";
 import {
   Dialog,
   DialogContent,
@@ -162,7 +165,16 @@ export function EquipeSection() {
         }
       />
 
-      {tasksQ.isLoading ? (
+      <Tabs defaultValue="kanban" className="w-full">
+        <TabsList>
+          <TabsTrigger value="kanban">Kanban</TabsTrigger>
+          <TabsTrigger value="punch">Ponto</TabsTrigger>
+          {(hasPermission("team.assign.all") || hasPermission("team.assign.team")) && (
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          )}
+        </TabsList>
+        <TabsContent value="kanban" className="mt-4">
+          {tasksQ.isLoading ? (
         <div className="grid place-items-center py-24 text-sm text-muted-foreground">
           Carregando tarefas…
         </div>
@@ -193,7 +205,15 @@ export function EquipeSection() {
             ))}
           </div>
         </DndContext>
-      )}
+          )}
+        </TabsContent>
+        <TabsContent value="punch" className="mt-4">
+          <TeamPunch />
+        </TabsContent>
+        <TabsContent value="dashboard" className="mt-4">
+          <TeamDashboard />
+        </TabsContent>
+      </Tabs>
 
       <CreateTaskDialog
         open={openCreate}
