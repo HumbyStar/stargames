@@ -70,6 +70,8 @@ export function ImportCard({
   format,
   pulseKey,
   className,
+  onClick,
+  tooltip,
 }: {
   icon: LucideIcon;
   title: string;
@@ -80,6 +82,8 @@ export function ImportCard({
   /** Mude para forçar um pulse quando o valor variar fora de count-up. */
   pulseKey?: string | number;
   className?: string;
+  onClick?: () => void;
+  tooltip?: string;
 }) {
   const numeric = typeof value === "number" ? value : undefined;
   const counted = useCountUp(numeric);
@@ -100,12 +104,18 @@ export function ImportCard({
           ? format(counted)
           : counted.toLocaleString("pt-BR");
 
+  const Wrapper: "button" | "div" = onClick ? "button" : "div";
+  const interactiveCls = onClick
+    ? "cursor-pointer text-left hover:-translate-y-0.5 hover:shadow-md hover:shadow-[color:var(--card-accent)]/15 hover:border-[color:var(--card-accent)]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--card-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    : "";
   return (
-    <div
+    <Wrapper
+      {...(onClick ? { type: "button", onClick, title: tooltip ?? `Ver ${title.toLowerCase()}` } : {})}
       className={cn(
-        "relative overflow-hidden rounded-xl border p-3 shadow-xs transition-all",
+        "group relative w-full overflow-hidden rounded-xl border p-3 shadow-xs transition-all",
         toneClasses[tone],
         pulse && "ring-2 ring-[color:var(--card-accent)]/40",
+        interactiveCls,
         className,
       )}
     >
@@ -137,7 +147,7 @@ export function ImportCard({
           <Icon className="h-4 w-4" />
         </div>
       </div>
-    </div>
+    </Wrapper>
   );
 }
 
