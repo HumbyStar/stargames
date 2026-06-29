@@ -318,7 +318,7 @@ export function MGMVSection({
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-7">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
         <MetricCard
           label="Clientes MGMV"
           value={stats.clientes}
@@ -365,6 +365,13 @@ export function MGMVSection({
           value={formatBRL(stats.saldoTotal)}
           onClick={() => applyCardFilter("todos")}
           tooltip="Ver acordos com saldo restante"
+        />
+        <MetricCard
+          label="Com produtos externos"
+          value={stats.comProdutosExternos}
+          status={stats.comProdutosExternos > 0 ? "warning" : "default"}
+          onClick={() => applyCardFilter("com_produtos_externos")}
+          tooltip="Ver clientes MGMV que também compraram produtos fora do acordo"
         />
       </div>
 
