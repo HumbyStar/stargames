@@ -2084,7 +2084,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               normalmente e estão na prévia.
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-[50vh] overflow-y-auto rounded-md border border-border">
+          <div className="rounded-md border border-border">
             <table className="w-full text-xs">
               <thead className="bg-muted text-left text-muted-foreground">
                 <tr>
