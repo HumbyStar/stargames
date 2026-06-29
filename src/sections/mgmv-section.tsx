@@ -127,7 +127,7 @@ export function MGMVSection({
     setMGMVAgreement,
     applyAiReviewToAgreement,
   } = useStore();
-  const [chip, setChip] = useState<MgmvChip>("todos");
+  const [chip, setChip] = usePersistedState<MgmvChip>("mgmv.chip", "todos");
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [aiTarget, setAiTarget] = useState<string | null>(null);
