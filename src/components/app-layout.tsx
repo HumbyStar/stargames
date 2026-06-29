@@ -324,16 +324,42 @@ function FloatingNavbar() {
     return () => container.removeEventListener("scroll", onScroll);
   }, []);
 
-  const setHoverNow = (next: boolean) => {
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
-    }
-    if (next) setHovered(true);
-    else hoverTimeoutRef.current = setTimeout(() => setHovered(false), 500);
-  };
   useEffect(() => {
+    let raf = 0;
+    let lastInside = false;
+    const setHoverDeferred = (next: boolean) => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+      }
+      if (next) setHovered(true);
+      else hoverTimeoutRef.current = setTimeout(() => setHovered(false), 450);
+    };
+    const onMove = (e: MouseEvent) => {
+      if (raf) return;
+      const x = e.clientX;
+      const y = e.clientY;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const rect = navRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        // small padding so pointer doesn't fall out mid-transition
+        const pad = 6;
+        const inside =
+          x >= rect.left - pad &&
+          x <= rect.right + pad &&
+          y >= rect.top - pad &&
+          y <= rect.bottom + pad;
+        if (inside !== lastInside) {
+          lastInside = inside;
+          setHoverDeferred(inside);
+        }
+      });
+    };
+    window.addEventListener("mousemove", onMove, { passive: true });
     return () => {
+      window.removeEventListener("mousemove", onMove);
+      if (raf) cancelAnimationFrame(raf);
       if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     };
   }, []);
@@ -358,8 +384,6 @@ function FloatingNavbar() {
       ref={navRef}
       data-tour="navbar"
       data-mode={isCompact ? "compact" : "full"}
-      onMouseEnter={() => setHoverNow(true)}
-      onMouseLeave={() => setHoverNow(false)}
       onFocus={() => setNavFocusWithin(true)}
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) {
