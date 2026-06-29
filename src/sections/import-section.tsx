@@ -2165,49 +2165,51 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         </DialogContent>
       </Dialog>
 
-      {rows && (
-        <div className="mt-6 space-y-4">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+      <Dialog open={!!rows} onOpenChange={(o) => { if (!o) setRows(null); }}>
+        <DialogContent className="max-w-[95vw] sm:max-w-6xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6">
+            <DialogTitle>Preview da importação</DialogTitle>
+            <DialogDescription>
+              Revise os registros analisados antes de confirmar. Você pode fechar e ajustar a origem se algo estiver incorreto.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3 px-6 md:grid-cols-5">
             <MetricCard label="Registros válidos" value={summary.ok} status="success" />
             <MetricCard label="Registros com erro" value={summary.err} status="danger" />
             <MetricCard label="Clientes encontrados" value={summary.foundC} />
             <MetricCard label="Clientes novos" value={summary.newC} />
             <MetricCard label="Produtos prontos" value={summary.ready} status="primary" />
           </div>
-
-          <Card
-            title="Preview dos Dados"
-            action={<Button onClick={confirmImport} disabled={summary.ok === 0}>Confirmar Importação</Button>}
-          >
-            <div className="overflow-x-auto">
+          <div className="flex-1 overflow-auto px-6 pb-2">
+            <div className="rounded-md border border-border">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="py-2 pr-3 font-medium">Linha</th>
-                    <th className="py-2 pr-3 font-medium">Data</th>
-                    <th className="py-2 pr-3 font-medium">Nome</th>
-                    <th className="py-2 pr-3 font-medium">Telefone</th>
-                    <th className="py-2 pr-3 font-medium">Produto</th>
-                    <th className="py-2 pr-3 font-medium">Plataforma</th>
-                    <th className="py-2 pr-3 font-medium">Valor</th>
-                    <th className="py-2 pr-3 font-medium">Status</th>
-                    <th className="py-2 pr-3 font-medium">Aviso</th>
-                    <th className="py-2 pr-3 font-medium">Cliente</th>
-                    <th className="py-2 pr-3 font-medium">Resultado</th>
-                    <th className="py-2 pr-3 font-medium">Erro</th>
+                    <th className="py-2 px-3 font-medium">Linha</th>
+                    <th className="py-2 px-3 font-medium">Data</th>
+                    <th className="py-2 px-3 font-medium">Nome</th>
+                    <th className="py-2 px-3 font-medium">Telefone</th>
+                    <th className="py-2 px-3 font-medium">Produto</th>
+                    <th className="py-2 px-3 font-medium">Plataforma</th>
+                    <th className="py-2 px-3 font-medium">Valor</th>
+                    <th className="py-2 px-3 font-medium">Status</th>
+                    <th className="py-2 px-3 font-medium">Aviso</th>
+                    <th className="py-2 px-3 font-medium">Cliente</th>
+                    <th className="py-2 px-3 font-medium">Resultado</th>
+                    <th className="py-2 px-3 font-medium">Erro</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r, idx) => (
+                  {rows?.map((r, idx) => (
                     <tr key={idx} className="border-b border-border/60 last:border-0">
-                      <td className="py-3 pr-3 text-muted-foreground">{r.line}</td>
-                      <td className="py-3 pr-3 text-muted-foreground">{r.date ?? "—"}</td>
-                      <td className="py-3 pr-3">{r.name || "—"}</td>
-                      <td className="py-3 pr-3 text-muted-foreground">{r.phone || "—"}</td>
-                      <td className="py-3 pr-3">{r.product || "—"}</td>
-                      <td className="py-3 pr-3 text-muted-foreground">{r.platform || "—"}</td>
-                      <td className="py-3 pr-3 tabular-nums">{Number.isFinite(r.totalValue ?? NaN) ? formatBRL(r.totalValue!) : "—"}</td>
-                      <td className="py-3 pr-3">
+                      <td className="py-3 px-3 text-muted-foreground">{r.line}</td>
+                      <td className="py-3 px-3 text-muted-foreground">{r.date ?? "—"}</td>
+                      <td className="py-3 px-3">{r.name || "—"}</td>
+                      <td className="py-3 px-3 text-muted-foreground">{r.phone || "—"}</td>
+                      <td className="py-3 px-3">{r.product || "—"}</td>
+                      <td className="py-3 px-3 text-muted-foreground">{r.platform || "—"}</td>
+                      <td className="py-3 px-3 tabular-nums">{Number.isFinite(r.totalValue ?? NaN) ? formatBRL(r.totalValue!) : "—"}</td>
+                      <td className="py-3 px-3">
                         <Tag variant={r.financialStatus === "Pago" ? "success" : r.financialStatus === "Pendente" ? "danger" : "warning"}>
                           {r.financialStatus || "—"}
                         </Tag>
@@ -2217,20 +2219,26 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                           </div>
                         )}
                       </td>
-                      <td className="py-3 pr-3 text-xs text-amber-600 dark:text-amber-400">
+                      <td className="py-3 px-3 text-xs text-amber-600 dark:text-amber-400">
                         {r.statusWarning ?? "—"}
                       </td>
-                      <td className="py-3 pr-3 text-muted-foreground">{r.clientFound ? "Encontrado" : "Será criado"}</td>
-                      <td className="py-3 pr-3"><Tag variant={r.result === "Pronto" ? "success" : "danger"}>{r.result}</Tag></td>
-                      <td className="py-3 pr-3 text-destructive">{r.errors.join("; ") || "—"}</td>
+                      <td className="py-3 px-3 text-muted-foreground">{r.clientFound ? "Encontrado" : "Será criado"}</td>
+                      <td className="py-3 px-3"><Tag variant={r.result === "Pronto" ? "success" : "danger"}>{r.result}</Tag></td>
+                      <td className="py-3 px-3 text-destructive">{r.errors.join("; ") || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </Card>
-        </div>
-      )}
+          </div>
+          <DialogFooter className="px-6 pb-6">
+            <Button variant="outline" onClick={() => setRows(null)}>Cancelar</Button>
+            <Button onClick={confirmImport} disabled={summary.ok === 0}>
+              Confirmar Importação ({summary.ok})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
