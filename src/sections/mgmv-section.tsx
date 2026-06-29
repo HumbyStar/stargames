@@ -21,6 +21,8 @@ type MgmvChip =
   | "em_atraso"
   | "quitados"
   | "revisao"
+  | "revisado_ia"
+  | "revisado_manual"
   | "vencem_hoje"
   | "vencidos";
 
@@ -33,7 +35,12 @@ interface MgmvRow {
   paidValue: number;
   remainingValue: number;
   nextDue: string | null;
-  status: "Ativo" | "Em atraso" | "Quitado" | "Revisão necessária";
+  /** Status financeiro do acordo (separado do status de revisão). */
+  status: "Ativo" | "Em atraso" | "Quitado";
+  /** Status de revisão (independente do financeiro). */
+  reviewStatus: NonNullable<MGMVAgreement["reviewStatus"]>;
+  /** Indica divergência matemática entre soma das parcelas e total. */
+  hasMismatch: boolean;
 }
 
 function isSameDay(iso: string): boolean {
@@ -59,23 +66,30 @@ function buildRow(client: Client, agreement: MGMVAgreement): MgmvRow {
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
   const nextDue = next?.dueDate ?? null;
 
-  // Validação matemática — base para "Revisão necessária".
+  // Validação matemática — base para reviewStatus = "review_required" quando
+  // ainda não houve revisão IA / manual aplicada.
   const sumByInstallments = agreement.installments.reduce(
     (s, i) => s + (i.value || 0),
     0,
   );
-  const mismatch =
+  const hasMismatch =
     agreement.totalDebt > 0 &&
     Math.abs(sumByInstallments - agreement.totalDebt) > 0.01;
 
   let status: MgmvRow["status"] = "Ativo";
-  if (mismatch) status = "Revisão necessária";
-  else if (pendingCount === 0) status = "Quitado";
-  else if (
-    agreement.installments.some((i) => !i.paid && isOverdue(i.dueDate))
-  ) {
+  if (pendingCount === 0) status = "Quitado";
+  else if (agreement.installments.some((i) => !i.paid && isOverdue(i.dueDate))) {
     status = "Em atraso";
   }
+
+  // reviewStatus: preserva ai_reviewed / manually_reviewed; senão deriva.
+  const preserved =
+    agreement.reviewStatus === "ai_reviewed" ||
+    agreement.reviewStatus === "manually_reviewed"
+      ? agreement.reviewStatus
+      : null;
+  const reviewStatus: MgmvRow["reviewStatus"] =
+    preserved ?? (hasMismatch ? "review_required" : "none");
 
   return {
     client,
@@ -87,6 +101,8 @@ function buildRow(client: Client, agreement: MGMVAgreement): MgmvRow {
     remainingValue,
     nextDue,
     status,
+    reviewStatus,
+    hasMismatch,
   };
 }
 
@@ -95,8 +111,14 @@ export function MGMVSection({
 }: {
   onScrollTo: (id: string) => void;
 }) {
-  const { clients, products, openClient, payMGMVInstallment, setMGMVAgreement } =
-    useStore();
+  const {
+    clients,
+    products,
+    openClient,
+    payMGMVInstallment,
+    setMGMVAgreement,
+    applyAiReviewToAgreement,
+  } = useStore();
   const [chip, setChip] = useState<MgmvChip>("todos");
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
