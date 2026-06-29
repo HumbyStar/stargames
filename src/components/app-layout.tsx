@@ -272,11 +272,14 @@ function FloatingNavbar() {
     typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
   );
   const [navHover, setNavHover] = useState(false);
+  const [navProgress, setNavProgress] = useState<"false" | "loop" | "leaving">("false");
+  const [navDimmed, setNavDimmed] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [navSize, setNavSize] = useState({ width: 0, height: 0 });
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
+  const navExitTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const navBorderPath = useMemo(() => {
     // Desenha o path exatamente sobre a borda do pill da navbar.
     // Inset = metade da stroke-width (2px), então 1px de cada lado.
@@ -353,6 +356,46 @@ function FloatingNavbar() {
   const { unreadCount } = useNotifications();
 
   useEffect(() => {
+    const clearNavExitTimer = () => {
+      if (navExitTimerRef.current) {
+        window.clearTimeout(navExitTimerRef.current);
+        navExitTimerRef.current = null;
+      }
+    };
+
+    if (navHover) {
+      clearNavExitTimer();
+      setNavDimmed(false);
+      setNavProgress("loop");
+      return clearNavExitTimer;
+    }
+
+    if (!scrolled) {
+      clearNavExitTimer();
+      setNavDimmed(false);
+      setNavProgress("false");
+      return clearNavExitTimer;
+    }
+
+    setNavDimmed(false);
+    setNavProgress("leaving");
+    clearNavExitTimer();
+    navExitTimerRef.current = window.setTimeout(() => {
+      setNavProgress("false");
+      setNavDimmed(true);
+      navExitTimerRef.current = null;
+    }, 3000);
+
+    return clearNavExitTimer;
+  }, [navHover, scrolled]);
+
+  useEffect(() => {
+    return () => {
+      if (navExitTimerRef.current) window.clearTimeout(navExitTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
     const container = document.querySelector<HTMLElement>(".page-container");
     if (!container) return;
     const onScroll = () => {
@@ -385,8 +428,9 @@ function FloatingNavbar() {
       ref={navRef}
       data-tour="navbar"
       data-mode={isCompact ? "compact" : "full"}
-      data-progress={navHover ? "loop" : "false"}
+      data-progress={navProgress}
       data-scrolled={scrolled ? "true" : "false"}
+      data-dimmed={navDimmed ? "true" : "false"}
       onMouseEnter={() => setNavHover(true)}
       onMouseLeave={() => setNavHover(false)}
       className={cn(

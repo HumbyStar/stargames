@@ -276,23 +276,19 @@
 .floating-navbar[data-progress="loop"] .nav-progress-runner {
   animation: nav-progress-trace 2400ms linear infinite;
 }
-.floating-navbar[data-progress="true"] .nav-progress-ring {
+.floating-navbar[data-progress="true"] .nav-progress-ring,
+.floating-navbar[data-progress="leaving"] .nav-progress-ring {
   opacity: 1;
 }
 .floating-navbar[data-progress="true"] .nav-progress-runner {
   stroke-dasharray: 0 100;
   animation: nav-progress-fill 3000ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
 }
-/* Em modo glass (scrolled e sem hover), suaviza o anel para acompanhar
-   o estado translúcido da navbar. Ao passar o mouse volta ao brilho cheio. */
-.floating-navbar[data-scrolled="true"]:not(:hover) .nav-progress-ring {
-  /* Quando o mouse sai (com scroll): o traço NÃO congela.
-     Em vez disso preenche 100% da borda, pulsa com glow e
-     desaparece ao longo de ~3s, acompanhando o estado glass. */
+.floating-navbar[data-progress="leaving"] .nav-progress-ring {
   animation: nav-ring-pulse-out 3000ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
-.floating-navbar[data-scrolled="true"]:not(:hover) .nav-progress-runner {
-  animation: nav-runner-fill-perimeter 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+.floating-navbar[data-progress="leaving"] .nav-progress-runner {
+  animation: nav-runner-fill-perimeter 3000ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 @keyframes nav-progress-trace {
   from { stroke-dashoffset: 0; }
@@ -329,23 +325,17 @@
   }
 }
 
-/* Glass / fade ao rolar a página: navbar fica translúcida e ícones embaçados.
-   Só ofusca 3s DEPOIS de o mouse sair da navbar (e somente com scroll).
-   Ao passar o mouse, restaura instantaneamente. */
-.floating-navbar[data-scrolled="true"]:not(:hover) {
+/* Glass / fade ao rolar a página: só ofusca depois que o pulso de saída termina. */
+.floating-navbar[data-scrolled="true"][data-dimmed="true"]:not(:hover) {
   background: color-mix(in oklch, var(--color-background) 32%, transparent);
   backdrop-filter: blur(28px) saturate(140%);
   border-color: color-mix(in oklch, var(--color-foreground) 6%, transparent);
   box-shadow: 0 8px 24px color-mix(in oklch, var(--color-foreground) 8%, transparent);
-  transition-delay: 3s;
 }
-.floating-navbar[data-scrolled="true"]:not(:hover) > *:not(.nav-progress-ring) {
+.floating-navbar[data-scrolled="true"][data-dimmed="true"]:not(:hover) > *:not(.nav-progress-ring) {
   opacity: 0.42;
   filter: blur(0.5px);
-  transition: opacity 400ms ease 3s, filter 400ms ease 3s;
-}
-.floating-navbar[data-scrolled="true"]:not(:hover) .nav-progress-ring {
-  transition: opacity 250ms ease 3s, filter 400ms ease 3s;
+  transition: opacity 400ms ease, filter 400ms ease;
 }
 /* Todos os filhos da navbar ficam acima do anel para que o traço
    nunca apareça como barra sobre botões/ícones. */
@@ -370,7 +360,8 @@
     opacity: 0;
   }
   .floating-navbar[data-progress="loop"] .nav-progress-ring,
-  .floating-navbar[data-progress="true"] .nav-progress-ring {
+  .floating-navbar[data-progress="true"] .nav-progress-ring,
+  .floating-navbar[data-progress="leaving"] .nav-progress-ring {
     opacity: 0.6;
   }
 }
