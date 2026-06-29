@@ -428,67 +428,91 @@ function FloatingNavbar() {
           </TooltipTrigger>
           <TooltipContent side="bottom">Finanças</TooltipContent>
         </Tooltip>
-        <button
-          onClick={openImport}
-          data-tour="upload-button"
-          aria-label="Importar dados"
-          title="Importar dados"
-          className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all hover:-translate-y-0.5 hover:bg-primary/10 hover:text-primary"
-        >
-          <Upload className="size-5 transition-transform group-hover:-translate-y-0.5" />
-        </button>
-        <button
-          onClick={openSettings}
-          data-tour="settings-button"
-          aria-label="Configurações"
-          title="Configurações"
-          className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
-        >
-          <Settings className="size-5 transition-transform duration-300 group-hover:rotate-90" />
-        </button>
-        <button
-          onClick={openNotifications}
-          aria-label="Notificações"
-          title="Notificações"
-          className="group relative hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
-        >
-          <Bell className="size-5 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
-          {unreadCount > 0 && (
-            <>
-              <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary animate-pulse" />
-              <span className="absolute -right-0.5 -top-0.5 grid min-w-[16px] h-4 px-1 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground shadow-sm animate-in zoom-in-75 duration-200">
-                {unreadCount > 9 ? "9+" : unreadCount}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={openImport}
+              data-tour="upload-button"
+              aria-label="Importar dados"
+              className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all hover:-translate-y-0.5 hover:bg-primary/10 hover:text-primary"
+            >
+              <Upload className="size-5 transition-transform group-hover:-translate-y-0.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Importar</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={openSettings}
+              data-tour="settings-button"
+              aria-label="Configurações"
+              className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+            >
+              <Settings className="size-5 transition-transform duration-300 group-hover:rotate-90" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Configurações</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={openNotifications}
+              aria-label="Notificações"
+              className="group relative hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+            >
+              <Bell className="size-5 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
+              {unreadCount > 0 && (
+                <>
+                  <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary animate-pulse" />
+                  <span className="absolute -right-0.5 -top-0.5 grid min-w-[16px] h-4 px-1 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground shadow-sm animate-in zoom-in-75 duration-200">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                </>
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Notificações</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={openHelp}
+              data-tour="help-button"
+              aria-label="Tutorial"
+              className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+            >
+              <HelpCircle className="size-5 transition-transform duration-300 group-hover:scale-125 group-hover:animate-pulse" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Tutorial</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={toggleTheme}
+              aria-label={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
+              className="group grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+            >
+              <span key={isDark ? "sun" : "moon"} className="inline-flex animate-in fade-in zoom-in-75 duration-300 group-hover:rotate-12 transition-transform">
+                {isDark ? <Sun className="size-5" /> : <Moon className="size-5" />}
               </span>
-            </>
-          )}
-        </button>
-        <button
-          onClick={openHelp}
-          data-tour="help-button"
-          aria-label="Tutorial"
-          title="Tutorial"
-          className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
-        >
-          <HelpCircle className="size-5 transition-transform duration-300 group-hover:scale-125 group-hover:animate-pulse" />
-        </button>
-        <button
-          onClick={toggleTheme}
-          aria-label={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
-          title={isDark ? "Modo claro" : "Modo escuro"}
-          className="group grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
-        >
-          <span key={isDark ? "sun" : "moon"} className="inline-flex animate-in fade-in zoom-in-75 duration-300 group-hover:rotate-12 transition-transform">
-            {isDark ? <Sun className="size-5" /> : <Moon className="size-5" />}
-          </span>
-        </button>
-        <button
-          onClick={handleSignOut}
-          aria-label="Sair"
-          title="Sair"
-          className="group grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-destructive/10 hover:text-destructive active:scale-90"
-        >
-          <LogOut className="size-5 transition-transform duration-200 group-hover:translate-x-0.5" />
-        </button>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{isDark ? "Modo claro" : "Modo escuro"}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={handleSignOut}
+              aria-label="Sair"
+              className="group grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-destructive/10 hover:text-destructive active:scale-90"
+            >
+              <LogOut className="size-5 transition-transform duration-200 group-hover:translate-x-0.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Sair</TooltipContent>
+        </Tooltip>
         <button
           className="group md:hidden grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 active:scale-90"
           onClick={() => setOpenMobile((v) => !v)}
@@ -499,6 +523,14 @@ function FloatingNavbar() {
           </span>
         </button>
       </div>
+
+      {searchOpen && (
+        <div className="absolute right-3 top-[calc(100%+8px)] z-50 w-[min(92vw,420px)] animate-in fade-in slide-in-from-top-2 duration-200 hidden md:block">
+          <div className="rounded-2xl border border-border bg-popover/95 p-2 shadow-xl backdrop-blur">
+            <SearchBox inputRef={searchInputRef} />
+          </div>
+        </div>
+      )}
 
       {openMobile && (
         <div className="absolute left-2 right-2 top-[calc(100%+8px)] flex flex-col gap-1 rounded-2xl border border-border bg-popover/95 p-2 shadow-xl backdrop-blur md:hidden">
