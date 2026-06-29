@@ -490,6 +490,7 @@ export function CollectionSection({
               {compact ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
               {compact ? "Expandir" : "Compactar"}
             </Button>
+            <ListExpansionToggle section="collection" />
             <select
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
