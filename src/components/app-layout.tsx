@@ -32,6 +32,7 @@ import { NotificationsPanel } from "@/components/notifications-panel";
 import { useNotifications } from "@/lib/notifications";
 import { HelpCenter } from "@/components/help-center";
 import { TutorialRunner } from "@/components/tutorial-runner";
+import { ConciergeModal } from "@/components/concierge-modal";
 
 const navItems = [
   { id: "dashboard", label: "Dashboard" },
@@ -244,6 +245,7 @@ function FloatingNavbar() {
   const openSettings = useUiStore((s) => s.openSettings);
   const openHelp = useUiStore((s) => s.openHelp);
   const openNotifications = useUiStore((s) => s.openNotifications);
+  const openConcierge = useUiStore((s) => s.openConcierge);
   const { unreadCount } = useNotifications();
 
   useEffect(() => {
@@ -271,9 +273,11 @@ function FloatingNavbar() {
 
   return (
     <nav data-tour="navbar" className={cn("floating-navbar flex items-center gap-3 px-3 py-2 md:px-4", hidden && "navbar-hidden")}>
-      <a
-        href="#dashboard"
-        onClick={(e) => { e.preventDefault(); scrollToSection("dashboard"); }}
+      <button
+        type="button"
+        onClick={openConcierge}
+        aria-label="Abrir Concierge Operacional"
+        title="Concierge Operacional"
         className="group flex items-center gap-2 pl-2 pr-1 transition-transform duration-200 hover:-translate-y-0.5 active:scale-95"
       >
         <div className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-primary to-[oklch(0.65_0.22_280)] text-primary-foreground font-bold shadow-md transition-all duration-300 group-hover:shadow-lg group-hover:rotate-6 group-hover:scale-110">
@@ -283,7 +287,7 @@ function FloatingNavbar() {
           <p className="text-sm font-semibold">Star Games</p>
           <p className="text-[10px] text-muted-foreground">Gestão Operacional</p>
         </div>
-      </a>
+      </button>
 
       <div className="hidden md:flex items-center gap-1 rounded-full bg-foreground/5 p-1">
         {navItems.map((i) => (
@@ -498,6 +502,7 @@ function GlobalModals() {
       </Dialog>
 
       <TutorialRunner />
+      <ConciergeModal />
     </>
   );
 }

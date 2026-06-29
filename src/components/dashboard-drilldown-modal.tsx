@@ -314,10 +314,14 @@ export function DashboardDrilldownModal({
   cardId,
   onClose,
   onScrollTo,
+  origin,
+  onBackToConcierge,
 }: {
   cardId: DashboardCardId | null;
   onClose: () => void;
   onScrollTo: (id: string) => void;
+  origin?: string;
+  onBackToConcierge?: () => void;
 }) {
   const { clients, products, openClient, registerPayment, setProductSituation, payMGMVInstallment } =
     useStore();
@@ -396,6 +400,12 @@ export function DashboardDrilldownModal({
         <DialogHeader>
           <DialogTitle>{config.title}</DialogTitle>
           <DialogDescription>{config.description}</DialogDescription>
+          {origin ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <Tag variant="primary">Origem: {origin}</Tag>
+              <Tag variant="neutral">Filtro ativo: {config.title}</Tag>
+            </div>
+          ) : null}
         </DialogHeader>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-y border-border py-3">
@@ -505,6 +515,11 @@ export function DashboardDrilldownModal({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Fechar</Button>
+          {onBackToConcierge ? (
+            <Button variant="outline" onClick={onBackToConcierge}>
+              Voltar ao Concierge
+            </Button>
+          ) : null}
           <Button onClick={goToSection}>
             Ver na seção correspondente
             <ArrowRight className="size-4" />
