@@ -147,6 +147,14 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
                   text={`${client?.name ?? "Cliente"} — ${p.name} (${formatBRL(
                     p.totalValue - p.paidValue,
                   )} em aberto).`}
+                  onClick={() =>
+                    openCard(
+                      p.financialStatus === "Reserva"
+                        ? "overdue-reservations"
+                        : "pending",
+                    )
+                  }
+                  tooltip="Abrir lista filtrada"
                 />
               );
             })}
@@ -155,6 +163,8 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
                 type="success"
                 title="Pagos aguardando envio"
                 text={`${pagosAgEnvio} pedido(s) prontos para despacho.`}
+                onClick={() => openCard("paid-awaiting-shipment")}
+                tooltip="Ver pagos aguardando envio"
               />
             )}
             {mgmvVencidas > 0 && (
@@ -162,6 +172,8 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
                 type="warning"
                 title="Parcelas MGMV vencidas"
                 text={`${mgmvVencidas} parcela(s) em atraso.`}
+                onClick={() => openCard("mgmv-overdue")}
+                tooltip="Ver parcelas MGMV vencidas"
               />
             )}
           </div>
