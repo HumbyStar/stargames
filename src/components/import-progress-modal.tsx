@@ -14,7 +14,6 @@ import {
   Box,
   Copy,
   FolderOpen,
-  PackageCheck,
   PhoneCall,
   RefreshCcw,
   ShieldCheck,
