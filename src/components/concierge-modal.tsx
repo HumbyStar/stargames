@@ -477,9 +477,9 @@ export function ConciergeModal() {
               "inset-0 w-screen h-[100dvh] max-w-none rounded-none border-0",
               // Tablet: quase tela cheia, centralizado
               "md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2",
-              "md:w-[94vw] md:h-[90vh] md:max-w-3xl md:rounded-3xl md:border md:border-border",
+              "md:w-[94vw] md:h-auto md:max-h-[92vh] md:max-w-2xl md:rounded-3xl md:border md:border-border",
               // Desktop: modal premium
-              "lg:w-[82vw] lg:max-w-5xl lg:h-auto lg:max-h-[85vh] lg:rounded-[28px]",
+              "lg:w-[70vw] lg:max-w-2xl lg:max-h-[90vh] lg:rounded-[28px]",
               "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
             )}
             style={{
@@ -491,47 +491,49 @@ export function ConciergeModal() {
               Concierge Operacional
             </DialogPrimitive.Title>
 
-            {/* Header */}
-            <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-border/60 px-5 py-4 md:px-7 md:py-5">
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="relative shrink-0">
+            {/* Close button (absolute) */}
+            <button
+              type="button"
+              onClick={close}
+              aria-label="Fechar Concierge"
+              className="absolute right-4 top-4 z-10 grid size-10 place-items-center rounded-2xl border border-border bg-background/80 text-muted-foreground shadow-sm transition hover:bg-accent hover:text-foreground md:right-5 md:top-5"
+            >
+              <X className="size-5" />
+            </button>
+
+            {/* Conteúdo rolável */}
+            <div className="flex-1 overflow-y-auto px-6 pb-6 pt-8 md:px-10 md:pb-8 md:pt-10">
+              {/* Hero: avatar + título centralizado */}
+              <div className="flex flex-col items-center text-center">
+                <span className="relative">
                   <span
                     aria-hidden
-                    className="pointer-events-none absolute inset-[-6px] rounded-full bg-[radial-gradient(circle_at_center,color-mix(in_oklch,var(--color-primary)_45%,transparent)_0%,transparent_70%)] blur-md"
+                    className="pointer-events-none absolute inset-[-10px] rounded-full bg-[radial-gradient(circle_at_center,color-mix(in_oklch,var(--color-primary)_45%,transparent)_0%,transparent_70%)] blur-lg"
                   />
                   <img
                     src={mascotAsset.url}
                     alt=""
                     draggable={false}
-                    className="relative size-12 rounded-full object-cover ring-1 ring-primary/30 md:size-14"
+                    className="relative size-24 rounded-full object-cover ring-2 ring-primary/40 md:size-28"
                   />
                 </span>
-                <div className="min-w-0">
-                  <h2 className="truncate text-lg font-bold leading-tight md:text-xl">
-                    O que vamos fazer agora?
-                  </h2>
-                  <p className="truncate text-xs text-muted-foreground md:text-sm">
-                    {canUseAI
-                      ? "Fale ou escreva um comando — eu abro o filtro, cliente ou cadastro certo."
-                      : "Escolha uma ação rápida para abrir o filtro correto."}
-                  </p>
+                <div className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.18em] text-primary">
+                  <Sparkles className="size-3.5" />
+                  Concierge Operacional
                 </div>
+                <h2 className="mt-2 text-2xl font-extrabold tracking-tight md:text-3xl">
+                  O que vamos fazer agora?
+                </h2>
+                <p className="mt-2 max-w-md text-sm text-muted-foreground md:text-[15px]">
+                  {canUseAI
+                    ? "Digite ou fale. Eu encontro a sessão certa, aplico os filtros e te levo direto para a ação."
+                    : "Escolha uma ação rápida para abrir o filtro correto."}
+                </p>
               </div>
-              <button
-                type="button"
-                onClick={close}
-                aria-label="Fechar Concierge"
-                className="grid size-10 shrink-0 place-items-center rounded-full border border-border bg-background/60 text-muted-foreground transition hover:bg-accent hover:text-foreground"
-              >
-                <X className="size-5" />
-              </button>
-            </header>
 
-            {/* Conteúdo rolável */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 md:px-7 md:py-5">
               {/* Ambiguidade */}
               {ambiguous && (
-                <section className="mb-5 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+                <section className="mt-6 rounded-2xl border border-primary/30 bg-primary/5 p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <p className="text-sm font-semibold">{ambiguous.title}</p>
                     <button
@@ -565,73 +567,38 @@ export function ConciergeModal() {
                 </section>
               )}
 
-              {/* Ações rápidas */}
-              <section className="mb-5">
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Ações rápidas
-                </h3>
-                <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 lg:grid-cols-4">
-                  {QUICK_ACTIONS.map((a) => {
-                    const Icon = a.icon;
-                    return (
-                      <button
-                        key={a.id}
-                        onClick={() => handleQuickAction(a)}
-                        className={cn(
-                          "group flex min-h-[64px] items-start gap-3 rounded-2xl border bg-background/40 px-3 py-3 text-left transition",
-                          "hover:-translate-y-0.5",
-                          TONE_CLASS[a.tone],
-                        )}
-                      >
-                        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-foreground/5">
-                          <Icon className="size-4" />
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold">{a.label}</p>
-                          <p className="truncate text-xs text-muted-foreground">{a.description}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-
-              {/* Sugestões */}
-              <section>
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Sugestões para agora
-                </h3>
-                <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-                  {suggestions.map((s) => (
+              {/* Ações rápidas — grid 2x2 */}
+              <section className="mt-6 grid grid-cols-2 gap-3">
+                {QUICK_ACTIONS.map((a) => {
+                  const Icon = a.icon;
+                  return (
                     <button
-                      key={s.id}
-                      onClick={s.action}
+                      key={a.id}
+                      onClick={() => handleQuickAction(a)}
                       className={cn(
-                        "rounded-2xl border bg-background/40 p-4 text-left transition hover:-translate-y-0.5 hover:bg-accent",
-                        s.tone === "danger" && "border-destructive/30",
-                        s.tone === "warning" && "border-amber-500/30",
-                        s.tone === "success" && "border-emerald-500/30",
-                        s.tone === "primary" && "border-primary/30",
-                        s.tone === "neutral" && "border-border",
+                        "group flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-4 text-left transition",
+                        "hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md",
                       )}
                     >
-                      <p className="text-sm font-semibold">{s.title}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{s.body}</p>
+                      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                        <Icon className="size-5" />
+                      </span>
+                      <span className="min-w-0 flex-1 text-[15px] font-semibold leading-tight">
+                        {a.label}
+                      </span>
                     </button>
-                  ))}
-                </div>
+                  );
+                })}
               </section>
-            </div>
 
-            {/* Footer: input dinâmico (apenas para roles com permissão) */}
-            {canUseAI ? (
-              <footer className="border-t border-border/60 bg-background/95 px-5 py-4 md:px-7 md:py-5">
+              {/* Input + botão circular separados */}
+              {canUseAI && (
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
                     void submitText();
                   }}
-                  className="relative"
+                  className="mt-5 flex items-center gap-3"
                 >
                   <textarea
                     ref={inputRef}
@@ -648,19 +615,18 @@ export function ConciergeModal() {
                         ? "Gravando… fale o comando."
                         : voice.state === "transcribing"
                         ? "Interpretando áudio…"
-                        : "Diga ou escreva: abrir reservas vencidas, cobrar pendentes, buscar João…"
+                        : "Ex.: abrir cobranças de reservas vencidas"
                     }
                     rows={1}
                     disabled={running || voice.state === "transcribing"}
                     className={cn(
-                      "w-full resize-none rounded-2xl border border-border bg-background pl-4 pr-16 py-4",
-                      "text-base leading-snug shadow-sm transition",
+                      "flex-1 resize-none rounded-2xl border-2 border-primary/40 bg-background px-4 py-4",
+                      "text-[15px] leading-snug shadow-sm transition",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                       "disabled:opacity-60",
                       "min-h-[56px] max-h-[140px]",
                     )}
                   />
-
                   <button
                     type={hasText ? "submit" : "button"}
                     onClick={
@@ -684,63 +650,92 @@ export function ConciergeModal() {
                         : "Falar comando"
                     }
                     className={cn(
-                      "absolute right-2 top-1/2 -translate-y-1/2",
-                      "grid size-11 place-items-center rounded-full transition shadow-md",
-                      hasText
-                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                        : voice.state === "recording"
-                        ? "bg-destructive text-destructive-foreground animate-pulse"
-                        : voice.state === "denied"
-                        ? "bg-muted text-muted-foreground"
-                        : "bg-foreground/10 text-foreground hover:bg-foreground/20",
-                      "disabled:opacity-60 disabled:cursor-not-allowed",
+                      "grid size-14 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg transition",
+                      "hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed",
+                      voice.state === "recording" && "animate-pulse bg-destructive",
                     )}
                   >
                     {running || voice.state === "transcribing" || voice.state === "requesting" ? (
-                      <Loader2 className="size-5 animate-spin" />
+                      <Loader2 className="size-6 animate-spin" />
                     ) : hasText ? (
-                      <ArrowUp className="size-5" />
+                      <ArrowUp className="size-6" />
                     ) : voice.state === "denied" ? (
-                      <MicOff className="size-5" />
+                      <MicOff className="size-6" />
                     ) : (
-                      <Mic className="size-5" />
+                      <Mic className="size-6" />
                     )}
                   </button>
                 </form>
+              )}
 
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        conciergePrefs.dismissToday();
-                        close();
-                      }}
-                      className="rounded-full border border-border px-3 py-1 hover:bg-accent transition"
-                    >
-                      Não abrir hoje
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        conciergePrefs.disableForever();
-                        close();
-                      }}
-                      className="rounded-full border border-border px-3 py-1 hover:bg-accent transition"
-                    >
-                      Não abrir automaticamente
-                    </button>
-                  </div>
-                  <p className="hidden sm:block">
-                    Enter envia · clique no microfone para falar
-                  </p>
+              {/* Sugestões em fieldset */}
+              <fieldset className="mt-6 rounded-2xl border border-border px-4 pb-4 pt-3">
+                <legend className="px-2 text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                  Sugestões para você
+                </legend>
+                <div className="flex flex-col gap-3">
+                  {suggestions.map((s) => {
+                    const styles = SUGGESTION_STYLE[s.tone];
+                    const Icon = styles.icon;
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={s.action}
+                        className={cn(
+                          "flex items-center gap-4 rounded-2xl border px-4 py-3 text-left transition hover:-translate-y-0.5",
+                          styles.wrap,
+                        )}
+                      >
+                        <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", styles.iconWrap)}>
+                          <Icon className="size-5" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className={cn("text-sm font-bold", styles.title)}>{styles.label}</p>
+                          <p className="text-[13px] leading-snug text-foreground/80">{s.title}</p>
+                        </div>
+                        <ChevronRight className={cn("size-5 shrink-0", styles.title)} />
+                      </button>
+                    );
+                  })}
                 </div>
-              </footer>
-            ) : (
-              <footer className="border-t border-border/60 bg-background/95 px-5 py-4 text-xs text-muted-foreground md:px-7">
-                Os comandos por texto e voz estão disponíveis para administradores e gerentes.
-              </footer>
-            )}
+              </fieldset>
+
+              {/* Footnote */}
+              <div className="mt-5 flex items-start justify-center gap-2 text-center text-xs text-muted-foreground">
+                <ShieldCheck className="mt-0.5 size-4 shrink-0" />
+                <p>O Concierge prioriza navegar para áreas já existentes do sistema.</p>
+              </div>
+
+              {/* Permissões / preferências */}
+              {canUseAI ? (
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-[11px] text-muted-foreground">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      conciergePrefs.dismissToday();
+                      close();
+                    }}
+                    className="rounded-full border border-border px-3 py-1 hover:bg-accent transition"
+                  >
+                    Não abrir hoje
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      conciergePrefs.disableForever();
+                      close();
+                    }}
+                    className="rounded-full border border-border px-3 py-1 hover:bg-accent transition"
+                  >
+                    Não abrir automaticamente
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-4 text-center text-xs text-muted-foreground">
+                  Os comandos por texto e voz estão disponíveis para administradores e gerentes.
+                </p>
+              )}
+            </div>
           </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
       </DialogPrimitive.Root>
