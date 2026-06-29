@@ -357,11 +357,17 @@ export function MGMVSection({
                 const tagVariant: "danger" | "warning" | "success" | "primary" | "neutral" =
                   r.status === "Em atraso"
                     ? "danger"
-                    : r.status === "Revisão necessária"
-                      ? "warning"
-                      : r.status === "Quitado"
-                        ? "success"
-                        : "primary";
+                    : r.status === "Quitado"
+                      ? "success"
+                      : "primary";
+                const reviewBadge =
+                  r.reviewStatus === "review_required"
+                    ? { label: "Revisão necessária", variant: "warning" as const }
+                    : r.reviewStatus === "ai_reviewed"
+                      ? { label: "Revisado com IA", variant: "primary" as const }
+                      : r.reviewStatus === "manually_reviewed"
+                        ? { label: "Revisado manualmente", variant: "success" as const }
+                        : null;
                 return (
                   <>
                     <tr
@@ -400,11 +406,16 @@ export function MGMVSection({
                         )}
                       </td>
                       <td className="px-3 py-2">
-                        <Tag variant={tagVariant}>{r.status}</Tag>
+                        <div className="flex flex-wrap gap-1">
+                          <Tag variant={tagVariant}>{r.status}</Tag>
+                          {reviewBadge && (
+                            <Tag variant={reviewBadge.variant}>{reviewBadge.label}</Tag>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-2 text-right">
                         <div className="flex justify-end gap-1">
-                          {r.status === "Revisão necessária" && (
+                          {r.reviewStatus === "review_required" && (
                             <Button
                               size="sm"
                               variant="secondary"
