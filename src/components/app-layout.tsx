@@ -382,12 +382,12 @@ function FloatingNavbar() {
           preserveAspectRatio="none"
         >
           <rect
-            x="1"
-            y="1"
-            width={Math.max(navSize.width - 2, 0)}
-            height={Math.max(navSize.height - 2, 0)}
-            rx={Math.max(navSize.height / 2 - 1, 0)}
-            ry={Math.max(navSize.height / 2 - 1, 0)}
+            x="0.75"
+            y="0.75"
+            width={Math.max(navSize.width - 1.5, 0)}
+            height={Math.max(navSize.height - 1.5, 0)}
+            rx={Math.max(navSize.height / 2 - 0.75, 0)}
+            ry={Math.max(navSize.height / 2 - 0.75, 0)}
             pathLength={100}
           />
         </svg>

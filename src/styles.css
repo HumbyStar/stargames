@@ -243,9 +243,11 @@
 .nav-progress-ring {
   position: absolute;
   opacity: 0;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  /* Absolute children are laid out from the padding box; expand 1px so the
+     animated stroke sits on the navbar div's outer rounded border. */
+  inset: -1px;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
   z-index: 0;
   transition: opacity 250ms ease;
   filter: drop-shadow(0 0 7px color-mix(in oklch, var(--color-primary) 65%, transparent));
@@ -257,7 +259,7 @@
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
   /* Short highlight segment so it reads as the navbar border running, not a bar over items. */
-  stroke-dasharray: 12 88;
+  stroke-dasharray: 7 93;
   stroke-dashoffset: 0;
 }
 .floating-navbar[data-progress="loop"] .nav-progress-ring {
