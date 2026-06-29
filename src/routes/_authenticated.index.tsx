@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { AppLayout } from "@/components/app-layout";
 import { Alert, Card, MetricCard, PageHeader, StackedBar } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { ClientesSection } from "@/sections/clientes-section";
 import { CollectionSection } from "@/sections/collection-section";
 import { MGMVSection } from "@/sections/mgmv-section";
 import { DashboardIntegrityCard } from "@/components/dashboard-integrity-card";
+import { DashboardDrilldownModal, type DashboardCardId } from "@/components/dashboard-drilldown-modal";
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
@@ -44,6 +45,8 @@ function OnePage() {
 function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) {
   const { clients, products } = useStore();
   const openImport = useUiStore((s) => s.openImport);
+  const [activeCard, setActiveCard] = useState<DashboardCardId | null>(null);
+  const openCard = (id: DashboardCardId) => setActiveCard(id);
 
   const overdueProducts = products.filter(shouldAppearInCollection);
   const reservasAtivas = products.filter(
@@ -85,17 +88,17 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
-        <MetricCard label="Total Clientes" value={clients.length} />
-        <MetricCard label="Total Produtos" value={products.length} />
-        <MetricCard label="Reservas Ativas" value={reservasAtivas} status="primary" />
-        <MetricCard label="Reservas Vencidas" value={reservasVencidas} status="danger" />
-        <MetricCard label="Pendências" value={pendencias} status="danger" />
-        <MetricCard label="Clientes MGMV" value={clientesMGMV} />
-        <MetricCard label="MGMV Vencidas" value={mgmvVencidas} status="danger" />
-        <MetricCard label="Pagos Ag. Envio" value={pagosAgEnvio} status="success" />
-        <MetricCard label="Produtos Enviados" value={enviados} />
-        <MetricCard label="Desistências" value={desistencias} />
-        <MetricCard label="Abandonos" value={abandonos} />
+        <MetricCard label="Total Clientes" value={clients.length} onClick={() => openCard("total-clients")} tooltip="Ver clientes cadastrados" />
+        <MetricCard label="Total Produtos" value={products.length} onClick={() => openCard("total-products")} tooltip="Ver produtos cadastrados" />
+        <MetricCard label="Reservas Ativas" value={reservasAtivas} status="primary" onClick={() => openCard("active-reservations")} tooltip="Ver reservas ativas" />
+        <MetricCard label="Reservas Vencidas" value={reservasVencidas} status="danger" onClick={() => openCard("overdue-reservations")} tooltip="Ver reservas vencidas" />
+        <MetricCard label="Pendências" value={pendencias} status="danger" onClick={() => openCard("pending")} tooltip="Ver pendências em aberto" />
+        <MetricCard label="Clientes MGMV" value={clientesMGMV} onClick={() => openCard("mgmv-clients")} tooltip="Ver clientes MGMV" />
+        <MetricCard label="MGMV Vencidas" value={mgmvVencidas} status="danger" onClick={() => openCard("mgmv-overdue")} tooltip="Ver MGMV vencidas" />
+        <MetricCard label="Pagos Ag. Envio" value={pagosAgEnvio} status="success" onClick={() => openCard("paid-awaiting-shipment")} tooltip="Ver pagos aguardando envio" />
+        <MetricCard label="Produtos Enviados" value={enviados} onClick={() => openCard("shipped")} tooltip="Ver produtos enviados" />
+        <MetricCard label="Desistências" value={desistencias} onClick={() => openCard("withdrawals")} tooltip="Ver desistências" />
+        <MetricCard label="Abandonos" value={abandonos} onClick={() => openCard("abandons")} tooltip="Ver abandonos" />
       </div>
 
       <div className="mt-6 flex flex-wrap gap-2">
@@ -168,6 +171,12 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
       <div className="mt-6">
         <DashboardIntegrityCard />
       </div>
+
+      <DashboardDrilldownModal
+        cardId={activeCard}
+        onClose={() => setActiveCard(null)}
+        onScrollTo={onScrollTo}
+      />
     </section>
   );
 }
