@@ -34,6 +34,7 @@ import { ImportProgressModal, type ImportProgressState } from "@/components/impo
 import { ImportCard, ImportCardsGrid } from "@/components/import-cards";
 import { Users, ShieldCheck, Box, Wallet, AlertOctagon, Brain } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { analyzeListWithAI } from "@/lib/list-ai-analyze.functions";
 
 interface ParsedRow {
   line: number;
@@ -1696,6 +1697,48 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     toast.success(`${parsed.length} linha(s) processadas`);
   };
 
+  const [aiLoading, setAiLoading] = useState(false);
+  const analyzeWithAI = async () => {
+    if (!text.trim()) return toast.error("Cole os dados para analisar.");
+    setAiLoading(true);
+    try {
+      const { rows: aiRows } = await analyzeListWithAI({ data: { text } });
+      if (aiRows.length === 0) {
+        toast.warning("A IA não identificou clientes na lista.");
+        return;
+      }
+      // Converte para o formato do parser para reaproveitar validateRows.
+      const raw = aiRows.map((r, idx) => ({
+        line: r.line || idx + 1,
+        date: null,
+        name: r.name,
+        phone: r.phone,
+        product: r.product,
+        platform: r.platform,
+        totalValue: r.totalValue,
+        paidValue: r.paidValue,
+        financialStatus: r.financialStatus,
+        situation: r.situation,
+        registerDate: null,
+        dueDate: null,
+        notes: [r.notes, r.fixes.length ? `IA: ${r.fixes.join("; ")}` : null]
+          .filter(Boolean)
+          .join(" • ") || undefined,
+      }));
+      const parsed = validateRows(raw, findClientByPhone);
+      setRows(parsed);
+      const fixed = aiRows.filter((r) => r.fixes.length > 0).length;
+      toast.success(
+        `IA encontrou ${aiRows.length} cliente(s)${fixed ? ` • ${fixed} com correções automáticas` : ""}`,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Falha ao analisar com IA";
+      toast.error("Não foi possível analisar a lista", { description: msg });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const summary = useMemo(() => {
     if (!rows) return { ok: 0, err: 0, newC: 0, foundC: 0, ready: 0 };
     return {
@@ -1898,8 +1941,22 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
 
             <TabsContent value="text" className="mt-4 space-y-3">
               <TextDropzone value={text} onChange={setText} onFile={handleFile} />
-              <div className="flex justify-end">
-                <Button onClick={validateText}>Validar Importação</Button>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  A IA lê cada linha do nome até o status, ignora linhas de grupo/vazias e corrige automaticamente erros comuns.
+                </p>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={analyzeWithAI}
+                    disabled={aiLoading}
+                    title="Analisa cada linha com IA, identifica vários clientes por linha e corrige erros comuns"
+                  >
+                    <Brain className="size-4" />
+                    {aiLoading ? "Analisando com IA..." : "Analisar com IA"}
+                  </Button>
+                  <Button onClick={validateText} disabled={aiLoading}>Validar Importação</Button>
+                </div>
               </div>
             </TabsContent>
 
