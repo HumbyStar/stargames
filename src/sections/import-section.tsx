@@ -2400,7 +2400,13 @@ function NotionPreview({
 
 // =================== ZIP Preview ===================
 
-function CompareCommonVsMgmv({ data }: { data: ZipPreviewData }) {
+function CompareCommonVsMgmv({
+  data,
+  onFilter,
+}: {
+  data: ZipPreviewData;
+  onFilter?: (key: ZipFilter) => void;
+}) {
   const stats = useMemo(() => {
     let commonClients = 0;
     let mgmvClients = 0;
@@ -2456,8 +2462,22 @@ function CompareCommonVsMgmv({ data }: { data: ZipPreviewData }) {
           </span>
         </div>
         <ImportCardsGrid className="sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
-          <ImportCard icon={Users} title="Clientes" value={stats.commonClients} tone="common" />
-          <ImportCard icon={Box} title="Produtos" value={stats.commonProducts} tone="common" />
+          <ImportCard
+            icon={Users}
+            title="Clientes"
+            value={stats.commonClients}
+            tone="common"
+            onClick={onFilter ? () => onFilter("novos") : undefined}
+            tooltip="Ver clientes comuns detectados"
+          />
+          <ImportCard
+            icon={Box}
+            title="Produtos"
+            value={stats.commonProducts}
+            tone="common"
+            onClick={onFilter ? () => onFilter("prontos") : undefined}
+            tooltip="Ver produtos detectados"
+          />
           <ImportCard icon={Wallet} title="Valor total" value={formatBRL(stats.commonValue)} tone="common" />
         </ImportCardsGrid>
       </div>
@@ -2472,13 +2492,22 @@ function CompareCommonVsMgmv({ data }: { data: ZipPreviewData }) {
           </span>
         </div>
         <ImportCardsGrid className="sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
-          <ImportCard icon={ShieldCheck} title="Acordos" value={stats.mgmvClients} tone="mgmv" />
+          <ImportCard
+            icon={ShieldCheck}
+            title="Acordos"
+            value={stats.mgmvClients}
+            tone="mgmv"
+            onClick={onFilter ? () => onFilter("mgmv") : undefined}
+            tooltip="Ver acordos MGMV detectados"
+          />
           <ImportCard icon={Wallet} title="Dívida MGMV" value={formatBRL(stats.mgmvValue)} tone="mgmv" />
           <ImportCard
             icon={stats.reviewPending > 0 ? AlertOctagon : Brain}
             title={stats.reviewPending > 0 ? "Revisão necessária" : "Revisados c/ IA"}
             value={stats.reviewPending > 0 ? stats.reviewPending : stats.aiReviewed}
             tone={stats.reviewPending > 0 ? "danger" : "success"}
+            onClick={onFilter ? () => onFilter("mgmv") : undefined}
+            tooltip={stats.reviewPending > 0 ? "Ver registros que precisam de revisão" : "Ver registros revisados"}
           />
         </ImportCardsGrid>
       </div>
@@ -2736,7 +2765,7 @@ function ZipPreview({
       )}
 
       {/* Comparativo Clientes comuns x Clientes MGMV */}
-      <CompareCommonVsMgmv data={data} />
+      <CompareCommonVsMgmv data={data} onFilter={setFilter} />
 
       {/* Métricas ordenadas por severidade: problemas primeiro, depois números frios. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
