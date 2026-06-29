@@ -24,6 +24,9 @@ import {
   dbInsertMgmvReviewAuditLog,
   dbSyncAgreementsBulkAsync,
   dbFetchDiagnostics,
+  dbReassignProductsClientAsync,
+  dbReassignAgreementClientAsync,
+  dbDeleteClientsByIdsAsync,
 } from "./db-sync";
 import type { ImportDiagnostics } from "./db-sync";
 export type { ImportDiagnostics } from "./db-sync";
