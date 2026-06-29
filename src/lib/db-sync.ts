@@ -247,16 +247,28 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
     total_agreement_value: number | string | null;
     installments_count: number | null;
     created_at: string;
+    review_status?: string | null;
+    ai_reviewed?: boolean | null;
+    ai_review_applied_at?: string | null;
+    ai_confidence?: number | string | null;
+    ai_review_raw_result?: unknown;
   }>) {
     const ins = (installmentsByAgreement.get(row.id) ?? []).sort(
       (a, b) => a.number - b.number,
     );
     const total = ins.length;
     for (const i of ins) i.total = total;
+    const rs = (row.review_status ?? "none") as MGMVAgreement["reviewStatus"];
     agreementsByClient.set(row.client_id, {
       startDate: row.created_at ?? new Date().toISOString(),
       totalDebt: Number(row.total_agreement_value ?? 0) || 0,
       installments: ins,
+      reviewStatus: rs,
+      aiReviewed: !!row.ai_reviewed,
+      aiReviewAppliedAt: row.ai_review_applied_at ?? undefined,
+      aiConfidence:
+        row.ai_confidence == null ? undefined : Number(row.ai_confidence) || 0,
+      aiReviewRawResult: row.ai_review_raw_result ?? undefined,
     });
   }
 
@@ -473,6 +485,17 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
 
   const status = paidCount >= sorted.length ? "Quitado" : needsReview ? "Revisão necessária" : "Ativo";
 
+  // Status de revisão (SEPARADO do status financeiro acima).
+  // Preserva ai_reviewed/manually_reviewed quando já marcados; senão deriva
+  // de needsReview (divergência matemática) ou cai em 'none'.
+  const preservedReview =
+    client.mgmv.reviewStatus === "ai_reviewed" ||
+    client.mgmv.reviewStatus === "manually_reviewed"
+      ? client.mgmv.reviewStatus
+      : null;
+  const reviewStatus: NonNullable<MGMVAgreement["reviewStatus"]> =
+    preservedReview ?? (needsReview ? "review_required" : "none");
+
   const upAgreement = await supabase.from("mgmv_agreements").upsert({
     id: agreementId,
     client_id: client.id,
@@ -489,6 +512,11 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
     remaining_value: remainingValue,
     status,
     needs_review: needsReview,
+    review_status: reviewStatus,
+    ai_reviewed: !!client.mgmv.aiReviewed,
+    ai_review_applied_at: client.mgmv.aiReviewAppliedAt ?? null,
+    ai_confidence: client.mgmv.aiConfidence ?? null,
+    ai_review_raw_result: (client.mgmv.aiReviewRawResult ?? null) as never,
     source_folder: client.folder ?? null,
     original_notes: client.notes ?? null,
   } as never);
@@ -575,6 +603,66 @@ export interface ImportDiagnostics {
   importProgressRows: number;
   /** Última versão de reset registrada localmente. */
   resetVersion: string;
+}
+
+// ============= Audit log =============
+
+/**
+ * Registra no audit_log a aplicação de uma revisão por IA sobre um acordo MGMV.
+ * Não bloqueia o fluxo do usuário em caso de falha — apenas loga e segue.
+ */
+export async function dbInsertMgmvReviewAuditLog(input: {
+  clientId: string;
+  agreementId: string;
+  previousReviewStatus: string;
+  newReviewStatus: string;
+  previousAgreement?: MGMVAgreement;
+  newAgreement: MGMVAgreement;
+  confidence: number;
+  confirmedWithConflict: boolean;
+  mathOk: boolean;
+}): Promise<void> {
+  try {
+    const { data: userRes } = await supabase.auth.getUser();
+    const uid = userRes.user?.id ?? null;
+    const userEmail = userRes.user?.email ?? null;
+    const old = input.previousAgreement
+      ? {
+          totalDebt: input.previousAgreement.totalDebt,
+          installments: input.previousAgreement.installments,
+          reviewStatus: input.previousAgreement.reviewStatus ?? "review_required",
+          aiReviewed: !!input.previousAgreement.aiReviewed,
+          aiConfidence: input.previousAgreement.aiConfidence ?? null,
+        }
+      : null;
+    const next = {
+      totalDebt: input.newAgreement.totalDebt,
+      installments: input.newAgreement.installments,
+      reviewStatus: input.newAgreement.reviewStatus,
+      aiReviewed: !!input.newAgreement.aiReviewed,
+      aiReviewAppliedAt: input.newAgreement.aiReviewAppliedAt ?? null,
+      aiConfidence: input.newAgreement.aiConfidence ?? null,
+      confidence: input.confidence,
+      confirmedWithConflict: input.confirmedWithConflict,
+      mathOk: input.mathOk,
+      previousReviewStatus: input.previousReviewStatus,
+      newReviewStatus: input.newReviewStatus,
+      event: "Revisão IA aplicada ao acordo MGMV",
+      clientId: input.clientId,
+    };
+    const { error } = await supabase.from("audit_log").insert({
+      table_name: "mgmv_agreements",
+      action: "ai_review_applied",
+      row_id: input.agreementId,
+      user_id: uid,
+      user_email: userEmail,
+      old_data: old as never,
+      new_data: next as never,
+    } as never);
+    if (error) logErr("audit_log.aiReview", error);
+  } catch (err) {
+    logErr("audit_log.aiReview", err);
+  }
 }
 
 export async function dbFetchDiagnostics(): Promise<ImportDiagnostics> {

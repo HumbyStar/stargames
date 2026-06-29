@@ -217,6 +217,10 @@ export type Database = {
       }
       mgmv_agreements: {
         Row: {
+          ai_confidence: number | null
+          ai_review_applied_at: string | null
+          ai_review_raw_result: Json | null
+          ai_reviewed: boolean
           client_id: string
           client_name: string
           client_phone: string
@@ -234,6 +238,7 @@ export type Database = {
           paid_value: number
           pending_installments: number | null
           remaining_value: number | null
+          review_status: string
           source_file: string | null
           source_folder: string | null
           status: string
@@ -241,6 +246,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ai_confidence?: number | null
+          ai_review_applied_at?: string | null
+          ai_review_raw_result?: Json | null
+          ai_reviewed?: boolean
           client_id: string
           client_name?: string
           client_phone?: string
@@ -258,6 +267,7 @@ export type Database = {
           paid_value?: number
           pending_installments?: number | null
           remaining_value?: number | null
+          review_status?: string
           source_file?: string | null
           source_folder?: string | null
           status?: string
@@ -265,6 +275,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ai_confidence?: number | null
+          ai_review_applied_at?: string | null
+          ai_review_raw_result?: Json | null
+          ai_reviewed?: boolean
           client_id?: string
           client_name?: string
           client_phone?: string
@@ -282,6 +296,7 @@ export type Database = {
           paid_value?: number
           pending_installments?: number | null
           remaining_value?: number | null
+          review_status?: string
           source_file?: string | null
           source_folder?: string | null
           status?: string

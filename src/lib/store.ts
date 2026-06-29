@@ -20,6 +20,8 @@ import {
   getUiValue,
   setUiValue,
   dbSyncAgreementForClient,
+  dbSyncAgreementForClientAsync,
+  dbInsertMgmvReviewAuditLog,
   dbSyncAgreementsBulkAsync,
   dbFetchDiagnostics,
 } from "./db-sync";
@@ -42,6 +44,24 @@ export interface MGMVAgreement {
   startDate: string;
   totalDebt: number;
   installments: MGMVInstallment[];
+  /**
+   * Status de revisão do acordo MGMV. É SEPARADO do status financeiro
+   * (Ativo / Em atraso / Quitado / Cancelado). Definido por:
+   *  - "review_required": parser detectou divergência / dado faltando.
+   *  - "ai_reviewed": usuário aplicou sugestão da IA com validação matemática
+   *     ok (ou confirmou manualmente mesmo com aviso).
+   *  - "manually_reviewed": usuário ajustou o acordo manualmente.
+   *  - "none": sem pendência de revisão.
+   */
+  reviewStatus?: "none" | "review_required" | "ai_reviewed" | "manually_reviewed";
+  /** True quando a sugestão da IA foi aplicada ao acordo. */
+  aiReviewed?: boolean;
+  /** ISO da aplicação da sugestão da IA. */
+  aiReviewAppliedAt?: string;
+  /** Confiança 0..1 retornada pela IA na última aplicação. */
+  aiConfidence?: number;
+  /** Resultado bruto retornado pela IA (preservado para auditoria). */
+  aiReviewRawResult?: unknown;
 }
 
 export interface Product {
@@ -154,6 +174,16 @@ interface State {
   updateClientNotes: (clientId: string, notes: string) => void;
   payMGMVInstallment: (clientId: string, installmentNumber: number) => void;
   setMGMVAgreement: (clientId: string, agreement: MGMVAgreement | undefined) => void;
+  applyAiReviewToAgreement: (
+    clientId: string,
+    nextAgreement: MGMVAgreement,
+    meta: {
+      confidence: number;
+      rawResult: unknown;
+      mathOk: boolean;
+      confirmedWithConflict?: boolean;
+    },
+  ) => Promise<void>;
   setPreferences: (patch: Partial<SystemPreferences>) => void;
   setRules: (patch: Partial<OperationalRules>) => void;
   setSecurity: (patch: Partial<SecuritySettings>) => void;
@@ -500,6 +530,44 @@ export const useStore = create<State>()((set, get) => ({
           }
           return { clients };
         }),
+      applyAiReviewToAgreement: async (clientId, nextAgreement, meta) => {
+        const prevClient = get().clients.find((c) => c.id === clientId);
+        const prevAgreement = prevClient?.mgmv;
+        const reviewStatus: MGMVAgreement["reviewStatus"] =
+          meta.mathOk || meta.confirmedWithConflict ? "ai_reviewed" : "review_required";
+        const merged: MGMVAgreement = {
+          ...nextAgreement,
+          reviewStatus,
+          aiReviewed: reviewStatus === "ai_reviewed",
+          aiReviewAppliedAt:
+            reviewStatus === "ai_reviewed" ? new Date().toISOString() : prevAgreement?.aiReviewAppliedAt,
+          aiConfidence: meta.confidence,
+          aiReviewRawResult: meta.rawResult,
+        };
+        set((s) => ({
+          clients: s.clients.map((c) =>
+            c.id === clientId
+              ? { ...c, mgmv: merged, clientType: "mgmv" as "mgmv" | "common" }
+              : c,
+          ),
+        }));
+        const updated = get().clients.find((c) => c.id === clientId);
+        if (updated) {
+          dbUpsertClient(updated);
+          await dbSyncAgreementForClientAsync(updated);
+          await dbInsertMgmvReviewAuditLog({
+            clientId,
+            agreementId: clientId,
+            previousReviewStatus: prevAgreement?.reviewStatus ?? "review_required",
+            newReviewStatus: reviewStatus,
+            previousAgreement: prevAgreement,
+            newAgreement: merged,
+            confidence: meta.confidence,
+            confirmedWithConflict: !!meta.confirmedWithConflict,
+            mathOk: meta.mathOk,
+          });
+        }
+      },
       setPreferences: (patch) =>
         set((s) => {
           const preferences = { ...s.preferences, ...patch };

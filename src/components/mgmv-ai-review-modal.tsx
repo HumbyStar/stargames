@@ -26,7 +26,10 @@ interface Props {
   client: Client;
   agreement: MGMVAgreement;
   products: Product[];
-  onApply: (suggestion: MgmvAiReviewSuggestion) => void;
+  onApply: (
+    suggestion: MgmvAiReviewSuggestion,
+    meta: { mathOk: boolean; confirmedWithConflict: boolean },
+  ) => void;
 }
 
 interface MathCheck {
@@ -318,7 +321,10 @@ export function MgmvAiReviewModal({
               <Button
                 onClick={() => {
                   if (!suggestion) return;
-                  onApply(suggestion);
+                  onApply(suggestion, {
+                    mathOk: !!mathCheck?.ok,
+                    confirmedWithConflict: !mathCheck?.ok && confirmConflict,
+                  });
                   onClose();
                 }}
                 disabled={!canApply}

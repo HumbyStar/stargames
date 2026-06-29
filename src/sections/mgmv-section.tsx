@@ -21,6 +21,8 @@ type MgmvChip =
   | "em_atraso"
   | "quitados"
   | "revisao"
+  | "revisado_ia"
+  | "revisado_manual"
   | "vencem_hoje"
   | "vencidos";
 
@@ -33,7 +35,12 @@ interface MgmvRow {
   paidValue: number;
   remainingValue: number;
   nextDue: string | null;
-  status: "Ativo" | "Em atraso" | "Quitado" | "Revisão necessária";
+  /** Status financeiro do acordo (separado do status de revisão). */
+  status: "Ativo" | "Em atraso" | "Quitado";
+  /** Status de revisão (independente do financeiro). */
+  reviewStatus: NonNullable<MGMVAgreement["reviewStatus"]>;
+  /** Indica divergência matemática entre soma das parcelas e total. */
+  hasMismatch: boolean;
 }
 
 function isSameDay(iso: string): boolean {
@@ -59,23 +66,30 @@ function buildRow(client: Client, agreement: MGMVAgreement): MgmvRow {
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
   const nextDue = next?.dueDate ?? null;
 
-  // Validação matemática — base para "Revisão necessária".
+  // Validação matemática — base para reviewStatus = "review_required" quando
+  // ainda não houve revisão IA / manual aplicada.
   const sumByInstallments = agreement.installments.reduce(
     (s, i) => s + (i.value || 0),
     0,
   );
-  const mismatch =
+  const hasMismatch =
     agreement.totalDebt > 0 &&
     Math.abs(sumByInstallments - agreement.totalDebt) > 0.01;
 
   let status: MgmvRow["status"] = "Ativo";
-  if (mismatch) status = "Revisão necessária";
-  else if (pendingCount === 0) status = "Quitado";
-  else if (
-    agreement.installments.some((i) => !i.paid && isOverdue(i.dueDate))
-  ) {
+  if (pendingCount === 0) status = "Quitado";
+  else if (agreement.installments.some((i) => !i.paid && isOverdue(i.dueDate))) {
     status = "Em atraso";
   }
+
+  // reviewStatus: preserva ai_reviewed / manually_reviewed; senão deriva.
+  const preserved =
+    agreement.reviewStatus === "ai_reviewed" ||
+    agreement.reviewStatus === "manually_reviewed"
+      ? agreement.reviewStatus
+      : null;
+  const reviewStatus: MgmvRow["reviewStatus"] =
+    preserved ?? (hasMismatch ? "review_required" : "none");
 
   return {
     client,
@@ -87,6 +101,8 @@ function buildRow(client: Client, agreement: MGMVAgreement): MgmvRow {
     remainingValue,
     nextDue,
     status,
+    reviewStatus,
+    hasMismatch,
   };
 }
 
@@ -95,8 +111,14 @@ export function MGMVSection({
 }: {
   onScrollTo: (id: string) => void;
 }) {
-  const { clients, products, openClient, payMGMVInstallment, setMGMVAgreement } =
-    useStore();
+  const {
+    clients,
+    products,
+    openClient,
+    payMGMVInstallment,
+    setMGMVAgreement,
+    applyAiReviewToAgreement,
+  } = useStore();
   const [chip, setChip] = useState<MgmvChip>("todos");
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -159,7 +181,11 @@ export function MGMVSection({
     const ativos = rows.filter((r) => r.status === "Ativo").length;
     const atraso = rows.filter((r) => r.status === "Em atraso").length;
     const quitados = rows.filter((r) => r.status === "Quitado").length;
-    const revisao = rows.filter((r) => r.status === "Revisão necessária").length;
+    const revisao = rows.filter((r) => r.reviewStatus === "review_required").length;
+    const revisadoIA = rows.filter((r) => r.reviewStatus === "ai_reviewed").length;
+    const revisadoManual = rows.filter(
+      (r) => r.reviewStatus === "manually_reviewed",
+    ).length;
     const parcelasVencidas = rows.reduce(
       (s, r) =>
         s +
@@ -174,6 +200,8 @@ export function MGMVSection({
       atraso,
       quitados,
       revisao,
+      revisadoIA,
+      revisadoManual,
       parcelasVencidas,
       saldoTotal,
     };
@@ -196,7 +224,11 @@ export function MGMVSection({
         case "quitados":
           return r.status === "Quitado";
         case "revisao":
-          return r.status === "Revisão necessária";
+          return r.reviewStatus === "review_required";
+        case "revisado_ia":
+          return r.reviewStatus === "ai_reviewed";
+        case "revisado_manual":
+          return r.reviewStatus === "manually_reviewed";
         case "vencem_hoje":
           return r.nextDue ? isSameDay(r.nextDue) : false;
         case "vencidos":
@@ -215,6 +247,8 @@ export function MGMVSection({
     { id: "em_atraso", label: "Em atraso", count: stats.atraso },
     { id: "quitados", label: "Quitados", count: stats.quitados },
     { id: "revisao", label: "Revisão necessária", count: stats.revisao },
+    { id: "revisado_ia", label: "Revisado com IA", count: stats.revisadoIA },
+    { id: "revisado_manual", label: "Revisado manualmente", count: stats.revisadoManual },
     { id: "vencem_hoje", label: "Vencem hoje" },
     { id: "vencidos", label: "Vencidos" },
   ];
@@ -323,11 +357,17 @@ export function MGMVSection({
                 const tagVariant: "danger" | "warning" | "success" | "primary" | "neutral" =
                   r.status === "Em atraso"
                     ? "danger"
-                    : r.status === "Revisão necessária"
-                      ? "warning"
-                      : r.status === "Quitado"
-                        ? "success"
-                        : "primary";
+                    : r.status === "Quitado"
+                      ? "success"
+                      : "primary";
+                const reviewBadge =
+                  r.reviewStatus === "review_required"
+                    ? { label: "Revisão necessária", variant: "warning" as const }
+                    : r.reviewStatus === "ai_reviewed"
+                      ? { label: "Revisado com IA", variant: "primary" as const }
+                      : r.reviewStatus === "manually_reviewed"
+                        ? { label: "Revisado manualmente", variant: "success" as const }
+                        : null;
                 return (
                   <>
                     <tr
@@ -366,11 +406,16 @@ export function MGMVSection({
                         )}
                       </td>
                       <td className="px-3 py-2">
-                        <Tag variant={tagVariant}>{r.status}</Tag>
+                        <div className="flex flex-wrap gap-1">
+                          <Tag variant={tagVariant}>{r.status}</Tag>
+                          {reviewBadge && (
+                            <Tag variant={reviewBadge.variant}>{reviewBadge.label}</Tag>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-2 text-right">
                         <div className="flex justify-end gap-1">
-                          {r.status === "Revisão necessária" && (
+                          {r.reviewStatus === "review_required" && (
                             <Button
                               size="sm"
                               variant="secondary"
@@ -513,9 +558,21 @@ export function MGMVSection({
             client={row.client}
             agreement={row.agreement}
             products={productsOfClient}
-            onApply={(s) => {
+            onApply={(s, meta) => {
               const next = applySuggestionToAgreement(row.agreement, s);
-              setMGMVAgreement(row.client.id, next);
+              void applyAiReviewToAgreement(row.client.id, next, {
+                confidence: s.confidence,
+                rawResult: s,
+                mathOk: meta.mathOk,
+                confirmedWithConflict: meta.confirmedWithConflict,
+              });
+              if (meta.mathOk || meta.confirmedWithConflict) {
+                toast.success("Acordo marcado como Revisado com IA.");
+              } else {
+                toast.warning(
+                  "A sugestão da IA ainda possui divergência matemática. Acordo continua em Revisão necessária.",
+                );
+              }
             }}
           />
         );
