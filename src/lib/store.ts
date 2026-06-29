@@ -172,6 +172,16 @@ interface State {
   updateClientNotes: (clientId: string, notes: string) => void;
   payMGMVInstallment: (clientId: string, installmentNumber: number) => void;
   setMGMVAgreement: (clientId: string, agreement: MGMVAgreement | undefined) => void;
+  applyAiReviewToAgreement: (
+    clientId: string,
+    nextAgreement: MGMVAgreement,
+    meta: {
+      confidence: number;
+      rawResult: unknown;
+      mathOk: boolean;
+      confirmedWithConflict?: boolean;
+    },
+  ) => Promise<void>;
   setPreferences: (patch: Partial<SystemPreferences>) => void;
   setRules: (patch: Partial<OperationalRules>) => void;
   setSecurity: (patch: Partial<SecuritySettings>) => void;
