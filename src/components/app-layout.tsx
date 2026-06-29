@@ -399,7 +399,8 @@ function FloatingNavbar() {
           viewBox={`0 0 ${navSize.width} ${navSize.height}`}
           preserveAspectRatio="none"
         >
-          <path d={navBorderPath} pathLength={100} />
+          <path className="nav-progress-track" d={navBorderPath} pathLength={100} />
+          <path className="nav-progress-runner" d={navBorderPath} pathLength={100} />
         </svg>
       )}
       <button

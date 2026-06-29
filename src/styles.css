@@ -254,25 +254,31 @@
 }
 .nav-progress-ring > path {
   fill: none;
-  stroke: color-mix(in oklch, var(--color-primary) 95%, transparent);
-  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
+}
+.nav-progress-track {
+  stroke: color-mix(in oklch, var(--color-primary) 42%, transparent);
+  stroke-width: 1;
+}
+.nav-progress-runner {
+  stroke: color-mix(in oklch, var(--color-primary) 98%, transparent);
+  stroke-width: 2;
   /* Short highlight segment so it reads as the navbar border running, not a bar over items. */
-  stroke-dasharray: 6 94;
+  stroke-dasharray: 3 97;
   stroke-dashoffset: 0;
 }
 .floating-navbar[data-progress="loop"] .nav-progress-ring {
   opacity: 1;
 }
-.floating-navbar[data-progress="loop"] .nav-progress-ring > path {
+.floating-navbar[data-progress="loop"] .nav-progress-runner {
   animation: nav-progress-trace 2400ms linear infinite;
 }
 .floating-navbar[data-progress="true"] .nav-progress-ring {
   opacity: 1;
 }
-.floating-navbar[data-progress="true"] .nav-progress-ring > path {
+.floating-navbar[data-progress="true"] .nav-progress-runner {
   stroke-dasharray: 0 100;
   animation: nav-progress-fill 3000ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
 }
