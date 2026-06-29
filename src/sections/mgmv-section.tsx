@@ -558,9 +558,21 @@ export function MGMVSection({
             client={row.client}
             agreement={row.agreement}
             products={productsOfClient}
-            onApply={(s) => {
+            onApply={(s, meta) => {
               const next = applySuggestionToAgreement(row.agreement, s);
-              setMGMVAgreement(row.client.id, next);
+              void applyAiReviewToAgreement(row.client.id, next, {
+                confidence: s.confidence,
+                rawResult: s,
+                mathOk: meta.mathOk,
+                confirmedWithConflict: meta.confirmedWithConflict,
+              });
+              if (meta.mathOk || meta.confirmedWithConflict) {
+                toast.success("Acordo marcado como Revisado com IA.");
+              } else {
+                toast.warning(
+                  "A sugestão da IA ainda possui divergência matemática. Acordo continua em Revisão necessária.",
+                );
+              }
             }}
           />
         );
