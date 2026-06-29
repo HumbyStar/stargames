@@ -200,6 +200,15 @@
   }
 }
 /* hover detection handled via window mousemove (no overlay needed) */
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-navbar,
+  .floating-navbar * {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
 .page-container {
   max-width: 1440px;
   margin: 0 auto;
