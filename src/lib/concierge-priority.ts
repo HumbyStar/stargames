@@ -1,11 +1,17 @@
 import { useMemo } from "react";
 import {
-  hasIncludedInMgmv,
   isOverdue,
   shouldAppearInCollection,
   useStore,
+  type Client,
+  type Product,
 } from "@/lib/store";
 import type { DashboardCardId } from "@/components/dashboard-drilldown-modal";
+
+function hasIncludedInMgmv(p: Product, clients: Client[]): boolean {
+  const c = clients.find((x) => x.id === p.clientId);
+  return !!c?.mgmv;
+}
 
 export type PriorityAlert = {
   count: number;
