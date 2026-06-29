@@ -198,7 +198,7 @@ export function ImportProgressModal({
         {/* Log de mensagens */}
         <div
           ref={logRef}
-          className="max-h-40 overflow-y-auto rounded-md border bg-muted/30 p-3 text-xs font-mono space-y-1"
+          className="rounded-md border bg-muted/30 p-3 text-xs font-mono space-y-1"
         >
           {state.messages.length === 0 ? (
             <div className="text-muted-foreground">Iniciando…</div>
