@@ -1689,17 +1689,17 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     }
   };
 
-  const validateText = () => {
-    if (!text.trim()) return toast.error("Cole os dados para validar.");
-    const raw = /<[a-z][\s\S]*>/i.test(text) ? parseHTMLList(text) : parseTextList(text);
-    const parsed = validateRows(raw, findClientByPhone);
-    setRows(parsed);
-    toast.success(`${parsed.length} linha(s) processadas`);
-  };
-
   const [aiLoading, setAiLoading] = useState(false);
-  const analyzeWithAI = async () => {
-    if (!text.trim()) return toast.error("Cole os dados para analisar.");
+  const validateText = async () => {
+    if (!text.trim()) return toast.error("Cole os dados para validar.");
+    // HTML continua com parser dedicado; texto puro vai direto para a IA.
+    if (/<[a-z][\s\S]*>/i.test(text)) {
+      const raw = parseHTMLList(text);
+      const parsed = validateRows(raw, findClientByPhone);
+      setRows(parsed);
+      toast.success(`${parsed.length} linha(s) processadas`);
+      return;
+    }
     setAiLoading(true);
     try {
       const { rows: aiRows } = await analyzeListWithAI({ data: { text } });
