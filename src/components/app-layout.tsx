@@ -16,6 +16,7 @@ import {
   Users,
   Sparkles,
   Wallet,
+  CircleDollarSign,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ComponentType, SVGProps } from "react";
@@ -40,6 +41,7 @@ import { HelpCenter } from "@/components/help-center";
 import { TutorialRunner } from "@/components/tutorial-runner";
 import { ConciergeModal } from "@/components/concierge-modal";
 import { FloatingConcierge } from "@/components/floating-concierge";
+import { FinanceDashboard } from "@/components/finance-dashboard";
 import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 
 const navItems: ReadonlyArray<{
