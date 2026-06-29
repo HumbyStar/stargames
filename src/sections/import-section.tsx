@@ -167,6 +167,99 @@ const calculateDueDate = (status: FinancialStatus, registerDate: string | null) 
   return registerDate;
 };
 
+// ---- Helpers MGMV ----
+const ORDINAL_WORDS: Record<string, number> = {
+  primeira: 1,
+  segunda: 2,
+  terceira: 3,
+  quarta: 4,
+  quinta: 5,
+  sexta: 6,
+  setima: 7,
+  oitava: 8,
+  nona: 9,
+  decima: 10,
+};
+
+const MONTH_NAMES: Record<string, number> = {
+  janeiro: 0,
+  fevereiro: 1,
+  marco: 2,
+  abril: 3,
+  maio: 4,
+  junho: 5,
+  julho: 6,
+  agosto: 7,
+  setembro: 8,
+  outubro: 9,
+  novembro: 10,
+  dezembro: 11,
+};
+
+function stripAccents(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+/** Soma `months` mantendo o mesmo dia; se o mês destino não tiver o dia,
+ * usa o último dia válido (ex.: 31/01 + 1 mês = 28/02 ou 29/02). */
+export function addMonthsClampDay(base: Date, months: number): Date {
+  const y = base.getFullYear();
+  const m = base.getMonth();
+  const d = base.getDate();
+  const target = new Date(y, m + months, 1, 12, 0, 0);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(d, lastDay));
+  return target;
+}
+
+/** Procura uma data BR num trecho de texto.
+ * Aceita "DD/MM/AAAA", "DD-MM-AAAA" e "dia DD de MES (de AAAA)?".
+ * Sem ano, usa `refYear`. Retorna ISO ou undefined. */
+export function extractPaymentDate(
+  fragment: string,
+  refYear: number,
+): string | undefined {
+  // DD/MM/YYYY ou DD-MM-YYYY ou DD/MM/YY
+  const numeric = fragment.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{2}|\d{4})/);
+  if (numeric) {
+    const iso = normalizeDateBR(
+      `${numeric[1]}/${numeric[2]}/${numeric[3].length === 2 ? "20" + numeric[3] : numeric[3]}`,
+    );
+    if (iso) return new Date(`${iso}T12:00:00`).toISOString();
+  }
+  // "dia DD de MES (de AAAA)?"
+  const named = fragment.match(
+    /dia\s+(\d{1,2})\s+de\s+([A-Za-zÀ-ÿ]+)(?:\s+de\s+(\d{4}))?/i,
+  );
+  if (named) {
+    const day = Number(named[1]);
+    const monthKey = stripAccents(named[2]);
+    const month = MONTH_NAMES[monthKey];
+    if (Number.isFinite(day) && month !== undefined) {
+      const year = named[3] ? Number(named[3]) : refYear;
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      const safeDay = Math.min(day, lastDay);
+      return new Date(year, month, safeDay, 12, 0, 0).toISOString();
+    }
+  }
+  return undefined;
+}
+
+/** Ano de referência: usa o primeiro ano de 4 dígitos achado nas notas
+ * (incluindo o do "1º Pagamento"), senão o ano corrente. */
+export function inferReferenceYear(notes: string, firstPaymentRaw?: string): number {
+  if (firstPaymentRaw) {
+    const m = firstPaymentRaw.match(/\d{4}/);
+    if (m) return Number(m[0]);
+  }
+  const m = notes.match(/\b(20\d{2})\b/);
+  if (m) return Number(m[1]);
+  return new Date().getFullYear();
+}
+
 function cleanClientName(name: string) {
   return String(name || "")
     .replace(/\s+\d{2}$/, "")
