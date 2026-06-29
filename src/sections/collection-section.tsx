@@ -664,6 +664,20 @@ export function CollectionSection({
           )}
         </div>
 
+        {!listExpanded && (
+          <MinimizedListCard
+            section="collection"
+            title="Lista de cobranças minimizada"
+            lines={[
+              `${filtered.length} cobrança(s) encontrada(s)`,
+              `${pendentesVencidos} pendência(s) vencida(s)`,
+              `${reservasVencidas} reserva(s) vencida(s)`,
+              `${mgmvVencidas} parcela(s) MGMV vencida(s)`,
+            ]}
+          />
+        )}
+        {listExpanded && (
+        <>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -873,6 +887,8 @@ export function CollectionSection({
               <span>Todas as cobranças carregadas.</span>
             )}
           </div>
+        )}
+        </>
         )}
       </Card>
 
