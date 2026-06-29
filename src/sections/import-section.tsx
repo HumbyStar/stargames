@@ -1941,8 +1941,22 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
 
             <TabsContent value="text" className="mt-4 space-y-3">
               <TextDropzone value={text} onChange={setText} onFile={handleFile} />
-              <div className="flex justify-end">
-                <Button onClick={validateText}>Validar Importação</Button>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  A IA lê cada linha do nome até o status, ignora linhas de grupo/vazias e corrige automaticamente erros comuns.
+                </p>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={analyzeWithAI}
+                    disabled={aiLoading}
+                    title="Analisa cada linha com IA, identifica vários clientes por linha e corrige erros comuns"
+                  >
+                    <Brain className="size-4" />
+                    {aiLoading ? "Analisando com IA..." : "Analisar com IA"}
+                  </Button>
+                  <Button onClick={validateText} disabled={aiLoading}>Validar Importação</Button>
+                </div>
               </div>
             </TabsContent>
 
