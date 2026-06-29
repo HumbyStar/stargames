@@ -2195,7 +2195,6 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           </Card>
         </div>
       )}
-      <ListImportModal open={listModalOpen} onOpenChange={setListModalOpen} />
     </section>
   );
 }
