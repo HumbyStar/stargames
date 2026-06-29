@@ -502,6 +502,7 @@ function GlobalModals() {
       </Dialog>
 
       <TutorialRunner />
+      <ConciergeModal />
     </>
   );
 }
