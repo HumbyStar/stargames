@@ -38,6 +38,27 @@ export function TutorialRunner() {
 
   const step = tutorial?.steps[stepIndex];
 
+  // Scroll the target into view + apply zoom-pulse class on small elements.
+  useEffect(() => {
+    if (!step) return;
+    const el = document.querySelector(step.targetSelector) as HTMLElement | null;
+    if (!el) return;
+    try {
+      el.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    } catch {
+      el.scrollIntoView();
+    }
+    const r = el.getBoundingClientRect();
+    const isSmall = r.width < 80 || r.height < 80;
+    if (isSmall) el.classList.add("tutorial-zoom-target");
+    // Re-measure shortly after the scroll/zoom starts.
+    const t = window.setTimeout(() => setTick((x) => x + 1), 360);
+    return () => {
+      window.clearTimeout(t);
+      el.classList.remove("tutorial-zoom-target");
+    };
+  }, [step]);
+
   // Side effects per step (e.g. abrir modal de importação/configurações).
   useEffect(() => {
     if (!tutorial || !step) return;
@@ -156,12 +177,14 @@ export function TutorialRunner() {
       avatarTop = Math.min(Math.max(rect.top + rect.height / 2 - avatarSize / 2, 16), vh - avatarSize - 16);
       avatarLeft = Math.max(rect.left - avatarSize - 16, 16);
     }
-    // Balloon ao lado do avatar
+    // Balloon ao lado do avatar; avatar sempre alinhado ao topo do balão.
     balloonTop = Math.min(Math.max(avatarTop, 16), vh - 220);
     balloonLeft = avatarLeft + avatarSize + 16;
     if (balloonLeft + balloonWidth > vw - 16) {
       balloonLeft = Math.max(avatarLeft - balloonWidth - 16, 16);
     }
+    // Align avatar top with balloon top (avatar lado, alinhado ao topo).
+    avatarTop = balloonTop;
   } else if (!rect && !isMobile) {
     // Centralizado quando alvo não existe
     avatarTop = window.innerHeight / 2 - avatarSize;
