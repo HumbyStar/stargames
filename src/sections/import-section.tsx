@@ -946,7 +946,6 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   const hydrated = useStore((s) => s.hydrated);
   const [tab, setTab] = useState("text");
   const [text, setText] = useState(SAMPLE_LIST);
-  const [listModalOpen, setListModalOpen] = useState(false);
   const [rows, setRows] = useState<ParsedRow[] | null>(null);
   const [notion, setNotion] = useState<NotionParseResult | null>(null);
   const [htmlText, setHtmlText] = useState("");
