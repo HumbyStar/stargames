@@ -34,6 +34,7 @@ import { ImportProgressModal, type ImportProgressState } from "@/components/impo
 import { ImportCard, ImportCardsGrid } from "@/components/import-cards";
 import { Users, ShieldCheck, Box, Wallet, AlertOctagon, Brain } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { analyzeListWithAI } from "@/lib/list-ai-analyze.functions";
 
 interface ParsedRow {
   line: number;
