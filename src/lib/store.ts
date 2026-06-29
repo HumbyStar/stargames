@@ -202,6 +202,21 @@ interface State {
   refreshSnapshot: () => Promise<void>;
 }
 
+export interface DuplicateClientGroup {
+  key: string;
+  primaryId: string;
+  duplicateIds: string[];
+  name: string;
+  phone: string;
+  productsToReassign: number;
+}
+
+export interface MergeDuplicatesResult {
+  groups: number;
+  removed: number;
+  reassignedProducts: number;
+}
+
 const uid = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
