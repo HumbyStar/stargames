@@ -24,6 +24,7 @@ import {
   type Client,
   type FinancialStatus,
   type MGMVAgreement,
+  type MGMVInstallment,
   type Situation,
 } from "@/lib/store";
 import { toast } from "sonner";
