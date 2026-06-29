@@ -24,7 +24,9 @@ export const Route = createFileRoute("/_authenticated/")({
 
 function scrollToSection(id: string) {
   const el = document.getElementById(id);
-  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (!el) return;
+  el.scrollTo({ top: 0, behavior: "auto" });
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function OnePage() {
