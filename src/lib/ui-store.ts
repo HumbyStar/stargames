@@ -10,6 +10,7 @@ interface UiState {
   helpOpen: boolean;
   notificationsOpen: boolean;
   conciergeOpen: boolean;
+  financeOpen: boolean;
   activeTutorialId: string | null;
   openImport: () => void;
   closeImport: () => void;
@@ -21,6 +22,8 @@ interface UiState {
   closeNotifications: () => void;
   openConcierge: () => void;
   closeConcierge: () => void;
+  openFinance: () => void;
+  closeFinance: () => void;
   startTutorial: (id: string) => void;
   stopTutorial: () => void;
 }
@@ -31,6 +34,7 @@ export const useUiStore = create<UiState>((set) => ({
   helpOpen: false,
   notificationsOpen: false,
   conciergeOpen: false,
+  financeOpen: false,
   activeTutorialId: null,
   openImport: () => set({ importOpen: true }),
   closeImport: () => set({ importOpen: false }),
@@ -42,6 +46,8 @@ export const useUiStore = create<UiState>((set) => ({
   closeNotifications: () => set({ notificationsOpen: false }),
   openConcierge: () => set({ conciergeOpen: true }),
   closeConcierge: () => set({ conciergeOpen: false }),
+  openFinance: () => set({ financeOpen: true }),
+  closeFinance: () => set({ financeOpen: false }),
   startTutorial: (id) => set({ activeTutorialId: id }),
   stopTutorial: () => set({ activeTutorialId: null }),
 }));
