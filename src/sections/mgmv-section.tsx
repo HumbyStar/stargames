@@ -584,6 +584,7 @@ export function MGMVSection({
         </div>
       </div>
       )}
+      </Card>
       {(() => {
         if (!aiTarget) return null;
         const row = rows.find((r) => r.client.id === aiTarget);
