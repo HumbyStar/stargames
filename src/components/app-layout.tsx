@@ -44,6 +44,7 @@ import { ConciergeModal } from "@/components/concierge-modal";
 import { FloatingConcierge } from "@/components/floating-concierge";
 import { FinanceDashboard } from "@/components/finance-dashboard";
 import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
+import { useNavbarConfig, getIconMeta, type NavbarIconId } from "@/lib/navbar-config";
 
 const navItems: ReadonlyArray<{
   id: string;
