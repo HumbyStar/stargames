@@ -87,7 +87,17 @@ export function CollectionSection({
   const [payTarget, setPayTarget] = useState<{ id: string; remaining: number; productName: string } | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [showFilters, setShowFilters] = useState(true);
-  const { expanded: listExpanded } = useListExpansion("collection");
+  const { expanded: listExpanded, expand: expandList } = useListExpansion("collection");
+
+  /**
+   * Aplica filtro a partir do clique em um card de resumo na Collection.
+   * Mantém o contexto da seção e expande a lista quando minimizada.
+   */
+  const applyCardFilter = (next: Filter) => {
+    setFilter(next);
+    setSearch("");
+    if (!listExpanded) expandList();
+  };
   const [savedFilters, setSavedFilters] = usePersistedState<SavedFilter[]>("collection.savedFilters", []);
   const [activeSavedId, setActiveSavedId] = usePersistedState<string>("collection.activeSavedId", "");
   const [search, setSearch] = useState("");
@@ -438,12 +448,46 @@ export function CollectionSection({
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-        <MetricCard label="Total em atraso" value={formatBRL(totalAtraso)} status="danger" />
-        <MetricCard label="Clientes inadimplentes" value={inadimplentes} />
-        <MetricCard label="Reservas vencidas" value={reservasVencidas} status="danger" />
-        <MetricCard label="Pendentes vencidos" value={pendentesVencidos} status="danger" />
-        <MetricCard label="Parcelas MGMV vencidas" value={mgmvVencidas} status="danger" />
-        <MetricCard label="Valor total restante" value={formatBRL(valorRestante)} />
+        <MetricCard
+          label="Total em atraso"
+          value={formatBRL(totalAtraso)}
+          status="danger"
+          onClick={() => applyCardFilter("em_aberto")}
+          tooltip="Ver cobranças em aberto"
+        />
+        <MetricCard
+          label="Clientes inadimplentes"
+          value={inadimplentes}
+          onClick={() => applyCardFilter("em_aberto")}
+          tooltip="Ver clientes inadimplentes"
+        />
+        <MetricCard
+          label="Reservas vencidas"
+          value={reservasVencidas}
+          status="danger"
+          onClick={() => applyCardFilter("reserva_vencida")}
+          tooltip="Ver reservas vencidas"
+        />
+        <MetricCard
+          label="Pendentes vencidos"
+          value={pendentesVencidos}
+          status="danger"
+          onClick={() => applyCardFilter("pendente_vencido")}
+          tooltip="Ver pendentes vencidos"
+        />
+        <MetricCard
+          label="Parcelas MGMV vencidas"
+          value={mgmvVencidas}
+          status="danger"
+          onClick={() => applyCardFilter("mgmv_vencido")}
+          tooltip="Ver parcelas MGMV vencidas"
+        />
+        <MetricCard
+          label="Valor total restante"
+          value={formatBRL(valorRestante)}
+          onClick={() => applyCardFilter("em_aberto")}
+          tooltip="Ver cobranças com valor em aberto"
+        />
       </div>
 
       <Card className="mt-6">

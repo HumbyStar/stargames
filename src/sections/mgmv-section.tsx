@@ -132,9 +132,20 @@ export function MGMVSection({
   const [expanded, setExpanded] = useState<string | null>(null);
   const [aiTarget, setAiTarget] = useState<string | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
-  const { expanded: listExpanded } = useListExpansion("mgmv");
+  const { expanded: listExpanded, expand: expandList } = useListExpansion("mgmv");
   const [pageSize, setPageSize] = usePersistedState<number>("mgmv.pageSize", 10);
   const [visibleCount, setVisibleCount] = useState<number>(10);
+
+  /**
+   * Aplica filtro a partir do clique em um card de resumo, mantendo o
+   * contexto da seção MGMV. Garante que a lista esteja expandida e
+   * limpa a busca livre para o usuário enxergar o subconjunto.
+   */
+  const applyCardFilter = (next: MgmvChip) => {
+    setChip(next);
+    setSearch("");
+    if (!listExpanded) expandList();
+  };
 
   const reprocessFromNotes = () => {
     setReprocessing(true);
@@ -295,25 +306,53 @@ export function MGMVSection({
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-7">
-        <MetricCard label="Clientes MGMV" value={stats.clientes} status="primary" />
-        <MetricCard label="Acordos ativos" value={stats.ativos} />
+        <MetricCard
+          label="Clientes MGMV"
+          value={stats.clientes}
+          status="primary"
+          onClick={() => applyCardFilter("todos")}
+          tooltip="Ver todos os acordos MGMV"
+        />
+        <MetricCard
+          label="Acordos ativos"
+          value={stats.ativos}
+          onClick={() => applyCardFilter("ativos")}
+          tooltip="Ver acordos ativos"
+        />
         <MetricCard
           label="Em atraso"
           value={stats.atraso}
           status={stats.atraso > 0 ? "danger" : "default"}
+          onClick={() => applyCardFilter("em_atraso")}
+          tooltip="Ver acordos em atraso"
         />
         <MetricCard
           label="Parcelas vencidas"
           value={stats.parcelasVencidas}
           status={stats.parcelasVencidas > 0 ? "danger" : "default"}
+          onClick={() => applyCardFilter("vencidos")}
+          tooltip="Ver parcelas vencidas"
         />
-        <MetricCard label="Quitados" value={stats.quitados} status="success" />
+        <MetricCard
+          label="Quitados"
+          value={stats.quitados}
+          status="success"
+          onClick={() => applyCardFilter("quitados")}
+          tooltip="Ver acordos quitados"
+        />
         <MetricCard
           label="Revisão necessária"
           value={stats.revisao}
           status={stats.revisao > 0 ? "warning" : "default"}
+          onClick={() => applyCardFilter("revisao")}
+          tooltip="Ver acordos com revisão necessária"
         />
-        <MetricCard label="Saldo total" value={formatBRL(stats.saldoTotal)} />
+        <MetricCard
+          label="Saldo total"
+          value={formatBRL(stats.saldoTotal)}
+          onClick={() => applyCardFilter("todos")}
+          tooltip="Ver acordos com saldo restante"
+        />
       </div>
 
       <Card className="mt-6">

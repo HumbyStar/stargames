@@ -95,7 +95,17 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const [visibleCount, setVisibleCount] = useState<number>(10);
   const [compact, setCompact] = useSectionCompact("clientes");
   const [showFilters, setShowFilters] = useState(true);
-  const { expanded: listExpanded } = useListExpansion("clients");
+  const { expanded: listExpanded, expand: expandList } = useListExpansion("clients");
+
+  /**
+   * Drill-down a partir de um card de resumo: ajusta o chip do contexto
+   * Clientes e expande a lista quando estiver minimizada.
+   */
+  const applyCardFilter = (next: ChipFilter) => {
+    setChip(next);
+    setSearch("");
+    if (!listExpanded) expandList();
+  };
 
   const drawerClientId = openClientId;
   const setDrawerClientId = (id: string | null) => openClient(id);
@@ -275,10 +285,33 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <MetricCard label="Total de Clientes" value={totalClients} />
-        <MetricCard label="Clientes com Pendência" value={clientesPendencia} status="danger" />
-        <MetricCard label="Clientes em MGMV" value={clientesMGMV} status="primary" />
-        <MetricCard label="Pagos aguardando envio" value={pagosAgEnvio} status="success" />
+        <MetricCard
+          label="Total de Clientes"
+          value={totalClients}
+          onClick={() => applyCardFilter("todos")}
+          tooltip="Ver todos os clientes"
+        />
+        <MetricCard
+          label="Clientes com Pendência"
+          value={clientesPendencia}
+          status="danger"
+          onClick={() => applyCardFilter("pendente")}
+          tooltip="Ver clientes com pendência"
+        />
+        <MetricCard
+          label="Clientes em MGMV"
+          value={clientesMGMV}
+          status="primary"
+          onClick={() => applyCardFilter("mgmv")}
+          tooltip="Ver clientes em MGMV"
+        />
+        <MetricCard
+          label="Pagos aguardando envio"
+          value={pagosAgEnvio}
+          status="success"
+          onClick={() => applyCardFilter("pago_aguardando")}
+          tooltip="Ver pagos aguardando envio"
+        />
       </div>
 
       <Card className="mt-6">

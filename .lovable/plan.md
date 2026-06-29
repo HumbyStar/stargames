@@ -1,86 +1,135 @@
 ## Objetivo
 
-Substituir o fluxo atual de importação por uma experiência única em ZIP que processa em lotes, exibe progresso visual moderno e abre um preview comparativo lado a lado (Clientes comuns × Clientes MGMV) antes de qualquer gravação no banco.
+Expandir a lógica de cards clicáveis (já implementada no Dashboard via `DashboardDrilldownModal`) para **todas as áreas** do sistema: Clientes, MGMV, Collection, Importação, Preview de Importação, Detalhe do Cliente e Detalhe MGMV.
 
-## Escopo
+Cada card de resumo passa a abrir um modal padrão com **lista filtrada do próprio contexto**, sem misturar dados oficiais com dados temporários de preview.
 
-A mudança fica em frontend + camada de pré-processamento/preview. Regras de detecção (parser MGMV, regras financeiras, persistência oficial) ficam intactas.
+---
 
-## Arquivos afetados
+## Arquitetura
 
-- `src/sections/import-section.tsx` — refatorar fluxo: upload → análise em lotes → preview → confirmação. Remover blocos longos de texto. Remover qualquer corte artificial (limites de 2k/5k/etc.).
-- `src/components/import-progress-modal.tsx` — substituir pelo novo modal visual (cards + esteira contínua + barra de progresso por lote).
-- `src/components/import-preview-modal.tsx` *(novo)* — modal grande com dois painéis internos lado a lado (desktop) / empilhados (mobile).
-- `src/components/import-cards.tsx` *(novo)* — cards retangulares reutilizáveis (ícone + título + número + microdescrição + animação count-up/pulse).
-- `src/components/import-conveyor.tsx` *(novo)* — esteira CSS com loop infinito; respeita `prefers-reduced-motion`; só finaliza quando `done === true`.
-- `src/lib/import-pipeline.ts` *(novo)* — orquestra leitura recursiva do ZIP, extração de HTML/HTM, classificação Comum vs MGMV, processamento em lotes (100–250 arquivos/lote), emissão de eventos de progresso, cancelamento. Reutiliza parsers existentes de `db-sync.ts`.
-- `src/lib/import-preview-store.ts` *(novo)* — store em memória do preview (não persiste no banco). Mantém `commonClientsPreview`, `mgmvClientsPreview`, métricas agregadas, filtros independentes por painel.
-- `src/lib/db-sync.ts` — expor função `commitImportPreview({ scope: 'common' | 'mgmv' | 'all', preview })` que grava no banco oficial apenas após confirmação. Reusar lógica atual de persistência; remover qualquer caminho que persista antes do preview.
-- `src/lib/store.ts` — adicionar limpeza de estado temporário (preview, runtime, sessionStorage de importação) em concluir/cancelar/resetar.
+### 1. Modal genérico de drill-down `ContextDrilldownModal`
 
-## Fluxo
+Novo componente em `src/components/context-drilldown-modal.tsx`. Recebe:
 
-```text
-Upload ZIP
-   ↓
-import-pipeline: percorre pastas, junta .html/.htm, divide em lotes
-   ↓
-ImportProgressModal: esteira animada contínua + cards atualizando em tempo real + "Lote X de N"
-   ↓ (ao concluir todos os lotes)
-animação de sucesso → abre ImportPreviewModal
-   ↓
-Preview comparativo (Comum | MGMV) com filtros, paginação e ações
-   ↓
-Rodapé: Cancelar / Importar só comuns / Importar só MGMV / Importar tudo validado
-   ↓
-commitImportPreview → grava clients, products, mgmv_agreements, mgmv_installments
-   ↓
-limpa preview/cache/sessionStorage; Dashboard/Clientes/MGMV/Collection leem só dados oficiais
+```ts
+type DrillContext = {
+  title: string;
+  description?: string;
+  origin: string;          // "Seção MGMV", "Preview – Comuns", "Cliente João", etc.
+  filterLabel: string;     // "Status = Em atraso"
+  rows: DrillRow[];        // já filtradas pelo chamador
+  totalValue?: number;
+  columns?: ("status" | "due" | "value" | "meta")[];
+  actions?: DrillAction[]; // openClient | whatsapp | markPaid | markShipped | openAgreement | payInstallment
+  onGoToSection?: () => void; // opcional — não aparece em contextos de preview
+};
 ```
 
-## Detalhes técnicos
+Estrutura visual reaproveita o padrão do `DashboardDrilldownModal` (header, chips de filtro ativo + total, busca, tabela com ações por linha, footer com **Limpar filtro / Ver na seção / Fechar**). Renderização sob demanda (rows só são montadas quando o modal abre — lazy via `useMemo` no componente pai).
 
-**Pipeline em lotes**
-- `extractZipEntries(file)` → lista completa de `.html/.htm` (sem corte).
-- `processBatch(entries, batchSize)` em loop com `await` entre lotes para liberar o event loop; `AbortController` para cancelar.
-- Emite `{ batchIndex, totalBatches, filesAnalyzed, totalFiles, counters }` via callback.
-- Classifica cada cliente detectado em `common` ou `mgmv` (baseado em parser MGMV atual).
+### 2. Registro central `card-registry.ts`
 
-**Cards (`import-cards.tsx`)**
-- `<ImportCard icon title value description tone>` com count-up suave (lerp), pulse on change, skeleton enquanto `value === undefined`. Tema claro/escuro via tokens.
-- Conjuntos: progresso (arquivos/pastas/HTMLs), comum (clientes/produtos/valores), MGMV (clientes/acordos/parcelas/dívida/revisão/IA), alertas (duplicatas/conflitos/erros/telefones corrigidos).
+`src/lib/card-registry.ts` exporta:
 
-**Esteira (`import-conveyor.tsx`)**
-- Trilho horizontal com sequência infinita de ícones (Arquivo→Pasta→HTML→Cliente→Produto→MGMV→Validação→IA→Preview).
-- `@keyframes` translateX com `animation-duration` longo e `iteration-count: infinite`; pausa só quando `state === 'done' | 'cancelled'`.
-- Em `prefers-reduced-motion`, reduz para fade entre ícones, mas mantém feedback.
+```ts
+export type CardContextId =
+  | "dashboard" | "clients" | "mgmv" | "collection"
+  | "import" | "import-common" | "import-mgmv"
+  | "client-detail" | "mgmv-detail";
 
-**Preview comparativo (`import-preview-modal.tsx`)**
-- Layout `grid lg:grid-cols-2` (desktop) / `flex-col` (mobile). Largura máxima ~1400px.
-- Cabeçalho: área de comparação compacta (distribuição %, totais).
-- Cada painel: cards próprios, filtros próprios (search, pasta, status, etc.), tabela paginada (10/20/30/40/50), expansão sob demanda. Borda azul/neutra (Comum) vs dourada (MGMV). Badges: Comum, MGMV, Revisão necessária, Revisado com IA, Conflito, Corrigido automaticamente, Duplicata, Pronto para importar.
-- Ações por linha: Expandir, Revisar, Revisar com IA (só MGMV em revisão), Aplicar decisão, Remover da importação.
-- Filtros 100% independentes entre painéis.
+export type CardDescriptor = {
+  id: string;                 // ex.: "mgmv-review-required"
+  context: CardContextId;
+  label: string;
+  tooltip: string;
+  modalTitle: string;
+  filterLabel: string;
+  actions: DrillActionKind[];
+};
 
-**IA**
-- Mantém regra híbrida atual: automática só para MGMV "Revisão necessária", sob demanda nos demais. Botão "Revisar com IA" no painel MGMV. Após aplicar + validação matemática OK, item muda para "Revisado com IA" e sai de "Revisão necessária".
+export const CARD_REGISTRY: Record<string, CardDescriptor> = { ... };
+```
 
-**Confirmação e persistência**
-- Rodapé com 4 ações conforme especificado.
-- Itens com conflito/revisão necessária exigem confirmação explícita (checkbox "incluir mesmo assim").
-- Após salvar: limpa `commonClientsPreview`, `mgmvClientsPreview`, `lastImportPreview`, `processedFiles`, runtime store, chaves de localStorage/sessionStorage de importação, `import_progress` antigo.
-- Produtos MGMV recebem `included_in_mgmv = true`, `mgmv_agreement_id`, `collection_eligible = false`.
+O registry concentra **título, tooltip, filterLabel e ações** por card. Cada seção apenas referencia `CARD_REGISTRY["clients-with-reservation"]` em vez de duplicar strings.
 
-**Limites artificiais**
-- Auditar e remover toda constante tipo `MAX_FILES`, `MAX_PRODUCTS`, `slice(0, N)` no caminho de importação. Substituir mensagens "serão ignorados" por "Volume alto detectado. A importação será processada em lotes para evitar travamentos."
+### 3. Reuso do `MetricCard`
 
-**Performance**
-- Tabelas paginadas (mesma `LoadMoreButton`/`usePersistedState` já usados em MGMV/Clientes/Collection). Virtualização só se >2000 linhas visíveis.
+`MetricCard` já aceita `onClick` + `tooltip` + visual de hover/chevron — **não muda**. Cards informativos continuam sem `onClick` e parecem informativos.
 
-## Não alterar
+---
 
-Regras de detecção MGMV, parser por regra, regras financeiras, persistência oficial das tabelas, fluxo de unificação de duplicatas, navegação one-page atual.
+## Mapa de cards a tornar clicáveis
 
-## Critérios de aceite
+### Seção Clientes (`src/sections/clientes-section.tsx`)
+- Total de Clientes → lista comuns
+- Clientes com Pendência → clientes com produto pendente/vencido
+- Clientes em MGMV → roteia para seção MGMV (chip todos)
+- Pagos aguardando envio → produtos pagos sem envio
 
-Replicam os 19 itens listados pelo usuário na seção 23: ZIP único, lotes, sem corte, modal moderno, esteira contínua que só para ao concluir, preview comparativo lado a lado/empilhado, cards e filtros independentes por painel, três modos de importação no rodapé, nada salvo antes da confirmação, badge "Revisado com IA" após IA + validação OK, limpeza de cache/preview após persistir.
+### Seção MGMV (`src/sections/mgmv-section.tsx`)
+- Clientes MGMV → todos
+- Acordos ativos → `chip = ativos`
+- Em atraso → `chip = vencidos`
+- Revisão necessária → `reviewStatus = review_required`
+- Quitados → `chip = quitados`
+- Revisados com IA → `reviewStatus = ai_reviewed`
+- Saldo total → ordenado por maior saldo restante
+
+### Seção Collection (`src/sections/collection-section.tsx`)
+- Total em atraso → cobranças com `daysLate > 0`
+- Clientes inadimplentes → distinct clients in atraso
+- Reservas vencidas → `filter = reserva_vencida`
+- Pendentes vencidos → `filter = pendente_vencido`
+- Parcelas MGMV vencidas → MGMV overdue installments
+- Valor total restante → ordenado por valor restante
+
+### Detalhe do Cliente (`clientes-section.tsx` — modal `ClientDetail`)
+- Total Comprado / Pago / Restante → filtra produtos do cliente
+- Produtos → todos do cliente
+- MGMV → abre acordo MGMV daquele cliente
+- Cards do bloco MGMV (Saldo, Parcelas pagas, Parcela mensal) → filtra parcelas
+
+### Importação (`src/sections/import-section.tsx`)
+- Cards do **resumo geral** (linhas 2120/2294/2743/2871) → lista temporária do preview com filtro
+- Painel **Comuns**: Clientes / Produtos / Reservas / Pendências / Duplicatas / Telefones corrigidos
+- Painel **MGMV**: Clientes / Acordos detectados / Revisão necessária / Revisados IA / Conflitos / Saldo
+
+**Importante:** clique em card de preview **abre modal interno ao próprio import-section** com dados temporários — nunca despacha para seções oficiais e nunca persiste nada.
+
+---
+
+## Filtros que precisam ser deep-linkáveis
+
+Já existem (`usePersistedState`):
+- `mgmv.chip`
+- `clientes.chip`
+- `collection.filter`
+
+Adicionar suporte (se ausente) para chips faltantes — verificar em cada seção e migrar `useState` → `usePersistedState` apenas quando necessário para deep-link.
+
+---
+
+## Visual / UX
+
+- Cards clicáveis: hover lift + chevron + tooltip (já existe).
+- Cards informativos (ex.: valores agregados sem ação concreta) **permanecem sem onClick** — não fingem ser clicáveis.
+- Modal mostra badge "Origem: <card>" + chip "Filtro: <filterLabel>" + botão "Limpar filtro" (= fecha) + "Ver na seção" (quando aplicável).
+- Performance: tabela renderiza com `slice(0, 200)` + busca; nada é montado até clique.
+
+---
+
+## Restrições
+
+- **Não** mudar parser de importação, regras MGMV/financeiras, persistência, estrutura do Dashboard atual.
+- Preview temporário **nunca** alimenta seções oficiais.
+- Dashboard drilldown existente continua funcionando inalterado.
+
+---
+
+## Entregáveis
+
+1. `src/components/context-drilldown-modal.tsx` — modal genérico reutilizável.
+2. `src/lib/card-registry.ts` — descriptors centralizados.
+3. Edições em `clientes-section.tsx`, `mgmv-section.tsx`, `collection-section.tsx`, `import-section.tsx` para fiar onClick + abrir modal local com rows filtradas.
+4. Sem mudanças em `_authenticated.index.tsx` (Dashboard já pronto).
