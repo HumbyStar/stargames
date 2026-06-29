@@ -42,6 +42,24 @@ export interface MGMVAgreement {
   startDate: string;
   totalDebt: number;
   installments: MGMVInstallment[];
+  /**
+   * Status de revisão do acordo MGMV. É SEPARADO do status financeiro
+   * (Ativo / Em atraso / Quitado / Cancelado). Definido por:
+   *  - "review_required": parser detectou divergência / dado faltando.
+   *  - "ai_reviewed": usuário aplicou sugestão da IA com validação matemática
+   *     ok (ou confirmou manualmente mesmo com aviso).
+   *  - "manually_reviewed": usuário ajustou o acordo manualmente.
+   *  - "none": sem pendência de revisão.
+   */
+  reviewStatus?: "none" | "review_required" | "ai_reviewed" | "manually_reviewed";
+  /** True quando a sugestão da IA foi aplicada ao acordo. */
+  aiReviewed?: boolean;
+  /** ISO da aplicação da sugestão da IA. */
+  aiReviewAppliedAt?: string;
+  /** Confiança 0..1 retornada pela IA na última aplicação. */
+  aiConfidence?: number;
+  /** Resultado bruto retornado pela IA (preservado para auditoria). */
+  aiReviewRawResult?: unknown;
 }
 
 export interface Product {
