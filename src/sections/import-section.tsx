@@ -1891,6 +1891,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList>
               <TabsTrigger value="text">Lista</TabsTrigger>
+              <TabsTrigger value="list-groups">Lista por grupos</TabsTrigger>
               <TabsTrigger value="html">HTML / Notion</TabsTrigger>
               <TabsTrigger value="zip">ZIP Notion</TabsTrigger>
               <TabsTrigger value="csv">CSV</TabsTrigger>
