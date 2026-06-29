@@ -267,6 +267,160 @@ function NavLink({
 }
 
 function FloatingNavbar() {
+  // placeholder for ordering — actual definition below
+  return _FloatingNavbarImpl();
+}
+
+interface RightNavIconProps {
+  id: NavbarIconId;
+  isDark: boolean;
+  unreadCount: number;
+  onSearch: () => void;
+  onFinance: () => void;
+  onImport: () => void;
+  onSettings: () => void;
+  onNotifications: () => void;
+  onHelp: () => void;
+  onToggleTheme: () => void;
+  onSignOut: () => void;
+}
+
+function RightNavIcon({
+  id,
+  isDark,
+  unreadCount,
+  onSearch,
+  onFinance,
+  onImport,
+  onSettings,
+  onNotifications,
+  onHelp,
+  onToggleTheme,
+  onSignOut,
+}: RightNavIconProps) {
+  const baseBtn =
+    "group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90";
+  switch (id) {
+    case "search":
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button type="button" data-tour="global-search" onClick={onSearch} aria-label="Buscar" className={baseBtn}>
+              <Search className="size-5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Buscar</TooltipContent>
+        </Tooltip>
+      );
+    case "finance":
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={onFinance}
+              aria-label="Finanças"
+              className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-success/15 hover:text-success active:scale-90"
+            >
+              <CircleDollarSign className="size-5 transition-transform duration-300 group-hover:scale-110" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Finanças</TooltipContent>
+        </Tooltip>
+      );
+    case "import":
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={onImport}
+              data-tour="upload-button"
+              aria-label="Importar dados"
+              className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all hover:-translate-y-0.5 hover:bg-primary/10 hover:text-primary"
+            >
+              <Upload className="size-5 transition-transform group-hover:-translate-y-0.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Importar</TooltipContent>
+        </Tooltip>
+      );
+    case "settings":
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button onClick={onSettings} data-tour="settings-button" aria-label="Configurações" className={baseBtn}>
+              <Settings className="size-5 transition-transform duration-300 group-hover:rotate-90" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Configurações</TooltipContent>
+        </Tooltip>
+      );
+    case "notifications":
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button onClick={onNotifications} aria-label="Notificações" className={cn(baseBtn, "relative")}>
+              <Bell className="size-5 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
+              {unreadCount > 0 && (
+                <>
+                  <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary animate-pulse" />
+                  <span className="absolute -right-0.5 -top-0.5 grid min-w-[16px] h-4 px-1 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground shadow-sm animate-in zoom-in-75 duration-200">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                </>
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Notificações</TooltipContent>
+        </Tooltip>
+      );
+    case "help":
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button onClick={onHelp} data-tour="help-button" aria-label="Tutorial" className={baseBtn}>
+              <HelpCircle className="size-5 transition-transform duration-300 group-hover:scale-125 group-hover:animate-pulse" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Tutorial</TooltipContent>
+        </Tooltip>
+      );
+    case "theme":
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={onToggleTheme}
+              aria-label={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
+              className="group grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+            >
+              <span key={isDark ? "sun" : "moon"} className="inline-flex animate-in fade-in zoom-in-75 duration-300 group-hover:rotate-12 transition-transform">
+                {isDark ? <Sun className="size-5" /> : <Moon className="size-5" />}
+              </span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{isDark ? "Modo claro" : "Modo escuro"}</TooltipContent>
+        </Tooltip>
+      );
+    case "signout":
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={onSignOut}
+              aria-label="Sair"
+              className="group grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-destructive/10 hover:text-destructive active:scale-90"
+            >
+              <LogOut className="size-5 transition-transform duration-200 group-hover:translate-x-0.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Sair</TooltipContent>
+        </Tooltip>
+      );
+  }
+}
+
+function _FloatingNavbarImpl() {
   const [openMobile, setOpenMobile] = useState(false);
   const [activeSection, setActiveSection] = useState<string>("dashboard");
   const [isDark, setIsDark] = useState(() =>
