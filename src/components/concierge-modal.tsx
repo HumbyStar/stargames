@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Tag } from "@/components/ui-bits";
 import { useStore } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
+import { usePriorityAlert, conciergePrefs } from "@/lib/concierge-priority";
+import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 import {
   AlertTriangle,
   Clock,
@@ -121,6 +123,16 @@ export function ConciergeModal() {
 
   const [query, setQuery] = useState("");
   const [activeCard, setActiveCard] = useState<DashboardCardId | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const alert = usePriorityAlert();
+
+  // Foca campo de busca ao abrir
+  useEffect(() => {
+    if (open) {
+      const t = setTimeout(() => inputRef.current?.focus(), 80);
+      return () => clearTimeout(t);
+    }
+  }, [open]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -194,18 +206,40 @@ export function ConciergeModal() {
   return (
     <>
       <Dialog open={open} onOpenChange={(o) => (o ? null : close())}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl animate-in fade-in zoom-in-95 duration-200">
           <DialogHeader>
-            <DialogTitle>Concierge Operacional</DialogTitle>
-            <DialogDescription>
-              Filtro operacional central. Escolha uma ação ou busque cliente, telefone ou produto.
-            </DialogDescription>
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 grid size-12 place-items-center rounded-full bg-gradient-to-br from-primary/20 to-primary/5 ring-1 ring-primary/30 overflow-hidden">
+                <img src={mascotAsset.url} alt="" className="size-10 object-cover" draggable={false} />
+              </div>
+              <div className="min-w-0">
+                <DialogTitle>Concierge Operacional</DialogTitle>
+                <DialogDescription>
+                  Filtro operacional central. Escolha uma ação ou busque cliente, telefone ou produto.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
+
+          {alert.count > 0 && alert.cardId && (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 px-3 py-3 text-sm flex items-center justify-between gap-3">
+              <p className="text-foreground">{alert.message}</p>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setActiveCard(alert.cardId);
+                  close();
+                }}
+              >
+                Abrir agora
+              </Button>
+            </div>
+          )}
 
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              autoFocus
+              ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar cliente, telefone ou produto..."
@@ -261,7 +295,29 @@ export function ConciergeModal() {
             </div>
           )}
 
-          <div className="flex justify-end">
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 pt-1">
+            <div className="flex flex-wrap gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  conciergePrefs.dismissToday();
+                  close();
+                }}
+                className="rounded-full border border-border px-3 py-1.5 text-muted-foreground hover:bg-accent transition"
+              >
+                Não mostrar automaticamente hoje
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  conciergePrefs.disableForever();
+                  close();
+                }}
+                className="rounded-full border border-border px-3 py-1.5 text-muted-foreground hover:bg-accent transition"
+              >
+                Não mostrar automaticamente novamente
+              </button>
+            </div>
             <Button variant="outline" onClick={close}>
               Fechar
             </Button>
