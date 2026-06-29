@@ -95,6 +95,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const [visibleCount, setVisibleCount] = useState<number>(10);
   const [compact, setCompact] = useSectionCompact("clientes");
   const [showFilters, setShowFilters] = useState(true);
+  const { expanded: listExpanded } = useListExpansion("clients");
 
   const drawerClientId = openClientId;
   const setDrawerClientId = (id: string | null) => openClient(id);
