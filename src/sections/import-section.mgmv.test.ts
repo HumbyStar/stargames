@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { extractMGMVAgreementFromNotes } from "./import-section";
+import {
+  extractMGMVAgreementFromNotes,
+  extractPaymentDate,
+  addMonthsClampDay,
+} from "./import-section";
 
 describe("extractMGMVAgreementFromNotes", () => {
   it("retorna null quando não há observações", () => {
@@ -147,5 +151,88 @@ describe("detecção de MGMV na coluna Situação", () => {
     ["", false],
   ])("situação %p → MGMV=%p", (input, expected) => {
     expect(situationMentionsMgmv(input)).toBe(expected);
+  });
+});
+
+describe("MGMV — parcelas pagas com data por extenso (cenário do usuário)", () => {
+  const notes = [
+    "MGMV: 410 dividido em 5x de 82 reais",
+    "→ Primeira parcela paga dia 30 de Abril",
+    "→ Segunda parcela paga dia 29 de Maio",
+  ].join("\n");
+
+  it("identifica 2 parcelas pagas e saldo restante correto", () => {
+    const a = extractMGMVAgreementFromNotes(notes);
+    expect(a).not.toBeNull();
+    expect(a!.totalDebt).toBe(410);
+    expect(a!.installments).toHaveLength(5);
+    expect(a!.installments[0].paid).toBe(true);
+    expect(a!.installments[1].paid).toBe(true);
+    expect(a!.installments[2].paid).toBe(false);
+    const paidValue = a!.installments
+      .filter((i) => i.paid)
+      .reduce((s, i) => s + i.value, 0);
+    expect(paidValue).toBe(164);
+    expect(a!.totalDebt - paidValue).toBe(246);
+  });
+
+  it("guarda paidAt nas parcelas pagas e calcula próximo vencimento +1 mês", () => {
+    const a = extractMGMVAgreementFromNotes(notes)!;
+    expect(a.installments[0].paidAt).toBeDefined();
+    expect(a.installments[1].paidAt).toBeDefined();
+    const p2 = new Date(a.installments[1].paidAt!);
+    const p3 = new Date(a.installments[2].dueDate);
+    expect(p3.getDate()).toBe(p2.getDate());
+    expect(p3.getMonth()).toBe((p2.getMonth() + 1) % 12);
+  });
+
+  it("interpreta 'pagou primeira parcela' e 'pagou segunda parcela'", () => {
+    const a = extractMGMVAgreementFromNotes(
+      "MGMV 3x Parcelas de 50\npagou primeira parcela\npagou segunda parcela",
+    )!;
+    expect(a.installments.filter((i) => i.paid)).toHaveLength(2);
+  });
+
+  it("reconhece ordinal sem acento (setima/decima)", () => {
+    const a = extractMGMVAgreementFromNotes(
+      "MGMV 10x Parcelas de 10\nsetima parcela paga\ndecima parcela paga",
+    )!;
+    expect(a.installments[6].paid).toBe(true);
+    expect(a.installments[9].paid).toBe(true);
+  });
+
+  it("aceita data numérica DD/MM/AAAA na linha", () => {
+    const a = extractMGMVAgreementFromNotes(
+      "MGMV 3x Parcelas de 100\n1ª parcela paga 30/04/2026\n2ª parcela paga 29/05/2026",
+    )!;
+    expect(a.installments[0].paid).toBe(true);
+    expect(a.installments[1].paid).toBe(true);
+    const d2 = new Date(a.installments[1].paidAt!);
+    expect(d2.getUTCMonth()).toBe(4); // maio
+  });
+});
+
+describe("addMonthsClampDay", () => {
+  it("preserva o mesmo dia quando possível", () => {
+    const d = addMonthsClampDay(new Date(2026, 4, 29), 1);
+    expect(d.getMonth()).toBe(5);
+    expect(d.getDate()).toBe(29);
+  });
+  it("usa o último dia do mês destino quando o dia não existe", () => {
+    const d = addMonthsClampDay(new Date(2026, 0, 31), 1);
+    expect(d.getMonth()).toBe(1); // fevereiro
+    expect(d.getDate()).toBe(28); // 2026 não é bissexto
+    const d2 = addMonthsClampDay(new Date(2028, 0, 31), 1);
+    expect(d2.getDate()).toBe(29); // 2028 é bissexto
+  });
+});
+
+describe("extractPaymentDate", () => {
+  it("usa refYear quando o ano não está escrito", () => {
+    const iso = extractPaymentDate("paga dia 30 de Abril", 2026);
+    const d = new Date(iso!);
+    expect(d.getFullYear()).toBe(2026);
+    expect(d.getMonth()).toBe(3);
+    expect(d.getDate()).toBe(30);
   });
 });
