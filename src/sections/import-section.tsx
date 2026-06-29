@@ -2649,6 +2649,9 @@ function ZipPreview({
         </Card>
       )}
 
+      {/* Comparativo Clientes comuns x Clientes MGMV */}
+      <CompareCommonVsMgmv data={data} />
+
       {/* Métricas ordenadas por severidade: problemas primeiro, depois números frios. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
         <MetricCard
