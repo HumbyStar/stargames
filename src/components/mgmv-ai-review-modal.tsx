@@ -216,7 +216,7 @@ export function MgmvAiReviewModal({
             <h4 className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
               Observação original
             </h4>
-            <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-[11px] text-foreground/80">
+            <pre className="whitespace-pre-wrap text-[11px] text-foreground/80">
               {client.notes?.trim() || "(vazio)"}
             </pre>
           </section>
