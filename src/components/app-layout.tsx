@@ -267,7 +267,6 @@ function FloatingNavbar() {
   const [isDark, setIsDark] = useState(() =>
     typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
   );
-  const [scrolled, setScrolled] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
@@ -310,7 +309,6 @@ function FloatingNavbar() {
     const container = document.querySelector<HTMLElement>(".page-container");
     if (!container) return;
     const onScroll = () => {
-      setScrolled(container.scrollTop > 40);
       const probe = container.scrollTop + 200;
       let current = navItems[0].id as string;
       for (const item of navItems) {
@@ -343,13 +341,15 @@ function FloatingNavbar() {
         raf = 0;
         const rect = navRef.current?.getBoundingClientRect();
         if (!rect) return;
-        // small padding so pointer doesn't fall out mid-transition
+        // Expand when pointer is over the navbar OR near the top edge of the viewport
         const pad = 6;
-        const inside =
+        const overNav =
           x >= rect.left - pad &&
           x <= rect.right + pad &&
           y >= rect.top - pad &&
           y <= rect.bottom + pad;
+        const nearTop = y <= 120;
+        const inside = overNav || nearTop;
         if (inside !== lastInside) {
           lastInside = inside;
           setHoverDeferred(inside);
@@ -365,7 +365,6 @@ function FloatingNavbar() {
   }, []);
 
   const isCompact =
-    scrolled &&
     !hovered &&
     !searchExpanded &&
     !searchFocused &&
