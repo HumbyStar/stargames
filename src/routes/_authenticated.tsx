@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { PermissionsProvider } from "@/lib/use-permissions";
+import { SessionGuard } from "@/components/session-guard";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -13,7 +14,9 @@ export const Route = createFileRoute("/_authenticated")({
   },
   component: () => (
     <PermissionsProvider>
-      <Outlet />
+      <SessionGuard>
+        <Outlet />
+      </SessionGuard>
     </PermissionsProvider>
   ),
 });
