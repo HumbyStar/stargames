@@ -299,17 +299,22 @@
 }
 
 /* Glass / fade ao rolar a página: navbar fica translúcida e ícones embaçados.
-   Volta ao normal ao passar o mouse OU ao subir até o topo. */
+   Só ofusca 3s DEPOIS de o mouse sair da navbar (e somente com scroll).
+   Ao passar o mouse, restaura instantaneamente. */
 .floating-navbar[data-scrolled="true"]:not(:hover) {
   background: color-mix(in oklch, var(--color-background) 32%, transparent);
   backdrop-filter: blur(28px) saturate(140%);
   border-color: color-mix(in oklch, var(--color-foreground) 6%, transparent);
   box-shadow: 0 8px 24px color-mix(in oklch, var(--color-foreground) 8%, transparent);
+  transition-delay: 3s;
 }
 .floating-navbar[data-scrolled="true"]:not(:hover) > *:not(.nav-progress-ring) {
   opacity: 0.42;
   filter: blur(0.5px);
-  transition: opacity 400ms ease, filter 400ms ease;
+  transition: opacity 400ms ease 3s, filter 400ms ease 3s;
+}
+.floating-navbar[data-scrolled="true"]:not(:hover) .nav-progress-ring {
+  transition: opacity 250ms ease 3s, filter 400ms ease 3s;
 }
 /* Todos os filhos da navbar ficam acima do anel para que o traço
    nunca apareça como barra sobre botões/ícones. */
