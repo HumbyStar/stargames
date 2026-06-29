@@ -337,6 +337,16 @@ export function MGMVSection({
               )}
             </div>
             <ListExpansionToggle section="mgmv" />
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="h-9 rounded-md border border-input bg-background px-2 text-xs"
+              title="Máximo de linhas por carga"
+            >
+              {[10, 20, 30, 40, 50].map((n) => (
+                <option key={n} value={n}>Máx. {n}</option>
+              ))}
+            </select>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -378,8 +388,8 @@ export function MGMVSection({
           />
         )}
         {listExpanded && (
-      <div className="mt-4 overflow-hidden rounded-xl border border-border bg-card shadow-xs">
-        <div className="max-h-[640px] overflow-auto">
+      <>
+      <div className="mt-4 overflow-x-auto rounded-xl border border-border bg-card shadow-xs">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-card/95 backdrop-blur">
               <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -395,14 +405,14 @@ export function MGMVSection({
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && (
+              {pagedRows.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">
                     Nenhum acordo MGMV encontrado.
                   </td>
                 </tr>
               )}
-              {filtered.map((r) => {
+              {pagedRows.map((r) => {
                 const isOpen = expanded === r.client.id;
                 const productsOfClient = products.filter(
                   (p) => p.clientId === r.client.id,
