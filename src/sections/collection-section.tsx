@@ -29,6 +29,11 @@ import { LoadMoreButton } from "@/components/load-more-button";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { useSectionCompact } from "@/lib/use-section-compact";
 import {
+  ListExpansionToggle,
+  MinimizedListCard,
+} from "@/components/list-expansion";
+import { useListExpansion } from "@/lib/list-expansion";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -82,6 +87,7 @@ export function CollectionSection({
   const [payTarget, setPayTarget] = useState<{ id: string; remaining: number; productName: string } | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [showFilters, setShowFilters] = useState(true);
+  const { expanded: listExpanded } = useListExpansion("collection");
   const [savedFilters, setSavedFilters] = usePersistedState<SavedFilter[]>("collection.savedFilters", []);
   const [activeSavedId, setActiveSavedId] = usePersistedState<string>("collection.activeSavedId", "");
   const [search, setSearch] = useState("");
@@ -484,6 +490,7 @@ export function CollectionSection({
               {compact ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
               {compact ? "Expandir" : "Compactar"}
             </Button>
+            <ListExpansionToggle section="collection" />
             <select
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
@@ -657,6 +664,20 @@ export function CollectionSection({
           )}
         </div>
 
+        {!listExpanded && (
+          <MinimizedListCard
+            section="collection"
+            title="Lista de cobranças minimizada"
+            lines={[
+              `${filtered.length} cobrança(s) encontrada(s)`,
+              `${pendentesVencidos} pendência(s) vencida(s)`,
+              `${reservasVencidas} reserva(s) vencida(s)`,
+              `${mgmvVencidas} parcela(s) MGMV vencida(s)`,
+            ]}
+          />
+        )}
+        {listExpanded && (
+        <>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -866,6 +887,8 @@ export function CollectionSection({
               <span>Todas as cobranças carregadas.</span>
             )}
           </div>
+        )}
+        </>
         )}
       </Card>
 

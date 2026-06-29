@@ -6,6 +6,11 @@ import { usePersistedState } from "@/lib/use-persisted-state";
 import { useSectionCompact } from "@/lib/use-section-compact";
 import { Button } from "@/components/ui/button";
 import {
+  ListExpansionToggle,
+  MinimizedListCard,
+} from "@/components/list-expansion";
+import { useListExpansion } from "@/lib/list-expansion";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -90,6 +95,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const [visibleCount, setVisibleCount] = useState<number>(10);
   const [compact, setCompact] = useSectionCompact("clientes");
   const [showFilters, setShowFilters] = useState(true);
+  const { expanded: listExpanded } = useListExpansion("clients");
 
   const drawerClientId = openClientId;
   const setDrawerClientId = (id: string | null) => openClient(id);
@@ -319,6 +325,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               {compact ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
               {compact ? "Expandir" : "Compactar"}
             </Button>
+            <ListExpansionToggle section="clients" />
             <select
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
@@ -399,6 +406,20 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           )}
         </div>
 
+        {!listExpanded && (
+          <MinimizedListCard
+            section="clients"
+            title="Lista de clientes minimizada"
+            lines={[
+              `${rows.length} cliente(s) encontrado(s)`,
+              activeFilterCount > 0
+                ? `${activeFilterCount} filtro(s) ativo(s)`
+                : "Sem filtros ativos",
+            ]}
+          />
+        )}
+        {listExpanded && (
+        <>
         <div className="mt-5 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -470,6 +491,8 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               <span>Todos os clientes carregados.</span>
             )}
           </div>
+        )}
+        </>
         )}
       </Card>
 

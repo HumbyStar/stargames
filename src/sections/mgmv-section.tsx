@@ -10,6 +10,11 @@ import {
   type MGMVAgreement,
 } from "@/lib/store";
 import { MgmvAiReviewModal } from "@/components/mgmv-ai-review-modal";
+import {
+  ListExpansionToggle,
+  MinimizedListCard,
+} from "@/components/list-expansion";
+import { useListExpansion } from "@/lib/list-expansion";
 import type { MgmvAiReviewSuggestion } from "@/lib/mgmv-ai-review.functions";
 import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
 import { extractMGMVAgreementFromNotes } from "@/sections/import-section";
@@ -124,6 +129,7 @@ export function MGMVSection({
   const [expanded, setExpanded] = useState<string | null>(null);
   const [aiTarget, setAiTarget] = useState<string | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
+  const { expanded: listExpanded } = useListExpansion("mgmv");
 
   const reprocessFromNotes = () => {
     setReprocessing(true);
@@ -264,7 +270,8 @@ export function MGMVSection({
         description="Controle acordos MGMV, parcelas, vencimentos, saldos e clientes agrupados."
       />
 
-      <div className="mb-3 flex justify-end">
+      <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+        <ListExpansionToggle section="mgmv" />
         <Button
           size="sm"
           variant="outline"
@@ -325,6 +332,20 @@ export function MGMVSection({
         </div>
       </div>
 
+      {!listExpanded && (
+        <MinimizedListCard
+          section="mgmv"
+          title="Lista MGMV minimizada"
+          lines={[
+            `${filtered.length} acordo(s) encontrado(s)`,
+            stats.revisao > 0
+              ? `${stats.revisao} em revisão necessária`
+              : "Nenhum em revisão necessária",
+            `Saldo total: ${formatBRL(stats.saldoTotal)}`,
+          ]}
+        />
+      )}
+      {listExpanded && (
       <div className="mt-4 overflow-hidden rounded-xl border border-border bg-card shadow-xs">
         <div className="max-h-[640px] overflow-auto">
           <table className="w-full text-sm">
@@ -544,6 +565,7 @@ export function MGMVSection({
           </table>
         </div>
       </div>
+      )}
       {(() => {
         if (!aiTarget) return null;
         const row = rows.find((r) => r.client.id === aiTarget);
