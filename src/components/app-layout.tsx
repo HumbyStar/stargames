@@ -270,6 +270,8 @@ function FloatingNavbar() {
     typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
   );
   const [navHover, setNavHover] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -392,36 +394,40 @@ function FloatingNavbar() {
         ))}
       </div>
 
-      <div
-        data-tour="global-search"
-        className={cn(
-          "hidden md:block ml-3 transition-all duration-[700ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
-          isCompact ? "w-0 ml-1 overflow-hidden opacity-0 pointer-events-none" : "flex-1 max-w-md opacity-100",
-        )}
-      >
-        <SearchBox
-          inputRef={searchInputRef}
-          onFocusChange={setSearchFocused}
-          className="transition-all duration-300 focus-within:scale-[1.02]"
-        />
-      </div>
-      {isCompact && (
+      <div className="ml-auto flex items-center gap-1.5 md:gap-2 md:pl-2">
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
-              onClick={expandAndFocusSearch}
+              data-tour="global-search"
+              onClick={() => {
+                setSearchOpen((v) => {
+                  const next = !v;
+                  if (next) requestAnimationFrame(() => searchInputRef.current?.focus());
+                  return next;
+                });
+              }}
               aria-label="Buscar"
-              className="hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90 animate-in fade-in zoom-in-90 duration-200"
+              className="hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
             >
               <Search className="size-5" />
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom">Buscar</TooltipContent>
         </Tooltip>
-      )}
-
-      <div className="ml-auto flex items-center gap-1.5 md:gap-2 md:pl-2">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={openFinance}
+              aria-label="Finanças"
+              className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-success/15 hover:text-success active:scale-90"
+            >
+              <CircleDollarSign className="size-5 transition-transform duration-300 group-hover:scale-110" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Finanças</TooltipContent>
+        </Tooltip>
         <button
           onClick={openImport}
           data-tour="upload-button"
