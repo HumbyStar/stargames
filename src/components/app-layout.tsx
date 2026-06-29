@@ -277,6 +277,24 @@ function FloatingNavbar() {
   const [navSize, setNavSize] = useState({ width: 0, height: 0 });
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
+  const navBorderPath = useMemo(() => {
+    const width = Math.max(navSize.width - 1.5, 0);
+    const height = Math.max(navSize.height - 1.5, 0);
+    const radius = Math.max(height / 2, 0);
+    if (!width || !height) return "";
+    return [
+      `M ${radius + 0.75} 0.75`,
+      `H ${width - radius + 0.75}`,
+      `A ${radius} ${radius} 0 0 1 ${width + 0.75} ${radius + 0.75}`,
+      `V ${height - radius + 0.75}`,
+      `A ${radius} ${radius} 0 0 1 ${width - radius + 0.75} ${height + 0.75}`,
+      `H ${radius + 0.75}`,
+      `A ${radius} ${radius} 0 0 1 0.75 ${height - radius + 0.75}`,
+      `V ${radius + 0.75}`,
+      `A ${radius} ${radius} 0 0 1 ${radius + 0.75} 0.75`,
+      "Z",
+    ].join(" ");
+  }, [navSize.height, navSize.width]);
 
   useEffect(() => {
     const nav = navRef.current;
@@ -374,22 +392,14 @@ function FloatingNavbar() {
       )}
     >
       {/* Looping border highlight on the navbar container border itself */}
-      {navSize.width > 0 && navSize.height > 0 && (
+      {navBorderPath && (
         <svg
           aria-hidden
           className="nav-progress-ring pointer-events-none absolute overflow-visible"
           viewBox={`0 0 ${navSize.width} ${navSize.height}`}
           preserveAspectRatio="none"
         >
-          <rect
-            x="0.75"
-            y="0.75"
-            width={Math.max(navSize.width - 1.5, 0)}
-            height={Math.max(navSize.height - 1.5, 0)}
-            rx={Math.max(navSize.height / 2 - 0.75, 0)}
-            ry={Math.max(navSize.height / 2 - 0.75, 0)}
-            pathLength={100}
-          />
+          <path d={navBorderPath} pathLength={100} />
         </svg>
       )}
       <button

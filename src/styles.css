@@ -252,26 +252,27 @@
   transition: opacity 250ms ease;
   filter: drop-shadow(0 0 7px color-mix(in oklch, var(--color-primary) 65%, transparent));
 }
-.nav-progress-ring > rect {
+.nav-progress-ring > path {
   fill: none;
   stroke: color-mix(in oklch, var(--color-primary) 95%, transparent);
   stroke-width: 1.5;
   stroke-linecap: round;
+  stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
   /* Short highlight segment so it reads as the navbar border running, not a bar over items. */
-  stroke-dasharray: 7 93;
+  stroke-dasharray: 6 94;
   stroke-dashoffset: 0;
 }
 .floating-navbar[data-progress="loop"] .nav-progress-ring {
   opacity: 1;
 }
-.floating-navbar[data-progress="loop"] .nav-progress-ring > rect {
+.floating-navbar[data-progress="loop"] .nav-progress-ring > path {
   animation: nav-progress-trace 2400ms linear infinite;
 }
 .floating-navbar[data-progress="true"] .nav-progress-ring {
   opacity: 1;
 }
-.floating-navbar[data-progress="true"] .nav-progress-ring > rect {
+.floating-navbar[data-progress="true"] .nav-progress-ring > path {
   stroke-dasharray: 0 100;
   animation: nav-progress-fill 3000ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
 }
