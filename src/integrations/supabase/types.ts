@@ -494,6 +494,45 @@ export type Database = {
         }
         Relationships: []
       }
+      team_punch_entries: {
+        Row: {
+          created_at: string
+          day: string
+          feedback_environment: number | null
+          feedback_mood: number | null
+          feedback_notes: string | null
+          feedback_optimization: string | null
+          id: string
+          kind: Database["public"]["Enums"]["punch_kind"]
+          punched_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          day?: string
+          feedback_environment?: number | null
+          feedback_mood?: number | null
+          feedback_notes?: string | null
+          feedback_optimization?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["punch_kind"]
+          punched_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          feedback_environment?: number | null
+          feedback_mood?: number | null
+          feedback_notes?: string | null
+          feedback_optimization?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["punch_kind"]
+          punched_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       team_task_activity: {
         Row: {
           action: string
@@ -703,6 +742,7 @@ export type Database = {
         | "funcionario"
         | "envio"
         | "mgmv"
+      punch_kind: "in" | "lunch_out" | "lunch_in" | "out"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -863,6 +903,7 @@ export const Constants = {
         "envio",
         "mgmv",
       ],
+      punch_kind: ["in", "lunch_out", "lunch_in", "out"],
     },
   },
 } as const
