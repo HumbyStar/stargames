@@ -278,20 +278,23 @@ function FloatingNavbar() {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
   const navBorderPath = useMemo(() => {
-    const width = Math.max(navSize.width - 1.5, 0);
-    const height = Math.max(navSize.height - 1.5, 0);
+    // Desenha o path exatamente sobre a borda do pill da navbar.
+    // Inset = metade da stroke-width (2px), então 1px de cada lado.
+    const inset = 1;
+    const width = Math.max(navSize.width - inset * 2, 0);
+    const height = Math.max(navSize.height - inset * 2, 0);
     const radius = Math.max(height / 2, 0);
     if (!width || !height) return "";
     return [
-      `M ${radius + 0.75} 0.75`,
-      `H ${width - radius + 0.75}`,
-      `A ${radius} ${radius} 0 0 1 ${width + 0.75} ${radius + 0.75}`,
-      `V ${height - radius + 0.75}`,
-      `A ${radius} ${radius} 0 0 1 ${width - radius + 0.75} ${height + 0.75}`,
-      `H ${radius + 0.75}`,
-      `A ${radius} ${radius} 0 0 1 0.75 ${height - radius + 0.75}`,
-      `V ${radius + 0.75}`,
-      `A ${radius} ${radius} 0 0 1 ${radius + 0.75} 0.75`,
+      `M ${inset + radius} ${inset}`,
+      `H ${inset + width - radius}`,
+      `A ${radius} ${radius} 0 0 1 ${inset + width} ${inset + radius}`,
+      `V ${inset + height - radius}`,
+      `A ${radius} ${radius} 0 0 1 ${inset + width - radius} ${inset + height}`,
+      `H ${inset + radius}`,
+      `A ${radius} ${radius} 0 0 1 ${inset} ${inset + height - radius}`,
+      `V ${inset + radius}`,
+      `A ${radius} ${radius} 0 0 1 ${inset + radius} ${inset}`,
       "Z",
     ].join(" ");
   }, [navSize.height, navSize.width]);
@@ -395,7 +398,7 @@ function FloatingNavbar() {
       {navBorderPath && (
         <svg
           aria-hidden
-          className="nav-progress-ring pointer-events-none absolute overflow-visible"
+          className="nav-progress-ring pointer-events-none absolute inset-0 h-full w-full overflow-visible"
           viewBox={`0 0 ${navSize.width} ${navSize.height}`}
           preserveAspectRatio="none"
         >
