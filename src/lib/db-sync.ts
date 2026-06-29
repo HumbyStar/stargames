@@ -247,16 +247,28 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
     total_agreement_value: number | string | null;
     installments_count: number | null;
     created_at: string;
+    review_status?: string | null;
+    ai_reviewed?: boolean | null;
+    ai_review_applied_at?: string | null;
+    ai_confidence?: number | string | null;
+    ai_review_raw_result?: unknown;
   }>) {
     const ins = (installmentsByAgreement.get(row.id) ?? []).sort(
       (a, b) => a.number - b.number,
     );
     const total = ins.length;
     for (const i of ins) i.total = total;
+    const rs = (row.review_status ?? "none") as MGMVAgreement["reviewStatus"];
     agreementsByClient.set(row.client_id, {
       startDate: row.created_at ?? new Date().toISOString(),
       totalDebt: Number(row.total_agreement_value ?? 0) || 0,
       installments: ins,
+      reviewStatus: rs,
+      aiReviewed: !!row.ai_reviewed,
+      aiReviewAppliedAt: row.ai_review_applied_at ?? undefined,
+      aiConfidence:
+        row.ai_confidence == null ? undefined : Number(row.ai_confidence) || 0,
+      aiReviewRawResult: row.ai_review_raw_result ?? undefined,
     });
   }
 
