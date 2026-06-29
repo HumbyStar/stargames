@@ -271,7 +271,13 @@ function FloatingNavbar() {
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [navFocusWithin, setNavFocusWithin] = useState(false);
+  const [expanding, setExpanding] = useState(false);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const expandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoveredRef = useRef(false);
+  useEffect(() => {
+    hoveredRef.current = hovered;
+  }, [hovered]);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
 
@@ -325,13 +331,34 @@ function FloatingNavbar() {
   useEffect(() => {
     let raf = 0;
     let lastInside = false;
+    const startExpandIntent = () => {
+      if (hoveredRef.current) return;
+      if (expandTimerRef.current) return;
+      setExpanding(true);
+      expandTimerRef.current = setTimeout(() => {
+        expandTimerRef.current = null;
+        setExpanding(false);
+        setHovered(true);
+      }, 3000);
+    };
+    const cancelExpandIntent = () => {
+      if (expandTimerRef.current) {
+        clearTimeout(expandTimerRef.current);
+        expandTimerRef.current = null;
+      }
+      setExpanding(false);
+    };
     const setHoverDeferred = (next: boolean) => {
       if (hoverTimeoutRef.current) {
         clearTimeout(hoverTimeoutRef.current);
         hoverTimeoutRef.current = null;
       }
-      if (next) setHovered(true);
-      else hoverTimeoutRef.current = setTimeout(() => setHovered(false), 450);
+      if (next) {
+        startExpandIntent();
+      } else {
+        cancelExpandIntent();
+        hoverTimeoutRef.current = setTimeout(() => setHovered(false), 450);
+      }
     };
     const onMove = (e: MouseEvent) => {
       if (raf) return;
@@ -361,6 +388,7 @@ function FloatingNavbar() {
       window.removeEventListener("mousemove", onMove);
       if (raf) cancelAnimationFrame(raf);
       if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+      if (expandTimerRef.current) clearTimeout(expandTimerRef.current);
     };
   }, []);
 
@@ -370,7 +398,21 @@ function FloatingNavbar() {
     !searchFocused &&
     !navFocusWithin;
 
+  const forceExpand = () => {
+    if (expandTimerRef.current) {
+      clearTimeout(expandTimerRef.current);
+      expandTimerRef.current = null;
+    }
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setExpanding(false);
+    setHovered(true);
+  };
+
   const expandAndFocusSearch = () => {
+    forceExpand();
     setSearchExpanded(true);
     requestAnimationFrame(() => {
       searchInputRef.current?.focus();
@@ -383,7 +425,11 @@ function FloatingNavbar() {
       ref={navRef}
       data-tour="navbar"
       data-mode={isCompact ? "compact" : "full"}
+      data-progress={expanding && isCompact ? "true" : "false"}
       onFocus={() => setNavFocusWithin(true)}
+      onClickCapture={() => {
+        if (isCompact) forceExpand();
+      }}
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) {
           setNavFocusWithin(false);
@@ -395,6 +441,11 @@ function FloatingNavbar() {
         isCompact && "md:gap-2 md:py-2 md:px-3",
       )}
     >
+      {/* Circular progress ring during hover-intent (3s) before expand */}
+      <span
+        aria-hidden
+        className="nav-progress-ring pointer-events-none absolute inset-0 rounded-full"
+      />
       <button
         type="button"
         onClick={openConcierge}
