@@ -217,6 +217,10 @@ export function MGMVSection({
       0,
     );
     const saldoTotal = rows.reduce((s, r) => s + r.remainingValue, 0);
+    // Clientes MGMV que também compraram produtos comuns (fora do acordo).
+    const comProdutosExternos = rows.filter((r) =>
+      products.some((p) => p.clientId === r.client.id),
+    ).length;
     return {
       clientes: rows.length,
       ativos,
@@ -227,8 +231,9 @@ export function MGMVSection({
       revisadoManual,
       parcelasVencidas,
       saldoTotal,
+      comProdutosExternos,
     };
-  }, [rows]);
+  }, [rows, products]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -258,11 +263,13 @@ export function MGMVSection({
           return r.agreement.installments.some(
             (i) => !i.paid && isOverdue(i.dueDate),
           );
+        case "com_produtos_externos":
+          return products.some((p) => p.clientId === r.client.id);
         default:
           return true;
       }
     });
-  }, [rows, search, chip]);
+  }, [rows, search, chip, products]);
 
   useEffect(() => {
     setVisibleCount(pageSize);
@@ -284,6 +291,11 @@ export function MGMVSection({
     { id: "revisado_manual", label: "Revisado manualmente", count: stats.revisadoManual },
     { id: "vencem_hoje", label: "Vencem hoje" },
     { id: "vencidos", label: "Vencidos" },
+    {
+      id: "com_produtos_externos",
+      label: "Com produtos fora do MGMV",
+      count: stats.comProdutosExternos,
+    },
   ];
 
   return (
