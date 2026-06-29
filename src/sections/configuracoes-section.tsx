@@ -787,6 +787,8 @@ export function ConfiguracoesSection() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AccessManagementDialog open={accessOpen} onOpenChange={setAccessOpen} />
     </section>
   );
 }
