@@ -16,6 +16,7 @@ import {
   Users,
   Sparkles,
   Wallet,
+  CircleDollarSign,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ComponentType, SVGProps } from "react";
@@ -40,6 +41,7 @@ import { HelpCenter } from "@/components/help-center";
 import { TutorialRunner } from "@/components/tutorial-runner";
 import { ConciergeModal } from "@/components/concierge-modal";
 import { FloatingConcierge } from "@/components/floating-concierge";
+import { FinanceDashboard } from "@/components/finance-dashboard";
 import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 
 const navItems: ReadonlyArray<{
@@ -267,21 +269,18 @@ function FloatingNavbar() {
   const [isDark, setIsDark] = useState(() =>
     typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
   );
-  const [hovered, setHovered] = useState(false);
-  const [searchExpanded, setSearchExpanded] = useState(false);
-  const [searchFocused, setSearchFocused] = useState(false);
-  const [navFocusWithin, setNavFocusWithin] = useState(false);
-  const [expanding, setExpanding] = useState(false);
-  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const expandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hoveredRef = useRef(false);
-  const pointerRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const anchorTargetRef = useRef<Element | null>(null);
-  useEffect(() => {
-    hoveredRef.current = hovered;
-  }, [hovered]);
+  const [navHover, setNavHover] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!searchOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!navRef.current?.contains(e.target as Node)) setSearchOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [searchOpen]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -311,6 +310,7 @@ function FloatingNavbar() {
   const openHelp = useUiStore((s) => s.openHelp);
   const openNotifications = useUiStore((s) => s.openNotifications);
   const openConcierge = useUiStore((s) => s.openConcierge);
+  const openFinance = useUiStore((s) => s.openFinance);
   const { unreadCount } = useNotifications();
 
   useEffect(() => {
@@ -330,142 +330,8 @@ function FloatingNavbar() {
     return () => container.removeEventListener("scroll", onScroll);
   }, []);
 
-  const clearAnchorShift = () => {
-    if (navRef.current) navRef.current.style.setProperty("--nav-shift", "0px");
-    anchorTargetRef.current = null;
-  };
-
-  const applyAnchorShift = () => {
-    const target = anchorTargetRef.current;
-    const nav = navRef.current;
-    if (!target || !nav) return;
-    // wait two frames for the expand layout to settle
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const rect = (target as HTMLElement).getBoundingClientRect();
-        if (rect.width === 0) return;
-        const center = rect.left + rect.width / 2;
-        const current = parseFloat(nav.style.getPropertyValue("--nav-shift") || "0");
-        const delta = pointerRef.current.x - center + current;
-        // clamp so navbar doesn't run off-screen
-        const navRect = nav.getBoundingClientRect();
-        const maxShift = Math.max(0, window.innerWidth - navRect.right + current - 12);
-        const minShift = Math.min(0, -navRect.left + current + 12);
-        const clamped = Math.max(minShift, Math.min(maxShift, delta));
-        nav.style.setProperty("--nav-shift", `${clamped}px`);
-      });
-    });
-  };
-
-  useEffect(() => {
-    let raf = 0;
-    let lastInside = false;
-    const startExpandIntent = () => {
-      if (hoveredRef.current) return;
-      if (expandTimerRef.current) return;
-      setExpanding(true);
-      expandTimerRef.current = setTimeout(() => {
-        expandTimerRef.current = null;
-        setExpanding(false);
-        // capture the element under the cursor as the anchor
-        const el = document.elementFromPoint(
-          pointerRef.current.x,
-          pointerRef.current.y,
-        );
-        anchorTargetRef.current =
-          el?.closest("a,button,input") ?? null;
-        setHovered(true);
-        applyAnchorShift();
-      }, 3000);
-    };
-    const cancelExpandIntent = () => {
-      if (expandTimerRef.current) {
-        clearTimeout(expandTimerRef.current);
-        expandTimerRef.current = null;
-      }
-      setExpanding(false);
-    };
-    const setHoverDeferred = (next: boolean) => {
-      if (hoverTimeoutRef.current) {
-        clearTimeout(hoverTimeoutRef.current);
-        hoverTimeoutRef.current = null;
-      }
-      if (next) {
-        startExpandIntent();
-      } else {
-        cancelExpandIntent();
-        hoverTimeoutRef.current = setTimeout(() => {
-          setHovered(false);
-          clearAnchorShift();
-        }, 450);
-      }
-    };
-    const onMove = (e: MouseEvent) => {
-      if (raf) return;
-      const x = e.clientX;
-      const y = e.clientY;
-      pointerRef.current = { x, y };
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        const rect = navRef.current?.getBoundingClientRect();
-        if (!rect) return;
-        // Expand when pointer is over the navbar OR near the top edge of the viewport
-        const pad = 6;
-        const overNav =
-          x >= rect.left - pad &&
-          x <= rect.right + pad &&
-          y >= rect.top - pad &&
-          y <= rect.bottom + pad;
-        const nearTop = y <= 120;
-        const inside = overNav || nearTop;
-        if (inside !== lastInside) {
-          lastInside = inside;
-          setHoverDeferred(inside);
-        }
-      });
-    };
-    window.addEventListener("mousemove", onMove, { passive: true });
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      if (raf) cancelAnimationFrame(raf);
-      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-      if (expandTimerRef.current) clearTimeout(expandTimerRef.current);
-    };
-  }, []);
-
-  const isCompact =
-    !hovered &&
-    !searchExpanded &&
-    !searchFocused &&
-    !navFocusWithin;
-
-  const forceExpand = () => {
-    if (expandTimerRef.current) {
-      clearTimeout(expandTimerRef.current);
-      expandTimerRef.current = null;
-    }
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
-    }
-    setExpanding(false);
-    setHovered(true);
-    // anchor on the clicked element if any
-    const el = document.elementFromPoint(
-      pointerRef.current.x,
-      pointerRef.current.y,
-    );
-    anchorTargetRef.current = el?.closest("a,button,input") ?? null;
-    applyAnchorShift();
-  };
-
-  const expandAndFocusSearch = () => {
-    forceExpand();
-    setSearchExpanded(true);
-    requestAnimationFrame(() => {
-      searchInputRef.current?.focus();
-    });
-  };
+  // Navbar is always compact on desktop; hovering triggers a looping conic glow.
+  const isCompact = true;
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -473,23 +339,15 @@ function FloatingNavbar() {
       ref={navRef}
       data-tour="navbar"
       data-mode={isCompact ? "compact" : "full"}
-      data-progress={expanding && isCompact ? "true" : "false"}
-      onFocus={() => setNavFocusWithin(true)}
-      onClickCapture={() => {
-        if (isCompact) forceExpand();
-      }}
-      onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-          setNavFocusWithin(false);
-          setSearchExpanded(false);
-        }
-      }}
+      data-progress={navHover ? "loop" : "false"}
+      onMouseEnter={() => setNavHover(true)}
+      onMouseLeave={() => setNavHover(false)}
       className={cn(
         "floating-navbar flex items-center gap-3 px-3 py-2 md:px-4",
         isCompact && "md:gap-2 md:py-2 md:px-3",
       )}
     >
-      {/* Circular progress ring during hover-intent (3s) before expand */}
+      {/* Looping conic glow that runs while the cursor is over the navbar */}
       <span
         aria-hidden
         className="nav-progress-ring pointer-events-none absolute inset-0 rounded-full"
@@ -544,97 +402,125 @@ function FloatingNavbar() {
         ))}
       </div>
 
-      <div
-        data-tour="global-search"
-        className={cn(
-          "hidden md:block ml-3 transition-all duration-[700ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
-          isCompact ? "w-0 ml-1 overflow-hidden opacity-0 pointer-events-none" : "flex-1 max-w-md opacity-100",
-        )}
-      >
-        <SearchBox
-          inputRef={searchInputRef}
-          onFocusChange={setSearchFocused}
-          className="transition-all duration-300 focus-within:scale-[1.02]"
-        />
-      </div>
-      {isCompact && (
+      <div className="ml-auto flex items-center gap-1.5 md:gap-2 md:pl-2">
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
-              onClick={expandAndFocusSearch}
+              data-tour="global-search"
+              onClick={() => {
+                setSearchOpen((v) => {
+                  const next = !v;
+                  if (next) requestAnimationFrame(() => searchInputRef.current?.focus());
+                  return next;
+                });
+              }}
               aria-label="Buscar"
-              className="hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90 animate-in fade-in zoom-in-90 duration-200"
+              className="hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
             >
               <Search className="size-5" />
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom">Buscar</TooltipContent>
         </Tooltip>
-      )}
-
-      <div className="ml-auto flex items-center gap-1.5 md:gap-2 md:pl-2">
-        <button
-          onClick={openImport}
-          data-tour="upload-button"
-          aria-label="Importar dados"
-          title="Importar dados"
-          className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all hover:-translate-y-0.5 hover:bg-primary/10 hover:text-primary"
-        >
-          <Upload className="size-5 transition-transform group-hover:-translate-y-0.5" />
-        </button>
-        <button
-          onClick={openSettings}
-          data-tour="settings-button"
-          aria-label="Configurações"
-          title="Configurações"
-          className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
-        >
-          <Settings className="size-5 transition-transform duration-300 group-hover:rotate-90" />
-        </button>
-        <button
-          onClick={openNotifications}
-          aria-label="Notificações"
-          title="Notificações"
-          className="group relative hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
-        >
-          <Bell className="size-5 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
-          {unreadCount > 0 && (
-            <>
-              <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary animate-pulse" />
-              <span className="absolute -right-0.5 -top-0.5 grid min-w-[16px] h-4 px-1 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground shadow-sm animate-in zoom-in-75 duration-200">
-                {unreadCount > 9 ? "9+" : unreadCount}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={openFinance}
+              aria-label="Finanças"
+              className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-success/15 hover:text-success active:scale-90"
+            >
+              <CircleDollarSign className="size-5 transition-transform duration-300 group-hover:scale-110" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Finanças</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={openImport}
+              data-tour="upload-button"
+              aria-label="Importar dados"
+              className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all hover:-translate-y-0.5 hover:bg-primary/10 hover:text-primary"
+            >
+              <Upload className="size-5 transition-transform group-hover:-translate-y-0.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Importar</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={openSettings}
+              data-tour="settings-button"
+              aria-label="Configurações"
+              className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+            >
+              <Settings className="size-5 transition-transform duration-300 group-hover:rotate-90" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Configurações</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={openNotifications}
+              aria-label="Notificações"
+              className="group relative hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+            >
+              <Bell className="size-5 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
+              {unreadCount > 0 && (
+                <>
+                  <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary animate-pulse" />
+                  <span className="absolute -right-0.5 -top-0.5 grid min-w-[16px] h-4 px-1 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground shadow-sm animate-in zoom-in-75 duration-200">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                </>
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Notificações</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={openHelp}
+              data-tour="help-button"
+              aria-label="Tutorial"
+              className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+            >
+              <HelpCircle className="size-5 transition-transform duration-300 group-hover:scale-125 group-hover:animate-pulse" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Tutorial</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={toggleTheme}
+              aria-label={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
+              className="group grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+            >
+              <span key={isDark ? "sun" : "moon"} className="inline-flex animate-in fade-in zoom-in-75 duration-300 group-hover:rotate-12 transition-transform">
+                {isDark ? <Sun className="size-5" /> : <Moon className="size-5" />}
               </span>
-            </>
-          )}
-        </button>
-        <button
-          onClick={openHelp}
-          data-tour="help-button"
-          aria-label="Tutorial"
-          title="Tutorial"
-          className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
-        >
-          <HelpCircle className="size-5 transition-transform duration-300 group-hover:scale-125 group-hover:animate-pulse" />
-        </button>
-        <button
-          onClick={toggleTheme}
-          aria-label={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
-          title={isDark ? "Modo claro" : "Modo escuro"}
-          className="group grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
-        >
-          <span key={isDark ? "sun" : "moon"} className="inline-flex animate-in fade-in zoom-in-75 duration-300 group-hover:rotate-12 transition-transform">
-            {isDark ? <Sun className="size-5" /> : <Moon className="size-5" />}
-          </span>
-        </button>
-        <button
-          onClick={handleSignOut}
-          aria-label="Sair"
-          title="Sair"
-          className="group grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-destructive/10 hover:text-destructive active:scale-90"
-        >
-          <LogOut className="size-5 transition-transform duration-200 group-hover:translate-x-0.5" />
-        </button>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{isDark ? "Modo claro" : "Modo escuro"}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={handleSignOut}
+              aria-label="Sair"
+              className="group grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-destructive/10 hover:text-destructive active:scale-90"
+            >
+              <LogOut className="size-5 transition-transform duration-200 group-hover:translate-x-0.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Sair</TooltipContent>
+        </Tooltip>
         <button
           className="group md:hidden grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 active:scale-90"
           onClick={() => setOpenMobile((v) => !v)}
@@ -645,6 +531,14 @@ function FloatingNavbar() {
           </span>
         </button>
       </div>
+
+      {searchOpen && (
+        <div className="absolute right-3 top-[calc(100%+8px)] z-50 w-[min(92vw,420px)] animate-in fade-in slide-in-from-top-2 duration-200 hidden md:block">
+          <div className="rounded-2xl border border-border bg-popover/95 p-2 shadow-xl backdrop-blur">
+            <SearchBox inputRef={searchInputRef} />
+          </div>
+        </div>
+      )}
 
       {openMobile && (
         <div className="absolute left-2 right-2 top-[calc(100%+8px)] flex flex-col gap-1 rounded-2xl border border-border bg-popover/95 p-2 shadow-xl backdrop-blur md:hidden">
@@ -718,6 +612,8 @@ function GlobalModals() {
   const closeHelp = useUiStore((s) => s.closeHelp);
   const notificationsOpen = useUiStore((s) => s.notificationsOpen);
   const closeNotifications = useUiStore((s) => s.closeNotifications);
+  const financeOpen = useUiStore((s) => s.financeOpen);
+  const closeFinance = useUiStore((s) => s.closeFinance);
 
   // onScrollTo dentro dos modais: fecha o modal e rola até a seção alvo.
   const handleScrollTo = (id: string) => {
@@ -768,6 +664,16 @@ function GlobalModals() {
             <DialogDescription>Alertas e avisos recentes da operação.</DialogDescription>
           </DialogHeader>
           <NotificationsPanel onOpenClient={() => closeNotifications()} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={financeOpen} onOpenChange={(o) => (o ? null : closeFinance())}>
+        <DialogContent className="max-w-[95vw] xl:max-w-7xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Finanças</DialogTitle>
+            <DialogDescription>Dashboard financeiro consolidado.</DialogDescription>
+          </DialogHeader>
+          <FinanceDashboard />
         </DialogContent>
       </Dialog>
 
