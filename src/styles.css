@@ -196,24 +196,7 @@
     box-shadow: 0 10px 28px color-mix(in oklch, var(--color-foreground) 14%, transparent);
   }
 }
-.navbar-hover-zone {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 110px;
-  z-index: 49;
-  pointer-events: none;
-}
-@media (min-width: 768px) {
-  .navbar-hover-zone {
-    pointer-events: auto;
-    background: transparent;
-  }
-  .navbar-hover-zone > * {
-    pointer-events: auto;
-  }
-}
+/* hover detection handled via window mousemove (no overlay needed) */
 .page-container {
   max-width: 1440px;
   margin: 0 auto;
