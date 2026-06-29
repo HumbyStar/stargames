@@ -230,7 +230,7 @@ function NavLink({
       title={compact ? label : undefined}
       className={cn(
         "flex items-center gap-2 rounded-full text-sm font-medium transition-all duration-300 hover:-translate-y-0.5 active:scale-95",
-        compact ? "size-8 justify-center px-0 py-0" : "px-4 py-1.5",
+        compact ? "size-10 justify-center px-0 py-0" : "px-4 py-2",
         active
           ? "bg-primary text-primary-foreground shadow-sm"
           : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground",
@@ -239,7 +239,7 @@ function NavLink({
       <Icon
         className={cn(
           "transition-all duration-[700ms] ease-[cubic-bezier(0.32,0.72,0,1)] shrink-0",
-          compact ? "size-4" : "size-3.5 opacity-80",
+          compact ? "size-5" : "size-4 opacity-90",
         )}
       />
       <span
@@ -400,17 +400,21 @@ function FloatingNavbar() {
         onClick={openConcierge}
         aria-label="Abrir Concierge Operacional"
         title="Concierge Operacional"
-        className="group flex items-center gap-2 pl-2 pr-1 transition-transform duration-200 hover:-translate-y-0.5 active:scale-95"
+        className="group relative flex items-center gap-2 pl-2 pr-1 transition-transform duration-300 hover:-translate-y-0.5 active:scale-95"
       >
-        <img
-          src={mascotAsset.url}
-          alt=""
-          draggable={false}
-          className={cn(
-            "rounded-full object-cover ring-1 ring-primary/30 shadow-md transition-all duration-[700ms] ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:shadow-lg group-hover:rotate-6 group-hover:scale-110",
-            isCompact ? "size-7" : "size-9",
-          )}
-        />
+        <span className="relative grid size-11 place-items-center shrink-0">
+          {/* fade glow behind mascot */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-[-6px] rounded-full bg-[radial-gradient(circle_at_center,color-mix(in_oklch,var(--color-primary)_45%,transparent)_0%,transparent_70%)] blur-md opacity-70 transition-opacity duration-[800ms] ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:opacity-100"
+          />
+          <img
+            src={mascotAsset.url}
+            alt=""
+            draggable={false}
+            className="relative size-11 rounded-full object-cover ring-1 ring-primary/30 shadow-md transition-all duration-[800ms] ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:shadow-lg group-hover:rotate-6 group-hover:scale-110"
+          />
+        </span>
         <div
           className={cn(
             "hidden lg:block leading-tight transition-all duration-[700ms] ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-0.5 overflow-hidden",
@@ -461,9 +465,9 @@ function FloatingNavbar() {
               type="button"
               onClick={expandAndFocusSearch}
               aria-label="Buscar"
-              className="hidden md:grid size-8 place-items-center rounded-full text-muted-foreground transition-all hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90 animate-in fade-in zoom-in-90 duration-200"
+              className="hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90 animate-in fade-in zoom-in-90 duration-200"
             >
-              <Search className="size-4" />
+              <Search className="size-5" />
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom">Buscar</TooltipContent>
@@ -476,26 +480,26 @@ function FloatingNavbar() {
           data-tour="upload-button"
           aria-label="Importar dados"
           title="Importar dados"
-          className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all hover:-translate-y-0.5 hover:bg-primary/10 hover:text-primary"
+          className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all hover:-translate-y-0.5 hover:bg-primary/10 hover:text-primary"
         >
-          <Upload className="size-4 transition-transform group-hover:-translate-y-0.5" />
+          <Upload className="size-5 transition-transform group-hover:-translate-y-0.5" />
         </button>
         <button
           onClick={openSettings}
           data-tour="settings-button"
           aria-label="Configurações"
           title="Configurações"
-          className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+          className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
         >
-          <Settings className="size-4 transition-transform duration-300 group-hover:rotate-90" />
+          <Settings className="size-5 transition-transform duration-300 group-hover:rotate-90" />
         </button>
         <button
           onClick={openNotifications}
           aria-label="Notificações"
           title="Notificações"
-          className="group relative hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+          className="group relative hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
         >
-          <Bell className="size-4 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
+          <Bell className="size-5 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
           {unreadCount > 0 && (
             <>
               <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary animate-pulse" />
@@ -510,35 +514,35 @@ function FloatingNavbar() {
           data-tour="help-button"
           aria-label="Tutorial"
           title="Tutorial"
-          className="group hidden md:grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+          className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
         >
-          <HelpCircle className="size-4 transition-transform duration-300 group-hover:scale-125 group-hover:animate-pulse" />
+          <HelpCircle className="size-5 transition-transform duration-300 group-hover:scale-125 group-hover:animate-pulse" />
         </button>
         <button
           onClick={toggleTheme}
           aria-label={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
           title={isDark ? "Modo claro" : "Modo escuro"}
-          className="group grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+          className="group grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
         >
           <span key={isDark ? "sun" : "moon"} className="inline-flex animate-in fade-in zoom-in-75 duration-300 group-hover:rotate-12 transition-transform">
-            {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            {isDark ? <Sun className="size-5" /> : <Moon className="size-5" />}
           </span>
         </button>
         <button
           onClick={handleSignOut}
           aria-label="Sair"
           title="Sair"
-          className="group grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-destructive/10 hover:text-destructive active:scale-90"
+          className="group grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-destructive/10 hover:text-destructive active:scale-90"
         >
-          <LogOut className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+          <LogOut className="size-5 transition-transform duration-200 group-hover:translate-x-0.5" />
         </button>
         <button
-          className="group md:hidden grid size-9 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 active:scale-90"
+          className="group md:hidden grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 active:scale-90"
           onClick={() => setOpenMobile((v) => !v)}
           aria-label="Menu"
         >
           <span key={openMobile ? "x" : "menu"} className="inline-flex animate-in fade-in zoom-in-75 duration-200">
-            {openMobile ? <X className="size-4" /> : <Menu className="size-4" />}
+            {openMobile ? <X className="size-5" /> : <Menu className="size-5" />}
           </span>
         </button>
       </div>
