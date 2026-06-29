@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Card, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
+import { AccessManagementDialog } from "@/components/access-management";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -655,10 +656,10 @@ export function ConfiguracoesSection() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" className="gap-2" onClick={() => toast("Gerenciamento de usuários em breve.")}>
+              <Button variant="outline" className="gap-2" onClick={() => setAccessOpen(true)}>
                 <Users className="size-4" /> Gerenciar usuários
               </Button>
-              <Button variant="outline" className="gap-2" onClick={() => toast("Alteração de senha em breve.")}>
+              <Button variant="outline" className="gap-2" onClick={() => setAccessOpen(true)}>
                 <KeyRound className="size-4" /> Alterar senha administrativa
               </Button>
             </div>
