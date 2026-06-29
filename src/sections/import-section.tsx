@@ -433,9 +433,7 @@ export function extractMGMVAgreementFromNotes(notes: string): MGMVAgreement | nu
   const perLineOrd =
     /(primeira|segunda|terceira|quarta|quinta|sexta|s[ée]tima|oitava|nona|d[ée]cima)[^\n]*?(?:\bparcela\b)?[^\n]*?\b(?:paga|pago|quitada|quitado)\b[^\n]*/gi;
   for (const m of notes.matchAll(perLineOrd)) {
-    const n = ORDINAL_WORDS[m[1].toLowerCase().replace(/[áéíóúâê]/g, (c) =>
-      ({ á: "a", é: "e", í: "i", ó: "o", ú: "u", â: "a", ê: "e" }[c] ?? c),
-    )];
+    const n = ORDINAL_WORDS[stripAccents(m[1])];
     if (n && n <= count) {
       const date = extractPaymentDate(m[0], refYear);
       if (!paidByNumber.has(n) || (date && !paidByNumber.get(n))) {
@@ -447,10 +445,7 @@ export function extractMGMVAgreementFromNotes(notes: string): MGMVAgreement | nu
   const pagouOrdRe =
     /pagou\s+(?:a\s+)?(primeira|segunda|terceira|quarta|quinta|sexta|s[ée]tima|oitava|nona|d[ée]cima)/gi;
   for (const m of notes.matchAll(pagouOrdRe)) {
-    const key = m[1].toLowerCase().replace(/[áéíóúâê]/g, (c) =>
-      ({ á: "a", é: "e", í: "i", ó: "o", ú: "u", â: "a", ê: "e" }[c] ?? c),
-    );
-    const n = ORDINAL_WORDS[key];
+    const n = ORDINAL_WORDS[stripAccents(m[1])];
     if (n && n <= count && !paidByNumber.has(n)) paidByNumber.set(n, undefined);
   }
 
