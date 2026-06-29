@@ -266,8 +266,8 @@
 .nav-progress-runner {
   stroke: color-mix(in oklch, var(--color-primary) 98%, transparent);
   stroke-width: 2;
-  /* Short highlight segment so it reads as the navbar border running, not a bar over items. */
-  stroke-dasharray: 3 97;
+  /* Highlight ocupa 25% do perímetro da navbar. */
+  stroke-dasharray: 25 75;
   stroke-dashoffset: 0;
 }
 .floating-navbar[data-progress="loop"] .nav-progress-ring {
