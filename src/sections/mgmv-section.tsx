@@ -10,6 +10,11 @@ import {
   type MGMVAgreement,
 } from "@/lib/store";
 import { MgmvAiReviewModal } from "@/components/mgmv-ai-review-modal";
+import {
+  ListExpansionToggle,
+  MinimizedListCard,
+} from "@/components/list-expansion";
+import { useListExpansion } from "@/lib/list-expansion";
 import type { MgmvAiReviewSuggestion } from "@/lib/mgmv-ai-review.functions";
 import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
 import { extractMGMVAgreementFromNotes } from "@/sections/import-section";
