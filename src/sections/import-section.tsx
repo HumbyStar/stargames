@@ -1946,16 +1946,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                   A IA lê cada linha do nome até o status, ignora linhas de grupo/vazias e corrige automaticamente erros comuns.
                 </p>
                 <div className="flex flex-wrap justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={analyzeWithAI}
-                    disabled={aiLoading}
-                    title="Analisa cada linha com IA, identifica vários clientes por linha e corrige erros comuns"
-                  >
+                  <Button onClick={validateText} disabled={aiLoading}>
                     <Brain className="size-4" />
-                    {aiLoading ? "Analisando com IA..." : "Analisar com IA"}
+                    {aiLoading ? "Analisando com IA..." : "Validar Importação"}
                   </Button>
-                  <Button onClick={validateText} disabled={aiLoading}>Validar Importação</Button>
                 </div>
               </div>
             </TabsContent>
