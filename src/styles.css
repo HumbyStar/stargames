@@ -476,10 +476,32 @@
 .tutorial-overlay {
   position: fixed;
   inset: 0;
-  background: transparent;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(2px);
   z-index: 1000;
   pointer-events: auto;
   animation: tutorial-fade 220ms ease-out;
+  /* Cut-out spotlight: the target area stays fully clear and opaque. */
+  -webkit-mask:
+    linear-gradient(#000 0 0) no-repeat,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  -webkit-mask-position:
+    calc(var(--th-left, 0px)) calc(var(--th-top, 0px)),
+    0 0;
+  -webkit-mask-size:
+    calc(var(--th-w, 0px)) calc(var(--th-h, 0px)),
+    100% 100%;
+  mask:
+    linear-gradient(#000 0 0) no-repeat,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  mask-position:
+    calc(var(--th-left, 0px)) calc(var(--th-top, 0px)),
+    0 0;
+  mask-size:
+    calc(var(--th-w, 0px)) calc(var(--th-h, 0px)),
+    100% 100%;
 }
 .tutorial-highlight {
   position: fixed;
@@ -488,7 +510,6 @@
   pointer-events: none;
   box-shadow:
     0 0 0 4px rgba(245, 158, 11, 0.4),
-    0 0 0 9999px rgba(0, 0, 0, 0.62),
     0 0 28px rgba(245, 158, 11, 0.55);
   transition: top 360ms cubic-bezier(0.22, 1, 0.36, 1),
     left 360ms cubic-bezier(0.22, 1, 0.36, 1),
