@@ -605,6 +605,66 @@ export interface ImportDiagnostics {
   resetVersion: string;
 }
 
+// ============= Audit log =============
+
+/**
+ * Registra no audit_log a aplicação de uma revisão por IA sobre um acordo MGMV.
+ * Não bloqueia o fluxo do usuário em caso de falha — apenas loga e segue.
+ */
+export async function dbInsertMgmvReviewAuditLog(input: {
+  clientId: string;
+  agreementId: string;
+  previousReviewStatus: string;
+  newReviewStatus: string;
+  previousAgreement?: MGMVAgreement;
+  newAgreement: MGMVAgreement;
+  confidence: number;
+  confirmedWithConflict: boolean;
+  mathOk: boolean;
+}): Promise<void> {
+  try {
+    const { data: userRes } = await supabase.auth.getUser();
+    const uid = userRes.user?.id ?? null;
+    const userEmail = userRes.user?.email ?? null;
+    const old = input.previousAgreement
+      ? {
+          totalDebt: input.previousAgreement.totalDebt,
+          installments: input.previousAgreement.installments,
+          reviewStatus: input.previousAgreement.reviewStatus ?? "review_required",
+          aiReviewed: !!input.previousAgreement.aiReviewed,
+          aiConfidence: input.previousAgreement.aiConfidence ?? null,
+        }
+      : null;
+    const next = {
+      totalDebt: input.newAgreement.totalDebt,
+      installments: input.newAgreement.installments,
+      reviewStatus: input.newAgreement.reviewStatus,
+      aiReviewed: !!input.newAgreement.aiReviewed,
+      aiReviewAppliedAt: input.newAgreement.aiReviewAppliedAt ?? null,
+      aiConfidence: input.newAgreement.aiConfidence ?? null,
+      confidence: input.confidence,
+      confirmedWithConflict: input.confirmedWithConflict,
+      mathOk: input.mathOk,
+      previousReviewStatus: input.previousReviewStatus,
+      newReviewStatus: input.newReviewStatus,
+      event: "Revisão IA aplicada ao acordo MGMV",
+      clientId: input.clientId,
+    };
+    const { error } = await supabase.from("audit_log").insert({
+      table_name: "mgmv_agreements",
+      action: "ai_review_applied",
+      row_id: input.agreementId,
+      user_id: uid,
+      user_email: userEmail,
+      old_data: old as never,
+      new_data: next as never,
+    } as never);
+    if (error) logErr("audit_log.aiReview", error);
+  } catch (err) {
+    logErr("audit_log.aiReview", err);
+  }
+}
+
 export async function dbFetchDiagnostics(): Promise<ImportDiagnostics> {
   const head = (q: ReturnType<typeof supabase.from>) =>
     (q.select("*", { count: "exact", head: true }) as unknown as Promise<{ count: number | null; error: unknown }>);
