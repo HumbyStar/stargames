@@ -711,6 +711,96 @@ export const useStore = create<State>()((set, get) => ({
           hydrated: true,
         });
       },
+      findDuplicateClientGroups: () => {
+        const { clients, products } = get();
+        return computeDuplicateGroups(clients, products);
+      },
+      mergeDuplicateClients: async () => {
+        const state = get();
+        const groups = computeDuplicateGroups(state.clients, state.products);
+        if (groups.length === 0) {
+          return { groups: 0, removed: 0, reassignedProducts: 0 };
+        }
+
+        // Mapa fromId -> toId para reatribuição em memória.
+        const reassign = new Map<string, string>();
+        const removedIds: string[] = [];
+        const updatedPrimaries = new Map<string, Client>();
+
+        for (const g of groups) {
+          const primary = state.clients.find((c) => c.id === g.primaryId);
+          if (!primary) continue;
+          const dups = g.duplicateIds
+            .map((id) => state.clients.find((c) => c.id === id))
+            .filter((c): c is Client => Boolean(c));
+
+          // Mescla nome (mais longo), notas (concatena únicas), folder, mgmv se faltar.
+          const allNames = [primary.name, ...dups.map((d) => d.name)].filter(Boolean);
+          const bestName = allNames.reduce((a, b) => (b.length > a.length ? b : a), primary.name);
+          const notesPieces = [primary.notes, ...dups.map((d) => d.notes)]
+            .map((n) => (n ?? "").trim())
+            .filter(Boolean);
+          const mergedNotes = Array.from(new Set(notesPieces)).join("\n\n") || undefined;
+          const mergedMgmv = primary.mgmv ?? dups.find((d) => d.mgmv)?.mgmv;
+          const mergedFolder = primary.folder ?? dups.find((d) => d.folder)?.folder;
+
+          const mergedPrimary: Client = {
+            ...primary,
+            name: bestName,
+            notes: mergedNotes,
+            mgmv: mergedMgmv,
+            folder: mergedFolder,
+          };
+          updatedPrimaries.set(primary.id, mergedPrimary);
+
+          for (const d of dups) {
+            reassign.set(d.id, primary.id);
+            removedIds.push(d.id);
+          }
+        }
+
+        // 1) Banco: reatribui produtos e (se necessário) acordos antes de apagar.
+        const fromIds = Array.from(reassign.keys());
+        const targets = new Set(Array.from(reassign.values()));
+        for (const toId of targets) {
+          const sources = fromIds.filter((id) => reassign.get(id) === toId);
+          await dbReassignProductsClientAsync(sources, toId);
+          // Se o primário não tem mgmv mas um duplicado tem, move o acordo.
+          const primary = updatedPrimaries.get(toId);
+          if (primary?.mgmv) {
+            for (const src of sources) {
+              const dup = state.clients.find((c) => c.id === src);
+              if (dup?.mgmv && primary.mgmv === dup.mgmv) {
+                await dbReassignAgreementClientAsync(src, toId);
+              }
+            }
+          }
+        }
+        await dbDeleteClientsByIdsAsync(removedIds);
+
+        // 2) Persiste primários atualizados (nome/notas/mgmv mesclados).
+        const mergedClientsToUpsert = Array.from(updatedPrimaries.values());
+        await dbUpsertClientsAsync(mergedClientsToUpsert);
+
+        // 3) Atualiza memória.
+        const reassignedProducts = state.products.filter((p) => reassign.has(p.clientId)).length;
+        set((s) => {
+          const removedSet = new Set(removedIds);
+          const clients = s.clients
+            .filter((c) => !removedSet.has(c.id))
+            .map((c) => updatedPrimaries.get(c.id) ?? c);
+          const products = s.products.map((p) =>
+            reassign.has(p.clientId) ? { ...p, clientId: reassign.get(p.clientId)! } : p,
+          );
+          return { clients, products };
+        });
+
+        return {
+          groups: groups.length,
+          removed: removedIds.length,
+          reassignedProducts,
+        };
+      },
 }));
 
 export const formatBRL = (n: number) =>
