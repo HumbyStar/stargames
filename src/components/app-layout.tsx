@@ -398,25 +398,51 @@ function FloatingNavbar() {
   useEffect(() => {
     const container = document.querySelector<HTMLElement>(".page-container");
     if (!container) return;
+
+    // Active section: observa cada seção e marca como ativa quando entra na viewport.
+    const sectionObserver = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible?.target.id) setActiveSection(visible.target.id);
+      },
+      { root: container, threshold: [0.25, 0.5, 0.75] },
+    );
+    for (const item of navItems) {
+      const el = document.getElementById(item.id);
+      if (el) sectionObserver.observe(el);
+    }
+
+    // Scrolled flag: usa uma sentinela invisível no topo, sem ler scrollTop.
+    // Quando a sentinela some da viewport => página rolou.
+    const sentinel = document.createElement("div");
+    sentinel.setAttribute("aria-hidden", "true");
+    sentinel.style.cssText =
+      "position:absolute;top:0;left:0;width:1px;height:32px;pointer-events:none;";
+    container.prepend(sentinel);
+    const scrollObserver = new IntersectionObserver(
+      ([entry]) => setScrolled(!entry.isIntersecting),
+      { root: container, threshold: 0 },
+    );
+    scrollObserver.observe(sentinel);
+
+    // Fallback: também escuta o evento de scroll real (sem ler scrollTop)
+    // para reagir imediatamente em qualquer interação do usuário.
     const onScroll = () => {
-      const probe = container.scrollTop + 200;
-      let current = navItems[0].id as string;
-      for (const item of navItems) {
-        const el = document.getElementById(item.id);
-        if (el && el.offsetTop <= probe) current = item.id;
-      }
-      setActiveSection(current);
-      // Glass mode com histerese: ativa após 32px, desativa abaixo de 8px.
-      setScrolled((prev) => {
-        const top = container.scrollTop;
-        if (!prev && top > 32) return true;
-        if (prev && top < 8) return false;
-        return prev;
-      });
+      // Apenas garante reavaliação dos observers em browsers que demoram
+      // a despachar o IntersectionObserver durante scroll inercial.
     };
     container.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => container.removeEventListener("scroll", onScroll);
+    window.addEventListener("scroll", onScroll, { passive: true });
+
+    return () => {
+      sectionObserver.disconnect();
+      scrollObserver.disconnect();
+      sentinel.remove();
+      container.removeEventListener("scroll", onScroll);
+      window.removeEventListener("scroll", onScroll);
+    };
   }, []);
 
   // Navbar is always compact on desktop; hovering triggers a looping conic glow.
