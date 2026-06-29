@@ -244,11 +244,13 @@ function FloatingNavbar() {
   const { unreadCount } = useNotifications();
 
   useEffect(() => {
+    const container = document.querySelector<HTMLElement>(".page-container");
+    if (!container) return;
     const onScroll = () => {
       setHidden(true);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       timeoutRef.current = setTimeout(() => setHidden(false), 350);
-      const probe = window.scrollY + 200;
+      const probe = container.scrollTop + 200;
       let current = navItems[0].id as string;
       for (const item of navItems) {
         const el = document.getElementById(item.id);
@@ -256,10 +258,10 @@ function FloatingNavbar() {
       }
       setActiveSection(current);
     };
-    window.addEventListener("scroll", onScroll, { passive: true });
+    container.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
     return () => {
-      window.removeEventListener("scroll", onScroll);
+      container.removeEventListener("scroll", onScroll);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, []);

@@ -13,8 +13,19 @@ const listeners = new Set<(id: MonitoredId | null) => void>();
 let rafId = 0;
 let initialized = false;
 
+function getScroller(): HTMLElement | Window {
+  return (
+    document.querySelector<HTMLElement>(".page-container") ?? window
+  );
+}
+
 function computeActive(): MonitoredId | null {
-  const probe = window.scrollY + window.innerHeight * 0.3;
+  const scroller = getScroller();
+  const scrollTop =
+    scroller instanceof Window ? scroller.scrollY : scroller.scrollTop;
+  const viewportH =
+    scroller instanceof Window ? scroller.innerHeight : scroller.clientHeight;
+  const probe = scrollTop + viewportH * 0.3;
   let current: MonitoredId | null = null;
   let bestTop = -Infinity;
   for (const id of MONITORED) {
@@ -46,7 +57,8 @@ function schedule() {
 function ensureInit() {
   if (initialized || typeof window === "undefined") return;
   initialized = true;
-  window.addEventListener("scroll", schedule, { passive: true });
+  const scroller = getScroller();
+  scroller.addEventListener("scroll", schedule, { passive: true } as AddEventListenerOptions);
   window.addEventListener("resize", schedule);
   // primeira medição após o layout assentar
   requestAnimationFrame(schedule);
