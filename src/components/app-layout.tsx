@@ -488,7 +488,7 @@ function GlobalModals() {
       </Dialog>
 
       <Dialog open={notificationsOpen} onOpenChange={(o) => (o ? null : closeNotifications())}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Notificações</DialogTitle>
             <DialogDescription>Alertas e avisos recentes da operação.</DialogDescription>

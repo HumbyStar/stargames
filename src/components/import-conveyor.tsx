@@ -19,16 +19,18 @@ const STAGES = [
 export function ImportConveyor({
   running,
   state,
+  height = "h-24",
 }: {
   running: boolean;
   state: "processing" | "done" | "cancelled";
+  height?: string;
 }) {
   const items = [...STAGES, ...STAGES, ...STAGES]; // triplo para loop suave
   return (
-    <div className="relative h-24 overflow-hidden rounded-xl border bg-gradient-to-b from-muted/40 to-muted/10">
+    <div className={`relative ${height} overflow-hidden rounded-xl border bg-gradient-to-b from-muted/40 to-muted/10`}>
       {/* Trilho */}
-      <div className="absolute inset-x-0 bottom-3 h-2 rounded bg-foreground/10" />
-      <div className="absolute inset-x-0 bottom-3 h-2 overflow-hidden rounded">
+      <div className="absolute inset-x-0 bottom-4 h-2 rounded bg-foreground/10" />
+      <div className="absolute inset-x-0 bottom-4 h-2 overflow-hidden rounded">
         <div
           className="h-full w-[200%] opacity-60"
           style={{
@@ -40,9 +42,9 @@ export function ImportConveyor({
       </div>
 
       {/* Ícones em movimento */}
-      <div className="absolute inset-x-0 top-2 bottom-7 flex items-center">
+      <div className="absolute inset-x-0 top-3 bottom-9 flex items-center">
         <div
-          className="flex gap-5 px-4 will-change-transform motion-reduce:animate-none"
+          className="flex gap-8 px-4 will-change-transform motion-reduce:animate-none"
           style={{
             animation: running ? "import-load 18s linear infinite" : undefined,
           }}
@@ -52,10 +54,10 @@ export function ImportConveyor({
             return (
               <div
                 key={i}
-                className="flex flex-col items-center gap-1 text-[10px] text-muted-foreground"
+                className="flex flex-col items-center gap-1.5 text-xs text-muted-foreground"
               >
-                <div className="grid h-10 w-10 place-items-center rounded-md border bg-card shadow-xs text-primary">
-                  <Icon className="h-5 w-5" />
+                <div className="grid h-14 w-14 place-items-center rounded-lg border bg-card shadow-xs text-primary">
+                  <Icon className="h-7 w-7" />
                 </div>
                 <span className="whitespace-nowrap">{s.label}</span>
               </div>

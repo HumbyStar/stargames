@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   AlertOctagon,
   Box,
+  CheckCircle2,
   Copy,
   FolderOpen,
   PhoneCall,
@@ -19,7 +20,6 @@ import {
   ShieldCheck,
   Sparkles,
   Timer,
-  Trophy,
   UserPlus,
   Zap,
 } from "lucide-react";
@@ -77,8 +77,8 @@ export function ImportProgressModal({
   onClose: () => void;
   onDiscard?: () => void;
 }) {
-  const logRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [countdown, setCountdown] = useState<number | null>(null);
 
   useEffect(() => {
     if (!state || state.done || state.resumed) return;
@@ -86,13 +86,84 @@ export function ImportProgressModal({
     return () => clearInterval(id);
   }, [state?.done, state?.resumed, state?.fileHash]);
 
+  // Auto-close em 5s quando concluído com sucesso (sem ser retomado)
   useEffect(() => {
-    if (logRef.current) {
-      logRef.current.scrollTop = logRef.current.scrollHeight;
+    if (!state?.done || state.resumed) {
+      setCountdown(null);
+      return;
     }
-  }, [state?.messages.length]);
+    setCountdown(5);
+    const id = setInterval(() => {
+      setCountdown((c) => {
+        if (c === null) return null;
+        if (c <= 1) {
+          clearInterval(id);
+          onClose();
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [state?.done, state?.resumed, state?.fileHash, onClose]);
 
   if (!state) return null;
+
+  // Tela de sucesso dedicada
+  if (state.done && !state.resumed) {
+    const s = state.stats;
+    return (
+      <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+        <DialogContent className="max-w-2xl border-emerald-500/40 bg-gradient-to-b from-emerald-500/10 via-background to-emerald-500/5">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Importação concluída</DialogTitle>
+            <DialogDescription>Resumo da importação</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-5 py-6 text-center">
+            <div className="relative grid h-24 w-24 place-items-center rounded-full bg-emerald-500/15 ring-8 ring-emerald-500/10 animate-scale-in">
+              <CheckCircle2 className="h-14 w-14 text-emerald-600 dark:text-emerald-400" />
+              <span className="absolute inset-0 rounded-full ring-2 ring-emerald-500/40 animate-ping" />
+            </div>
+            <div className="space-y-1 animate-fade-in">
+              <h2 className="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">
+                Tudo certo! 🎉
+              </h2>
+              <p className="text-sm text-muted-foreground max-w-md">
+                Sua importação de <span className="font-medium text-foreground">{state.zipName}</span> foi concluída com sucesso e os dados já estão atualizados na sua operação.
+              </p>
+            </div>
+            <div className="grid w-full max-w-md grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-2">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Clientes</div>
+                <div className="font-mono text-lg font-semibold text-emerald-700 dark:text-emerald-300">{s.createdClients + s.updatedClients}</div>
+              </div>
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-2">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Produtos</div>
+                <div className="font-mono text-lg font-semibold text-emerald-700 dark:text-emerald-300">{s.createdProducts}</div>
+              </div>
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-2">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Acordos</div>
+                <div className="font-mono text-lg font-semibold text-emerald-700 dark:text-emerald-300">{s.createdAgreements}</div>
+              </div>
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-2">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Pastas</div>
+                <div className="font-mono text-lg font-semibold text-emerald-700 dark:text-emerald-300">{state.folders.length}</div>
+              </div>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Fechando em <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">{countdown ?? 5}</span>s…
+            </div>
+            <Button
+              onClick={onClose}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              Ver agora
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   const total = state.folders.length;
   const idx = state.currentIdx;
@@ -116,32 +187,24 @@ export function ImportProgressModal({
       <DialogContent className="max-w-3xl" onInteractOutside={(e) => { if (!state.done) e.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {state.done ? (
-              <Trophy className="h-5 w-5 text-amber-500" />
-            ) : state.resumed ? (
+            {state.resumed ? (
               <AlertTriangle className="h-5 w-5 text-amber-500" />
             ) : (
               <Sparkles className="h-5 w-5 text-primary animate-pulse" />
             )}
-            {state.done
-              ? "Importação concluída!"
-              : state.resumed
-                ? "Importação interrompida"
-                : "Processando em lotes…"}
+            {state.resumed ? "Importação interrompida" : "Processando em lotes…"}
           </DialogTitle>
           <DialogDescription>
-            {state.done
-              ? "Tudo certo."
-              : state.resumed
-                ? <>A última importação de <span className="font-medium text-foreground">{state.zipName}</span> não terminou. Reenvie o ZIP para continuar — duplicatas serão detectadas automaticamente.</>
+            {state.resumed
+              ? <>A última importação de <span className="font-medium text-foreground">{state.zipName}</span> não terminou. Reenvie o ZIP para continuar — duplicatas serão detectadas automaticamente.</>
               : currentFolder
                 ? <>Lote atual: <span className="font-medium text-foreground">{currentFolder}</span> — {tip}</>
                 : "Preparando a esteira…"}
           </DialogDescription>
         </DialogHeader>
 
-        {/* Esteira animada contínua */}
-        <ImportConveyor running={running} state={conveyorState} />
+        {/* Esteira animada contínua (maior) */}
+        <ImportConveyor running={running} state={conveyorState} height="h-40" />
 
         {/* Barra de progresso */}
         <div className="space-y-1">
@@ -195,30 +258,17 @@ export function ImportProgressModal({
           </div>
         </div>
 
-        {/* Log de mensagens */}
-        <div
-          ref={logRef}
-          className="rounded-md border bg-muted/30 p-3 text-xs font-mono space-y-1"
-        >
-          {state.messages.length === 0 ? (
-            <div className="text-muted-foreground">Iniciando…</div>
-          ) : (
-            state.messages.map((m, i) => (
-              <div key={i} className="animate-fade-in">{m}</div>
-            ))
-          )}
-          {state.errors.length > 0 && (
-            <div className="mt-2 border-t border-destructive/30 pt-2 space-y-1">
-              {state.errors.map((e, i) => (
-                <div key={i} className="text-destructive">⚠️ {e}</div>
-              ))}
-            </div>
-          )}
-        </div>
+        {state.errors.length > 0 && (
+          <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs space-y-1">
+            {state.errors.slice(-5).map((e, i) => (
+              <div key={i} className="text-destructive">⚠️ {e}</div>
+            ))}
+          </div>
+        )}
 
-        {(state.done || state.resumed) && (
+        {state.resumed && (
           <DialogFooter>
-            {state.resumed && !state.done && onDiscard && (
+            {onDiscard && (
               <Button variant="ghost" onClick={onDiscard}>Descartar progresso</Button>
             )}
             <Button onClick={onClose}>Fechar</Button>
