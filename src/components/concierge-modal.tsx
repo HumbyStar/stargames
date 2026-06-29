@@ -60,12 +60,51 @@ const QUICK_ACTIONS: QuickAction[] = [
   { id: "view-pending", label: "Ver pendentes", description: "Pendências em aberto.", icon: AlertTriangle, cardId: "pending", tone: "primary" },
 ];
 
-const TONE_CLASS: Record<QuickAction["tone"], string> = {
-  primary: "border-primary/30 hover:bg-primary/10",
-  danger: "border-destructive/30 hover:bg-destructive/10",
-  warning: "border-amber-500/30 hover:bg-amber-500/10",
-  success: "border-emerald-500/30 hover:bg-emerald-500/10",
-  neutral: "border-border hover:bg-accent",
+const SUGGESTION_STYLE: Record<
+  "danger" | "warning" | "success" | "primary" | "neutral",
+  {
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    wrap: string;
+    iconWrap: string;
+    title: string;
+  }
+> = {
+  warning: {
+    label: "Sugestão",
+    icon: Lightbulb,
+    wrap: "border-amber-300/60 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10",
+    iconWrap: "bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-300",
+    title: "text-amber-700 dark:text-amber-300",
+  },
+  danger: {
+    label: "Alerta",
+    icon: Bell,
+    wrap: "border-rose-300/60 bg-rose-50 dark:border-rose-500/30 dark:bg-rose-500/10",
+    iconWrap: "bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-300",
+    title: "text-rose-700 dark:text-rose-300",
+  },
+  success: {
+    label: "Atalho",
+    icon: Link2,
+    wrap: "border-emerald-300/60 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10",
+    iconWrap: "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300",
+    title: "text-emerald-700 dark:text-emerald-300",
+  },
+  primary: {
+    label: "Atalho",
+    icon: Sparkles,
+    wrap: "border-primary/40 bg-primary/5",
+    iconWrap: "bg-primary/10 text-primary",
+    title: "text-primary",
+  },
+  neutral: {
+    label: "Sugestão",
+    icon: Lightbulb,
+    wrap: "border-border bg-background",
+    iconWrap: "bg-foreground/5 text-foreground",
+    title: "text-foreground",
+  },
 };
 
 /* --------------------------------- Utils --------------------------------- */
