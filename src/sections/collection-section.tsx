@@ -88,6 +88,16 @@ export function CollectionSection({
   const [payAmount, setPayAmount] = useState("");
   const [showFilters, setShowFilters] = useState(true);
   const { expanded: listExpanded, expand: expandList } = useListExpansion("collection");
+
+  /**
+   * Aplica filtro a partir do clique em um card de resumo na Collection.
+   * Mantém o contexto da seção e expande a lista quando minimizada.
+   */
+  const applyCardFilter = (next: Filter) => {
+    setFilter(next);
+    setSearch("");
+    if (!listExpanded) expandList();
+  };
   const [savedFilters, setSavedFilters] = usePersistedState<SavedFilter[]>("collection.savedFilters", []);
   const [activeSavedId, setActiveSavedId] = usePersistedState<string>("collection.activeSavedId", "");
   const [search, setSearch] = useState("");
