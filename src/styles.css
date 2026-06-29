@@ -190,7 +190,8 @@
 @media (min-width: 768px) {
   .floating-navbar[data-mode="compact"] {
     top: 8px;
-    max-width: 720px;
+    width: auto;
+    max-width: max-content;
     background: color-mix(in oklch, var(--color-background) 85%, transparent);
     backdrop-filter: blur(22px) saturate(180%);
     box-shadow: 0 10px 28px color-mix(in oklch, var(--color-foreground) 14%, transparent);
