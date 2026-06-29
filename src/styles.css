@@ -244,15 +244,19 @@
    independent of the navbar's real perimeter. */
 .nav-progress-ring {
   opacity: 0;
+  /* Inset the SVG so the centered stroke sits ON the navbar's actual border. */
+  inset: 1px;
+  width: calc(100% - 2px);
+  height: calc(100% - 2px);
   transition: opacity 250ms ease;
-  filter: drop-shadow(0 0 8px color-mix(in oklch, var(--color-primary) 65%, transparent));
+  filter: drop-shadow(0 0 8px color-mix(in oklch, var(--color-primary) 70%, transparent));
 }
 .nav-progress-ring > rect {
   fill: none;
-  stroke: color-mix(in oklch, var(--color-primary) 90%, transparent);
-  stroke-width: 1.5;
+  stroke: color-mix(in oklch, var(--color-primary) 95%, transparent);
+  stroke-width: 2;
   stroke-linecap: round;
-  /* Visible arc = 22 of 100 units; the rest is the gap. */
+  /* Visible arc = 22% of the perimeter; the rest is gap. */
   stroke-dasharray: 22 78;
   stroke-dashoffset: 0;
 }
