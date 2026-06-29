@@ -459,6 +459,8 @@ function FloatingNavbar() {
       data-dimmed={navDimmed ? "true" : "false"}
       onMouseEnter={() => setNavHover(true)}
       onMouseLeave={() => setNavHover(false)}
+      onPointerEnter={() => setNavHover(true)}
+      onPointerLeave={() => setNavHover(false)}
       className={cn(
         "floating-navbar flex items-center gap-3 px-3 py-2 md:px-4",
         isCompact && "md:gap-2 md:py-2 md:px-3",
