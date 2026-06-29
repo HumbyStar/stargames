@@ -267,17 +267,15 @@
 }
 .floating-navbar[data-progress="loop"] .nav-progress-ring {
   opacity: 1;
-  animation: nav-progress-loop 2400ms linear infinite;
+  --nav-progress: 28%;
+  animation: nav-progress-spin 2200ms linear infinite;
 }
 @keyframes nav-progress-fill {
   from { --nav-progress: 0%; }
   to { --nav-progress: 100%; }
 }
-@keyframes nav-progress-loop {
-  0%   { --nav-progress: 0%; }
-  50%  { --nav-progress: 100%; }
-  50.01% { --nav-progress: 0%; }
-  100% { --nav-progress: 0%; }
+@keyframes nav-progress-spin {
+  to { transform: rotate(360deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
