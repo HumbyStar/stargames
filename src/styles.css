@@ -389,6 +389,18 @@
     opacity: 0.6;
   }
 }
+/* User opted-out animations (Configurações → Navbar). */
+.floating-navbar[data-anim="off"],
+.floating-navbar[data-anim="off"] * {
+  transition-duration: 0.001ms !important;
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+}
+.floating-navbar[data-anim="off"] .nav-progress-runner {
+  animation: none !important;
+  stroke-dasharray: none;
+  opacity: 0;
+}
 .page-container {
   max-width: 1440px;
   margin: 0 auto;
