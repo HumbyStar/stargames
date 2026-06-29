@@ -406,6 +406,20 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           )}
         </div>
 
+        {!listExpanded && (
+          <MinimizedListCard
+            section="clients"
+            title="Lista de clientes minimizada"
+            lines={[
+              `${rows.length} cliente(s) encontrado(s)`,
+              activeFilterCount > 0
+                ? `${activeFilterCount} filtro(s) ativo(s)`
+                : "Sem filtros ativos",
+            ]}
+          />
+        )}
+        {listExpanded && (
+        <>
         <div className="mt-5 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -477,6 +491,8 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               <span>Todos os clientes carregados.</span>
             )}
           </div>
+        )}
+        </>
         )}
       </Card>
 
