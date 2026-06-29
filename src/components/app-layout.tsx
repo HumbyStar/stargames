@@ -61,7 +61,15 @@ function scrollToSection(id: string) {
   el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function SearchBox({ className }: { className?: string }) {
+function SearchBox({
+  className,
+  inputRef,
+  onFocusChange,
+}: {
+  className?: string;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
+  onFocusChange?: (focused: boolean) => void;
+}) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -131,12 +139,17 @@ function SearchBox({ className }: { className?: string }) {
       <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
       <input
         type="search"
+        ref={inputRef}
         value={query}
         onChange={(e) => {
           setQuery(e.target.value);
           setOpen(true);
         }}
-        onFocus={() => query && setOpen(true)}
+        onFocus={() => {
+          onFocusChange?.(true);
+          if (query) setOpen(true);
+        }}
+        onBlur={() => onFocusChange?.(false)}
         onKeyDown={(e) => {
           if (!open || results.length === 0) return;
           if (e.key === "ArrowDown") {
