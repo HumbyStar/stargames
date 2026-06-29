@@ -32,7 +32,8 @@ type MgmvChip =
   | "revisado_ia"
   | "revisado_manual"
   | "vencem_hoje"
-  | "vencidos";
+  | "vencidos"
+  | "com_produtos_externos";
 
 interface MgmvRow {
   client: Client;
