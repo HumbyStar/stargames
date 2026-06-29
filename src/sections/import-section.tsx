@@ -1697,6 +1697,48 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     toast.success(`${parsed.length} linha(s) processadas`);
   };
 
+  const [aiLoading, setAiLoading] = useState(false);
+  const analyzeWithAI = async () => {
+    if (!text.trim()) return toast.error("Cole os dados para analisar.");
+    setAiLoading(true);
+    try {
+      const { rows: aiRows } = await analyzeListWithAI({ data: { text } });
+      if (aiRows.length === 0) {
+        toast.warning("A IA não identificou clientes na lista.");
+        return;
+      }
+      // Converte para o formato do parser para reaproveitar validateRows.
+      const raw = aiRows.map((r, idx) => ({
+        line: r.line || idx + 1,
+        date: null,
+        name: r.name,
+        phone: r.phone,
+        product: r.product,
+        platform: r.platform,
+        totalValue: r.totalValue,
+        paidValue: r.paidValue,
+        financialStatus: r.financialStatus,
+        situation: r.situation,
+        registerDate: null,
+        dueDate: null,
+        notes: [r.notes, r.fixes.length ? `IA: ${r.fixes.join("; ")}` : null]
+          .filter(Boolean)
+          .join(" • ") || undefined,
+      }));
+      const parsed = validateRows(raw, findClientByPhone);
+      setRows(parsed);
+      const fixed = aiRows.filter((r) => r.fixes.length > 0).length;
+      toast.success(
+        `IA encontrou ${aiRows.length} cliente(s)${fixed ? ` • ${fixed} com correções automáticas` : ""}`,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Falha ao analisar com IA";
+      toast.error("Não foi possível analisar a lista", { description: msg });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const summary = useMemo(() => {
     if (!rows) return { ok: 0, err: 0, newC: 0, foundC: 0, ready: 0 };
     return {
