@@ -13,9 +13,7 @@ import {
   AlertOctagon,
   Box,
   Copy,
-  FileText,
   FolderOpen,
-  Hash,
   PackageCheck,
   PhoneCall,
   RefreshCcw,
@@ -23,7 +21,6 @@ import {
   Sparkles,
   Timer,
   Trophy,
-  User,
   UserPlus,
   Zap,
 } from "lucide-react";
