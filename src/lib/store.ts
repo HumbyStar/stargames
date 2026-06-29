@@ -225,6 +225,67 @@ const uid = () =>
     : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 /**
+ * Identifica grupos de clientes duplicados (mesmo telefone normalizado, ou
+ * mesmo nome normalizado quando o telefone é vazio). Para cada grupo, elege
+ * um primário (com MGMV → mais produtos → menor id).
+ */
+export function computeDuplicateGroups(
+  clients: Client[],
+  products: Product[],
+): DuplicateClientGroup[] {
+  const productsByClient = new Map<string, number>();
+  for (const p of products) {
+    productsByClient.set(p.clientId, (productsByClient.get(p.clientId) ?? 0) + 1);
+  }
+
+  const normPhone = (s: string) => s.replace(/\D/g, "");
+  const normName = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const buckets = new Map<string, Client[]>();
+  for (const c of clients) {
+    const phone = normPhone(c.phone ?? "");
+    const key = phone ? `p:${phone}` : `n:${normName(c.name ?? "")}`;
+    if (!key || key === "p:" || key === "n:") continue;
+    const arr = buckets.get(key) ?? [];
+    arr.push(c);
+    buckets.set(key, arr);
+  }
+
+  const groups: DuplicateClientGroup[] = [];
+  for (const [key, list] of buckets) {
+    if (list.length < 2) continue;
+    const sorted = [...list].sort((a, b) => {
+      const am = a.mgmv ? 1 : 0;
+      const bm = b.mgmv ? 1 : 0;
+      if (am !== bm) return bm - am;
+      const ap = productsByClient.get(a.id) ?? 0;
+      const bp = productsByClient.get(b.id) ?? 0;
+      if (ap !== bp) return bp - ap;
+      return a.id.localeCompare(b.id);
+    });
+    const [primary, ...rest] = sorted;
+    groups.push({
+      key,
+      primaryId: primary.id,
+      duplicateIds: rest.map((c) => c.id),
+      name: primary.name,
+      phone: primary.phone,
+      productsToReassign: rest.reduce(
+        (s, c) => s + (productsByClient.get(c.id) ?? 0),
+        0,
+      ),
+    });
+  }
+  return groups;
+}
+
+/**
  * Regra única de status financeiro com base nos valores.
  * - Pago: valorPago >= valorTotal (e total > 0)
  * - Reserva: valorPago > 0 && valorPago < valorTotal
