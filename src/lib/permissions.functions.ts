@@ -1,7 +1,17 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-export type AppRole = "admin" | "manager" | "operator" | "viewer";
+export type AppRole =
+  | "admin"
+  | "manager"
+  | "operator"
+  | "viewer"
+  | "admin_master"
+  | "gerente"
+  | "supervisor"
+  | "funcionario"
+  | "envio"
+  | "mgmv";
 export type AppPermission =
   | "dashboard.view"
   | "clientes.view"
@@ -13,7 +23,15 @@ export type AppPermission =
   | "import.use"
   | "finance.view"
   | "settings.view"
-  | "users.manage";
+  | "users.manage"
+  | "team.view"
+  | "team.assign.all"
+  | "team.assign.team"
+  | "team.task.update_own"
+  | "team.task.comment"
+  | "punch.clock"
+  | "shipping.mark_sent"
+  | "mgmv.register_product";
 
 export interface MyAccess {
   userId: string;
