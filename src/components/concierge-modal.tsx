@@ -213,7 +213,7 @@ export function ConciergeModal() {
                 <img src={mascotAsset.url} alt="" className="size-10 object-cover" draggable={false} />
               </div>
               <div className="min-w-0">
-                <DialogTitle>Concierge Operacional</DialogTitle>
+                <DialogTitle>O que vamos fazer agora?</DialogTitle>
                 <DialogDescription>
                   Filtro operacional central. Escolha uma ação ou busque cliente, telefone ou produto.
                 </DialogDescription>
