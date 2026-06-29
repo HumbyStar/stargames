@@ -332,6 +332,20 @@ export function MGMVSection({
         </div>
       </div>
 
+      {!listExpanded && (
+        <MinimizedListCard
+          section="mgmv"
+          title="Lista MGMV minimizada"
+          lines={[
+            `${filtered.length} acordo(s) encontrado(s)`,
+            stats.revisao > 0
+              ? `${stats.revisao} em revisão necessária`
+              : "Nenhum em revisão necessária",
+            `Saldo total: ${formatBRL(stats.saldoTotal)}`,
+          ]}
+        />
+      )}
+      {listExpanded && (
       <div className="mt-4 overflow-hidden rounded-xl border border-border bg-card shadow-xs">
         <div className="max-h-[640px] overflow-auto">
           <table className="w-full text-sm">
@@ -551,6 +565,7 @@ export function MGMVSection({
           </table>
         </div>
       </div>
+      )}
       {(() => {
         if (!aiTarget) return null;
         const row = rows.find((r) => r.client.id === aiTarget);
