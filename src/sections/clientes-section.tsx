@@ -41,15 +41,12 @@ type ChipFilter =
   | "todos"
   | "reserva_vencida"
   | "pendente"
-  | "mgmv"
   | "pago_aguardando"
   | "enviado"
   | "desistiu"
   | "abandonou"
   | "em_dia"
-  | "sem_produtos"
-  | "mgmv_vencido"
-  | "mgmv_quitado";
+  | "sem_produtos";
 
 function generalStatus(client: Client, products: Product[]): {
   label: string;
@@ -156,16 +153,10 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           if (!hit) return false;
         }
         if (chip !== "todos") {
-          const mgmvActive = r.client.mgmv && r.client.mgmv.installments.some((i) => !i.paid);
-          const mgmvOverdue = r.client.mgmv && r.client.mgmv.installments.some((i) => !i.paid && isOverdue(i.dueDate));
-          const mgmvQuitado = r.client.mgmv && r.client.mgmv.installments.every((i) => i.paid);
           const map: Record<ChipFilter, boolean> = {
             todos: true,
             reserva_vencida: r.status.label === "Reserva vencida",
             pendente: r.products.some((p) => p.financialStatus === "Pendente" && p.situation === "Em Aberto"),
-            mgmv: !!mgmvActive,
-            mgmv_vencido: !!mgmvOverdue,
-            mgmv_quitado: !!mgmvQuitado,
             pago_aguardando: r.products.some((p) => p.financialStatus === "Pago" && p.situation === "Em Aberto"),
             enviado: r.products.some((p) => p.situation === "Enviado"),
             desistiu: r.products.some((p) => p.situation === "Desistiu"),
@@ -232,16 +223,12 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
         (p.financialStatus === "Pendente" || (p.financialStatus === "Reserva" && isOverdue(p.dueDate))),
     ),
   ).length;
-  const clientesMGMV = clients.filter((c) => c.mgmv).length;
   const pagosAgEnvio = products.filter((p) => p.financialStatus === "Pago" && p.situation === "Em Aberto").length;
 
   const chips: { id: ChipFilter; label: string }[] = [
     { id: "todos", label: "Todos" },
     { id: "reserva_vencida", label: "Reserva vencida" },
     { id: "pendente", label: "Pendente" },
-    { id: "mgmv", label: "MGMV" },
-    { id: "mgmv_vencido", label: "MGMV vencido" },
-    { id: "mgmv_quitado", label: "MGMV quitado" },
     { id: "pago_aguardando", label: "Pago aguardando envio" },
     { id: "enviado", label: "Enviado" },
     { id: "desistiu", label: "Desistiu" },
