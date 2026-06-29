@@ -269,20 +269,7 @@ function FloatingNavbar() {
   const [isDark, setIsDark] = useState(() =>
     typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
   );
-  const [hovered, setHovered] = useState(false);
-  const [searchExpanded, setSearchExpanded] = useState(false);
-  const [searchFocused, setSearchFocused] = useState(false);
-  const [navFocusWithin, setNavFocusWithin] = useState(false);
-  const [expanding, setExpanding] = useState(false);
-  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const expandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hoveredRef = useRef(false);
-  const pointerRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const anchorTargetRef = useRef<Element | null>(null);
-  useEffect(() => {
-    hoveredRef.current = hovered;
-  }, [hovered]);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [navHover, setNavHover] = useState(false);
   const navRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -313,6 +300,7 @@ function FloatingNavbar() {
   const openHelp = useUiStore((s) => s.openHelp);
   const openNotifications = useUiStore((s) => s.openNotifications);
   const openConcierge = useUiStore((s) => s.openConcierge);
+  const openFinance = useUiStore((s) => s.openFinance);
   const { unreadCount } = useNotifications();
 
   useEffect(() => {
@@ -332,142 +320,8 @@ function FloatingNavbar() {
     return () => container.removeEventListener("scroll", onScroll);
   }, []);
 
-  const clearAnchorShift = () => {
-    if (navRef.current) navRef.current.style.setProperty("--nav-shift", "0px");
-    anchorTargetRef.current = null;
-  };
-
-  const applyAnchorShift = () => {
-    const target = anchorTargetRef.current;
-    const nav = navRef.current;
-    if (!target || !nav) return;
-    // wait two frames for the expand layout to settle
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const rect = (target as HTMLElement).getBoundingClientRect();
-        if (rect.width === 0) return;
-        const center = rect.left + rect.width / 2;
-        const current = parseFloat(nav.style.getPropertyValue("--nav-shift") || "0");
-        const delta = pointerRef.current.x - center + current;
-        // clamp so navbar doesn't run off-screen
-        const navRect = nav.getBoundingClientRect();
-        const maxShift = Math.max(0, window.innerWidth - navRect.right + current - 12);
-        const minShift = Math.min(0, -navRect.left + current + 12);
-        const clamped = Math.max(minShift, Math.min(maxShift, delta));
-        nav.style.setProperty("--nav-shift", `${clamped}px`);
-      });
-    });
-  };
-
-  useEffect(() => {
-    let raf = 0;
-    let lastInside = false;
-    const startExpandIntent = () => {
-      if (hoveredRef.current) return;
-      if (expandTimerRef.current) return;
-      setExpanding(true);
-      expandTimerRef.current = setTimeout(() => {
-        expandTimerRef.current = null;
-        setExpanding(false);
-        // capture the element under the cursor as the anchor
-        const el = document.elementFromPoint(
-          pointerRef.current.x,
-          pointerRef.current.y,
-        );
-        anchorTargetRef.current =
-          el?.closest("a,button,input") ?? null;
-        setHovered(true);
-        applyAnchorShift();
-      }, 3000);
-    };
-    const cancelExpandIntent = () => {
-      if (expandTimerRef.current) {
-        clearTimeout(expandTimerRef.current);
-        expandTimerRef.current = null;
-      }
-      setExpanding(false);
-    };
-    const setHoverDeferred = (next: boolean) => {
-      if (hoverTimeoutRef.current) {
-        clearTimeout(hoverTimeoutRef.current);
-        hoverTimeoutRef.current = null;
-      }
-      if (next) {
-        startExpandIntent();
-      } else {
-        cancelExpandIntent();
-        hoverTimeoutRef.current = setTimeout(() => {
-          setHovered(false);
-          clearAnchorShift();
-        }, 450);
-      }
-    };
-    const onMove = (e: MouseEvent) => {
-      if (raf) return;
-      const x = e.clientX;
-      const y = e.clientY;
-      pointerRef.current = { x, y };
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        const rect = navRef.current?.getBoundingClientRect();
-        if (!rect) return;
-        // Expand when pointer is over the navbar OR near the top edge of the viewport
-        const pad = 6;
-        const overNav =
-          x >= rect.left - pad &&
-          x <= rect.right + pad &&
-          y >= rect.top - pad &&
-          y <= rect.bottom + pad;
-        const nearTop = y <= 120;
-        const inside = overNav || nearTop;
-        if (inside !== lastInside) {
-          lastInside = inside;
-          setHoverDeferred(inside);
-        }
-      });
-    };
-    window.addEventListener("mousemove", onMove, { passive: true });
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      if (raf) cancelAnimationFrame(raf);
-      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-      if (expandTimerRef.current) clearTimeout(expandTimerRef.current);
-    };
-  }, []);
-
-  const isCompact =
-    !hovered &&
-    !searchExpanded &&
-    !searchFocused &&
-    !navFocusWithin;
-
-  const forceExpand = () => {
-    if (expandTimerRef.current) {
-      clearTimeout(expandTimerRef.current);
-      expandTimerRef.current = null;
-    }
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
-    }
-    setExpanding(false);
-    setHovered(true);
-    // anchor on the clicked element if any
-    const el = document.elementFromPoint(
-      pointerRef.current.x,
-      pointerRef.current.y,
-    );
-    anchorTargetRef.current = el?.closest("a,button,input") ?? null;
-    applyAnchorShift();
-  };
-
-  const expandAndFocusSearch = () => {
-    forceExpand();
-    setSearchExpanded(true);
-    requestAnimationFrame(() => {
-      searchInputRef.current?.focus();
-    });
-  };
+  // Navbar is always compact on desktop; hovering triggers a looping conic glow.
+  const isCompact = true;
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -475,23 +329,15 @@ function FloatingNavbar() {
       ref={navRef}
       data-tour="navbar"
       data-mode={isCompact ? "compact" : "full"}
-      data-progress={expanding && isCompact ? "true" : "false"}
-      onFocus={() => setNavFocusWithin(true)}
-      onClickCapture={() => {
-        if (isCompact) forceExpand();
-      }}
-      onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-          setNavFocusWithin(false);
-          setSearchExpanded(false);
-        }
-      }}
+      data-progress={navHover ? "loop" : "false"}
+      onMouseEnter={() => setNavHover(true)}
+      onMouseLeave={() => setNavHover(false)}
       className={cn(
         "floating-navbar flex items-center gap-3 px-3 py-2 md:px-4",
         isCompact && "md:gap-2 md:py-2 md:px-3",
       )}
     >
-      {/* Circular progress ring during hover-intent (3s) before expand */}
+      {/* Looping conic glow that runs while the cursor is over the navbar */}
       <span
         aria-hidden
         className="nav-progress-ring pointer-events-none absolute inset-0 rounded-full"
