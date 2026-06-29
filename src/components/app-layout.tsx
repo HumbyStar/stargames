@@ -365,12 +365,12 @@ function FloatingNavbar() {
         preserveAspectRatio="none"
       >
         <rect
-          x="0"
-          y="0"
-          width="100%"
-          height="100%"
-          rx="29"
-          ry="29"
+          x="1"
+          y="1"
+          width="calc(100% - 2px)"
+          height="calc(100% - 2px)"
+          rx="50%"
+          ry="50%"
           pathLength={100}
         />
       </svg>
