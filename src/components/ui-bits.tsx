@@ -159,10 +159,14 @@ export function Alert({
   type,
   title,
   text,
+  onClick,
+  tooltip,
 }: {
   type: "danger" | "warning" | "success" | "info";
   title: string;
   text: string;
+  onClick?: () => void;
+  tooltip?: string;
 }) {
   const styles = {
     danger: "border-destructive/30 bg-destructive/5",
@@ -176,6 +180,28 @@ export function Alert({
     success: "bg-[color:var(--success)]",
     info: "bg-primary",
   }[type];
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title={tooltip ?? `Ver ${title.toLowerCase()}`}
+        className={cn(
+          "group flex w-full gap-3 rounded-lg border p-3 text-left transition-all cursor-pointer",
+          "hover:-translate-y-0.5 hover:shadow-md hover:shadow-primary/10 hover:border-primary/40",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          styles,
+        )}
+      >
+        <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", dot)} />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">{title}</p>
+          <p className="text-sm text-muted-foreground">{text}</p>
+        </div>
+        <ChevronRight className="size-4 shrink-0 self-center text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+      </button>
+    );
+  }
   return (
     <div className={cn("flex gap-3 rounded-lg border p-3", styles)}>
       <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", dot)} />
