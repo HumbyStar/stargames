@@ -209,9 +209,12 @@ export function ConciergeModal() {
         <DialogContent className="max-w-2xl animate-in fade-in zoom-in-95 duration-200">
           <DialogHeader>
             <div className="flex items-start gap-3">
-              <div className="shrink-0 grid size-12 place-items-center rounded-full bg-gradient-to-br from-primary/20 to-primary/5 ring-1 ring-primary/30 overflow-hidden">
-                <img src={mascotAsset.url} alt="" className="size-10 object-cover" draggable={false} />
-              </div>
+              <img
+                src={mascotAsset.url}
+                alt=""
+                className="shrink-0 size-12 rounded-full object-cover ring-1 ring-primary/30"
+                draggable={false}
+              />
               <div className="min-w-0">
                 <DialogTitle>O que vamos fazer agora?</DialogTitle>
                 <DialogDescription>
