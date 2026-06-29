@@ -87,7 +87,7 @@ export function CollectionSection({
   const [payTarget, setPayTarget] = useState<{ id: string; remaining: number; productName: string } | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [showFilters, setShowFilters] = useState(true);
-  const { expanded: listExpanded } = useListExpansion("collection");
+  const { expanded: listExpanded, expand: expandList } = useListExpansion("collection");
   const [savedFilters, setSavedFilters] = usePersistedState<SavedFilter[]>("collection.savedFilters", []);
   const [activeSavedId, setActiveSavedId] = usePersistedState<string>("collection.activeSavedId", "");
   const [search, setSearch] = useState("");
