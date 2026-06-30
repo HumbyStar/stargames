@@ -629,7 +629,7 @@ function RolesTab() {
 
   return (
     <div className="overflow-auto rounded-md border border-border">
-      <Table>
+      <Table className="min-w-[900px]">
         <TableHeader>
           <TableRow>
             <TableHead>Permissão</TableHead>
