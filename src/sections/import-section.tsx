@@ -11,6 +11,11 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -34,7 +39,19 @@ import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { ImportProgressModal, type ImportProgressState } from "@/components/import-progress-modal";
 import { ImportCard, ImportCardsGrid } from "@/components/import-cards";
-import { Users, ShieldCheck, Box, Wallet, AlertOctagon, Brain } from "lucide-react";
+import {
+  Users,
+  ShieldCheck,
+  Box,
+  Wallet,
+  AlertOctagon,
+  Brain,
+  FileText,
+  FileCode,
+  FileSpreadsheet,
+  FileArchive,
+  ChevronDown,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { analyzeListWithAI } from "@/lib/list-ai-analyze.functions";
 import { useBlocker } from "@tanstack/react-router";
