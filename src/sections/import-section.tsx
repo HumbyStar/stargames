@@ -2302,17 +2302,17 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               Revise os registros analisados antes de confirmar. Você pode fechar e ajustar a origem se algo estiver incorreto.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-3 px-6 md:grid-cols-5">
-            <MetricCard label="Registros válidos" value={summary.ok} status="success" />
-            <MetricCard label="Registros com erro" value={summary.err} status="danger" />
-            <MetricCard label="Clientes encontrados" value={summary.foundC} />
-            <MetricCard label="Clientes novos" value={summary.newC} />
-            <MetricCard label="Produtos prontos" value={summary.ready} status="primary" />
+          <div className="grid grid-cols-2 gap-2 px-6 sm:grid-cols-3 md:grid-cols-5">
+            <SlimMetric label="Válidos" value={summary.ok} tone="success" />
+            <SlimMetric label="Com erro" value={summary.err} tone="danger" />
+            <SlimMetric label="Clientes encontr." value={summary.foundC} />
+            <SlimMetric label="Clientes novos" value={summary.newC} />
+            <SlimMetric label="Prontos" value={summary.ready} tone="primary" />
           </div>
-          <div className="flex-1 min-h-0 px-6 pb-2">
+          <div className="flex flex-1 min-h-0 flex-col px-6 pb-2">
             <PreviewVirtualTable rows={rows ?? []} />
           </div>
-          <DialogFooter className="shrink-0 border-t border-border bg-background px-6 py-4">
+          <DialogFooter className="shrink-0 flex-col gap-2 border-t border-border bg-background px-6 py-4 sm:flex-row sm:justify-center">
             <Button variant="outline" onClick={() => setRows(null)}>Cancelar</Button>
             <Button onClick={confirmImport} disabled={summary.ok === 0}>
               Confirmar Importação ({summary.ok})
@@ -2329,80 +2329,190 @@ function UploadArea({ accept, onFile, hint, tall }: { accept: string; onFile: (f
   return _UploadAreaImpl({ accept, onFile, hint, tall });
 }
 
+function SlimMetric({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: string | number;
+  tone?: "default" | "primary" | "success" | "danger";
+}) {
+  const toneClass = {
+    default: "text-foreground",
+    primary: "text-primary",
+    success: "text-[color:var(--success)]",
+    danger: "text-destructive",
+  }[tone];
+  return (
+    <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-xs">
+      <p className="truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={cn("mt-0.5 text-lg font-semibold tabular-nums leading-tight", toneClass)}>{value}</p>
+    </div>
+  );
+}
+
+type PreviewFilter = "all" | "ready" | "error" | "pago" | "reserva" | "pendente";
+
 function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
   const parentRef = useRef<HTMLDivElement | null>(null);
-  const ROW_HEIGHT = 60;
+  const ROW_HEIGHT = 40;
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<PreviewFilter>("all");
+
+  const filteredRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (filter === "ready" && r.result !== "Pronto") return false;
+      if (filter === "error" && r.result !== "Erro") return false;
+      if (filter === "pago" && r.financialStatus !== "Pago") return false;
+      if (filter === "reserva" && r.financialStatus !== "Reserva") return false;
+      if (filter === "pendente" && r.financialStatus !== "Pendente") return false;
+      if (!q) return true;
+      return (
+        r.name.toLowerCase().includes(q) ||
+        r.phone.toLowerCase().includes(q) ||
+        r.product.toLowerCase().includes(q) ||
+        r.platform.toLowerCase().includes(q)
+      );
+    });
+  }, [rows, query, filter]);
+
   const rowVirtualizer = useVirtualizer({
-    count: rows.length,
+    count: filteredRows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 12,
   });
 
+  // Compact column layout that fits within the modal width without horizontal scroll.
   const gridCols =
-    "grid-cols-[60px_90px_minmax(140px,1.2fr)_120px_minmax(140px,1.2fr)_110px_100px_120px_minmax(160px,1.4fr)_120px_110px_minmax(140px,1.2fr)]";
+    "grid-cols-[40px_minmax(110px,1.3fr)_110px_minmax(120px,1.4fr)_minmax(80px,0.9fr)_85px_82px_82px_minmax(120px,1.2fr)]";
+
+  const filterChips: { id: PreviewFilter; label: string }[] = [
+    { id: "all", label: "Todos" },
+    { id: "ready", label: "Prontos" },
+    { id: "error", label: "Erros" },
+    { id: "pago", label: "Pago" },
+    { id: "reserva", label: "Reserva" },
+    { id: "pendente", label: "Pendente" },
+  ];
 
   return (
-    <div className="flex h-full flex-col rounded-md border border-border">
-      <div className="flex flex-1 min-h-0 flex-col overflow-x-auto">
-        <div className="flex min-w-[1490px] flex-1 min-h-0 flex-col">
-          <div className={cn("grid shrink-0 border-b border-border bg-muted/40 px-3 py-2 text-left text-xs uppercase tracking-wide text-muted-foreground", gridCols)}>
-            <div className="font-medium">Linha</div>
-            <div className="font-medium">Data</div>
-            <div className="font-medium">Nome</div>
-            <div className="font-medium">Telefone</div>
-            <div className="font-medium">Produto</div>
-            <div className="font-medium">Plataforma</div>
-            <div className="font-medium">Valor</div>
-            <div className="font-medium">Status</div>
-            <div className="font-medium">Aviso</div>
-            <div className="font-medium">Cliente</div>
-            <div className="font-medium">Resultado</div>
-            <div className="font-medium">Erro</div>
-          </div>
-          <div ref={parentRef} className="flex-1 min-h-0 overflow-y-auto" role="rowgroup" aria-rowcount={rows.length}>
-        {rows.length === 0 ? (
-          <div className="p-6 text-center text-sm text-muted-foreground">Nenhuma linha para exibir.</div>
-        ) : (
-          <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
-            {rowVirtualizer.getVirtualItems().map((vi) => {
-              const r = rows[vi.index];
-              return (
-                <div
-                  key={vi.key}
-                  role="row"
-                  aria-rowindex={vi.index + 1}
-                  className={cn("absolute left-0 top-0 grid w-full items-center border-b border-border/60 px-3 text-sm", gridCols)}
-                  style={{ height: vi.size, transform: `translateY(${vi.start}px)` }}
-                >
-                  <div className="text-muted-foreground">{r.line}</div>
-                  <div className="text-muted-foreground">{r.date ?? "—"}</div>
-                  <div className="truncate" title={r.name}>{r.name || "—"}</div>
-                  <div className="text-muted-foreground">{r.phone || "—"}</div>
-                  <div className="truncate" title={r.product}>{r.product || "—"}</div>
-                  <div className="truncate text-muted-foreground">{r.platform || "—"}</div>
-                  <div className="tabular-nums">{Number.isFinite(r.totalValue ?? NaN) ? formatBRL(r.totalValue!) : "—"}</div>
-                  <div>
-                    <Tag variant={r.financialStatus === "Pago" ? "success" : r.financialStatus === "Pendente" ? "danger" : "warning"}>
-                      {r.financialStatus || "—"}
-                    </Tag>
-                  </div>
-                  <div className="truncate text-xs text-amber-600 dark:text-amber-400" title={r.statusWarning ?? ""}>
-                    {r.statusWarning ?? "—"}
-                  </div>
-                  <div className="text-muted-foreground">{r.clientFound ? "Encontrado" : "Será criado"}</div>
-                  <div><Tag variant={r.result === "Pronto" ? "success" : "danger"}>{r.result}</Tag></div>
-                  <div className="truncate text-destructive" title={r.errors.join("; ")}>{r.errors.join("; ") || "—"}</div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-          </div>
+    <div className="flex h-full flex-col gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar por nome, telefone, produto..."
+            className="h-8 pl-7 text-sm"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-1">
+          {filterChips.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setFilter(c.id)}
+              className={cn(
+                "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                filter === c.id
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:bg-muted",
+              )}
+            >
+              {c.label}
+            </button>
+          ))}
         </div>
       </div>
-      <div className="border-t border-border bg-muted/30 px-3 py-2 text-center text-xs text-muted-foreground">
-        {rows.length} {rows.length === 1 ? "linha" : "linhas"} • virtualização ativa para preservar a performance
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+        <div
+          className={cn(
+            "grid shrink-0 items-center gap-0 border-b border-border bg-muted/40 px-2 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground",
+            gridCols,
+          )}
+        >
+          <div className="font-medium">#</div>
+          <div className="font-medium">Nome</div>
+          <div className="font-medium">Telefone</div>
+          <div className="font-medium">Produto</div>
+          <div className="font-medium">Plataforma</div>
+          <div className="font-medium">Valor</div>
+          <div className="font-medium">Status</div>
+          <div className="font-medium">Result.</div>
+          <div className="font-medium">Aviso / Erro</div>
+        </div>
+        <div
+          ref={parentRef}
+          className="flex-1 min-h-0 overflow-y-auto"
+          role="rowgroup"
+          aria-rowcount={filteredRows.length}
+        >
+          {filteredRows.length === 0 ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              {rows.length === 0 ? "Nenhuma linha para exibir." : "Nenhum resultado para o filtro."}
+            </div>
+          ) : (
+            <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
+              {rowVirtualizer.getVirtualItems().map((vi) => {
+                const r = filteredRows[vi.index];
+                const aviso = r.errors.join("; ") || r.statusWarning || "";
+                const avisoTone = r.errors.length
+                  ? "text-destructive"
+                  : r.statusWarning
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-muted-foreground";
+                return (
+                  <div
+                    key={vi.key}
+                    role="row"
+                    aria-rowindex={vi.index + 1}
+                    className={cn(
+                      "absolute left-0 top-0 grid w-full items-center border-b border-border/60 px-2 text-xs",
+                      gridCols,
+                    )}
+                    style={{ height: vi.size, transform: `translateY(${vi.start}px)` }}
+                  >
+                    <div className="text-muted-foreground tabular-nums">{r.line}</div>
+                    <div className="truncate font-medium" title={r.name}>{r.name || "—"}</div>
+                    <div className="truncate text-muted-foreground tabular-nums" title={r.phone}>{r.phone || "—"}</div>
+                    <div className="truncate" title={r.product}>{r.product || "—"}</div>
+                    <div className="truncate text-muted-foreground" title={r.platform}>{r.platform || "—"}</div>
+                    <div className="tabular-nums">
+                      {Number.isFinite(r.totalValue ?? NaN) ? formatBRL(r.totalValue!) : "—"}
+                    </div>
+                    <div>
+                      <Tag
+                        variant={
+                          r.financialStatus === "Pago"
+                            ? "success"
+                            : r.financialStatus === "Pendente"
+                            ? "danger"
+                            : "warning"
+                        }
+                      >
+                        {r.financialStatus || "—"}
+                      </Tag>
+                    </div>
+                    <div>
+                      <Tag variant={r.result === "Pronto" ? "success" : "danger"}>{r.result}</Tag>
+                    </div>
+                    <div className={cn("truncate", avisoTone)} title={aviso}>
+                      {aviso || "—"}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div className="border-t border-border bg-muted/30 px-3 py-1.5 text-center text-[11px] text-muted-foreground">
+          {filteredRows.length} de {rows.length} {rows.length === 1 ? "linha" : "linhas"}
+          {filter !== "all" || query ? " (filtrado)" : ""}
+        </div>
       </div>
     </div>
   );
