@@ -46,6 +46,7 @@ import {
   type ConciergeTaskDraft,
 } from "@/components/concierge-task-confirm-modal";
 import type { ConciergeTaskType, ConciergePriority } from "@/lib/concierge-tasks.functions";
+import { DataIntegrityPanel } from "@/components/data-integrity-panel";
 
 /* ----------------------------- Quick actions ------------------------------ */
 
@@ -55,7 +56,7 @@ type QuickAction = {
   description: string;
   icon: React.ComponentType<{ className?: string }>;
   cardId?: DashboardCardId;
-  custom?: "new-client" | "add-product";
+  custom?: "new-client" | "add-product" | "validate-data";
   tone: "primary" | "danger" | "warning" | "success" | "neutral";
 };
 
@@ -64,6 +65,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   { id: "add-product", label: "Adicionar produto", description: "Vincular produto a cliente.", icon: Package, custom: "add-product", tone: "primary" },
   { id: "charge", label: "Cobrar cliente", description: "Cobranças elegíveis.", icon: CreditCard, cardId: "pending", tone: "primary" },
   { id: "view-pending", label: "Ver pendentes", description: "Pendências em aberto.", icon: AlertTriangle, cardId: "pending", tone: "primary" },
+  { id: "validate-data", label: "Validar dados", description: "Detecta inconsistências e sugere correções seguras.", icon: ShieldCheck, custom: "validate-data", tone: "success" },
 ];
 
 const SUGGESTION_STYLE: Record<
