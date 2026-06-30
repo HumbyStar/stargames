@@ -606,8 +606,15 @@ function parseProductsTable(table: Element): NotionProduct[] {
             : "Existe valor pago de entrada, portanto o status correto é Reserva.";
       rowWarnings.push(`Status corrigido de "${originalStatus}" para "${financialStatus}". ${statusWarning}`);
     }
-    const situationN = normalizeSituationBR(situation ?? "");
-    if (!situation) rowWarnings.push('Situação vazia (usado "Em Aberto").');
+    const situationResult = normalizeSituationBR(situation ?? "");
+    const situationN = situationResult.situation;
+    if (!String(situation ?? "").trim()) {
+      rowWarnings.push('Situação vazia (usado "Em Aberto").');
+    } else if (situationResult.unrecognized) {
+      rowWarnings.push(
+        `Situação "${String(situation).trim()}" não reconhecida — marcada como "Resolvido". Verifique a observação no Notion.`,
+      );
+    }
     const registerDate = normalizeDateBR(date ?? "");
     const dueDate = calculateDueDate(financialStatus, registerDate);
     products.push({
