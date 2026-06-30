@@ -23,8 +23,10 @@ import {
   UserCog,
   AlertTriangle,
   CheckCircle2,
+  Brain,
 } from "lucide-react";
 import { Card, PageHeader, Tag } from "@/components/ui-bits";
+import { AiTrainingModal } from "@/components/ai-training-modal";
 import { Button } from "@/components/ui/button";
 import { AccessManagementDialog } from "@/components/access-management";
 import { Input } from "@/components/ui/input";
@@ -358,6 +360,7 @@ export function ConfiguracoesSection() {
   const [diagLoading, setDiagLoading] = useState(false);
   const [mergeBusy, setMergeBusy] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
+  const [aiTrainingOpen, setAiTrainingOpen] = useState(false);
   const duplicateGroups = findDuplicateClientGroups();
 
   const refreshDiag = async () => {
