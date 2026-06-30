@@ -226,6 +226,7 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
   const [createOpen, setCreateOpen] = useState(false);
   const [resetUser, setResetUser] = useState<AdminUserRow | null>(null);
   const [rolesUser, setRolesUser] = useState<AdminUserRow | null>(null);
+  const [respUser, setRespUser] = useState<AdminUserRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminUserRow | null>(null);
 
   const invalidate = () => {
@@ -273,6 +274,7 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
               <TableHead>E-mail</TableHead>
               <TableHead>Nome</TableHead>
               <TableHead>Papéis</TableHead>
+              <TableHead>Responsabilidades</TableHead>
               <TableHead>Último login</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Ações</TableHead>
@@ -280,7 +282,7 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground">Carregando...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground">Carregando...</TableCell></TableRow>
             )}
             {users?.map((u) => (
               <TableRow key={u.id}>
@@ -294,6 +296,21 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
                     ))}
                   </div>
                 </TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {(u.responsibilities ?? []).length === 0 && (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                    {(u.responsibilities ?? []).map((r) => (
+                      <Badge key={r} variant="outline" className="text-[10px]">
+                        {RESPONSIBILITY_LABELS[r as UserResponsibility] ?? r}
+                      </Badge>
+                    ))}
+                    {u.canReceiveTasks === false && (
+                      <Badge variant="destructive" className="text-[10px]">não recebe tarefas</Badge>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell className="text-xs text-muted-foreground">
                   {u.lastSignInAt ? new Date(u.lastSignInAt).toLocaleString("pt-BR") : "nunca"}
                 </TableCell>
@@ -304,6 +321,9 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
                   <div className="flex justify-end gap-1">
                     <Button size="sm" variant="ghost" title="Editar papéis" onClick={() => setRolesUser(u)}>
                       <UserCog className="size-4" />
+                    </Button>
+                    <Button size="sm" variant="ghost" title="Responsabilidades" onClick={() => setRespUser(u)}>
+                      <ShieldCheck className="size-4" />
                     </Button>
                     <Button size="sm" variant="ghost" title="Redefinir senha" onClick={() => setResetUser(u)}>
                       <KeyRound className="size-4" />
@@ -331,7 +351,7 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
               </TableRow>
             ))}
             {!isLoading && users && users.length === 0 && (
-              <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground">Nenhum usuário.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground">Nenhum usuário.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -340,6 +360,7 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
       <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={invalidate} />
       <ResetPasswordDialog user={resetUser} onClose={() => setResetUser(null)} />
       <EditRolesDialog user={rolesUser} onClose={() => setRolesUser(null)} onSaved={invalidate} />
+      <EditResponsibilitiesDialog user={respUser} onClose={() => setRespUser(null)} onSaved={invalidate} />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
         <AlertDialogContent>
