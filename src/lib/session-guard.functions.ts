@@ -41,17 +41,9 @@ export const claimSession = createServerFn({ method: "POST" })
       .eq("user_id", userId)
       .maybeSingle();
 
-    if (existing && existing.session_id !== data.sessionId && !data.force) {
-      const lastSeenMs = new Date(existing.last_seen).getTime();
-      const ageSeconds = (Date.now() - lastSeenMs) / 1000;
-      if (ageSeconds < ACTIVE_WINDOW_SECONDS) {
-        return {
-          ok: false,
-          reason: "session_already_active",
-          lastSeen: existing.last_seen,
-        };
-      }
-    }
+    // Sessões concorrentes liberadas: o dispositivo atual sempre toma o slot.
+    // O `existing` é mantido apenas para registro/auditoria — nunca bloqueia.
+    void existing;
 
     const { error: upErr } = await supabase
       .from("active_sessions")
@@ -78,20 +70,16 @@ export const heartbeatSession = createServerFn({ method: "POST" })
     const internal = await hasAnyInternalRole(supabase, userId);
     if (!internal) return { valid: false, reason: "no_internal_access" };
 
-    const { data: existing } = await supabase
-      .from("active_sessions")
-      .select("session_id")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (!existing || existing.session_id !== data.sessionId) {
-      return { valid: false, reason: "replaced" };
-    }
-
+    // Sessões concorrentes liberadas: cada dispositivo mantém o próprio
+    // heartbeat sem expulsar os outros. O dispositivo em uso sempre permanece
+    // ativo. A tabela ainda registra a última sessão vista, apenas para
+    // auditoria — nunca rejeitamos por "replaced".
     await supabase
       .from("active_sessions")
-      .update({ last_seen: new Date().toISOString() })
-      .eq("user_id", userId);
+      .upsert(
+        { user_id: userId, session_id: data.sessionId, last_seen: new Date().toISOString() },
+        { onConflict: "user_id" },
+      );
     return { valid: true };
   });
 
