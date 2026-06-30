@@ -2449,28 +2449,30 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
         </div>
       </div>
       <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
-        <div
-          className={cn(
-            "grid shrink-0 items-center gap-0 border-b border-border bg-muted/40 px-2 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground",
-            gridCols,
-          )}
-        >
-          <div className="font-medium">#</div>
-          <div className="font-medium">Nome</div>
-          <div className="font-medium">Telefone</div>
-          <div className="font-medium">Produto</div>
-          <div className="font-medium">Plataforma</div>
-          <div className="font-medium">Valor</div>
-          <div className="font-medium">Status</div>
-          <div className="font-medium">Result.</div>
-          <div className="font-medium">Aviso / Erro</div>
-        </div>
-        <div
-          ref={parentRef}
-          className="flex-1 min-h-0 overflow-y-auto"
-          role="rowgroup"
-          aria-rowcount={filteredRows.length}
-        >
+        <div className="flex h-full min-h-0 flex-col overflow-x-auto">
+          <div className="flex min-w-[860px] flex-1 min-h-0 flex-col">
+            <div
+              className={cn(
+                "grid shrink-0 items-center gap-0 border-b border-border bg-muted/60 px-2 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground backdrop-blur",
+                gridCols,
+              )}
+            >
+              <div className="font-medium">#</div>
+              <div className="font-medium">Nome</div>
+              <div className="font-medium">Telefone</div>
+              <div className="font-medium">Produto</div>
+              <div className="font-medium">Plataforma</div>
+              <div className="font-medium">Valor</div>
+              <div className="font-medium">Status</div>
+              <div className="font-medium">Result.</div>
+              <div className="font-medium">Aviso / Erro</div>
+            </div>
+            <div
+              ref={parentRef}
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
+              role="rowgroup"
+              aria-rowcount={filteredRows.length}
+            >
           {filteredRows.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">
               {rows.length === 0 ? "Nenhuma linha para exibir." : "Nenhum resultado para o filtro."}
@@ -2480,6 +2482,7 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
               {rowVirtualizer.getVirtualItems().map((vi) => {
                 const r = filteredRows[vi.index];
                 const aviso = r.errors.join("; ") || r.statusWarning || "";
+                const isError = r.result === "Erro";
                 const avisoTone = r.errors.length
                   ? "text-destructive"
                   : r.statusWarning
@@ -2492,6 +2495,7 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
                     aria-rowindex={vi.index + 1}
                     className={cn(
                       "absolute left-0 top-0 grid w-full items-center border-b border-border/60 px-2 text-xs",
+                      isError && "bg-destructive/10 border-l-2 border-l-destructive",
                       gridCols,
                     )}
                     style={{ height: vi.size, transform: `translateY(${vi.start}px)` }}
@@ -2528,6 +2532,8 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
               })}
             </div>
           )}
+            </div>
+          </div>
         </div>
         <div className="border-t border-border bg-muted/30 px-3 py-1.5 text-center text-[11px] text-muted-foreground">
           {filteredRows.length} de {rows.length} {rows.length === 1 ? "linha" : "linhas"}
