@@ -66,7 +66,7 @@ export interface ConciergeIntentResult {
   suggestedTitle?: string;
   suggestedDescription?: string;
   suggestedPriority?: ConciergePriority;
-  linkedFilter?: Record<string, unknown> | null;
+  linkedFilter?: Record<string, string | number | boolean | null> | null;
   linkedEntityType?: "client" | "product" | "mgmv_agreement" | "mgmv_installment" | "collection" | "import_batch" | null;
 }
 
