@@ -292,9 +292,11 @@ export function ImportProgressModal({
               </details>
             )}
 
-            <div className="text-xs text-muted-foreground">
-              Fechando em <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">{countdown ?? 5}</span>s…
-            </div>
+            {countdown !== null && (
+              <div className="text-xs text-muted-foreground">
+                Fechando em <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">{countdown}</span>s…
+              </div>
+            )}
             <Button
               onClick={onClose}
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
