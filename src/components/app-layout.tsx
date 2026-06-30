@@ -93,10 +93,11 @@ function SearchBox({
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return [] as Array<
-      | { type: "client"; id: string; title: string; subtitle: string }
-      | { type: "product"; id: string; clientId: string; title: string; subtitle: string }
-    >;
+    if (!q)
+      return [] as Array<
+        | { type: "client"; id: string; title: string; subtitle: string }
+        | { type: "product"; id: string; clientId: string; title: string; subtitle: string }
+      >;
     const digits = q.replace(/\D/g, "");
     const clientMatches = clients
       .filter((c) => {
@@ -191,7 +192,11 @@ function SearchBox({
                 )}
               >
                 <div className="grid size-8 place-items-center rounded-full bg-primary/10 text-primary">
-                  {item.type === "client" ? <User className="size-4" /> : <Package className="size-4" />}
+                  {item.type === "client" ? (
+                    <User className="size-4" />
+                  ) : (
+                    <Package className="size-4" />
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{item.title}</p>
@@ -360,9 +365,7 @@ function RightNavIcon({
     "group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90";
   switch (id) {
     case "search":
-      return (
-        <InlineSearch open={searchOpen} onToggle={onSearch} />
-      );
+      return <InlineSearch open={searchOpen} onToggle={onSearch} />;
     case "finance":
       return (
         <Tooltip>
@@ -399,7 +402,12 @@ function RightNavIcon({
       return (
         <Tooltip>
           <TooltipTrigger asChild>
-            <button onClick={onSettings} data-tour="settings-button" aria-label="Configurações" className={baseBtn}>
+            <button
+              onClick={onSettings}
+              data-tour="settings-button"
+              aria-label="Configurações"
+              className={baseBtn}
+            >
               <Settings className="size-5 transition-transform duration-300 group-hover:rotate-90" />
             </button>
           </TooltipTrigger>
@@ -410,7 +418,11 @@ function RightNavIcon({
       return (
         <Tooltip>
           <TooltipTrigger asChild>
-            <button onClick={onNotifications} aria-label="Notificações" className={cn(baseBtn, "relative")}>
+            <button
+              onClick={onNotifications}
+              aria-label="Notificações"
+              className={cn(baseBtn, "relative")}
+            >
               <Bell className="size-5 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
               {unreadCount > 0 && (
                 <>
@@ -429,7 +441,12 @@ function RightNavIcon({
       return (
         <Tooltip>
           <TooltipTrigger asChild>
-            <button onClick={onHelp} data-tour="help-button" aria-label="Tutorial" className={baseBtn}>
+            <button
+              onClick={onHelp}
+              data-tour="help-button"
+              aria-label="Tutorial"
+              className={baseBtn}
+            >
               <HelpCircle className="size-5 transition-transform duration-300 group-hover:scale-125 group-hover:animate-pulse" />
             </button>
           </TooltipTrigger>
@@ -445,7 +462,10 @@ function RightNavIcon({
               aria-label={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
               className="group grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
             >
-              <span key={isDark ? "sun" : "moon"} className="inline-flex animate-in fade-in zoom-in-75 duration-300 group-hover:rotate-12 transition-transform">
+              <span
+                key={isDark ? "sun" : "moon"}
+                className="inline-flex animate-in fade-in zoom-in-75 duration-300 group-hover:rotate-12 transition-transform"
+              >
                 {isDark ? <Sun className="size-5" /> : <Moon className="size-5" />}
               </span>
             </button>
@@ -474,8 +494,8 @@ function RightNavIcon({
 function _FloatingNavbarImpl() {
   const [openMobile, setOpenMobile] = useState(false);
   const [activeSection, setActiveSection] = useState<string>("dashboard");
-  const [isDark, setIsDark] = useState(() =>
-    typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
+  const [isDark, setIsDark] = useState(
+    () => typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
   );
   const [navHover, setNavHover] = useState(false);
   const [navProgress, setNavProgress] = useState<"false" | "loop" | "leaving">("false");
@@ -696,135 +716,135 @@ function _FloatingNavbarImpl() {
 
   return (
     <TooltipProvider delayDuration={150}>
-    <nav
-      ref={navRef}
-      data-tour="navbar"
-      data-mode={isCompact ? "compact" : "full"}
-      data-progress={navProgress}
-      data-scrolled={scrolled ? "true" : "false"}
-      data-dimmed={navDimmed ? "true" : "false"}
-      data-anim={navbarCfg.animation.disabled ? "off" : "on"}
-      data-search={searchOpen ? "open" : "closed"}
-      style={{
-        ["--nav-anim-hover" as string]: `${navbarCfg.animation.hoverMs}ms`,
-        ["--nav-anim-leave" as string]: `${navbarCfg.animation.leaveMs}ms`,
-        ["--nav-anim-ring" as string]: `${navbarCfg.animation.ringMs}ms`,
-      }}
-      onMouseEnter={() => setNavHover(true)}
-      onMouseLeave={() => setNavHover(false)}
-      onPointerEnter={() => setNavHover(true)}
-      onPointerLeave={() => setNavHover(false)}
-      className={cn(
-        "floating-navbar flex items-center gap-3 px-3 py-2 md:px-4",
-        "h-[60px] md:h-[60px]",
-        isCompact && "md:gap-2 md:py-2 md:px-3",
-      )}
-    >
-      {/* Looping border highlight on the navbar container border itself */}
-      {navBorderPath && (
-        <svg
-          aria-hidden
-          className="nav-progress-ring pointer-events-none absolute inset-0 block h-full w-full overflow-visible"
-          viewBox={`0 0 ${navSize.width} ${navSize.height}`}
-          preserveAspectRatio="none"
-        >
-          <path className="nav-progress-track" d={navBorderPath} pathLength={100} />
-          <path className="nav-progress-runner" d={navBorderPath} pathLength={100} />
-        </svg>
-      )}
-      <button
-        type="button"
-        onClick={openConcierge}
-        aria-label="Abrir Concierge Operacional"
-        title="Concierge Operacional"
-        className="group relative flex items-center gap-2 pl-2 pr-1 transition-transform duration-300 hover:-translate-y-0.5 active:scale-95"
-      >
-        <span className="relative grid size-11 place-items-center shrink-0">
-          {/* fade glow behind mascot */}
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-[-6px] rounded-full bg-[radial-gradient(circle_at_center,color-mix(in_oklch,var(--color-primary)_45%,transparent)_0%,transparent_70%)] blur-md opacity-70 transition-opacity duration-[800ms] ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:opacity-100"
-          />
-          <img
-            src={mascotAsset.url}
-            alt=""
-            draggable={false}
-            className="relative size-11 rounded-full object-cover ring-1 ring-primary/30 shadow-md transition-all duration-[800ms] ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:shadow-lg group-hover:rotate-6 group-hover:scale-110"
-          />
-        </span>
-        <div
-          className={cn(
-            "hidden lg:block leading-tight transition-all duration-[700ms] ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-0.5 overflow-hidden",
-            isCompact ? "max-w-0 opacity-0" : "max-w-[180px] opacity-100",
-          )}
-        >
-          <p className="text-sm font-semibold">Star Games</p>
-          <p className="text-[10px] text-muted-foreground">Gestão Operacional</p>
-        </div>
-      </button>
-
-      <div
+      <nav
+        ref={navRef}
+        data-tour="navbar"
+        data-mode={isCompact ? "compact" : "full"}
+        data-progress={navProgress}
+        data-scrolled={scrolled ? "true" : "false"}
+        data-dimmed={navDimmed ? "true" : "false"}
+        data-anim={navbarCfg.animation.disabled ? "off" : "on"}
+        data-search={searchOpen ? "open" : "closed"}
+        style={{
+          ["--nav-anim-hover" as string]: `${navbarCfg.animation.hoverMs}ms`,
+          ["--nav-anim-leave" as string]: `${navbarCfg.animation.leaveMs}ms`,
+          ["--nav-anim-ring" as string]: `${navbarCfg.animation.ringMs}ms`,
+        }}
+        onMouseEnter={() => setNavHover(true)}
+        onMouseLeave={() => setNavHover(false)}
+        onPointerEnter={() => setNavHover(true)}
+        onPointerLeave={() => setNavHover(false)}
         className={cn(
-          "hidden md:flex items-center gap-1 rounded-full bg-foreground/5 transition-all duration-[700ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
-          isCompact ? "p-0.5" : "p-1",
+          "floating-navbar flex items-center gap-3 px-3 py-2 md:px-4",
+          "h-[60px] md:h-[60px]",
+          isCompact && "md:gap-2 md:py-2 md:px-3",
         )}
       >
-        {navItems.map((i) => (
-          <NavLink
-            key={i.id}
-            id={i.id}
-            label={i.label}
-            Icon={i.icon}
-            active={activeSection === i.id}
-            onClick={() => scrollToSection(i.id)}
-            compact={isCompact}
-          />
-        ))}
-      </div>
-
-      <div className="ml-auto flex items-center gap-1.5 md:gap-2 md:pl-2">
-        {visibleIds.map((iconId) => {
-          const meta = getIconMeta(iconId);
-          if (!meta) return null;
-          return (
-            <RightNavIcon
-              key={iconId}
-              id={iconId}
-              isDark={isDark}
-              unreadCount={unreadCount}
-              searchOpen={searchOpen}
-              onSearch={() => {
-                setSearchOpen((v) => !v);
-              }}
-              onFinance={openFinance}
-              onImport={openImport}
-              onSettings={openSettings}
-              onNotifications={openNotifications}
-              onHelp={openHelp}
-              onToggleTheme={toggleTheme}
-              onSignOut={handleSignOut}
-            />
-          );
-        })}
+        {/* Looping border highlight on the navbar container border itself */}
+        {navBorderPath && (
+          <svg
+            aria-hidden
+            className="nav-progress-ring pointer-events-none absolute inset-0 block h-full w-full overflow-visible"
+            viewBox={`0 0 ${navSize.width} ${navSize.height}`}
+            preserveAspectRatio="none"
+          >
+            <path className="nav-progress-track" d={navBorderPath} pathLength={100} />
+            <path className="nav-progress-runner" d={navBorderPath} pathLength={100} />
+          </svg>
+        )}
         <button
-          className="group md:hidden grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 active:scale-90"
-          onClick={() => setOpenMobile((v) => !v)}
-          aria-label="Menu"
-          aria-expanded={openMobile}
-          aria-controls="mobile-nav-menu"
+          type="button"
+          onClick={openConcierge}
+          aria-label="Abrir Concierge Operacional"
+          title="Concierge Operacional"
+          className="group relative flex items-center gap-2 pl-2 pr-1 transition-transform duration-300 hover:-translate-y-0.5 active:scale-95"
         >
-          <Menu className="size-5" />
+          <span className="relative grid size-11 place-items-center shrink-0">
+            {/* fade glow behind mascot */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-[-6px] rounded-full bg-[radial-gradient(circle_at_center,color-mix(in_oklch,var(--color-primary)_45%,transparent)_0%,transparent_70%)] blur-md opacity-70 transition-opacity duration-[800ms] ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:opacity-100"
+            />
+            <img
+              src={mascotAsset.url}
+              alt=""
+              draggable={false}
+              className="relative size-11 rounded-full object-cover ring-1 ring-primary/30 shadow-md transition-all duration-[800ms] ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:shadow-lg group-hover:rotate-6 group-hover:scale-110"
+            />
+          </span>
+          <div
+            className={cn(
+              "hidden lg:block leading-tight transition-all duration-[700ms] ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-0.5 overflow-hidden",
+              isCompact ? "max-w-0 opacity-0" : "max-w-[180px] opacity-100",
+            )}
+          >
+            <p className="text-sm font-semibold">Star Games</p>
+            <p className="text-[10px] text-muted-foreground">Gestão Operacional</p>
+          </div>
         </button>
-      </div>
-    </nav>
-    {openMobile && (
-      <div
-        id="mobile-nav-menu"
-        role="menu"
-        ref={mobileMenuRef}
-        style={{ top: `${navBottom + 8}px` }}
-        className="fixed right-4 z-[60] w-[260px] max-w-[calc(100vw-32px)] rounded-2xl border border-border bg-popover/95 backdrop-blur-xl shadow-xl ring-1 ring-foreground/5 md:hidden p-1.5 animate-in fade-in slide-in-from-top-2 duration-200"
-      >
+
+        <div
+          className={cn(
+            "hidden md:flex items-center gap-1 rounded-full bg-foreground/5 transition-all duration-[700ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
+            isCompact ? "p-0.5" : "p-1",
+          )}
+        >
+          {navItems.map((i) => (
+            <NavLink
+              key={i.id}
+              id={i.id}
+              label={i.label}
+              Icon={i.icon}
+              active={activeSection === i.id}
+              onClick={() => scrollToSection(i.id)}
+              compact={isCompact}
+            />
+          ))}
+        </div>
+
+        <div className="ml-auto flex items-center gap-1.5 md:gap-2 md:pl-2">
+          {visibleIds.map((iconId) => {
+            const meta = getIconMeta(iconId);
+            if (!meta) return null;
+            return (
+              <RightNavIcon
+                key={iconId}
+                id={iconId}
+                isDark={isDark}
+                unreadCount={unreadCount}
+                searchOpen={searchOpen}
+                onSearch={() => {
+                  setSearchOpen((v) => !v);
+                }}
+                onFinance={openFinance}
+                onImport={openImport}
+                onSettings={openSettings}
+                onNotifications={openNotifications}
+                onHelp={openHelp}
+                onToggleTheme={toggleTheme}
+                onSignOut={handleSignOut}
+              />
+            );
+          })}
+          <button
+            className="group md:hidden grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 active:scale-90"
+            onClick={() => setOpenMobile((v) => !v)}
+            aria-label="Menu"
+            aria-expanded={openMobile}
+            aria-controls="mobile-nav-menu"
+          >
+            <Menu className="size-5" />
+          </button>
+        </div>
+      </nav>
+      {openMobile && (
+        <div
+          id="mobile-nav-menu"
+          role="menu"
+          ref={mobileMenuRef}
+          style={{ top: `${navBottom + 8}px` }}
+          className="fixed right-4 z-[60] w-[260px] max-w-[calc(100vw-32px)] rounded-2xl border border-border bg-popover/95 backdrop-blur-xl shadow-xl ring-1 ring-foreground/5 md:hidden p-1.5 animate-in fade-in slide-in-from-top-2 duration-200"
+        >
           {navItems.map((i) => {
             const Icon = i.icon;
             const active = activeSection === i.id;
@@ -832,7 +852,10 @@ function _FloatingNavbarImpl() {
               <button
                 key={i.id}
                 role="menuitem"
-                onClick={() => { setOpenMobile(false); scrollToSection(i.id); }}
+                onClick={() => {
+                  setOpenMobile(false);
+                  scrollToSection(i.id);
+                }}
                 className={cn(
                   "flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left transition-colors",
                   active
@@ -846,10 +869,24 @@ function _FloatingNavbarImpl() {
             );
           })}
           <div className="my-1.5 h-px bg-border/70" />
-          <button role="menuitem" onClick={() => { setOpenMobile(false); openImport(); }} className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent">
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpenMobile(false);
+              openImport();
+            }}
+            className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent"
+          >
             <Upload className="size-4 opacity-70 shrink-0" /> Importar
           </button>
-          <button role="menuitem" onClick={() => { setOpenMobile(false); openNotifications(); }} className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent">
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpenMobile(false);
+              openNotifications();
+            }}
+            className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent"
+          >
             <Bell className="size-4 opacity-70 shrink-0" />
             <span className="flex-1">Notificações</span>
             {unreadCount > 0 && (
@@ -858,18 +895,50 @@ function _FloatingNavbarImpl() {
               </span>
             )}
           </button>
-          <button role="menuitem" onClick={() => { setOpenMobile(false); openHelp(); }} className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent">
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpenMobile(false);
+              openHelp();
+            }}
+            className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent"
+          >
             <HelpCircle className="size-4 opacity-70 shrink-0" /> Ajuda
           </button>
-          <button role="menuitem" onClick={() => { setOpenMobile(false); openSettings(); }} className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent">
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpenMobile(false);
+              openSettings();
+            }}
+            className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent"
+          >
             <Settings className="size-4 opacity-70 shrink-0" /> Configurações
           </button>
           <div className="my-1.5 h-px bg-border/70" />
-          <button role="menuitem" onClick={() => { setOpenMobile(false); toggleTheme(); }} className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent">
-            {isDark ? <Sun className="size-4 opacity-70 shrink-0" /> : <Moon className="size-4 opacity-70 shrink-0" />}
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpenMobile(false);
+              toggleTheme();
+            }}
+            className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent"
+          >
+            {isDark ? (
+              <Sun className="size-4 opacity-70 shrink-0" />
+            ) : (
+              <Moon className="size-4 opacity-70 shrink-0" />
+            )}
             {isDark ? "Modo claro" : "Modo escuro"}
           </button>
-          <button role="menuitem" onClick={() => { setOpenMobile(false); void handleSignOut(); }} className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-destructive hover:bg-destructive/10">
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpenMobile(false);
+              void handleSignOut();
+            }}
+            className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-destructive hover:bg-destructive/10"
+          >
             <LogOut className="size-4 shrink-0" /> Sair
           </button>
         </div>
@@ -931,7 +1000,7 @@ function GlobalModals() {
   return (
     <>
       <Dialog open={importOpen} onOpenChange={(o) => (o ? null : closeImport())}>
-        <DialogContent data-tour="import-modal" className="max-w-6xl max-h-[92vh] overflow-y-auto">
+        <DialogContent data-tour="import-modal" className="max-w-6xl sm:max-h-[92vh]">
           <DialogHeader className="sr-only">
             <DialogTitle>Importação</DialogTitle>
             <DialogDescription>Importe clientes e produtos em massa.</DialogDescription>
@@ -941,7 +1010,7 @@ function GlobalModals() {
       </Dialog>
 
       <Dialog open={settingsOpen} onOpenChange={(o) => (o ? null : closeSettings())}>
-        <DialogContent data-tour="settings-modal" className="max-w-5xl max-h-[92vh] overflow-y-auto">
+        <DialogContent data-tour="settings-modal" className="max-w-5xl sm:max-h-[92vh]">
           <DialogHeader className="sr-only">
             <DialogTitle>Configurações</DialogTitle>
             <DialogDescription>Preferências, regras e zona de perigo.</DialogDescription>
@@ -951,7 +1020,7 @@ function GlobalModals() {
       </Dialog>
 
       <Dialog open={helpOpen} onOpenChange={(o) => (o ? null : closeHelp())}>
-        <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl sm:max-h-[92vh]">
           <DialogHeader className="sr-only">
             <DialogTitle>Central de Ajuda</DialogTitle>
             <DialogDescription>Tutoriais guiados visuais.</DialogDescription>
@@ -961,7 +1030,7 @@ function GlobalModals() {
       </Dialog>
 
       <Dialog open={notificationsOpen} onOpenChange={(o) => (o ? null : closeNotifications())}>
-        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-md sm:max-h-[85vh]">
           <DialogHeader>
             <DialogTitle>Notificações</DialogTitle>
             <DialogDescription>Alertas e avisos recentes da operação.</DialogDescription>
@@ -971,7 +1040,7 @@ function GlobalModals() {
       </Dialog>
 
       <Dialog open={financeOpen} onOpenChange={(o) => (o ? null : closeFinance())}>
-        <DialogContent className="max-w-[95vw] xl:max-w-7xl max-h-[92vh] overflow-y-auto">
+        <DialogContent className="max-w-[95vw] xl:max-w-7xl sm:max-h-[92vh]">
           <DialogHeader className="sr-only">
             <DialogTitle>Finanças</DialogTitle>
             <DialogDescription>Dashboard financeiro consolidado.</DialogDescription>

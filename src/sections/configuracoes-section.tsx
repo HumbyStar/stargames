@@ -1,15 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+  ArrowLeft,
+  ArrowRight,
+  Bell,
+  Database,
   Download,
   FileSpreadsheet,
   FileText,
   History,
   KeyRound,
+  LayoutGrid,
+  ListChecks,
+  Navigation,
   Save,
+  ShieldCheck,
+  ShieldAlert,
+  Sliders,
+  Sun,
   Trash2,
   Users,
+  UserCog,
   AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 import { Card, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -47,8 +60,22 @@ import {
   type ImportStatus,
   type ImportDiagnostics,
 } from "@/lib/store";
+import { useUiStore } from "@/lib/ui-store";
 import { NotificationsPrefsCard } from "@/components/notifications-prefs-card";
 import { NavbarSettingsCard } from "@/components/navbar-settings-card";
+import { cn } from "@/lib/utils";
+
+type View =
+  | "home"
+  | "import"
+  | "rules"
+  | "preferences"
+  | "security"
+  | "notifications"
+  | "navbar"
+  | "history"
+  | "duplicates"
+  | "danger";
 
 function DiagBox({
   label,
@@ -66,23 +93,19 @@ function DiagBox({
         ? "border-amber-500/40"
         : "border-border/60";
   return (
-    <div className={`rounded-md border ${ring} bg-card/50 px-3 py-2`}>
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+    <div className={`min-w-0 rounded-md border ${ring} bg-card/50 px-3 py-2`}>
+      <div className="truncate text-[11px] uppercase tracking-wide text-muted-foreground">
         {label}
       </div>
-      <div className="text-lg font-semibold">{value}</div>
+      <div className="text-lg font-semibold tabular-nums">{value}</div>
     </div>
   );
 }
 
-const dangerCatalog: Record<
-  DangerAction,
-  { title: string; description: string; cta: string }
-> = {
+const dangerCatalog: Record<DangerAction, { title: string; description: string; cta: string }> = {
   deleteImportedData: {
     title: "Excluir dados importados",
-    description:
-      "Remove o histórico de importações. Clientes e produtos permanecem intactos.",
+    description: "Remove o histórico de importações. Clientes e produtos permanecem intactos.",
     cta: "Excluir importações",
   },
   deleteAllClients: {
@@ -93,8 +116,7 @@ const dangerCatalog: Record<
   },
   deleteAllProducts: {
     title: "Excluir todos os produtos",
-    description:
-      "Remove permanentemente todos os produtos cadastrados. Os clientes permanecem.",
+    description: "Remove permanentemente todos os produtos cadastrados. Os clientes permanecem.",
     cta: "Excluir produtos",
   },
   resetSystem: {
@@ -125,9 +147,7 @@ function FieldRow({
     <div className="flex items-start justify-between gap-4 py-2">
       <div className="min-w-0">
         <p className="text-sm font-medium">{label}</p>
-        {description ? (
-          <p className="text-xs text-muted-foreground">{description}</p>
-        ) : null}
+        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
       </div>
       <div className="shrink-0">{children}</div>
     </div>
@@ -151,11 +171,167 @@ function toCSV(rows: Array<Record<string, unknown>>) {
     const s = String(v ?? "");
     return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  return [
-    headers.join(","),
-    ...rows.map((r) => headers.map((h) => esc(r[h])).join(",")),
-  ].join("\n");
+  return [headers.join(","), ...rows.map((r) => headers.map((h) => esc(r[h])).join(","))].join(
+    "\n",
+  );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cards do hub
+// ─────────────────────────────────────────────────────────────────────────────
+
+function PrimaryCard({
+  icon: Icon,
+  title,
+  description,
+  stats,
+  actions,
+  tone = "primary",
+  onOpen,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+  stats: Array<{ label: string; value: string | number; tone?: "default" | "warning" | "danger" }>;
+  actions: Array<{
+    label: string;
+    onClick: () => void;
+    variant?: "default" | "outline" | "secondary";
+  }>;
+  tone?: "primary" | "amber";
+  onOpen: () => void;
+}) {
+  const toneRing =
+    tone === "amber"
+      ? "border-amber-500/30 bg-gradient-to-br from-amber-500/[0.08] via-card to-card"
+      : "border-primary/30 bg-gradient-to-br from-primary/[0.08] via-card to-card";
+  const toneIcon =
+    tone === "amber" ? "bg-amber-500/15 text-amber-500" : "bg-primary/15 text-primary";
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn(
+        "group flex w-full flex-col gap-4 rounded-2xl border p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.99]",
+        toneRing,
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div className={cn("grid size-11 shrink-0 place-items-center rounded-xl", toneIcon)}>
+          <Icon className="size-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-base font-semibold">{title}</h3>
+          <p className="text-sm text-muted-foreground">{description}</p>
+        </div>
+        <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        {stats.map((s) => (
+          <DiagBox key={s.label} label={s.label} value={s.value} status={s.tone} />
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-2 pt-1">
+        {actions.map((a) => (
+          <span
+            key={a.label}
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              a.onClick();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                a.onClick();
+              }
+            }}
+            className={cn(
+              "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors cursor-pointer",
+              a.variant === "default"
+                ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
+                : a.variant === "secondary"
+                  ? "border-border bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                  : "border-border bg-background text-foreground hover:bg-accent",
+            )}
+          >
+            {a.label}
+          </span>
+        ))}
+      </div>
+    </button>
+  );
+}
+
+function SecondaryCard({
+  icon: Icon,
+  title,
+  summary,
+  status,
+  onOpen,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  summary: string;
+  status?: string;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group flex w-full min-h-[112px] flex-col gap-2 rounded-xl border border-border bg-card p-4 text-left shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md active:scale-[0.99]"
+    >
+      <div className="flex items-center gap-2">
+        <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent text-accent-foreground">
+          <Icon className="size-4" />
+        </div>
+        <h4 className="min-w-0 flex-1 truncate text-sm font-semibold">{title}</h4>
+        <ArrowRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+      </div>
+      <p className="text-xs text-muted-foreground">{summary}</p>
+      {status ? (
+        <p className="mt-auto truncate text-[11px] font-medium text-foreground/70">{status}</p>
+      ) : null}
+    </button>
+  );
+}
+
+function DiagChip({
+  tone,
+  label,
+  onClick,
+}: {
+  tone: "danger" | "warning" | "info";
+  label: string;
+  onClick: () => void;
+}) {
+  const cls =
+    tone === "danger"
+      ? "border-destructive/50 bg-destructive/10 text-destructive hover:bg-destructive/15"
+      : tone === "warning"
+        ? "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-300 hover:bg-amber-500/15"
+        : "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors",
+        cls,
+      )}
+    >
+      <AlertTriangle className="size-3.5 shrink-0" />
+      <span className="truncate">{label}</span>
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function ConfiguracoesSection() {
   const preferences = useStore((s) => s.preferences);
@@ -174,6 +350,10 @@ export function ConfiguracoesSection() {
   const mergeDuplicateClients = useStore((s) => s.mergeDuplicateClients);
   const refreshSnapshot = useStore((s) => s.refreshSnapshot);
 
+  const openImportModal = useUiStore((s) => s.openImport);
+  const closeSettings = useUiStore((s) => s.closeSettings);
+
+  const [view, setView] = useState<View>("home");
   const [diag, setDiag] = useState<ImportDiagnostics | null>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [mergeBusy, setMergeBusy] = useState(false);
@@ -200,11 +380,12 @@ export function ConfiguracoesSection() {
 
   const [prefDraft, setPrefDraft] = useState(preferences);
   const [rulesDraft, setRulesDraft] = useState(rules);
-
-  // Mantém os drafts sincronizados com o store — se a Zona de Perigo resetar
-  // o sistema, os formulários refletem na hora e não regravam dados antigos.
-  useEffect(() => { setPrefDraft(preferences); }, [preferences]);
-  useEffect(() => { setRulesDraft(rules); }, [rules]);
+  useEffect(() => {
+    setPrefDraft(preferences);
+  }, [preferences]);
+  useEffect(() => {
+    setRulesDraft(rules);
+  }, [rules]);
 
   const [dangerOpen, setDangerOpen] = useState(false);
   const [dangerAction, setDangerAction] = useState<DangerAction | null>(null);
@@ -247,7 +428,14 @@ export function ConfiguracoesSection() {
     let csv = "";
     let filename = "";
     if (kind === "clientes") {
-      csv = toCSV(clients.map((c) => ({ id: c.id, nome: c.name, telefone: c.phone, observacoes: c.notes ?? "" })));
+      csv = toCSV(
+        clients.map((c) => ({
+          id: c.id,
+          nome: c.name,
+          telefone: c.phone,
+          observacoes: c.notes ?? "",
+        })),
+      );
       filename = "clientes.csv";
     } else if (kind === "produtos") {
       csv = toCSV(
@@ -284,7 +472,8 @@ export function ConfiguracoesSection() {
   };
 
   const handleTemplate = (kind: "csv" | "excel") => {
-    const headers = "nome,telefone,produto,plataforma,valor_total,valor_pago,status_financeiro,situacao,data_cadastro,data_vencimento";
+    const headers =
+      "nome,telefone,produto,plataforma,valor_total,valor_pago,status_financeiro,situacao,data_cadastro,data_vencimento";
     if (kind === "csv") {
       downloadFile("modelo_importacao.csv", headers + "\n", "text/csv;charset=utf-8");
     } else {
@@ -293,463 +482,870 @@ export function ConfiguracoesSection() {
     toast.success("Modelo baixado.");
   };
 
-  const scrollToHistory = () => {
-    document.getElementById("import-history")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  const lastImport = importHistory[0];
+  const hasPreviewActive = (diag?.importProgressRows ?? 0) > 0;
+  const hasMgmvInconsistency =
+    (diag?.mgmvClientsWithoutAgreement ?? 0) > 0 || (diag?.mgmvProductsWithoutAgreementId ?? 0) > 0;
+  const hasDuplicates = duplicateGroups.length > 0;
+  const hasImportErrors = (lastImport?.errors ?? 0) > 0;
+
+  const alerts = useMemo(() => {
+    const arr: Array<{
+      key: string;
+      tone: "danger" | "warning";
+      label: string;
+      onClick: () => void;
+    }> = [];
+    if (hasPreviewActive)
+      arr.push({
+        key: "preview",
+        tone: "warning",
+        label: `Preview temporário de importação ativo (${diag?.importProgressRows ?? 0})`,
+        onClick: () => setView("import"),
+      });
+    if (hasImportErrors)
+      arr.push({
+        key: "import-errors",
+        tone: "danger",
+        label: `Última importação com ${lastImport!.errors} erro(s)`,
+        onClick: () => setView("history"),
+      });
+    if (hasDuplicates)
+      arr.push({
+        key: "dup",
+        tone: "warning",
+        label: `${duplicateGroups.length} grupo(s) de clientes duplicados`,
+        onClick: () => setView("duplicates"),
+      });
+    if (hasMgmvInconsistency)
+      arr.push({
+        key: "mgmv",
+        tone: "danger",
+        label: "Inconsistência em MGMV (clientes/produtos sem acordo)",
+        onClick: () => setView("import"),
+      });
+    return arr;
+  }, [
+    hasPreviewActive,
+    hasImportErrors,
+    hasDuplicates,
+    hasMgmvInconsistency,
+    diag,
+    duplicateGroups,
+    lastImport,
+  ]);
+
+  // Detalhe: header com botão voltar
+  const DetailHeader = ({ title, description }: { title: string; description?: string }) => (
+    <div className="mb-4 flex items-start gap-3">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setView("home")}
+        className="shrink-0 gap-1.5"
+      >
+        <ArrowLeft className="size-4" /> Voltar
+      </Button>
+      <div className="min-w-0">
+        <h2 className="truncate text-lg font-semibold">{title}</h2>
+        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+      </div>
+    </div>
+  );
 
   return (
     <section id="configuracoes" className="one-page-section">
-      <PageHeader
-        title="Configurações"
-        description="Gerencie preferências, regras operacionais, importações, segurança e manutenção do sistema."
-      />
+      {view === "home" && (
+        <>
+          <PageHeader
+            title="Configurações"
+            description="Visão operacional. Comece pelas duas configurações mais críticas no topo."
+          />
 
-      {/* Diagnóstico da Importação — leitura DIRETA das tabelas oficiais. */}
-      <Card title="Diagnóstico da Importação" className="mb-4">
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <DiagBox label="Clientes (banco)" value={diag?.clientsCount ?? "—"} />
-            <DiagBox label="Produtos (banco)" value={diag?.productsCount ?? "—"} />
-            <DiagBox
-              label="Acordos MGMV"
-              value={diag?.agreementsCount ?? "—"}
-              status={diag && diag.agreementsCount === 0 ? "warning" : "default"}
-            />
-            <DiagBox label="Parcelas MGMV" value={diag?.installmentsCount ?? "—"} />
-          </div>
-
-          <div className="grid gap-2 rounded-md border border-border/60 bg-card/50 p-3 text-xs">
-            <div className="flex items-center justify-between">
-              <span>Clientes MGMV sem acordo oficial</span>
-              <Tag
-                variant={
-                  diag && diag.mgmvClientsWithoutAgreement > 0 ? "danger" : "success"
-                }
-              >
-                {diag?.mgmvClientsWithoutAgreement ?? "—"}
-              </Tag>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Produtos marcados MGMV sem mgmv_agreement_id</span>
-              <Tag
-                variant={
-                  diag && diag.mgmvProductsWithoutAgreementId > 0 ? "danger" : "success"
-                }
-              >
-                {diag?.mgmvProductsWithoutAgreementId ?? "—"}
-              </Tag>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Importações interrompidas (import_progress)</span>
-              <Tag
-                variant={
-                  diag && diag.importProgressRows > 0 ? "warning" : "neutral"
-                }
-              >
-                {diag?.importProgressRows ?? "—"}
-              </Tag>
-            </div>
-            <div className="flex items-center justify-between text-muted-foreground">
-              <span>Versão do reset (cache)</span>
-              <code className="text-[10px]">{diag?.resetVersion || "—"}</code>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="outline" onClick={refreshDiag} disabled={diagLoading}>
-              {diagLoading ? "Atualizando…" : "Atualizar diagnóstico"}
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                clearImportCache();
-                toast.success(
-                  "Cache temporário da importação limpo. Dados oficiais preservados.",
-                );
-                void refreshDiag();
-              }}
-            >
-              Limpar cache temporário da importação
-            </Button>
-            <p className="text-[11px] text-muted-foreground">
-              O botão limpa apenas o cache local (preview, progresso interrompido).
-              Não toca em clientes, produtos, acordos ou parcelas oficiais.
-            </p>
-          </div>
-        </div>
-      </Card>
-
-      {/* Deduplicação de clientes */}
-      <Card title="Clientes duplicados" className="mb-4">
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Detecta clientes com o mesmo telefone (ou mesmo nome quando o
-            telefone está vazio) e unifica em um único cliente primário,
-            preservando produtos, acordos MGMV e observações.
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Tag variant={duplicateGroups.length > 0 ? "warning" : "success"}>
-              {duplicateGroups.length} grupo(s) duplicado(s)
-            </Tag>
-            <Tag variant="neutral">
-              {duplicateGroups.reduce((s, g) => s + g.duplicateIds.length, 0)} cliente(s) a remover
-            </Tag>
-            <Tag variant="neutral">
-              {duplicateGroups.reduce((s, g) => s + g.productsToReassign, 0)} produto(s) a reatribuir
-            </Tag>
-          </div>
-
-          {duplicateGroups.length > 0 && (
-            <div className="max-h-48 overflow-auto rounded-md border border-border/60 bg-card/50 p-2 text-xs">
-              <ul className="space-y-1">
-                {duplicateGroups.slice(0, 50).map((g) => (
-                  <li key={g.key} className="flex items-center justify-between gap-2">
-                    <span className="truncate">
-                      <strong>{g.name}</strong>{" "}
-                      <span className="text-muted-foreground">({g.phone || "sem telefone"})</span>
-                    </span>
-                    <span className="text-muted-foreground">
-                      mantém 1 · remove {g.duplicateIds.length} · move {g.productsToReassign} prod
-                    </span>
-                  </li>
-                ))}
-                {duplicateGroups.length > 50 && (
-                  <li className="text-muted-foreground">
-                    … e mais {duplicateGroups.length - 50} grupo(s)
-                  </li>
-                )}
-              </ul>
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              variant="default"
-              disabled={duplicateGroups.length === 0 || mergeBusy}
-              onClick={async () => {
-                if (duplicateGroups.length === 0) return;
-                const total = duplicateGroups.reduce(
-                  (s, g) => s + g.duplicateIds.length,
-                  0,
-                );
-                if (
-                  !confirm(
-                    `Unificar ${duplicateGroups.length} grupo(s)? ${total} cliente(s) duplicado(s) serão removidos e seus produtos/acordos reatribuídos ao cliente primário. Esta ação não pode ser desfeita.`,
-                  )
-                )
-                  return;
-                setMergeBusy(true);
-                try {
-                  const r = await mergeDuplicateClients();
-                  toast.success(
-                    `Unificação concluída: ${r.groups} grupo(s), ${r.removed} cliente(s) removidos, ${r.reassignedProducts} produto(s) reatribuídos.`,
-                  );
-                  await refreshSnapshot();
-                  await refreshDiag();
-                } catch (err) {
-                  console.error(err);
-                  toast.error("Falha ao unificar duplicados.");
-                } finally {
-                  setMergeBusy(false);
-                }
-              }}
-            >
-              {mergeBusy ? "Unificando…" : "Unificar duplicados"}
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => void refreshSnapshot()}>
-              Recarregar lista
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* Preferências */}
-        <Card title="Preferências do Sistema">
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="company-name">Nome da empresa</Label>
-              <Input
-                id="company-name"
-                value={prefDraft.companyName}
-                maxLength={80}
-                onChange={(e) => setPrefDraft({ ...prefDraft, companyName: e.target.value })}
-              />
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>Moeda padrão</Label>
-                <Select
-                  value={prefDraft.currency}
-                  onValueChange={(v) => setPrefDraft({ ...prefDraft, currency: v as typeof prefDraft.currency })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="BRL">BRL — Real Brasileiro</SelectItem>
-                    <SelectItem value="USD">USD — Dólar</SelectItem>
-                    <SelectItem value="EUR">EUR — Euro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Formato de data</Label>
-                <Select
-                  value={prefDraft.dateFormat}
-                  onValueChange={(v) => setPrefDraft({ ...prefDraft, dateFormat: v as typeof prefDraft.dateFormat })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="DD/MM/AAAA">DD/MM/AAAA</SelectItem>
-                    <SelectItem value="AAAA-MM-DD">AAAA-MM-DD</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-border bg-background/40 px-3">
-              <FieldRow label="Modo compacto de tabelas" description="Reduz o espaçamento das linhas.">
-                <Switch
-                  checked={prefDraft.compactTables}
-                  onCheckedChange={(v) => setPrefDraft({ ...prefDraft, compactTables: v })}
-                />
-              </FieldRow>
-              <FieldRow label="Exibir alertas no Dashboard" description="Mostra avisos operacionais no topo.">
-                <Switch
-                  checked={prefDraft.showDashboardAlerts}
-                  onCheckedChange={(v) => setPrefDraft({ ...prefDraft, showDashboardAlerts: v })}
-                />
-              </FieldRow>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Tema da interface</Label>
-              <Select
-                value={prefDraft.theme}
-                onValueChange={(v) => setPrefDraft({ ...prefDraft, theme: v as typeof prefDraft.theme })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="light">Claro</SelectItem>
-                  <SelectItem value="dark">Escuro</SelectItem>
-                  <SelectItem value="system">Sistema</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex justify-end">
-              <Button onClick={handleSavePrefs} className="gap-2">
-                <Save className="size-4" /> Salvar Preferências
-              </Button>
-            </div>
-          </div>
-        </Card>
-
-        {/* Regras Operacionais */}
-        <Card title="Regras Operacionais">
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="reserva-days">Prazo padrão de reserva</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="reserva-days"
-                  type="number"
-                  min={1}
-                  max={365}
-                  value={rulesDraft.reservaDaysDefault}
-                  onChange={(e) =>
-                    setRulesDraft({ ...rulesDraft, reservaDaysDefault: Math.max(1, Number(e.target.value) || 1) })
-                  }
-                  className="w-28"
-                />
-                <span className="text-sm text-muted-foreground">dias</span>
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-border bg-background/40 px-3">
-              <FieldRow label="Bloquear nova reserva para cliente com MGMV ativo">
-                <Switch
-                  checked={rulesDraft.blockReserveOnActiveMGMV}
-                  onCheckedChange={(v) => setRulesDraft({ ...rulesDraft, blockReserveOnActiveMGMV: v })}
-                />
-              </FieldRow>
-              <FieldRow label="Ocultar desistências da Collection">
-                <Switch
-                  checked={rulesDraft.hideDesistenciasFromCollection}
-                  onCheckedChange={(v) => setRulesDraft({ ...rulesDraft, hideDesistenciasFromCollection: v })}
-                />
-              </FieldRow>
-              <FieldRow label="Ocultar abandonos da Collection">
-                <Switch
-                  checked={rulesDraft.hideAbandonosFromCollection}
-                  onCheckedChange={(v) => setRulesDraft({ ...rulesDraft, hideAbandonosFromCollection: v })}
-                />
-              </FieldRow>
-              <FieldRow label="Calcular vencimento automaticamente para Reserva">
-                <Switch
-                  checked={rulesDraft.autoCalculateReservaDueDate}
-                  onCheckedChange={(v) => setRulesDraft({ ...rulesDraft, autoCalculateReservaDueDate: v })}
-                />
-              </FieldRow>
-              <FieldRow label="Considerar Pendente vencido como inadimplente">
-                <Switch
-                  checked={rulesDraft.treatOverduePendenteAsDelinquent}
-                  onCheckedChange={(v) => setRulesDraft({ ...rulesDraft, treatOverduePendenteAsDelinquent: v })}
-                />
-              </FieldRow>
-            </div>
-
-            <div className="flex justify-end">
-              <Button onClick={handleSaveRules} className="gap-2">
-                <Save className="size-4" /> Salvar Regras
-              </Button>
-            </div>
-          </div>
-        </Card>
-
-        {/* Importação e Exportação */}
-        <Card title="Importação e Exportação">
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Button variant="outline" onClick={() => handleTemplate("csv")} className="justify-start gap-2">
-              <FileText className="size-4" /> Baixar modelo CSV
-            </Button>
-            <Button variant="outline" onClick={() => handleTemplate("excel")} className="justify-start gap-2">
-              <FileSpreadsheet className="size-4" /> Baixar modelo Excel
-            </Button>
-            <Button variant="outline" onClick={() => handleExport("clientes")} className="justify-start gap-2">
-              <Download className="size-4" /> Exportar base de clientes
-            </Button>
-            <Button variant="outline" onClick={() => handleExport("produtos")} className="justify-start gap-2">
-              <Download className="size-4" /> Exportar produtos
-            </Button>
-            <Button variant="outline" onClick={() => handleExport("cobrancas")} className="justify-start gap-2">
-              <Download className="size-4" /> Exportar cobranças
-            </Button>
-            <Button variant="outline" onClick={scrollToHistory} className="justify-start gap-2">
-              <History className="size-4" /> Ver histórico de importações
-            </Button>
-          </div>
-        </Card>
-
-        {/* Segurança */}
-        <Card title="Segurança e Acesso">
-          <div className="space-y-4">
-            <div className="rounded-lg border border-border bg-background/40 px-3">
-              <FieldRow label="Exigir confirmação antes de excluir dados">
-                <Switch
-                  checked={security.requireConfirmBeforeDelete}
-                  onCheckedChange={(v) => setSecurity({ requireConfirmBeforeDelete: v })}
-                />
-              </FieldRow>
-              <FieldRow label="Bloquear exclusão em massa sem senha">
-                <Switch
-                  checked={security.blockMassDeleteWithoutPassword}
-                  onCheckedChange={(v) => setSecurity({ blockMassDeleteWithoutPassword: v })}
-                />
-              </FieldRow>
-              <FieldRow label="Ativar log de auditoria">
-                <Switch
-                  checked={security.enableAuditLog}
-                  onCheckedChange={(v) => setSecurity({ enableAuditLog: v })}
-                />
-              </FieldRow>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" className="gap-2" onClick={() => setAccessOpen(true)}>
-                <Users className="size-4" /> Gerenciar usuários
-              </Button>
-              <Button variant="outline" className="gap-2" onClick={() => setAccessOpen(true)}>
-                <KeyRound className="size-4" /> Alterar senha administrativa
-              </Button>
-            </div>
-          </div>
-        </Card>
-
-        {/* Notificações */}
-        <NotificationsPrefsCard />
-
-        {/* Navbar — reordenação, ocultar ícones, tempos de animação */}
-        <NavbarSettingsCard />
-      </div>
-
-      {/* Histórico de Importações */}
-      <div id="import-history" className="mt-6">
-        <Card title="Histórico de Importações">
-          {importHistory.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              Nenhuma importação registrada ainda.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Origem</TableHead>
-                    <TableHead>Arquivo</TableHead>
-                    <TableHead className="text-right">Clientes</TableHead>
-                    <TableHead className="text-right">Produtos</TableHead>
-                    <TableHead className="text-right">Erros</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {importHistory.map((h) => (
-                    <TableRow key={h.id}>
-                      <TableCell className="whitespace-nowrap">{formatDateBR(h.date)}</TableCell>
-                      <TableCell>{h.source}</TableCell>
-                      <TableCell className="font-medium">{h.file}</TableCell>
-                      <TableCell className="text-right tabular-nums">{h.clientsCreated}</TableCell>
-                      <TableCell className="text-right tabular-nums">{h.productsAdded}</TableCell>
-                      <TableCell className="text-right tabular-nums">{h.errors}</TableCell>
-                      <TableCell>
-                        <Tag variant={statusVariant[h.status]}>{h.status}</Tag>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </Card>
-      </div>
-
-      {/* Zona de Perigo */}
-      <div className="mt-6">
-        <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-5 shadow-xs">
-          <div className="mb-4 flex items-start gap-3">
-            <div className="grid size-9 place-items-center rounded-full bg-destructive/15 text-destructive">
-              <AlertTriangle className="size-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-destructive">Zona de Perigo</h3>
-              <p className="text-sm text-muted-foreground">
-                Ações irreversíveis que podem apagar dados do sistema. Use com cuidado.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            {(Object.keys(dangerCatalog) as DangerAction[]).map((action) => (
+          {/* Diagnóstico rápido */}
+          <div className="mb-5 rounded-xl border border-border bg-card/50 p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <ShieldAlert className="size-4 text-amber-500 shrink-0" />
+              <h3 className="text-sm font-semibold">Diagnóstico rápido</h3>
               <Button
-                key={action}
-                variant="destructive"
-                onClick={() => openDanger(action)}
-                className="justify-start gap-2"
+                variant="ghost"
+                size="sm"
+                onClick={refreshDiag}
+                disabled={diagLoading}
+                className="ml-auto h-7 px-2 text-xs"
               >
-                <Trash2 className="size-4" />
-                {dangerCatalog[action].cta}
+                {diagLoading ? "Atualizando…" : "Atualizar"}
               </Button>
-            ))}
+            </div>
+            {alerts.length === 0 ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
+                Sistema sem alertas críticos de configuração.
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {alerts.map((a) => (
+                  <DiagChip key={a.key} tone={a.tone} label={a.label} onClick={a.onClick} />
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      </div>
 
-      {/* Modal confirmação */}
-      <Dialog open={dangerOpen} onOpenChange={(v) => { if (!v) { setDangerOpen(false); setConfirmText(""); } }}>
+          {/* Cards principais */}
+          <div className="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <PrimaryCard
+              icon={Database}
+              tone="primary"
+              title="Importação e Dados"
+              description="Base operacional do sistema. Erros aqui quebram Dashboard, MGMV e Collection."
+              stats={[
+                { label: "Clientes", value: diag?.clientsCount ?? clients.length },
+                { label: "Produtos", value: diag?.productsCount ?? products.length },
+                {
+                  label: "Erros pendentes",
+                  value: lastImport?.errors ?? 0,
+                  tone: (lastImport?.errors ?? 0) > 0 ? "danger" : "default",
+                },
+                {
+                  label: "Preview temp.",
+                  value: hasPreviewActive ? "Ativo" : "Limpo",
+                  tone: hasPreviewActive ? "warning" : "default",
+                },
+              ]}
+              actions={[
+                {
+                  label: "Abrir importação",
+                  variant: "default",
+                  onClick: () => {
+                    closeSettings();
+                    setTimeout(() => openImportModal(), 0);
+                  },
+                },
+                {
+                  label: "Limpar cache temporário",
+                  variant: "outline",
+                  onClick: () => {
+                    clearImportCache();
+                    toast.success("Cache temporário limpo.");
+                    void refreshDiag();
+                  },
+                },
+                { label: "Ver diagnóstico", variant: "outline", onClick: () => setView("import") },
+                { label: "Histórico", variant: "outline", onClick: () => setView("history") },
+              ]}
+              onOpen={() => setView("import")}
+            />
+
+            <PrimaryCard
+              icon={Users}
+              tone="amber"
+              title="Usuários e Responsabilidades"
+              description="Quem acessa, quem é admin e quem recebe tarefas do Concierge."
+              stats={[
+                { label: "Clientes ativos", value: clients.length },
+                {
+                  label: "Última importação",
+                  value: lastImport ? formatDateBR(lastImport.date) : "—",
+                },
+                { label: "Auditoria", value: security.enableAuditLog ? "Ativa" : "Desligada" },
+                {
+                  label: "Confirmação delete",
+                  value: security.requireConfirmBeforeDelete ? "Sim" : "Não",
+                  tone: security.requireConfirmBeforeDelete ? "default" : "warning",
+                },
+              ]}
+              actions={[
+                {
+                  label: "Gerenciar usuários",
+                  variant: "default",
+                  onClick: () => setAccessOpen(true),
+                },
+                {
+                  label: "Definir responsabilidades",
+                  variant: "outline",
+                  onClick: () => setAccessOpen(true),
+                },
+                { label: "Ver permissões", variant: "outline", onClick: () => setAccessOpen(true) },
+                { label: "Segurança", variant: "outline", onClick: () => setView("security") },
+              ]}
+              onOpen={() => setAccessOpen(true)}
+            />
+          </div>
+
+          {/* Cards secundários */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <SecondaryCard
+              icon={Sun}
+              title="Tema e aparência"
+              summary="Modo claro/escuro, moeda, formato de data e tabelas compactas."
+              status={`Tema: ${prefDraft.theme === "system" ? "Sistema" : prefDraft.theme === "dark" ? "Escuro" : "Claro"}`}
+              onOpen={() => setView("preferences")}
+            />
+            <SecondaryCard
+              icon={Sliders}
+              title="Regras operacionais"
+              summary="Prazo de reserva, bloqueios MGMV e regras de Collection."
+              status={`Prazo padrão: ${rulesDraft.reservaDaysDefault} dias`}
+              onOpen={() => setView("rules")}
+            />
+            <SecondaryCard
+              icon={ShieldCheck}
+              title="Segurança e Auditoria"
+              summary="Confirmações, bloqueios em massa e log de auditoria."
+              status={security.enableAuditLog ? "Auditoria ativa" : "Auditoria desligada"}
+              onOpen={() => setView("security")}
+            />
+            <SecondaryCard
+              icon={Bell}
+              title="Notificações"
+              summary="Alertas operacionais e preferências de aviso."
+              onOpen={() => setView("notifications")}
+            />
+            <SecondaryCard
+              icon={Navigation}
+              title="Navbar"
+              summary="Ordem dos ícones, ocultar itens e tempos de animação."
+              onOpen={() => setView("navbar")}
+            />
+            <SecondaryCard
+              icon={UserCog}
+              title="Clientes duplicados"
+              summary="Detecta e unifica clientes duplicados preservando produtos."
+              status={hasDuplicates ? `${duplicateGroups.length} grupo(s)` : "Nenhum encontrado"}
+              onOpen={() => setView("duplicates")}
+            />
+            <SecondaryCard
+              icon={History}
+              title="Histórico de importações"
+              summary="Veja todas as importações já executadas."
+              status={lastImport ? `Última: ${formatDateBR(lastImport.date)}` : "Nenhuma"}
+              onOpen={() => setView("history")}
+            />
+            <SecondaryCard
+              icon={LayoutGrid}
+              title="Importação e Exportação"
+              summary="Baixe modelos e exporte clientes, produtos e cobranças."
+              onOpen={() => setView("import")}
+            />
+            <SecondaryCard
+              icon={Trash2}
+              title="Zona de perigo"
+              summary="Ações irreversíveis: limpar bases, resetar sistema."
+              status="Use com cuidado"
+              onOpen={() => setView("danger")}
+            />
+          </div>
+        </>
+      )}
+
+      {view === "import" && (
+        <>
+          <DetailHeader title="Importação e Dados" description="Diagnóstico, exportação e cache." />
+
+          <Card title="Diagnóstico da Importação" className="mb-4">
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <DiagBox label="Clientes (banco)" value={diag?.clientsCount ?? "—"} />
+                <DiagBox label="Produtos (banco)" value={diag?.productsCount ?? "—"} />
+                <DiagBox
+                  label="Acordos MGMV"
+                  value={diag?.agreementsCount ?? "—"}
+                  status={diag && diag.agreementsCount === 0 ? "warning" : "default"}
+                />
+                <DiagBox label="Parcelas MGMV" value={diag?.installmentsCount ?? "—"} />
+              </div>
+
+              <div className="grid gap-2 rounded-md border border-border/60 bg-card/50 p-3 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>Clientes MGMV sem acordo oficial</span>
+                  <Tag
+                    variant={diag && diag.mgmvClientsWithoutAgreement > 0 ? "danger" : "success"}
+                  >
+                    {diag?.mgmvClientsWithoutAgreement ?? "—"}
+                  </Tag>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>Produtos marcados MGMV sem mgmv_agreement_id</span>
+                  <Tag
+                    variant={diag && diag.mgmvProductsWithoutAgreementId > 0 ? "danger" : "success"}
+                  >
+                    {diag?.mgmvProductsWithoutAgreementId ?? "—"}
+                  </Tag>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>Importações interrompidas (import_progress)</span>
+                  <Tag variant={diag && diag.importProgressRows > 0 ? "warning" : "neutral"}>
+                    {diag?.importProgressRows ?? "—"}
+                  </Tag>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-muted-foreground">
+                  <span>Versão do reset (cache)</span>
+                  <code className="text-[10px]">{diag?.resetVersion || "—"}</code>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="outline" onClick={refreshDiag} disabled={diagLoading}>
+                  {diagLoading ? "Atualizando…" : "Atualizar diagnóstico"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    clearImportCache();
+                    toast.success(
+                      "Cache temporário da importação limpo. Dados oficiais preservados.",
+                    );
+                    void refreshDiag();
+                  }}
+                >
+                  Limpar cache temporário
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    closeSettings();
+                    setTimeout(() => openImportModal(), 0);
+                  }}
+                >
+                  Abrir importação
+                </Button>
+              </div>
+            </div>
+          </Card>
+
+          <Card title="Importação e Exportação">
+            <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
+              <Button
+                variant="outline"
+                onClick={() => handleTemplate("csv")}
+                className="justify-start gap-2 min-h-11"
+              >
+                <FileText className="size-4" /> Baixar modelo CSV
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleTemplate("excel")}
+                className="justify-start gap-2 min-h-11"
+              >
+                <FileSpreadsheet className="size-4" /> Baixar modelo Excel
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleExport("clientes")}
+                className="justify-start gap-2 min-h-11"
+              >
+                <Download className="size-4" /> Exportar clientes
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleExport("produtos")}
+                className="justify-start gap-2 min-h-11"
+              >
+                <Download className="size-4" /> Exportar produtos
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleExport("cobrancas")}
+                className="justify-start gap-2 min-h-11"
+              >
+                <Download className="size-4" /> Exportar cobranças
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setView("history")}
+                className="justify-start gap-2 min-h-11"
+              >
+                <History className="size-4" /> Ver histórico
+              </Button>
+            </div>
+          </Card>
+        </>
+      )}
+
+      {view === "history" && (
+        <>
+          <DetailHeader title="Histórico de Importações" />
+          <Card title="Histórico">
+            {importHistory.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                Nenhuma importação registrada ainda.
+              </p>
+            ) : (
+              <>
+                {/* Mobile: cards */}
+                <ul className="space-y-2 sm:hidden">
+                  {importHistory.map((h) => (
+                    <li key={h.id} className="rounded-lg border border-border bg-card/50 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{h.file}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDateBR(h.date)} · {h.source}
+                          </p>
+                        </div>
+                        <Tag variant={statusVariant[h.status]}>{h.status}</Tag>
+                      </div>
+                      <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                          <span className="text-muted-foreground">Clientes</span>
+                          <div className="font-semibold tabular-nums">{h.clientsCreated}</div>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Produtos</span>
+                          <div className="font-semibold tabular-nums">{h.productsAdded}</div>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Erros</span>
+                          <div
+                            className={cn(
+                              "font-semibold tabular-nums",
+                              h.errors > 0 && "text-destructive",
+                            )}
+                          >
+                            {h.errors}
+                          </div>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                {/* Desktop: tabela */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Data</TableHead>
+                        <TableHead>Origem</TableHead>
+                        <TableHead>Arquivo</TableHead>
+                        <TableHead className="text-right">Clientes</TableHead>
+                        <TableHead className="text-right">Produtos</TableHead>
+                        <TableHead className="text-right">Erros</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {importHistory.map((h) => (
+                        <TableRow key={h.id}>
+                          <TableCell className="whitespace-nowrap">
+                            {formatDateBR(h.date)}
+                          </TableCell>
+                          <TableCell>{h.source}</TableCell>
+                          <TableCell className="font-medium">{h.file}</TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {h.clientsCreated}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {h.productsAdded}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">{h.errors}</TableCell>
+                          <TableCell>
+                            <Tag variant={statusVariant[h.status]}>{h.status}</Tag>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )}
+          </Card>
+        </>
+      )}
+
+      {view === "duplicates" && (
+        <>
+          <DetailHeader
+            title="Clientes duplicados"
+            description="Detecta e unifica clientes pelo telefone ou nome."
+          />
+          <Card title="Clientes duplicados">
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Detecta clientes com o mesmo telefone (ou mesmo nome quando o telefone está vazio) e
+                unifica em um único cliente primário, preservando produtos, acordos MGMV e
+                observações.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Tag variant={hasDuplicates ? "warning" : "success"}>
+                  {duplicateGroups.length} grupo(s) duplicado(s)
+                </Tag>
+                <Tag variant="neutral">
+                  {duplicateGroups.reduce((s, g) => s + g.duplicateIds.length, 0)} cliente(s) a
+                  remover
+                </Tag>
+                <Tag variant="neutral">
+                  {duplicateGroups.reduce((s, g) => s + g.productsToReassign, 0)} produto(s) a
+                  reatribuir
+                </Tag>
+              </div>
+
+              {hasDuplicates && (
+                <div className="max-h-64 overflow-auto rounded-md border border-border/60 bg-card/50 p-2 text-xs">
+                  <ul className="space-y-1">
+                    {duplicateGroups.slice(0, 50).map((g) => (
+                      <li key={g.key} className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="min-w-0 truncate">
+                          <strong>{g.name}</strong>{" "}
+                          <span className="text-muted-foreground">
+                            ({g.phone || "sem telefone"})
+                          </span>
+                        </span>
+                        <span className="text-muted-foreground">
+                          remove {g.duplicateIds.length} · move {g.productsToReassign} prod
+                        </span>
+                      </li>
+                    ))}
+                    {duplicateGroups.length > 50 && (
+                      <li className="text-muted-foreground">
+                        … e mais {duplicateGroups.length - 50} grupo(s)
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  disabled={!hasDuplicates || mergeBusy}
+                  onClick={async () => {
+                    if (!hasDuplicates) return;
+                    const total = duplicateGroups.reduce((s, g) => s + g.duplicateIds.length, 0);
+                    if (
+                      !confirm(
+                        `Unificar ${duplicateGroups.length} grupo(s)? ${total} cliente(s) duplicado(s) serão removidos e seus produtos/acordos reatribuídos. Esta ação não pode ser desfeita.`,
+                      )
+                    )
+                      return;
+                    setMergeBusy(true);
+                    try {
+                      const r = await mergeDuplicateClients();
+                      toast.success(
+                        `Unificação concluída: ${r.groups} grupo(s), ${r.removed} removido(s), ${r.reassignedProducts} produto(s) reatribuído(s).`,
+                      );
+                      await refreshSnapshot();
+                      await refreshDiag();
+                    } catch (err) {
+                      console.error(err);
+                      toast.error("Falha ao unificar duplicados.");
+                    } finally {
+                      setMergeBusy(false);
+                    }
+                  }}
+                >
+                  {mergeBusy ? "Unificando…" : "Unificar duplicados"}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => void refreshSnapshot()}>
+                  Recarregar lista
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </>
+      )}
+
+      {view === "preferences" && (
+        <>
+          <DetailHeader
+            title="Tema e aparência"
+            description="Preferências visuais e de formatação."
+          />
+          <Card title="Preferências do Sistema">
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="company-name">Nome da empresa</Label>
+                <Input
+                  id="company-name"
+                  value={prefDraft.companyName}
+                  maxLength={80}
+                  onChange={(e) => setPrefDraft({ ...prefDraft, companyName: e.target.value })}
+                />
+              </div>
+
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Moeda padrão</Label>
+                  <Select
+                    value={prefDraft.currency}
+                    onValueChange={(v) =>
+                      setPrefDraft({ ...prefDraft, currency: v as typeof prefDraft.currency })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="BRL">BRL — Real Brasileiro</SelectItem>
+                      <SelectItem value="USD">USD — Dólar</SelectItem>
+                      <SelectItem value="EUR">EUR — Euro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Formato de data</Label>
+                  <Select
+                    value={prefDraft.dateFormat}
+                    onValueChange={(v) =>
+                      setPrefDraft({ ...prefDraft, dateFormat: v as typeof prefDraft.dateFormat })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DD/MM/AAAA">DD/MM/AAAA</SelectItem>
+                      <SelectItem value="AAAA-MM-DD">AAAA-MM-DD</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border bg-background/40 px-3">
+                <FieldRow
+                  label="Modo compacto de tabelas"
+                  description="Reduz o espaçamento das linhas."
+                >
+                  <Switch
+                    checked={prefDraft.compactTables}
+                    onCheckedChange={(v) => setPrefDraft({ ...prefDraft, compactTables: v })}
+                  />
+                </FieldRow>
+                <FieldRow
+                  label="Exibir alertas no Dashboard"
+                  description="Mostra avisos operacionais no topo."
+                >
+                  <Switch
+                    checked={prefDraft.showDashboardAlerts}
+                    onCheckedChange={(v) => setPrefDraft({ ...prefDraft, showDashboardAlerts: v })}
+                  />
+                </FieldRow>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Tema da interface</Label>
+                <Select
+                  value={prefDraft.theme}
+                  onValueChange={(v) =>
+                    setPrefDraft({ ...prefDraft, theme: v as typeof prefDraft.theme })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="light">Claro</SelectItem>
+                    <SelectItem value="dark">Escuro</SelectItem>
+                    <SelectItem value="system">Sistema</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex justify-end">
+                <Button onClick={handleSavePrefs} className="gap-2 min-h-11 w-full sm:w-auto">
+                  <Save className="size-4" /> Salvar Preferências
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </>
+      )}
+
+      {view === "rules" && (
+        <>
+          <DetailHeader
+            title="Regras operacionais"
+            description="Prazos, bloqueios e regras de Collection."
+          />
+          <Card title="Regras Operacionais">
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="reserva-days">Prazo padrão de reserva</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="reserva-days"
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={rulesDraft.reservaDaysDefault}
+                    onChange={(e) =>
+                      setRulesDraft({
+                        ...rulesDraft,
+                        reservaDaysDefault: Math.max(1, Number(e.target.value) || 1),
+                      })
+                    }
+                    className="w-28"
+                  />
+                  <span className="text-sm text-muted-foreground">dias</span>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border bg-background/40 px-3">
+                <FieldRow label="Bloquear nova reserva para cliente com MGMV ativo">
+                  <Switch
+                    checked={rulesDraft.blockReserveOnActiveMGMV}
+                    onCheckedChange={(v) =>
+                      setRulesDraft({ ...rulesDraft, blockReserveOnActiveMGMV: v })
+                    }
+                  />
+                </FieldRow>
+                <FieldRow label="Ocultar desistências da Collection">
+                  <Switch
+                    checked={rulesDraft.hideDesistenciasFromCollection}
+                    onCheckedChange={(v) =>
+                      setRulesDraft({ ...rulesDraft, hideDesistenciasFromCollection: v })
+                    }
+                  />
+                </FieldRow>
+                <FieldRow label="Ocultar abandonos da Collection">
+                  <Switch
+                    checked={rulesDraft.hideAbandonosFromCollection}
+                    onCheckedChange={(v) =>
+                      setRulesDraft({ ...rulesDraft, hideAbandonosFromCollection: v })
+                    }
+                  />
+                </FieldRow>
+                <FieldRow label="Calcular vencimento automaticamente para Reserva">
+                  <Switch
+                    checked={rulesDraft.autoCalculateReservaDueDate}
+                    onCheckedChange={(v) =>
+                      setRulesDraft({ ...rulesDraft, autoCalculateReservaDueDate: v })
+                    }
+                  />
+                </FieldRow>
+                <FieldRow label="Considerar Pendente vencido como inadimplente">
+                  <Switch
+                    checked={rulesDraft.treatOverduePendenteAsDelinquent}
+                    onCheckedChange={(v) =>
+                      setRulesDraft({ ...rulesDraft, treatOverduePendenteAsDelinquent: v })
+                    }
+                  />
+                </FieldRow>
+              </div>
+
+              <div className="flex justify-end">
+                <Button onClick={handleSaveRules} className="gap-2 min-h-11 w-full sm:w-auto">
+                  <Save className="size-4" /> Salvar Regras
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </>
+      )}
+
+      {view === "security" && (
+        <>
+          <DetailHeader
+            title="Segurança e Acesso"
+            description="Confirmações, auditoria e gestão de usuários."
+          />
+          <Card title="Segurança e Acesso">
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border bg-background/40 px-3">
+                <FieldRow label="Exigir confirmação antes de excluir dados">
+                  <Switch
+                    checked={security.requireConfirmBeforeDelete}
+                    onCheckedChange={(v) => setSecurity({ requireConfirmBeforeDelete: v })}
+                  />
+                </FieldRow>
+                <FieldRow label="Bloquear exclusão em massa sem senha">
+                  <Switch
+                    checked={security.blockMassDeleteWithoutPassword}
+                    onCheckedChange={(v) => setSecurity({ blockMassDeleteWithoutPassword: v })}
+                  />
+                </FieldRow>
+                <FieldRow label="Ativar log de auditoria">
+                  <Switch
+                    checked={security.enableAuditLog}
+                    onCheckedChange={(v) => setSecurity({ enableAuditLog: v })}
+                  />
+                </FieldRow>
+              </div>
+
+              <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
+                <Button
+                  variant="outline"
+                  className="gap-2 justify-start min-h-11"
+                  onClick={() => setAccessOpen(true)}
+                >
+                  <Users className="size-4" /> Gerenciar usuários
+                </Button>
+                <Button
+                  variant="outline"
+                  className="gap-2 justify-start min-h-11"
+                  onClick={() => setAccessOpen(true)}
+                >
+                  <KeyRound className="size-4" /> Alterar senha administrativa
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </>
+      )}
+
+      {view === "notifications" && (
+        <>
+          <DetailHeader title="Notificações" />
+          <NotificationsPrefsCard />
+        </>
+      )}
+
+      {view === "navbar" && (
+        <>
+          <DetailHeader
+            title="Navbar"
+            description="Reordenar ícones, ocultar itens e ajustar animações."
+          />
+          <NavbarSettingsCard />
+        </>
+      )}
+
+      {view === "danger" && (
+        <>
+          <DetailHeader
+            title="Zona de perigo"
+            description="Ações irreversíveis. Use com cuidado."
+          />
+          <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-5 shadow-xs">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="grid size-9 shrink-0 place-items-center rounded-full bg-destructive/15 text-destructive">
+                <AlertTriangle className="size-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-base font-semibold text-destructive">Zona de Perigo</h3>
+                <p className="text-sm text-muted-foreground">
+                  Ações irreversíveis que podem apagar dados do sistema.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
+              {(Object.keys(dangerCatalog) as DangerAction[]).map((action) => (
+                <Button
+                  key={action}
+                  variant="destructive"
+                  onClick={() => openDanger(action)}
+                  className="justify-start gap-2 min-h-11"
+                >
+                  <Trash2 className="size-4" />
+                  {dangerCatalog[action].cta}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Modal confirmação Zona de Perigo */}
+      <Dialog
+        open={dangerOpen}
+        onOpenChange={(v) => {
+          if (!v) {
+            setDangerOpen(false);
+            setConfirmText("");
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
@@ -765,7 +1361,8 @@ export function ConfiguracoesSection() {
 
           <div className="space-y-2">
             <Label htmlFor="confirm-input">
-              Digite <span className="font-mono font-semibold text-destructive">EXCLUIR</span> para confirmar.
+              Digite <span className="font-mono font-semibold text-destructive">EXCLUIR</span> para
+              confirmar.
             </Label>
             <Input
               id="confirm-input"
@@ -777,7 +1374,7 @@ export function ConfiguracoesSection() {
             />
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-2">
+          <DialogFooter>
             <Button variant="outline" onClick={() => setDangerOpen(false)}>
               Cancelar
             </Button>

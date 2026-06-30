@@ -5,10 +5,7 @@ import { LoadMoreButton } from "@/components/load-more-button";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { useSectionCompact } from "@/lib/use-section-compact";
 import { Button } from "@/components/ui/button";
-import {
-  ListExpansionToggle,
-  MinimizedListCard,
-} from "@/components/list-expansion";
+import { ListExpansionToggle, MinimizedListCard } from "@/components/list-expansion";
 import { useListExpansion } from "@/lib/list-expansion";
 import {
   Dialog,
@@ -48,12 +45,19 @@ type ChipFilter =
   | "em_dia"
   | "sem_produtos";
 
-function generalStatus(client: Client, products: Product[]): {
+function generalStatus(
+  client: Client,
+  products: Product[],
+): {
   label: string;
   variant: "danger" | "warning" | "success" | "neutral" | "primary";
 } {
   const ps = products.filter((p) => p.clientId === client.id);
-  if (ps.some((p) => p.financialStatus === "Reserva" && p.situation === "Em Aberto" && isOverdue(p.dueDate)))
+  if (
+    ps.some(
+      (p) => p.financialStatus === "Reserva" && p.situation === "Em Aberto" && isOverdue(p.dueDate),
+    )
+  )
     return { label: "Reserva vencida", variant: "danger" };
   if (ps.some((p) => p.financialStatus === "Pendente" && p.situation === "Em Aberto"))
     return { label: "Pendente", variant: "danger" };
@@ -83,9 +87,18 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
 
   const [search, setSearch] = useState("");
   const [chip, setChip] = usePersistedState<ChipFilter>("clientes.chip", "todos");
-  const [financialFilter, setFinancialFilter] = usePersistedState<string>("clientes.financial", "Todos");
-  const [situationFilter, setSituationFilter] = usePersistedState<string>("clientes.situation", "Todas");
-  const [platformFilter, setPlatformFilter] = usePersistedState<string>("clientes.platform", "Todas");
+  const [financialFilter, setFinancialFilter] = usePersistedState<string>(
+    "clientes.financial",
+    "Todos",
+  );
+  const [situationFilter, setSituationFilter] = usePersistedState<string>(
+    "clientes.situation",
+    "Todas",
+  );
+  const [platformFilter, setPlatformFilter] = usePersistedState<string>(
+    "clientes.platform",
+    "Todas",
+  );
   const [periodFilter, setPeriodFilter] = usePersistedState<string>("clientes.period", "Todos");
   const [folderFilter, setFolderFilter] = usePersistedState<string>("clientes.folder", "Todas");
   const [pageSize, setPageSize] = usePersistedState<number>("clientes.pageSize", 10);
@@ -106,8 +119,14 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
 
   const drawerClientId = openClientId;
   const setDrawerClientId = (id: string | null) => openClient(id);
-  const [clientModal, setClientModal] = useState<{ open: boolean; client?: Client | null }>({ open: false });
-  const [productModal, setProductModal] = useState<{ open: boolean; clientId?: string; product?: Product | null }>({ open: false });
+  const [clientModal, setClientModal] = useState<{ open: boolean; client?: Client | null }>({
+    open: false,
+  });
+  const [productModal, setProductModal] = useState<{
+    open: boolean;
+    clientId?: string;
+    product?: Product | null;
+  }>({ open: false });
 
   const drawerClient = clients.find((c) => c.id === drawerClientId) ?? null;
 
@@ -121,74 +140,106 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return clients
-      // Seção Clientes lista apenas clientes comuns. Clientes MGMV (com
-      // acordo ativo ou classificados como mgmv pela importação) vão para
-      // a seção MGMV dedicada.
-      .filter((c) => {
-        const isMgmv =
-          c.clientType === "mgmv" ||
-          (!!c.mgmv && c.mgmv.installments.length > 0);
-        return !isMgmv;
-      })
-      .map((c) => {
-        const ps = products.filter((p) => p.clientId === c.id);
-        const totalPurchased = ps.reduce((a, p) => a + p.totalValue, 0);
-        const totalOpen = ps
-          .filter((p) => p.situation === "Em Aberto")
-          .reduce((a, p) => a + (p.totalValue - p.paidValue), 0);
-        const last = ps
-          .map((p) => p.registerDate)
-          .sort()
-          .pop();
-        const status = generalStatus(c, products);
-        return { client: c, products: ps, totalPurchased, totalOpen, last, status };
-      })
-      .filter((r) => {
-        if (q) {
-          const hit =
-            r.client.name.toLowerCase().includes(q) ||
-            r.client.phone.replace(/\D/g, "").includes(q.replace(/\D/g, "")) ||
-            r.products.some((p) => p.name.toLowerCase().includes(q));
-          if (!hit) return false;
-        }
-        if (chip !== "todos") {
-          const map: Record<ChipFilter, boolean> = {
-            todos: true,
-            reserva_vencida: r.status.label === "Reserva vencida",
-            pendente: r.products.some((p) => p.financialStatus === "Pendente" && p.situation === "Em Aberto"),
-            pago_aguardando: r.products.some((p) => p.financialStatus === "Pago" && p.situation === "Em Aberto"),
-            enviado: r.products.some((p) => p.situation === "Enviado"),
-            desistiu: r.products.some((p) => p.situation === "Desistiu"),
-            abandonou: r.products.some((p) => p.situation === "Abandonou"),
-            em_dia: r.status.label === "Em dia",
-            sem_produtos: r.products.length === 0,
-          };
-          if (!map[chip]) return false;
-        }
-        if (financialFilter !== "Todos" && !r.products.some((p) => p.financialStatus === financialFilter)) return false;
-        if (situationFilter !== "Todas" && !r.products.some((p) => p.situation === situationFilter)) return false;
-        if (platformFilter !== "Todas" && !r.products.some((p) => p.platform === platformFilter)) return false;
-        if (periodFilter !== "Todos" && r.last) {
-          const diff = (Date.now() - new Date(r.last).getTime()) / 86400000;
-          if (periodFilter === "7" && diff > 7) return false;
-          if (periodFilter === "30" && diff > 30) return false;
-        }
-        if (folderFilter !== "Todas") {
-          if (folderFilter === "__sem__") {
-            if (r.client.folder) return false;
-          } else if (r.client.folder !== folderFilter) {
-            return false;
+    return (
+      clients
+        // Seção Clientes lista apenas clientes comuns. Clientes MGMV (com
+        // acordo ativo ou classificados como mgmv pela importação) vão para
+        // a seção MGMV dedicada.
+        .filter((c) => {
+          const isMgmv = c.clientType === "mgmv" || (!!c.mgmv && c.mgmv.installments.length > 0);
+          return !isMgmv;
+        })
+        .map((c) => {
+          const ps = products.filter((p) => p.clientId === c.id);
+          const totalPurchased = ps.reduce((a, p) => a + p.totalValue, 0);
+          const totalOpen = ps
+            .filter((p) => p.situation === "Em Aberto")
+            .reduce((a, p) => a + (p.totalValue - p.paidValue), 0);
+          const last = ps
+            .map((p) => p.registerDate)
+            .sort()
+            .pop();
+          const status = generalStatus(c, products);
+          return { client: c, products: ps, totalPurchased, totalOpen, last, status };
+        })
+        .filter((r) => {
+          if (q) {
+            const hit =
+              r.client.name.toLowerCase().includes(q) ||
+              r.client.phone.replace(/\D/g, "").includes(q.replace(/\D/g, "")) ||
+              r.products.some((p) => p.name.toLowerCase().includes(q));
+            if (!hit) return false;
           }
-        }
-        return true;
-      });
-  }, [clients, products, search, chip, financialFilter, situationFilter, platformFilter, periodFilter, folderFilter]);
+          if (chip !== "todos") {
+            const map: Record<ChipFilter, boolean> = {
+              todos: true,
+              reserva_vencida: r.status.label === "Reserva vencida",
+              pendente: r.products.some(
+                (p) => p.financialStatus === "Pendente" && p.situation === "Em Aberto",
+              ),
+              pago_aguardando: r.products.some(
+                (p) => p.financialStatus === "Pago" && p.situation === "Em Aberto",
+              ),
+              enviado: r.products.some((p) => p.situation === "Enviado"),
+              desistiu: r.products.some((p) => p.situation === "Desistiu"),
+              abandonou: r.products.some((p) => p.situation === "Abandonou"),
+              em_dia: r.status.label === "Em dia",
+              sem_produtos: r.products.length === 0,
+            };
+            if (!map[chip]) return false;
+          }
+          if (
+            financialFilter !== "Todos" &&
+            !r.products.some((p) => p.financialStatus === financialFilter)
+          )
+            return false;
+          if (
+            situationFilter !== "Todas" &&
+            !r.products.some((p) => p.situation === situationFilter)
+          )
+            return false;
+          if (platformFilter !== "Todas" && !r.products.some((p) => p.platform === platformFilter))
+            return false;
+          if (periodFilter !== "Todos" && r.last) {
+            const diff = (Date.now() - new Date(r.last).getTime()) / 86400000;
+            if (periodFilter === "7" && diff > 7) return false;
+            if (periodFilter === "30" && diff > 30) return false;
+          }
+          if (folderFilter !== "Todas") {
+            if (folderFilter === "__sem__") {
+              if (r.client.folder) return false;
+            } else if (r.client.folder !== folderFilter) {
+              return false;
+            }
+          }
+          return true;
+        })
+    );
+  }, [
+    clients,
+    products,
+    search,
+    chip,
+    financialFilter,
+    situationFilter,
+    platformFilter,
+    periodFilter,
+    folderFilter,
+  ]);
 
   // Reseta a janela visível ao mudar filtros ou tamanho de carga.
   useEffect(() => {
     setVisibleCount(pageSize);
-  }, [pageSize, search, chip, financialFilter, situationFilter, platformFilter, periodFilter, folderFilter]);
+  }, [
+    pageSize,
+    search,
+    chip,
+    financialFilter,
+    situationFilter,
+    platformFilter,
+    periodFilter,
+    folderFilter,
+  ]);
 
   const pagedRows = useMemo(
     () => rows.slice(0, Math.min(visibleCount, rows.length)),
@@ -220,10 +271,13 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
       (p) =>
         p.clientId === c.id &&
         p.situation === "Em Aberto" &&
-        (p.financialStatus === "Pendente" || (p.financialStatus === "Reserva" && isOverdue(p.dueDate))),
+        (p.financialStatus === "Pendente" ||
+          (p.financialStatus === "Reserva" && isOverdue(p.dueDate))),
     ),
   ).length;
-  const pagosAgEnvio = products.filter((p) => p.financialStatus === "Pago" && p.situation === "Em Aberto").length;
+  const pagosAgEnvio = products.filter(
+    (p) => p.financialStatus === "Pago" && p.situation === "Em Aberto",
+  ).length;
 
   const chips: { id: ChipFilter; label: string }[] = [
     { id: "todos", label: "Todos" },
@@ -262,8 +316,12 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
         description="Gerencie clientes, produtos, histórico de compras e situação financeira."
         actions={
           <>
-            <Button onClick={() => setClientModal({ open: true, client: null })}>Adicionar Cliente</Button>
-            <Button variant="outline" onClick={() => onScrollTo("import")}>Importar Clientes</Button>
+            <Button onClick={() => setClientModal({ open: true, client: null })}>
+              Adicionar Cliente
+            </Button>
+            <Button variant="outline" onClick={() => onScrollTo("import")}>
+              Importar Clientes
+            </Button>
             <Button variant="outline" onClick={exportBase}>
               Exportar Base
             </Button>
@@ -346,76 +404,107 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               title="Máximo de linhas por carga"
             >
               {[10, 20, 30, 40, 50].map((n) => (
-                <option key={n} value={n}>Máx. {n}</option>
+                <option key={n} value={n}>
+                  Máx. {n}
+                </option>
               ))}
             </select>
           </div>
 
           {showFilters && (
-          <>
-          <div className="flex flex-wrap gap-2">
-            {chips.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => setChip(c.id)}
-                className={
-                  "rounded-full px-3 py-1 text-xs font-medium transition-colors " +
-                  (chip === c.id
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground hover:bg-accent")
-                }
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
-            <div className="relative">
-              <Folder className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <select
-                value={folderFilter}
-                onChange={(e) => setFolderFilter(e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-background pl-7 pr-2 text-sm"
-                title="Filtrar por pasta de origem"
-              >
-                <option value="Todas">Pasta (todas)</option>
-                <option value="__sem__">Sem pasta</option>
-                {folders.map((f) => (
-                  <option key={f} value={f}>{f}</option>
+            <>
+              <div className="flex flex-wrap gap-2">
+                {chips.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setChip(c.id)}
+                    className={
+                      "rounded-full px-3 py-1 text-xs font-medium transition-colors " +
+                      (chip === c.id
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-accent")
+                    }
+                  >
+                    {c.label}
+                  </button>
                 ))}
-              </select>
-            </div>
-            <select value={financialFilter} onChange={(e) => setFinancialFilter(e.target.value)} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
-              <option value="Todos">Status financeiro</option>
-              <option>Pago</option><option>Reserva</option><option>Pendente</option><option>MGMV</option>
-            </select>
-            <select value={situationFilter} onChange={(e) => setSituationFilter(e.target.value)} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
-              <option value="Todas">Situação</option>
-              <option>Em Aberto</option><option>Enviado</option><option>Desistiu</option><option>Abandonou</option>
-            </select>
-            <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value)} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
-              <option value="Todos">Período</option>
-              <option value="7">Últimos 7 dias</option>
-              <option value="30">Últimos 30 dias</option>
-            </select>
-            <select value={platformFilter} onChange={(e) => setPlatformFilter(e.target.value)} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
-              <option value="Todas">Plataforma</option>
-              <option>PS5</option><option>PS4</option><option>PS2</option><option>Xbox</option><option>Colecionável</option>
-            </select>
-          </div>
+              </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-            <div>
-              {rows.length} cliente(s) encontrado(s){activeFilterCount > 0 && ` • ${activeFilterCount} filtro(s) ativo(s)`}
-            </div>
-            {activeFilterCount > 0 && (
-              <button onClick={clearFilters} className="text-primary hover:underline">
-                Limpar filtros
-              </button>
-            )}
-          </div>
-          </>
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+                <div className="relative">
+                  <Folder className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <select
+                    value={folderFilter}
+                    onChange={(e) => setFolderFilter(e.target.value)}
+                    className="h-9 w-full rounded-md border border-input bg-background pl-7 pr-2 text-sm"
+                    title="Filtrar por pasta de origem"
+                  >
+                    <option value="Todas">Pasta (todas)</option>
+                    <option value="__sem__">Sem pasta</option>
+                    {folders.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <select
+                  value={financialFilter}
+                  onChange={(e) => setFinancialFilter(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="Todos">Status financeiro</option>
+                  <option>Pago</option>
+                  <option>Reserva</option>
+                  <option>Pendente</option>
+                  <option>MGMV</option>
+                </select>
+                <select
+                  value={situationFilter}
+                  onChange={(e) => setSituationFilter(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="Todas">Situação</option>
+                  <option>Em Aberto</option>
+                  <option>Enviado</option>
+                  <option>Desistiu</option>
+                  <option>Abandonou</option>
+                </select>
+                <select
+                  value={periodFilter}
+                  onChange={(e) => setPeriodFilter(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="Todos">Período</option>
+                  <option value="7">Últimos 7 dias</option>
+                  <option value="30">Últimos 30 dias</option>
+                </select>
+                <select
+                  value={platformFilter}
+                  onChange={(e) => setPlatformFilter(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="Todas">Plataforma</option>
+                  <option>PS5</option>
+                  <option>PS4</option>
+                  <option>PS2</option>
+                  <option>Xbox</option>
+                  <option>Colecionável</option>
+                </select>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                <div>
+                  {rows.length} cliente(s) encontrado(s)
+                  {activeFilterCount > 0 && ` • ${activeFilterCount} filtro(s) ativo(s)`}
+                </div>
+                {activeFilterCount > 0 && (
+                  <button onClick={clearFilters} className="text-primary hover:underline">
+                    Limpar filtros
+                  </button>
+                )}
+              </div>
+            </>
           )}
         </div>
 
@@ -432,93 +521,184 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           />
         )}
         {listExpanded && (
-        <>
-        <div className="mt-5 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="py-2 pr-3 font-medium">Cliente</th>
-                <th className="py-2 pr-3 font-medium">Telefone</th>
-                <th className="py-2 pr-3 font-medium">Status Geral</th>
-                <th className="py-2 pr-3 font-medium">Qtd. Produtos</th>
-                <th className="py-2 pr-3 font-medium">Total Comprado</th>
-                <th className="py-2 pr-3 font-medium">Total em Aberto</th>
-                <th className="py-2 pr-3 font-medium">Última Compra</th>
-                {!compact && <th className="py-2 pr-3 font-medium">Observações</th>}
-                <th className="py-2 pr-3 font-medium">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pagedRows.map((r) => (
-                <tr key={r.client.id} className="border-b border-border/60 last:border-0">
-                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 font-medium"}>
-                    <button onClick={() => setDrawerClientId(r.client.id)} className="text-left hover:text-primary">
-                      {r.client.name}
-                      {r.client.folder && (
-                        <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
-                          <Folder className="h-2.5 w-2.5" />
-                          {r.client.folder}
-                        </span>
-                      )}
-                    </button>
-                  </td>
-                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{r.client.phone}</td>
-                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}><Tag variant={r.status.variant}>{r.status.label}</Tag></td>
-                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums"}>{r.products.length}</td>
-                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums"}>{formatBRL(r.totalPurchased)}</td>
-                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums font-medium"}>{formatBRL(r.totalOpen)}</td>
-                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{r.last ? formatDateBR(r.last) : "—"}</td>
-                  {!compact && (
-                    <td className="py-3 pr-3 max-w-[220px] truncate text-muted-foreground">{r.client.notes ?? "—"}</td>
-                  )}
-                  <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>
-                    <div className="flex flex-wrap gap-1.5">
-                      <Button size="sm" variant="outline" onClick={() => setDrawerClientId(r.client.id)}>Abrir</Button>
+          <>
+            <div className="mt-5 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="py-2 pr-3 font-medium">Cliente</th>
+                    <th className="py-2 pr-3 font-medium">Telefone</th>
+                    <th className="py-2 pr-3 font-medium">Status Geral</th>
+                    <th className="py-2 pr-3 font-medium">Qtd. Produtos</th>
+                    <th className="py-2 pr-3 font-medium">Total Comprado</th>
+                    <th className="py-2 pr-3 font-medium">Total em Aberto</th>
+                    <th className="py-2 pr-3 font-medium">Última Compra</th>
+                    {!compact && <th className="py-2 pr-3 font-medium">Observações</th>}
+                    <th className="py-2 pr-3 font-medium">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedRows.map((r) => (
+                    <tr key={r.client.id} className="border-b border-border/60 last:border-0">
+                      <td
+                        className={
+                          (compact ? "py-1.5" : "py-3") +
+                          " pr-3 transition-[padding] duration-300 font-medium"
+                        }
+                      >
+                        <button
+                          onClick={() => setDrawerClientId(r.client.id)}
+                          className="text-left hover:text-primary"
+                        >
+                          {r.client.name}
+                          {r.client.folder && (
+                            <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
+                              <Folder className="h-2.5 w-2.5" />
+                              {r.client.folder}
+                            </span>
+                          )}
+                        </button>
+                      </td>
+                      <td
+                        className={
+                          (compact ? "py-1.5" : "py-3") +
+                          " pr-3 transition-[padding] duration-300 text-muted-foreground"
+                        }
+                      >
+                        {r.client.phone}
+                      </td>
+                      <td
+                        className={
+                          (compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"
+                        }
+                      >
+                        <Tag variant={r.status.variant}>{r.status.label}</Tag>
+                      </td>
+                      <td
+                        className={
+                          (compact ? "py-1.5" : "py-3") +
+                          " pr-3 transition-[padding] duration-300 tabular-nums"
+                        }
+                      >
+                        {r.products.length}
+                      </td>
+                      <td
+                        className={
+                          (compact ? "py-1.5" : "py-3") +
+                          " pr-3 transition-[padding] duration-300 tabular-nums"
+                        }
+                      >
+                        {formatBRL(r.totalPurchased)}
+                      </td>
+                      <td
+                        className={
+                          (compact ? "py-1.5" : "py-3") +
+                          " pr-3 transition-[padding] duration-300 tabular-nums font-medium"
+                        }
+                      >
+                        {formatBRL(r.totalOpen)}
+                      </td>
+                      <td
+                        className={
+                          (compact ? "py-1.5" : "py-3") +
+                          " pr-3 transition-[padding] duration-300 text-muted-foreground"
+                        }
+                      >
+                        {r.last ? formatDateBR(r.last) : "—"}
+                      </td>
                       {!compact && (
-                        <>
-                          <Button size="sm" variant="ghost" onClick={() => setClientModal({ open: true, client: r.client })}>Editar</Button>
-                          <Button size="sm" onClick={() => setProductModal({ open: true, clientId: r.client.id })}>+ Produto</Button>
-                          <Button size="sm" variant="ghost" onClick={() => onScrollTo("collection")}>Cobrança</Button>
-                        </>
+                        <td className="py-3 pr-3 max-w-[220px] truncate text-muted-foreground">
+                          {r.client.notes ?? "—"}
+                        </td>
                       )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {pagedRows.length === 0 && (
-                <tr><td colSpan={compact ? 8 : 9} className="py-10 text-center text-muted-foreground">Nenhum cliente encontrado.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                      <td
+                        className={
+                          (compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"
+                        }
+                      >
+                        <div className="flex flex-wrap gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setDrawerClientId(r.client.id)}
+                          >
+                            Abrir
+                          </Button>
+                          {!compact && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setClientModal({ open: true, client: r.client })}
+                              >
+                                Editar
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() =>
+                                  setProductModal({ open: true, clientId: r.client.id })
+                                }
+                              >
+                                + Produto
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => onScrollTo("collection")}
+                              >
+                                Cobrança
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {pagedRows.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={compact ? 8 : 9}
+                        className="py-10 text-center text-muted-foreground"
+                      >
+                        Nenhum cliente encontrado.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-        {rows.length > 0 && (
-          <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
-            <span>Exibindo {pagedRows.length} de {rows.length} cliente(s)</span>
-            {hasMore ? (
-              <LoadMoreButton
-                count={Math.min(pageSize, rows.length - pagedRows.length)}
-                onClick={() => setVisibleCount((c) => c + pageSize)}
-              />
-            ) : (
-              <span>Todos os clientes carregados.</span>
+            {rows.length > 0 && (
+              <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
+                <span>
+                  Exibindo {pagedRows.length} de {rows.length} cliente(s)
+                </span>
+                {hasMore ? (
+                  <LoadMoreButton
+                    count={Math.min(pageSize, rows.length - pagedRows.length)}
+                    onClick={() => setVisibleCount((c) => c + pageSize)}
+                  />
+                ) : (
+                  <span>Todos os clientes carregados.</span>
+                )}
+              </div>
             )}
-          </div>
-        )}
-        </>
+          </>
         )}
       </Card>
 
       {/* Modal cliente em tela cheia */}
       <Dialog open={!!drawerClient} onOpenChange={(o) => !o && setDrawerClientId(null)}>
-        <DialogContent className="max-w-[min(1200px,95vw)] max-h-[92vh] overflow-y-auto p-8">
+        <DialogContent className="max-w-[min(1200px,95vw)] sm:max-h-[92vh] sm:p-8">
           {drawerClient && (
             <ClientDrawer
               client={drawerClient}
               products={products.filter((p) => p.clientId === drawerClient.id)}
               onEdit={() => setClientModal({ open: true, client: drawerClient })}
               onAddProduct={() => setProductModal({ open: true, clientId: drawerClient.id })}
-              onEditProduct={(p) => setProductModal({ open: true, clientId: drawerClient.id, product: p })}
+              onEditProduct={(p) =>
+                setProductModal({ open: true, clientId: drawerClient.id, product: p })
+              }
               onSaveNotes={(notes) => {
                 updateClient(drawerClient.id, { notes });
                 toast.success("Observação salva");
@@ -618,9 +798,7 @@ function ClientDrawer({
   const individualRest = individualProducts
     .filter((p) => p.situation === "Em Aberto")
     .reduce((a, p) => a + (p.totalValue - p.paidValue), 0);
-  const mgmvPaid = mgmv
-    ? mgmv.installmentValue * mgmv.installmentsPaid
-    : 0;
+  const mgmvPaid = mgmv ? mgmv.installmentValue * mgmv.installmentsPaid : 0;
   const mgmvRest = mgmv ? mgmv.remainingBalance : 0;
   const totalBought = individualBought + (mgmv?.totalDebt ?? 0);
   const totalPaid = individualPaid + mgmvPaid;
@@ -638,8 +816,12 @@ function ClientDrawer({
       </DialogHeader>
 
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" onClick={onEdit}>Editar Cliente</Button>
-        <Button size="sm" onClick={onAddProduct}>Adicionar Produto</Button>
+        <Button size="sm" variant="outline" onClick={onEdit}>
+          Editar Cliente
+        </Button>
+        <Button size="sm" onClick={onAddProduct}>
+          Adicionar Produto
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
@@ -647,31 +829,49 @@ function ClientDrawer({
         <MetricCard label="Valor Pago" value={formatBRL(totalPaid)} status="success" />
         <MetricCard label="Valor Restante" value={formatBRL(totalRest)} status="danger" />
         <MetricCard label="Produtos" value={products.length} />
-        <MetricCard label="MGMV" value={client.mgmv ? "Ativo" : "Inativo"} status={client.mgmv ? "primary" : "default"} />
+        <MetricCard
+          label="MGMV"
+          value={client.mgmv ? "Ativo" : "Inativo"}
+          status={client.mgmv ? "primary" : "default"}
+        />
       </div>
 
       <Card title="Observações">
         <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="min-h-20" />
         <div className="mt-3 flex justify-end">
-          <Button size="sm" onClick={() => onSaveNotes(notes)}>Salvar Observação</Button>
+          <Button size="sm" onClick={() => onSaveNotes(notes)}>
+            Salvar Observação
+          </Button>
         </div>
       </Card>
 
       {mgmv && (
         <Card title={`Acordo MGMV — ${mgmv.status}`}>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
-            <MetricCard label="Valor total do acordo" value={formatBRL(mgmv.totalDebt)} status="primary" />
+            <MetricCard
+              label="Valor total do acordo"
+              value={formatBRL(mgmv.totalDebt)}
+              status="primary"
+            />
             <MetricCard
               label="Parcelas"
               value={`${mgmv.installmentsTotal}x de ${formatBRL(mgmv.installmentValue)}`}
             />
-            <MetricCard label="Parcelas pagas" value={`${mgmv.installmentsPaid}/${mgmv.installmentsTotal}`} status="success" />
+            <MetricCard
+              label="Parcelas pagas"
+              value={`${mgmv.installmentsPaid}/${mgmv.installmentsTotal}`}
+              status="success"
+            />
             <MetricCard
               label="Próximo vencimento"
               value={mgmv.nextInstallment ? formatDateBR(mgmv.nextInstallment.dueDate) : "—"}
               status={mgmv.hasOverdue ? "danger" : undefined}
             />
-            <MetricCard label="Saldo restante" value={formatBRL(mgmv.remainingBalance)} status="danger" />
+            <MetricCard
+              label="Saldo restante"
+              value={formatBRL(mgmv.remainingBalance)}
+              status="danger"
+            />
           </div>
           <div className="mt-4">
             <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
@@ -707,10 +907,14 @@ function ClientDrawer({
                   const variant = i.paid ? "success" : overdue ? "danger" : "warning";
                   return (
                     <tr key={i.number} className="border-b border-border/60 last:border-0">
-                      <td className="py-2 pr-3 font-medium">{i.number}/{i.total}</td>
+                      <td className="py-2 pr-3 font-medium">
+                        {i.number}/{i.total}
+                      </td>
                       <td className="py-2 pr-3 text-muted-foreground">{formatDateBR(i.dueDate)}</td>
                       <td className="py-2 pr-3 tabular-nums">{formatBRL(i.value)}</td>
-                      <td className="py-2 pr-3"><Tag variant={variant}>{label}</Tag></td>
+                      <td className="py-2 pr-3">
+                        <Tag variant={variant}>{label}</Tag>
+                      </td>
                       <td className="py-2 pr-3 text-muted-foreground">
                         {i.paidAt ? formatDateBR(i.paidAt) : "—"}
                       </td>
@@ -754,9 +958,15 @@ function ClientDrawer({
                         <td className="py-2 px-3 font-medium">{p.name}</td>
                         <td className="py-2 px-3 text-muted-foreground">{p.platform}</td>
                         <td className="py-2 px-3 tabular-nums">{formatBRL(p.totalValue)}</td>
-                        <td className="py-2 px-3 tabular-nums text-muted-foreground">{formatBRL(p.paidValue)}</td>
-                        <td className="py-2 px-3 tabular-nums">{formatBRL(Math.max(0, p.totalValue - p.paidValue))}</td>
-                        <td className="py-2 px-3 text-muted-foreground">{formatDateBR(p.registerDate)}</td>
+                        <td className="py-2 px-3 tabular-nums text-muted-foreground">
+                          {formatBRL(p.paidValue)}
+                        </td>
+                        <td className="py-2 px-3 tabular-nums">
+                          {formatBRL(Math.max(0, p.totalValue - p.paidValue))}
+                        </td>
+                        <td className="py-2 px-3 text-muted-foreground">
+                          {formatDateBR(p.registerDate)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -767,13 +977,11 @@ function ClientDrawer({
         </Card>
       )}
 
-      <Card
-        title={`Histórico de Produtos${mgmvProducts.length > 0 ? " — Individuais" : ""}`}
-      >
+      <Card title={`Histórico de Produtos${mgmvProducts.length > 0 ? " — Individuais" : ""}`}>
         {mgmvProducts.length > 0 && (
           <p className="mb-3 text-xs text-muted-foreground">
-            Itens do MGMV aparecem no card &ldquo;Itens incluídos no MGMV&rdquo; acima
-            e são cobrados pelas parcelas do acordo (sem cobrança individual).
+            Itens do MGMV aparecem no card &ldquo;Itens incluídos no MGMV&rdquo; acima e são
+            cobrados pelas parcelas do acordo (sem cobrança individual).
           </p>
         )}
         <div className="overflow-x-auto">
@@ -802,31 +1010,79 @@ function ClientDrawer({
                     <td className="py-2 pr-3 font-medium">{p.name}</td>
                     <td className="py-2 pr-3 text-muted-foreground">{p.platform}</td>
                     <td className="py-2 pr-3 tabular-nums">{formatBRL(p.totalValue)}</td>
-                    <td className="py-2 pr-3 tabular-nums text-muted-foreground">{formatBRL(p.paidValue)}</td>
+                    <td className="py-2 pr-3 tabular-nums text-muted-foreground">
+                      {formatBRL(p.paidValue)}
+                    </td>
                     <td className="py-2 pr-3 tabular-nums font-medium">{formatBRL(remaining)}</td>
-                    <td className="py-2 pr-3"><Tag variant={status.variant === "danger" ? "danger" : status.variant === "warning" ? "warning" : "neutral"}>{status.label}</Tag></td>
-                    <td className="py-2 pr-3"><Tag>{p.situation}</Tag></td>
-                    <td className="py-2 pr-3 text-muted-foreground">{formatDateBR(p.registerDate)}</td>
-                     <td className="py-2 pr-3 text-muted-foreground">{getProductDisplayDueDate(p)}</td>
+                    <td className="py-2 pr-3">
+                      <Tag
+                        variant={
+                          status.variant === "danger"
+                            ? "danger"
+                            : status.variant === "warning"
+                              ? "warning"
+                              : "neutral"
+                        }
+                      >
+                        {status.label}
+                      </Tag>
+                    </td>
+                    <td className="py-2 pr-3">
+                      <Tag>{p.situation}</Tag>
+                    </td>
+                    <td className="py-2 pr-3 text-muted-foreground">
+                      {formatDateBR(p.registerDate)}
+                    </td>
+                    <td className="py-2 pr-3 text-muted-foreground">
+                      {getProductDisplayDueDate(p)}
+                    </td>
                     <td className="py-2 pr-3">
                       <div className="flex flex-wrap gap-1">
                         {!isPaid && (
-                          <Button size="sm" onClick={() => onRegisterPayment(p.id, remaining)}>Pagar</Button>
+                          <Button size="sm" onClick={() => onRegisterPayment(p.id, remaining)}>
+                            Pagar
+                          </Button>
                         )}
-                        <Button size="sm" variant="ghost" onClick={() => onEditProduct(p)}>Editar</Button>
+                        <Button size="sm" variant="ghost" onClick={() => onEditProduct(p)}>
+                          Editar
+                        </Button>
                         {!isPaid && (
-                          <Button size="sm" variant="outline" onClick={() => onMarkPaid(p)}>Pago</Button>
+                          <Button size="sm" variant="outline" onClick={() => onMarkPaid(p)}>
+                            Pago
+                          </Button>
                         )}
-                        <Button size="sm" variant="outline" onClick={() => onChangeSituation(p.id, "Enviado")}>Enviado</Button>
-                        <Button size="sm" variant="ghost" onClick={() => onChangeSituation(p.id, "Desistiu")}>Desistiu</Button>
-                        <Button size="sm" variant="ghost" onClick={() => onChangeSituation(p.id, "Abandonou")}>Abandonou</Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onChangeSituation(p.id, "Enviado")}
+                        >
+                          Enviado
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onChangeSituation(p.id, "Desistiu")}
+                        >
+                          Desistiu
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onChangeSituation(p.id, "Abandonou")}
+                        >
+                          Abandonou
+                        </Button>
                       </div>
                     </td>
                   </tr>
                 );
               })}
               {individualProducts.length === 0 && (
-                <tr><td colSpan={10} className="py-6 text-center text-muted-foreground">Nenhum produto.</td></tr>
+                <tr>
+                  <td colSpan={10} className="py-6 text-center text-muted-foreground">
+                    Nenhum produto.
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
@@ -861,9 +1117,11 @@ function ClientModal({
         }
       }}
     >
-      <DialogContent className="max-w-xl p-8">
+      <DialogContent className="max-w-xl sm:p-8">
         <DialogHeader>
-          <DialogTitle className="text-xl">{state.client ? "Editar Cliente" : "Adicionar Cliente"}</DialogTitle>
+          <DialogTitle className="text-xl">
+            {state.client ? "Editar Cliente" : "Adicionar Cliente"}
+          </DialogTitle>
           <DialogDescription>O telefone é o identificador principal do cliente.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
@@ -873,7 +1131,11 @@ function ClientModal({
           </div>
           <div className="grid gap-1.5">
             <Label>Telefone</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="11 99999-9999" />
+            <Input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="11 99999-9999"
+            />
           </div>
           <div className="grid gap-1.5">
             <Label>Observações</Label>
@@ -881,7 +1143,9 @@ function ClientModal({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
           <Button
             onClick={() => {
               if (!name.trim() || !phone.trim()) return toast.error("Nome e telefone obrigatórios");
@@ -919,7 +1183,9 @@ function ProductModal({
   const [dueDate, setDueDate] = useState(
     (initial?.dueDate ?? new Date(Date.now() + 30 * 86400000).toISOString()).slice(0, 10),
   );
-  const [financialStatus, setFinancialStatus] = useState<FinancialStatus>(initial?.financialStatus ?? "Reserva");
+  const [financialStatus, setFinancialStatus] = useState<FinancialStatus>(
+    initial?.financialStatus ?? "Reserva",
+  );
   const [situation, setSituation] = useState<Situation>(initial?.situation ?? "Em Aberto");
   const [notes, setNotes] = useState(initial?.notes ?? "");
 
@@ -948,22 +1214,34 @@ function ProductModal({
           setTotalValue(p?.totalValue ?? 0);
           setPaidValue(p?.paidValue ?? 0);
           setRegisterDate((p?.registerDate ?? new Date().toISOString()).slice(0, 10));
-          setDueDate((p?.dueDate ?? new Date(Date.now() + 30 * 86400000).toISOString()).slice(0, 10));
+          setDueDate(
+            (p?.dueDate ?? new Date(Date.now() + 30 * 86400000).toISOString()).slice(0, 10),
+          );
           setFinancialStatus(p?.financialStatus ?? "Reserva");
           setSituation(p?.situation ?? "Em Aberto");
           setNotes(p?.notes ?? "");
         }
       }}
     >
-      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-8">
+      <DialogContent className="max-w-3xl sm:max-h-[92vh] sm:p-8">
         <DialogHeader>
-          <DialogTitle className="text-xl">{initial ? "Editar Produto" : "Adicionar Produto"}</DialogTitle>
+          <DialogTitle className="text-xl">
+            {initial ? "Editar Produto" : "Adicionar Produto"}
+          </DialogTitle>
         </DialogHeader>
         <div className="grid gap-3 md:grid-cols-2">
           <div className="grid gap-1.5 md:col-span-2">
             <Label>Cliente vinculado</Label>
-            <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name} — {c.phone}</option>)}
+            <select
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+            >
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} — {c.phone}
+                </option>
+              ))}
             </select>
           </div>
           <div className="grid gap-1.5">
@@ -976,11 +1254,19 @@ function ProductModal({
           </div>
           <div className="grid gap-1.5">
             <Label>Valor total</Label>
-            <Input type="number" value={totalValue} onChange={(e) => setTotalValue(Number(e.target.value))} />
+            <Input
+              type="number"
+              value={totalValue}
+              onChange={(e) => setTotalValue(Number(e.target.value))}
+            />
           </div>
           <div className="grid gap-1.5">
             <Label>Valor pago</Label>
-            <Input type="number" value={paidValue} onChange={(e) => setPaidValue(Number(e.target.value))} />
+            <Input
+              type="number"
+              value={paidValue}
+              onChange={(e) => setPaidValue(Number(e.target.value))}
+            />
           </div>
           <div className="grid gap-1.5">
             <Label>Valor restante</Label>
@@ -988,14 +1274,18 @@ function ProductModal({
           </div>
           <div className="grid gap-1.5">
             <Label>Data de cadastro</Label>
-            <Input type="date" value={registerDate} onChange={(e) => {
-              setRegisterDate(e.target.value);
-              if (financialStatus === "Reserva") {
-                const d = new Date(e.target.value);
-                d.setDate(d.getDate() + 30);
-                setDueDate(d.toISOString().slice(0, 10));
-              }
-            }} />
+            <Input
+              type="date"
+              value={registerDate}
+              onChange={(e) => {
+                setRegisterDate(e.target.value);
+                if (financialStatus === "Reserva") {
+                  const d = new Date(e.target.value);
+                  d.setDate(d.getDate() + 30);
+                  setDueDate(d.toISOString().slice(0, 10));
+                }
+              }}
+            />
           </div>
           <div className="grid gap-1.5">
             <Label>Data limite</Label>
@@ -1003,22 +1293,36 @@ function ProductModal({
           </div>
           <div className="grid gap-1.5">
             <Label>Status financeiro</Label>
-            <select value={financialStatus} onChange={(e) => {
-              const s = e.target.value as FinancialStatus;
-              setFinancialStatus(s);
-              if (s === "Reserva") {
-                const d = new Date(registerDate);
-                d.setDate(d.getDate() + 30);
-                setDueDate(d.toISOString().slice(0, 10));
-              }
-            }} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
-              <option>Pago</option><option>Reserva</option><option>Pendente</option><option>MGMV</option>
+            <select
+              value={financialStatus}
+              onChange={(e) => {
+                const s = e.target.value as FinancialStatus;
+                setFinancialStatus(s);
+                if (s === "Reserva") {
+                  const d = new Date(registerDate);
+                  d.setDate(d.getDate() + 30);
+                  setDueDate(d.toISOString().slice(0, 10));
+                }
+              }}
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+            >
+              <option>Pago</option>
+              <option>Reserva</option>
+              <option>Pendente</option>
+              <option>MGMV</option>
             </select>
           </div>
           <div className="grid gap-1.5">
             <Label>Situação</Label>
-            <select value={situation} onChange={(e) => setSituation(e.target.value as Situation)} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
-              <option>Em Aberto</option><option>Enviado</option><option>Desistiu</option><option>Abandonou</option>
+            <select
+              value={situation}
+              onChange={(e) => setSituation(e.target.value as Situation)}
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+            >
+              <option>Em Aberto</option>
+              <option>Enviado</option>
+              <option>Desistiu</option>
+              <option>Abandonou</option>
             </select>
           </div>
           <div className="grid gap-1.5 md:col-span-2">
@@ -1038,11 +1342,14 @@ function ProductModal({
           )}
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
           <Button
             disabled={blockReserva}
             onClick={() => {
-              if (!clientId || !name.trim() || !Number.isFinite(totalValue)) return toast.error("Preencha os campos obrigatórios");
+              if (!clientId || !name.trim() || !Number.isFinite(totalValue))
+                return toast.error("Preencha os campos obrigatórios");
               onSave(clientId, {
                 name: name.trim(),
                 platform,
