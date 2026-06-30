@@ -41,17 +41,9 @@ export const claimSession = createServerFn({ method: "POST" })
       .eq("user_id", userId)
       .maybeSingle();
 
-    if (existing && existing.session_id !== data.sessionId && !data.force) {
-      const lastSeenMs = new Date(existing.last_seen).getTime();
-      const ageSeconds = (Date.now() - lastSeenMs) / 1000;
-      if (ageSeconds < ACTIVE_WINDOW_SECONDS) {
-        return {
-          ok: false,
-          reason: "session_already_active",
-          lastSeen: existing.last_seen,
-        };
-      }
-    }
+    // Sessões concorrentes liberadas: o dispositivo atual sempre toma o slot.
+    // O `existing` é mantido apenas para registro/auditoria — nunca bloqueia.
+    void existing;
 
     const { error: upErr } = await supabase
       .from("active_sessions")
