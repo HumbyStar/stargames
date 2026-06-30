@@ -268,7 +268,7 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
       </div>
 
       <div className="max-h-[420px] overflow-auto rounded-md border border-border">
-        <Table>
+        <Table className="min-w-[720px]">
           <TableHeader>
             <TableRow>
               <TableHead>E-mail</TableHead>
