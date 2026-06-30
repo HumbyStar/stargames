@@ -55,7 +55,7 @@ export function LazySection({
   }, [visible, rootMargin, anchorId]);
 
   return (
-    <div ref={ref} style={visible ? undefined : { minHeight }}>
+    <div ref={ref} id={anchorId} style={visible ? undefined : { minHeight }}>
       {visible ? (
         <Suspense fallback={fallback ?? <SectionSkeleton minHeight={minHeight} />}>
           {children}
