@@ -2513,8 +2513,16 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
                     <div className="truncate text-muted-foreground tabular-nums" title={r.phone}>{r.phone || "—"}</div>
                     <div className="truncate" title={r.product}>{r.product || "—"}</div>
                     <div className="truncate text-muted-foreground" title={r.platform}>{r.platform || "—"}</div>
-                    <div className="tabular-nums">
-                      {Number.isFinite(r.totalValue ?? NaN) ? formatBRL(r.totalValue!) : "—"}
+                    <div className="tabular-nums leading-tight">
+                      <div>{Number.isFinite(r.totalValue ?? NaN) ? formatBRL(r.totalValue!) : "—"}</div>
+                      {r.financialStatus === "Reserva" &&
+                        Number.isFinite(r.totalValue ?? NaN) &&
+                        Number.isFinite(r.paidValue ?? NaN) && (
+                          <div className="text-[10px] text-muted-foreground">
+                            pago {formatBRL(r.paidValue!)} · resta{" "}
+                            {formatBRL(Math.max(0, (r.totalValue ?? 0) - (r.paidValue ?? 0)))}
+                          </div>
+                        )}
                     </div>
                     <div>
                       <Tag
