@@ -133,28 +133,28 @@ export function ImportProgressModal({
   if (state.done && !state.resumed) {
     const s = state.stats;
     const totalClients = s.createdClients + s.updatedClients;
-    const successItems: { label: string; value: number; tone: "ok" | "info" }[] = [
-      { label: "Clientes novos", value: s.createdClients, tone: "ok" },
-      { label: "Clientes atualizados", value: s.updatedClients, tone: "info" },
-      { label: "Produtos importados", value: s.createdProducts, tone: "ok" },
-      { label: "Acordos MGMV criados", value: s.createdAgreements, tone: "ok" },
-      { label: "Acordos MGMV substituídos", value: s.replacedAgreements, tone: "info" },
-      { label: "Telefones auto-corrigidos", value: s.skippedAfterCorrection, tone: "info" },
-    ].filter((i) => i.value > 0);
-    const softAlerts: { label: string; value: number; tone: "warn" | "danger"; hint: string }[] = [
+    const successItems = ([
+      { label: "Clientes novos", value: s.createdClients, tone: "ok" as const },
+      { label: "Clientes atualizados", value: s.updatedClients, tone: "info" as const },
+      { label: "Produtos importados", value: s.createdProducts, tone: "ok" as const },
+      { label: "Acordos MGMV criados", value: s.createdAgreements, tone: "ok" as const },
+      { label: "Acordos MGMV substituídos", value: s.replacedAgreements, tone: "info" as const },
+      { label: "Telefones auto-corrigidos", value: s.skippedAfterCorrection, tone: "info" as const },
+    ]).filter((i) => i.value > 0);
+    const softAlerts = ([
       {
         label: "Duplicatas ignoradas",
         value: s.ignoredDuplicates,
-        tone: "warn",
+        tone: "warn" as const,
         hint: "Produtos já existentes (mesmo cliente, nome e data) — não foram reprocessados.",
       },
       {
         label: "Entradas com erro",
         value: s.errorEntries,
-        tone: "danger",
+        tone: "danger" as const,
         hint: "Linhas que não puderam ser importadas por dados inválidos ou ausentes.",
       },
-    ].filter((i) => i.value > 0);
+    ]).filter((i) => i.value > 0);
     return (
       <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
  <DialogContent className="border-emerald-500/40 bg-gradient-to-b from-emerald-500/10 via-background to-emerald-500/5">
