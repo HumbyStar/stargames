@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Copy,
   FolderOpen,
+  Lock,
   PhoneCall,
   RefreshCcw,
   ShieldCheck,
@@ -79,6 +80,19 @@ export function ImportProgressModal({
 }) {
   const [now, setNow] = useState(() => Date.now());
   const [countdown, setCountdown] = useState<number | null>(null);
+  const running = !!(state && !state.done && !state.resumed);
+
+  // Trava saída acidental enquanto a importação está rodando.
+  useEffect(() => {
+    if (!running) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [running]);
 
   useEffect(() => {
     if (!state || state.done || state.resumed) return;
@@ -173,7 +187,6 @@ export function ImportProgressModal({
   const tip = FUN_TIPS[(Math.max(idx, 0)) % FUN_TIPS.length];
   const conveyorState: "processing" | "done" | "cancelled" =
     state.done ? "done" : state.resumed ? "cancelled" : "processing";
-  const running = !state.done && !state.resumed;
 
   const startedMs = new Date(state.startedAt).getTime();
   const elapsedMs = Math.max(0, now - startedMs);
@@ -184,21 +197,28 @@ export function ImportProgressModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o && (state.done || state.resumed)) onClose(); }}>
- <DialogContent onInteractOutside={(e) => { if (!state.done) e.preventDefault(); }}>
+      <DialogContent
+        hideClose={running}
+        onInteractOutside={(e) => { if (!state.done) e.preventDefault(); }}
+        onEscapeKeyDown={(e) => { if (running) e.preventDefault(); }}
+        onPointerDownOutside={(e) => { if (running) e.preventDefault(); }}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {state.resumed ? (
               <AlertTriangle className="h-5 w-5 text-amber-500" />
+            ) : running ? (
+              <Lock className="h-5 w-5 text-primary" />
             ) : (
               <Sparkles className="h-5 w-5 text-primary animate-pulse" />
             )}
-            {state.resumed ? "Importação interrompida" : "Processando em lotes…"}
+            {state.resumed ? "Retomar importação" : "Importação em andamento — não feche esta tela"}
           </DialogTitle>
           <DialogDescription>
             {state.resumed
-              ? <>A última importação de <span className="font-medium text-foreground">{state.zipName}</span> não terminou. Reenvie o ZIP para continuar — duplicatas serão detectadas automaticamente.</>
+              ? <>A importação anterior de <span className="font-medium text-foreground">{state.zipName}</span> ficou pendente. Reenvie o mesmo ZIP para continuar de onde parou — a IA detecta duplicatas automaticamente.</>
               : currentFolder
-                ? <>Lote atual: <span className="font-medium text-foreground">{currentFolder}</span> — {tip}</>
+                ? <>Lote atual: <span className="font-medium text-foreground">{currentFolder}</span> — {tip} A tela fica travada até concluir, processando 100% dos arquivos sem limites.</>
                 : "Preparando a esteira…"}
           </DialogDescription>
         </DialogHeader>

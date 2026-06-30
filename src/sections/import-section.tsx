@@ -751,10 +751,10 @@ const maskPhone = (p: string) => {
 const ZIP_LIMITS = {
   /** Apenas para alertar — não trunca mais. Importação processa todos. */
   highVolumeFiles: 2000,
-  /** Por arquivo HTML individual (cliente). Notion exporta páginas grandes. */
-  maxFileBytes: 25 * 1024 * 1024,
-  /** ZIP inteiro. Acima disto o navegador costuma travar ao alocar buffer. */
-  maxTotalBytes: 500 * 1024 * 1024,
+  /** Por arquivo HTML individual — apenas aviso, não bloqueia. */
+  maxFileBytes: Number.POSITIVE_INFINITY,
+  /** ZIP inteiro — sem teto. Importação não pode ser interrompida por limite. */
+  maxTotalBytes: Number.POSITIVE_INFINITY,
 };
 
 /** sha1 hex via Web Crypto API. Usado como fingerprint do arquivo importado. */
@@ -1085,11 +1085,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     if (!file.name.toLowerCase().endsWith(".zip")) {
       return toast.error("Envie um arquivo .zip");
     }
-    if (file.size > ZIP_LIMITS.maxTotalBytes) {
-      return toast.error(
-        `ZIP excede o teto de ${(ZIP_LIMITS.maxTotalBytes / 1024 / 1024) | 0} MB. Esse limite existe para o navegador não travar — para volumes ainda maiores, use a importação por backend (em breve).`,
-      );
-    }
+    // Sem teto de tamanho — a importação processa o ZIP inteiro em lotes.
     setZipProcessing(true);
     setZipData(null);
     setZipProgress({ done: 0, total: 0 });
