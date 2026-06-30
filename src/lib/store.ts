@@ -476,7 +476,14 @@ export const useStore = create<State>()((set, get) => ({
           }
           set({
             clients: snap.clients,
-            products: snap.products,
+            products: snap.products.map((p) =>
+              // Fix retroativo: produtos que já foram consolidados em MGMV
+              // não devem permanecer com situation "Em Aberto" (causava dupla
+              // cobrança e inflação em "Valores a Receber").
+              p.financialStatus === "MGMV" && p.situation === "Em Aberto"
+                ? { ...p, situation: "Resolvido" as Situation }
+                : p,
+            ),
             importHistory: snap.importHistory,
             preferences: { ...defaultPreferences, ...snap.preferences },
             rules: { ...defaultRules, ...snap.rules },
