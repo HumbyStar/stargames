@@ -14,6 +14,11 @@ import { useStore } from "@/lib/store";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
+import faviconIco from "@/assets/favicons/favicon.ico.asset.json";
+import favicon32 from "@/assets/favicons/mascot-32.png.asset.json";
+import favicon180 from "@/assets/favicons/mascot-180.png.asset.json";
+import favicon192 from "@/assets/favicons/mascot-192.png.asset.json";
+import favicon512 from "@/assets/favicons/mascot-512.png.asset.json";
 
 function NotFoundComponent() {
   return (
@@ -98,6 +103,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
+      { rel: "icon", type: "image/x-icon", href: faviconIco.url },
+      { rel: "icon", type: "image/png", sizes: "32x32", href: favicon32.url },
+      { rel: "icon", type: "image/png", sizes: "192x192", href: favicon192.url },
+      { rel: "icon", type: "image/png", sizes: "512x512", href: favicon512.url },
+      { rel: "apple-touch-icon", sizes: "180x180", href: favicon180.url },
     ],
   }),
   shellComponent: RootShell,
