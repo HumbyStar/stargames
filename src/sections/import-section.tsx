@@ -2342,21 +2342,23 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
 
   return (
     <div className="flex h-full flex-col rounded-md border border-border">
-      <div className={cn("grid border-b border-border bg-muted/40 px-3 py-2 text-left text-xs uppercase tracking-wide text-muted-foreground", gridCols)}>
-        <div className="font-medium">Linha</div>
-        <div className="font-medium">Data</div>
-        <div className="font-medium">Nome</div>
-        <div className="font-medium">Telefone</div>
-        <div className="font-medium">Produto</div>
-        <div className="font-medium">Plataforma</div>
-        <div className="font-medium">Valor</div>
-        <div className="font-medium">Status</div>
-        <div className="font-medium">Aviso</div>
-        <div className="font-medium">Cliente</div>
-        <div className="font-medium">Resultado</div>
-        <div className="font-medium">Erro</div>
-      </div>
-      <div ref={parentRef} className="flex-1 min-h-0 overflow-auto" role="rowgroup" aria-rowcount={rows.length}>
+      <div className="flex flex-1 min-h-0 flex-col overflow-x-auto">
+        <div className="flex min-w-[1490px] flex-1 min-h-0 flex-col">
+          <div className={cn("grid shrink-0 border-b border-border bg-muted/40 px-3 py-2 text-left text-xs uppercase tracking-wide text-muted-foreground", gridCols)}>
+            <div className="font-medium">Linha</div>
+            <div className="font-medium">Data</div>
+            <div className="font-medium">Nome</div>
+            <div className="font-medium">Telefone</div>
+            <div className="font-medium">Produto</div>
+            <div className="font-medium">Plataforma</div>
+            <div className="font-medium">Valor</div>
+            <div className="font-medium">Status</div>
+            <div className="font-medium">Aviso</div>
+            <div className="font-medium">Cliente</div>
+            <div className="font-medium">Resultado</div>
+            <div className="font-medium">Erro</div>
+          </div>
+          <div ref={parentRef} className="flex-1 min-h-0 overflow-y-auto" role="rowgroup" aria-rowcount={rows.length}>
         {rows.length === 0 ? (
           <div className="p-6 text-center text-sm text-muted-foreground">Nenhuma linha para exibir.</div>
         ) : (
@@ -2394,6 +2396,8 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
             })}
           </div>
         )}
+          </div>
+        </div>
       </div>
       <div className="border-t border-border bg-muted/30 px-3 py-2 text-center text-xs text-muted-foreground">
         {rows.length} {rows.length === 1 ? "linha" : "linhas"} • virtualização ativa para preservar a performance
