@@ -371,6 +371,36 @@ export function ImportProgressModal({
               style={{ width: `${pct}%` }}
             />
           </div>
+          {(typeof state.recordsTotal === "number" && state.recordsTotal > 0) && (
+            <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+              <div className="rounded-md border bg-muted/30 p-2">
+                <div className="text-muted-foreground">Registros no ZIP</div>
+                <div className="font-mono text-sm">
+                  {state.recordsProcessed ?? 0} processados ·{" "}
+                  <span className="text-amber-600 dark:text-amber-400">
+                    {Math.max(0, (state.recordsTotal ?? 0) - (state.recordsProcessed ?? 0))} restantes
+                  </span>{" "}
+                  / {state.recordsTotal}
+                </div>
+              </div>
+              <div className="rounded-md border bg-muted/30 p-2">
+                <div className="text-muted-foreground">Lote atual</div>
+                <div className="font-mono text-sm">
+                  {state.currentBatchProcessed ?? 0} de {state.currentBatchSize ?? 0}
+                  {state.currentBatchSize ? (
+                    <span className="text-muted-foreground">
+                      {" "}· {Math.max(0, (state.currentBatchSize ?? 0) - (state.currentBatchProcessed ?? 0))} faltam
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          )}
+          {state.retrying && !state.done && (
+            <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-[11px] text-amber-700 dark:text-amber-300">
+              ⚠️ Falha de rede — retomando o mesmo lote automaticamente (tentativa {state.retrying.attempt}). Motivo: {state.retrying.reason}
+            </div>
+          )}
         </div>
 
         {/* Cards de métricas */}
