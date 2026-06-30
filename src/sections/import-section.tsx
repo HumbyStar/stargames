@@ -3514,7 +3514,15 @@ interface ManualClient {
   products: ManualProduct[];
 }
 
-const SITUATIONS: Situation[] = ["Em Aberto", "Enviado", "Desistiu", "Abandonou"];
+const SITUATIONS: Situation[] = [
+  "Em Aberto",
+  "Enviado",
+  "Retirado",
+  "Removido",
+  "Desistiu",
+  "Abandonou",
+  "Resolvido",
+];
 
 const newProduct = (): ManualProduct => ({
   id: crypto.randomUUID(),
