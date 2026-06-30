@@ -2396,8 +2396,11 @@ type PreviewFilter = "all" | "ready" | "error" | "pago" | "reserva" | "pendente"
 function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const ROW_HEIGHT = 40;
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<PreviewFilter>("all");
+  const [query, setQuery] = usePersistedState<string>("import.preview.query", "");
+  const [filter, setFilter] = usePersistedState<PreviewFilter>("import.preview.filter", "all");
+
+  const errorCount = useMemo(() => rows.filter((r) => r.result === "Erro").length, [rows]);
+  const readyCount = rows.length - errorCount;
 
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -2424,6 +2427,58 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
     overscan: 12,
   });
 
+  const scrollToFirstError = () => {
+    setFilter("all");
+    setQuery("");
+    // Defer until filteredRows recomputes with all rows visible.
+    requestAnimationFrame(() => {
+      const idx = rows.findIndex((r) => r.result === "Erro");
+      if (idx >= 0) rowVirtualizer.scrollToIndex(idx, { align: "start" });
+    });
+  };
+
+  const downloadErrorsCsv = () => {
+    const invalid = rows.filter((r) => r.result === "Erro");
+    if (invalid.length === 0) {
+      toast.info("Nenhuma linha inválida para exportar.");
+      return;
+    }
+    const csv = Papa.unparse({
+      fields: [
+        "linha",
+        "nome",
+        "telefone",
+        "produto",
+        "plataforma",
+        "valor_total",
+        "valor_pago",
+        "status",
+        "motivo_erro",
+      ],
+      data: invalid.map((r) => [
+        r.line,
+        r.name,
+        r.phone,
+        r.product,
+        r.platform,
+        r.totalValue ?? "",
+        r.paidValue ?? "",
+        r.financialStatus,
+        r.errors.join("; "),
+      ]),
+    });
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `importacao-linhas-invalidas-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast.success(`${invalid.length} ${invalid.length === 1 ? "linha exportada" : "linhas exportadas"}.`);
+  };
+
   // Compact column layout that fits within the modal width without horizontal scroll.
   const gridCols =
     "grid-cols-[40px_minmax(110px,1.3fr)_110px_minmax(120px,1.4fr)_minmax(80px,0.9fr)_85px_82px_82px_minmax(120px,1.2fr)]";
@@ -2439,6 +2494,38 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
 
   return (
     <div className="flex h-full flex-col gap-2">
+      <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="font-medium text-[color:var(--success)]">
+            {readyCount} {readyCount === 1 ? "linha pronta" : "linhas prontas"}
+          </span>
+          <span className="text-muted-foreground">·</span>
+          {errorCount > 0 ? (
+            <button
+              type="button"
+              onClick={scrollToFirstError}
+              className="inline-flex items-center gap-1 font-medium text-destructive underline-offset-2 hover:underline"
+            >
+              <AlertCircle className="size-3.5" />
+              {errorCount} {errorCount === 1 ? "com erro" : "com erros"} — ir para a primeira
+            </button>
+          ) : (
+            <span className="text-muted-foreground">Nenhum erro encontrado.</span>
+          )}
+        </div>
+        {errorCount > 0 && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={downloadErrorsCsv}
+            className="h-7 gap-1 text-xs"
+          >
+            <Download className="size-3.5" />
+            Baixar CSV de erros
+          </Button>
+        )}
+      </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full sm:max-w-xs">
           <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
