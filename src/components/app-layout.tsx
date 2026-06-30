@@ -665,6 +665,7 @@ function _FloatingNavbarImpl() {
       data-scrolled={scrolled ? "true" : "false"}
       data-dimmed={navDimmed ? "true" : "false"}
       data-anim={navbarCfg.animation.disabled ? "off" : "on"}
+      data-search={searchOpen ? "open" : "closed"}
       style={{
         ["--nav-anim-hover" as string]: `${navbarCfg.animation.hoverMs}ms`,
         ["--nav-anim-leave" as string]: `${navbarCfg.animation.leaveMs}ms`,
