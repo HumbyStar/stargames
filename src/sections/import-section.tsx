@@ -1029,6 +1029,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           return;
         }
         setProgressRowId(data.id);
+        const restoredIgnored =
+          (stats as { ignoredItems?: ImportProgressState["ignoredItems"] }).ignoredItems ?? [];
         setImportProgress({
           fileHash: data.file_hash,
           zipName: data.zip_name,
@@ -1047,6 +1049,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             errorEntries: 0,
             skippedAfterCorrection: 0,
           },
+          ignoredItems: restoredIgnored,
           done: false,
           resumed: true,
         });
