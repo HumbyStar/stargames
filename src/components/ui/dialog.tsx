@@ -38,18 +38,23 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        // Mobile: full-screen, sem translate, rolagem vertical interna, sem horizontal.
-        "fixed inset-0 z-50 grid w-screen h-[100dvh] max-w-none gap-4 overflow-y-auto overflow-x-hidden border-0 bg-background p-4 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+        // Mobile: tratado como uma "sessão" — mesmo chrome das páginas
+        // (.one-page-section): padding superior para liberar o espaço da
+        // navbar flutuante, rolagem vertical interna, sem rolagem horizontal.
+        "dialog-as-section fixed inset-0 z-50 flex flex-col w-screen h-[100dvh] max-w-none gap-0 overflow-y-auto overflow-x-hidden border-0 bg-background px-6 pt-[120px] pb-14 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         // Desktop (≥640px): centralizado, max-w-lg padrão (overridável), max-h 90vh, com borda/raio.
-        "sm:fixed sm:inset-auto sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:w-full sm:h-auto sm:max-w-lg sm:max-h-[90vh] sm:rounded-lg sm:border sm:p-6 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95",
+        "sm:fixed sm:inset-auto sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:w-full sm:h-auto sm:max-w-lg sm:max-h-[90vh] sm:gap-4 sm:grid sm:rounded-lg sm:border sm:p-6 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95",
         className,
       )}
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-3 top-3 grid size-11 sm:size-9 place-items-center rounded-full opacity-70 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+      <DialogPrimitive.Close
+        aria-label="Fechar"
+        className="fixed sm:absolute right-4 sm:right-3 top-[76px] sm:top-3 z-20 grid size-11 sm:size-9 place-items-center rounded-full border border-border/60 bg-background/90 backdrop-blur-md shadow-sm opacity-90 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:text-muted-foreground"
+      >
         <X className="h-5 w-5 sm:h-4 sm:w-4" />
-        <span className="sr-only">Close</span>
+        <span className="sr-only">Fechar</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   </DialogPortal>
@@ -59,11 +64,11 @@ DialogContent.displayName = DialogPrimitive.Content.displayName;
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col space-y-1.5 text-left",
-      // Mobile: header sticky no topo do modal full-screen.
-      "sticky top-0 z-10 -mx-4 -mt-4 bg-background/95 backdrop-blur-md px-4 pt-4 pb-3 pr-14 border-b border-border/60",
-      // Desktop: comportamento original (não sticky, sem borda, sem fundo).
-      "sm:static sm:mx-0 sm:mt-0 sm:px-0 sm:pt-0 sm:pb-0 sm:pr-0 sm:bg-transparent sm:backdrop-blur-none sm:border-0",
+      "flex flex-col text-left",
+      // Mobile: cabeçalho idêntico ao PageHeader das sessões (sem sticky, sem fundo, sem borda).
+      "gap-2 mb-6 pr-14",
+      // Desktop: comportamento original.
+      "sm:gap-0 sm:space-y-1.5 sm:mb-0 sm:pr-0",
       className,
     )}
     {...props}
@@ -74,10 +79,10 @@ DialogHeader.displayName = "DialogHeader";
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      // Mobile: rodapé sticky com botões full-width empilhados.
-      "sticky bottom-0 z-10 -mx-4 -mb-4 mt-2 flex flex-col-reverse gap-2 border-t border-border/60 bg-background/95 backdrop-blur-md px-4 py-3 [&>button]:w-full [&>button]:min-h-11",
+      // Mobile: rodapé flui no fim da "sessão", botões full-width empilhados.
+      "mt-8 flex flex-col-reverse gap-2 [&>button]:w-full [&>button]:min-h-11",
       // Desktop: comportamento original em linha, sem sticky.
-      "sm:static sm:mx-0 sm:mb-0 sm:mt-0 sm:flex-row sm:justify-end sm:gap-0 sm:space-x-2 sm:border-0 sm:bg-transparent sm:backdrop-blur-none sm:px-0 sm:py-0 sm:[&>button]:w-auto sm:[&>button]:min-h-0",
+      "sm:mt-0 sm:flex-row sm:justify-end sm:gap-0 sm:space-x-2 sm:[&>button]:w-auto sm:[&>button]:min-h-0",
       className,
     )}
     {...props}
@@ -91,7 +96,13 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn("text-lg font-semibold leading-none tracking-tight", className)}
+    className={cn(
+      // Mobile: mesmo tamanho de título das páginas de sessão (PageHeader).
+      "text-2xl font-semibold tracking-tight leading-tight",
+      // Desktop: mantém o tamanho compacto original.
+      "sm:text-lg sm:leading-none",
+      className,
+    )}
     {...props}
   />
 ));
