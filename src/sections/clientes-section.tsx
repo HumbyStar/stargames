@@ -861,7 +861,7 @@ function ClientModal({
         }
       }}
     >
-      <DialogContent className="max-w-xl p-8">
+      <DialogContent className="max-w-xl sm:p-8">
         <DialogHeader>
           <DialogTitle className="text-xl">{state.client ? "Editar Cliente" : "Adicionar Cliente"}</DialogTitle>
           <DialogDescription>O telefone é o identificador principal do cliente.</DialogDescription>
@@ -955,7 +955,7 @@ function ProductModal({
         }
       }}
     >
-      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-8">
+      <DialogContent className="max-w-3xl sm:max-h-[92vh] sm:p-8">
         <DialogHeader>
           <DialogTitle className="text-xl">{initial ? "Editar Produto" : "Adicionar Produto"}</DialogTitle>
         </DialogHeader>
