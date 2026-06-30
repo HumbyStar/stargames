@@ -135,27 +135,6 @@ function AuthPage() {
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Entrando..." : "Entrar"}
           </Button>
-          {conflictOpen && (
-            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300 space-y-2">
-              <p>
-                Última atividade detectada{" "}
-                {conflictLastSeen
-                  ? new Date(conflictLastSeen).toLocaleString("pt-BR")
-                  : "há instantes"}
-                . Apenas uma sessão ativa por conta é permitida.
-              </p>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="w-full"
-                disabled={loading}
-                onClick={onForce}
-              >
-                Forçar entrada e encerrar a outra sessão
-              </Button>
-            </div>
-          )}
           <p className="text-xs text-muted-foreground text-center">
             Acesso restrito. Novos usuários são cadastrados por um administrador ou gerente.
           </p>
