@@ -870,8 +870,33 @@ function RolesTab() {
   if (isLoading) return <p className="text-sm text-muted-foreground">Carregando...</p>;
 
   return (
-    <div className="overflow-auto rounded-md border border-border">
-      <Table className="min-w-[900px]">
+    <>
+      {/* Mobile: cards por papel, sem scroll lateral */}
+      <div className="space-y-3 sm:hidden">
+        {ROLES.map((r) => {
+          const perms = ALL_PERMISSIONS.filter((p) => matrix.get(r)?.has(p));
+          return (
+            <div key={r} className="rounded-lg border border-border bg-card p-3 space-y-2">
+              <p className="font-medium text-sm">{ROLE_LABELS[r]}</p>
+              {perms.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Sem permissões.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1">
+                  {perms.map((p) => (
+                    <Badge key={p} variant="secondary" className="text-[10px]">
+                      {PERM_LABELS[p]}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop: matriz */}
+      <div className="hidden sm:block overflow-auto rounded-md border border-border">
+        <Table className="min-w-[900px]">
         <TableHeader>
           <TableRow>
             <TableHead>Permissão</TableHead>
@@ -899,7 +924,8 @@ function RolesTab() {
           ))}
         </TableBody>
       </Table>
-    </div>
+      </div>
+    </>
   );
 }
 
