@@ -2282,9 +2282,9 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   );
 }
 
-function UploadArea({ accept, onFile, hint }: { accept: string; onFile: (f: File) => void; hint: string }) {
+function UploadArea({ accept, onFile, hint, tall }: { accept: string; onFile: (f: File) => void; hint: string; tall?: boolean }) {
   // placeholder anchor for patch ordering below
-  return _UploadAreaImpl({ accept, onFile, hint });
+  return _UploadAreaImpl({ accept, onFile, hint, tall });
 }
 
 function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
@@ -2362,7 +2362,7 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
   );
 }
 
-function _UploadAreaImpl({ accept, onFile, hint }: { accept: string; onFile: (f: File) => void; hint: string }) {
+function _UploadAreaImpl({ accept, onFile, hint, tall }: { accept: string; onFile: (f: File) => void; hint: string; tall?: boolean }) {
   const [drag, setDrag] = useState(false);
   return (
     <label
@@ -2375,7 +2375,8 @@ function _UploadAreaImpl({ accept, onFile, hint }: { accept: string; onFile: (f:
         if (f) onFile(f);
       }}
       className={
-        "flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center text-sm transition " +
+        "flex w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center text-sm transition " +
+        (tall ? "min-h-[320px] " : "min-h-40 ") +
         (drag ? "border-primary bg-primary/5" : "border-input bg-muted/30 hover:bg-muted/50")
       }
     >
