@@ -2081,155 +2081,35 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         description="Importe clientes e produtos por lista, HTML, CSV ou Excel."
       />
 
-      <div className="mb-4">
-        <UploadArea
-          accept=".txt,.html,.htm,.csv,.xlsx,.xls"
-          onFile={handleFile}
-          hint="Arraste qualquer arquivo aqui (lista, HTML, CSV ou Excel) ou clique para selecionar"
-        />
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <Card>
-          <Tabs value={tab} onValueChange={setTab}>
-            <TabsList>
-              <TabsTrigger value="text">Lista</TabsTrigger>
-              <TabsTrigger value="html">HTML / Notion</TabsTrigger>
-              <TabsTrigger value="zip">ZIP Notion</TabsTrigger>
-              <TabsTrigger value="csv">CSV</TabsTrigger>
-              <TabsTrigger value="excel">Excel</TabsTrigger>
-              <TabsTrigger value="manual">Cadastro manual</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="text" className="mt-4 space-y-3">
-              <TextDropzone value={text} onChange={setText} onFile={handleFile} />
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs text-muted-foreground">
-                  A IA lê cada linha do nome até o status, ignora linhas de grupo/vazias e corrige automaticamente erros comuns.
-                </p>
-                <div className="flex flex-wrap justify-end gap-2">
-                  <Button onClick={validateText} disabled={aiLoading}>
-                    <Brain className="size-4" />
-                    {aiLoading ? "Analisando com IA..." : "Validar Importação"}
-                  </Button>
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="html" className="mt-4 space-y-3">
-              <UploadArea
-                accept=".html,.htm"
-                onFile={handleFile}
-                hint="Arraste um arquivo HTML exportado do Notion ou clique para selecionar"
-              />
-              <details className="rounded-md border border-border bg-muted/30 p-3 text-xs">
-                <summary className="cursor-pointer font-medium">Colar HTML manualmente</summary>
-                <textarea
-                  value={htmlText}
-                  onChange={(e) => setHtmlText(e.target.value)}
-                  placeholder="<h1 class='page-title'>Nome - Telefone</h1>..."
-                  className="mt-2 min-h-40 w-full rounded-md border border-input bg-background p-2 font-mono text-xs outline-none"
-                />
-                <div className="mt-2 flex justify-end">
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      if (!htmlText.trim()) return toast.error("Cole o HTML para validar.");
-                      const result = parseNotionHtml(htmlText);
-                      setNotion(result);
-                      setRows(null);
-                      if (result.errors.length) toast.error(result.errors[0]);
-                      else {
-                        const total = result.clients.reduce((s, c) => s + c.products.length, 0);
-                        toast.success(`${result.clients.length} cliente(s) • ${total} produto(s) extraído(s)`);
-                      }
-                    }}
-                  >
-                    Validar HTML
-                  </Button>
-                </div>
-              </details>
-            </TabsContent>
-
-            <TabsContent value="zip" className="mt-4 space-y-3" id="zip-import">
-              <div>
-                <h3 className="text-sm font-semibold">Importar ZIP do Notion</h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Processamento em lotes. Nada é salvo antes da prévia.
-                </p>
-              </div>
-              <UploadArea
-                accept=".zip"
-                onFile={handleZipFile}
-                hint={
-                  zipProcessing
-                    ? zipProgress && zipProgress.total > 0
-                      ? `Lendo ZIP... ${zipProgress.done}/${zipProgress.total} arquivos`
-                      : "Lendo ZIP..."
-                    : "Arraste o ZIP exportado do Notion ou clique para selecionar"
-                }
-              />
-              <p className="text-xs text-muted-foreground">
-                Nada é salvo nesta etapa. Apenas após confirmar a importação os dados são gravados.
-              </p>
-            </TabsContent>
-
-            <TabsContent value="csv" className="mt-4 space-y-3">
-              <UploadArea accept=".csv" onFile={handleFile} hint="Arraste um arquivo CSV ou clique para selecionar" />
-              <div className="flex justify-end">
-                <Button variant="outline" onClick={() => downloadModel("csv")}>Baixar modelo CSV</Button>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="excel" className="mt-4 space-y-3">
-              <UploadArea accept=".xlsx,.xls" onFile={handleFile} hint="Arraste um .xlsx/.xls ou clique para selecionar" />
-              <div className="flex justify-end">
-                <Button variant="outline" onClick={() => downloadModel("xlsx")}>Baixar modelo Excel</Button>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="manual" className="mt-4">
-              <ManualEntryForm
-                onConfirm={(entries) => {
-                  let savedClients = 0;
-                  let savedProducts = 0;
-                  for (const entry of entries) {
-                    const existing = findClientByPhone(entry.phone);
-                    const client = existing
-                      ? existing
-                      : addClient({
-                          name: entry.name,
-                          phone: entry.phone,
-                          notes: entry.notes || undefined,
-                        });
-                    if (!existing) savedClients++;
-                    for (const p of entry.products) {
-                      addProduct({
-                        clientId: client.id,
-                        name: p.name,
-                        platform: p.platform,
-                        totalValue: p.totalValue,
-                        paidValue: p.paidValue,
-                        financialStatus: calculateFinancialStatus(p.totalValue, p.paidValue),
-                        situation: p.situation,
-                        registerDate: p.date,
-                        dueDate: p.date,
-                        notes: p.notes || undefined,
-                      });
-                      savedProducts++;
-                    }
-                  }
-                  toast.success(
-                    `${savedClients} cliente(s) novo(s) • ${savedProducts} produto(s) cadastrado(s).`,
-                  );
-                  onScrollTo("clientes");
-                }}
-              />
-            </TabsContent>
-          </Tabs>
-        </Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="flex">
+          <UploadArea
+            accept=".txt,.html,.htm,.csv,.xlsx,.xls,.zip"
+            onFile={(f) => {
+              const ext = f.name.toLowerCase().split(".").pop();
+              if (ext === "zip") void handleZipFile(f);
+              else void handleFile(f);
+            }}
+            hint="Arraste qualquer arquivo aqui (lista, HTML, CSV, Excel ou ZIP do Notion) ou clique para selecionar"
+            tall
+          />
+        </div>
 
         <div className="space-y-4">
+          <Card>
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Importar clientes por lista</h3>
+              <Button size="sm" onClick={validateText} disabled={aiLoading}>
+                <Brain className="size-4" />
+                {aiLoading ? "Analisando..." : "Validar com IA"}
+              </Button>
+            </div>
+            <TextDropzone value={text} onChange={setText} onFile={handleFile} />
+            <p className="mt-2 text-xs text-muted-foreground">
+              Cole a lista (Nome - Telefone - Produto - Plataforma - Valor - Status) ou arraste um .txt. A IA corrige erros comuns.
+            </p>
+          </Card>
+
           <Card title="Formato esperado">
             <p className="text-xs text-muted-foreground">Lista:</p>
             <code className="block rounded-md bg-muted p-2 text-xs">Nome - Telefone - Produto - Plataforma - Valor - Status</code>
@@ -2244,6 +2124,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             <p className="mt-3 text-xs text-muted-foreground">
               Telefone é o identificador. Status: Pago, Reserva, Pendente, MGMV. Situação: Em Aberto, Enviado, Desistiu, Abandonou.
             </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => downloadModel("csv")}>Modelo CSV</Button>
+              <Button size="sm" variant="outline" onClick={() => downloadModel("xlsx")}>Modelo Excel</Button>
+            </div>
           </Card>
         </div>
       </div>
