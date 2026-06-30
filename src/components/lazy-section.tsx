@@ -7,13 +7,13 @@ import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
  * estado interno (filtros, paginação, etc.).
  */
 export function LazySection({
-  id,
+  anchorId,
   minHeight = 600,
   rootMargin = "800px",
   children,
   fallback,
 }: {
-  id?: string;
+  anchorId?: string;
   minHeight?: number;
   rootMargin?: string;
   children: ReactNode;
@@ -28,7 +28,7 @@ export function LazySection({
     if (!el) return;
 
     // Se o usuário chega via âncora (#clientes), montar imediatamente.
-    if (typeof window !== "undefined" && id && window.location.hash === `#${id}`) {
+    if (typeof window !== "undefined" && anchorId && window.location.hash === `#${anchorId}`) {
       setVisible(true);
       return;
     }
@@ -52,10 +52,10 @@ export function LazySection({
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [visible, rootMargin, id]);
+  }, [visible, rootMargin, anchorId]);
 
   return (
-    <div ref={ref} id={id} style={visible ? undefined : { minHeight }}>
+    <div ref={ref} style={visible ? undefined : { minHeight }}>
       {visible ? (
         <Suspense fallback={fallback ?? <SectionSkeleton minHeight={minHeight} />}>
           {children}
