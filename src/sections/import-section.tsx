@@ -1839,6 +1839,16 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   };
 
   const [aiLoading, setAiLoading] = useState(false);
+  // Token incremental para descartar respostas obsoletas / fluxos cancelados.
+  // Não dá para abortar a chamada do server function por dentro, mas
+  // ignorar o resultado garante que estado e toasts não escapem.
+  const aiRequestIdRef = useRef(0);
+  useEffect(() => {
+    return () => {
+      // Marca todas as requisições pendentes como obsoletas no unmount.
+      aiRequestIdRef.current += 1;
+    };
+  }, []);
   const validateText = async () => {
     if (!text.trim()) return toast.error("Cole os dados para validar.");
     // HTML continua com parser dedicado; texto puro vai direto para a IA.
@@ -1850,8 +1860,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       return;
     }
     setAiLoading(true);
+    const requestId = ++aiRequestIdRef.current;
     try {
       const { rows: aiRows } = await analyzeListWithAI({ data: { text } });
+      if (requestId !== aiRequestIdRef.current) return; // resposta obsoleta
       if (aiRows.length === 0) {
         toast.warning("A IA não identificou clientes na lista.");
         return;
@@ -1881,10 +1893,11 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         `IA encontrou ${aiRows.length} cliente(s)${fixed ? ` • ${fixed} com correções automáticas` : ""}`,
       );
     } catch (err) {
+      if (requestId !== aiRequestIdRef.current) return;
       const msg = err instanceof Error ? err.message : "Falha ao analisar com IA";
       toast.error("Não foi possível analisar a lista", { description: msg });
     } finally {
-      setAiLoading(false);
+      if (requestId === aiRequestIdRef.current) setAiLoading(false);
     }
   };
 
