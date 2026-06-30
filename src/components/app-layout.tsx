@@ -483,6 +483,7 @@ function _FloatingNavbarImpl() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [navSize, setNavSize] = useState({ width: 0, height: 0 });
+  const [navBottom, setNavBottom] = useState(0);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
@@ -513,13 +514,21 @@ function _FloatingNavbarImpl() {
     const nav = navRef.current;
     if (!nav) return;
     const update = () => {
-      const { width, height } = nav.getBoundingClientRect();
+      const rect = nav.getBoundingClientRect();
+      const { width, height } = rect;
       setNavSize({ width, height });
+      setNavBottom(rect.bottom);
     };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(nav);
-    return () => observer.disconnect();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, { passive: true });
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update);
+    };
   }, []);
 
   useEffect(() => {
@@ -545,13 +554,18 @@ function _FloatingNavbarImpl() {
     };
     const container = document.querySelector<HTMLElement>(".page-container");
     const onScroll = () => setOpenMobile(false);
+    const onResize = () => setOpenMobile(false);
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
     container?.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onResize);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
       container?.removeEventListener("scroll", onScroll);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onResize);
     };
   }, [openMobile]);
 
@@ -702,6 +716,7 @@ function _FloatingNavbarImpl() {
       onPointerLeave={() => setNavHover(false)}
       className={cn(
         "floating-navbar flex items-center gap-3 px-3 py-2 md:px-4",
+        "h-[60px] md:h-[60px]",
         isCompact && "md:gap-2 md:py-2 md:px-3",
       )}
     >
@@ -807,7 +822,7 @@ function _FloatingNavbarImpl() {
         id="mobile-nav-menu"
         role="menu"
         ref={mobileMenuRef}
-        style={{ top: `${(navRef.current?.getBoundingClientRect().bottom ?? 64) + 8}px` }}
+        style={{ top: `${navBottom + 8}px` }}
         className="fixed right-4 z-[60] w-[260px] max-w-[calc(100vw-32px)] rounded-2xl border border-border bg-popover/95 backdrop-blur-xl shadow-xl ring-1 ring-foreground/5 md:hidden p-1.5 animate-in fade-in slide-in-from-top-2 duration-200"
       >
           {navItems.map((i) => {
