@@ -412,7 +412,7 @@ export function ConciergeModal() {
       }
       setRunning(true);
       try {
-        const result = await resolveIntent({ data: { text: value } });
+        const result = (await resolveIntent({ data: { text: value } })) as ConciergeIntentResult;
         setText("");
         applyIntent(result);
       } catch (err) {
