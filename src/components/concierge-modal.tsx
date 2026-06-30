@@ -40,6 +40,11 @@ import {
   type ConciergeIntentResult,
   type ConciergeSection,
 } from "@/lib/concierge-ai.functions";
+import {
+  ConciergeTaskConfirmModal,
+  type ConciergeTaskDraft,
+} from "@/components/concierge-task-confirm-modal";
+import type { ConciergeTaskType, ConciergePriority } from "@/lib/concierge-tasks.functions";
 
 /* ----------------------------- Quick actions ------------------------------ */
 
@@ -264,6 +269,16 @@ export function ConciergeModal() {
     matches: Client[];
     followup?: (c: Client) => void;
   } | null>(null);
+  const [taskDraft, setTaskDraft] = useState<ConciergeTaskDraft | null>(null);
+  const [taskPickerOpen, setTaskPickerOpen] = useState(false);
+
+  const canCreateTasks = useMemo(
+    () =>
+      roles.some((r) =>
+        ["admin_master", "admin", "gerente", "manager"].includes(r),
+      ),
+    [roles],
+  );
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const resolveIntent = useServerFn(resolveConciergeIntent);
@@ -283,6 +298,7 @@ export function ConciergeModal() {
       setText("");
       setAmbiguous(null);
       setRunning(false);
+      setTaskPickerOpen(false);
     }
   }, [open]);
 
@@ -391,6 +407,25 @@ export function ConciergeModal() {
             dispatchAddProduct();
           }
           return;
+        case "create_task":
+          if (!canCreateTasks) {
+            toast.info("Apenas administradores e gerentes podem criar tarefas pelo Concierge.");
+            return;
+          }
+          if (!intent.taskType) {
+            setTaskPickerOpen(true);
+            return;
+          }
+          setTaskDraft({
+            taskType: intent.taskType,
+            title: intent.suggestedTitle || "Nova tarefa",
+            description: intent.suggestedDescription || "",
+            priority: (intent.suggestedPriority as ConciergePriority) || "media",
+            linkedFilter: (intent.linkedFilter as Record<string, unknown> | null) ?? null,
+            linkedEntityType: intent.linkedEntityType ?? null,
+            linkedEntityId: null,
+          });
+          return;
         case "ambiguous":
           toast.info(intent.message || "Pode reformular o pedido?");
           return;
@@ -399,7 +434,7 @@ export function ConciergeModal() {
           toast.info(intent.message || "Ainda não sei executar esse comando.");
       }
     },
-    [dispatchAddProduct, dispatchNewClient, goToSection, handleSearchClient, openCard],
+    [canCreateTasks, dispatchAddProduct, dispatchNewClient, goToSection, handleSearchClient, openCard],
   );
 
   const submitText = useCallback(
@@ -789,6 +824,144 @@ export function ConciergeModal() {
           setTimeout(() => openCx(), 50);
         }}
       />
+      <ConciergeTaskConfirmModal
+        open={!!taskDraft}
+        draft={taskDraft}
+        onClose={() => setTaskDraft(null)}
+      />
+      <ConciergeTaskTypePicker
+        open={taskPickerOpen}
+        onClose={() => setTaskPickerOpen(false)}
+        onPick={(taskType) => {
+          setTaskPickerOpen(false);
+          setTaskDraft(makeDefaultDraft(taskType));
+        }}
+      />
     </>
+  );
+}
+
+/* ------------------------ Picker quando intenção é vaga ----------------------- */
+
+function makeDefaultDraft(taskType: ConciergeTaskType): ConciergeTaskDraft {
+  const TYPES: Record<ConciergeTaskType, ConciergeTaskDraft> = {
+    cobranca: {
+      taskType, title: "Cobrar pendências em aberto",
+      description: "Revisar e cobrar clientes com pendências em aberto.",
+      priority: "alta",
+      linkedFilter: { context: "collection", financialStatus: "Reserva", overdue: true },
+      linkedEntityType: null, linkedEntityId: null,
+    },
+    mgmv: {
+      taskType, title: "Revisar MGMV pendente",
+      description: "Revisar acordos MGMV marcados como review_required.",
+      priority: "alta",
+      linkedFilter: { context: "mgmv", reviewStatus: "review_required" },
+      linkedEntityType: null, linkedEntityId: null,
+    },
+    envio: {
+      taskType, title: "Verificar produtos pagos aguardando envio",
+      description: "Conferir e separar produtos pagos para envio.",
+      priority: "media",
+      linkedFilter: { context: "shipping", financialStatus: "Pago", situation: "Em Aberto" },
+      linkedEntityType: null, linkedEntityId: null,
+    },
+    importacao: {
+      taskType, title: "Revisar importações com erro",
+      description: "Conferir batches de importação com pendências.",
+      priority: "media",
+      linkedFilter: { context: "import", status: "error" },
+      linkedEntityType: null, linkedEntityId: null,
+    },
+    revisao_ia: {
+      taskType, title: "Revisar análises de IA",
+      description: "Validar revisões automatizadas pendentes.",
+      priority: "media",
+      linkedFilter: { context: "mgmv", reviewStatus: "ai_reviewed" },
+      linkedEntityType: null, linkedEntityId: null,
+    },
+    cadastro: {
+      taskType, title: "Conferir cadastros inconsistentes",
+      description: "Verificar dados de cliente faltando ou inválidos.",
+      priority: "media",
+      linkedFilter: null, linkedEntityType: null, linkedEntityId: null,
+    },
+    financeiro: {
+      taskType, title: "Verificar pagamentos pendentes",
+      description: "Conciliar pagamentos no financeiro.",
+      priority: "media",
+      linkedFilter: null, linkedEntityType: null, linkedEntityId: null,
+    },
+    atendimento: {
+      taskType, title: "Atender clientes pendentes",
+      description: "Acompanhar clientes que aguardam retorno.",
+      priority: "media",
+      linkedFilter: null, linkedEntityType: null, linkedEntityId: null,
+    },
+    leiloes: {
+      taskType, title: "Acompanhar leilões",
+      description: "Verificar leilões e arremates em aberto.",
+      priority: "media",
+      linkedFilter: null, linkedEntityType: null, linkedEntityId: null,
+    },
+    dados_inconsistentes: {
+      taskType, title: "Conferir dados inconsistentes",
+      description: "Revisar registros com inconsistências de cadastro.",
+      priority: "media",
+      linkedFilter: null, linkedEntityType: null, linkedEntityId: null,
+    },
+  };
+  return TYPES[taskType];
+}
+
+const TASK_TYPE_LABELS: { id: ConciergeTaskType; label: string }[] = [
+  { id: "cobranca", label: "Cobrança" },
+  { id: "mgmv", label: "MGMV" },
+  { id: "envio", label: "Envio" },
+  { id: "importacao", label: "Importação" },
+  { id: "revisao_ia", label: "Revisão IA" },
+  { id: "cadastro", label: "Cadastro" },
+  { id: "financeiro", label: "Financeiro" },
+  { id: "atendimento", label: "Atendimento" },
+];
+
+function ConciergeTaskTypePicker({
+  open,
+  onClose,
+  onPick,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onPick: (t: ConciergeTaskType) => void;
+}) {
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0" />
+        <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-[60] w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-background p-6 shadow-2xl">
+          <DialogPrimitive.Title className="text-lg font-semibold">
+            Que tipo de tarefa você quer criar?
+          </DialogPrimitive.Title>
+          <DialogPrimitive.Description className="mt-1 text-sm text-muted-foreground">
+            Escolha um tipo para continuar.
+          </DialogPrimitive.Description>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            {TASK_TYPE_LABELS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => onPick(t.id)}
+                className="rounded-lg border border-border bg-background px-3 py-2 text-left text-sm font-medium transition hover:border-primary/40 hover:bg-accent"
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
