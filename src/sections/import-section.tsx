@@ -972,7 +972,11 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         total: state.folders.length,
         messages: state.messages.slice(-200),
         errors: state.errors.slice(-200),
-        stats: { ...state.stats, resetVersion: getResetVersion() },
+        stats: {
+          ...state.stats,
+          resetVersion: getResetVersion(),
+          ignoredItems: (state.ignoredItems ?? []).slice(-500),
+        },
         done: state.done,
         started_at: state.startedAt,
       };
