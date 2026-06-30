@@ -2369,61 +2369,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             <MetricCard label="Clientes novos" value={summary.newC} />
             <MetricCard label="Produtos prontos" value={summary.ready} status="primary" />
           </div>
-          <div className="flex-1 min-h-0 overflow-auto px-6 pb-2">
-            <div className="rounded-md border border-border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="py-2 px-3 font-medium">Linha</th>
-                    <th className="py-2 px-3 font-medium">Data</th>
-                    <th className="py-2 px-3 font-medium">Nome</th>
-                    <th className="py-2 px-3 font-medium">Telefone</th>
-                    <th className="py-2 px-3 font-medium">Produto</th>
-                    <th className="py-2 px-3 font-medium">Plataforma</th>
-                    <th className="py-2 px-3 font-medium">Valor</th>
-                    <th className="py-2 px-3 font-medium">Status</th>
-                    <th className="py-2 px-3 font-medium">Aviso</th>
-                    <th className="py-2 px-3 font-medium">Cliente</th>
-                    <th className="py-2 px-3 font-medium">Resultado</th>
-                    <th className="py-2 px-3 font-medium">Erro</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows?.slice(0, 300).map((r, idx) => (
-                    <tr key={idx} className="border-b border-border/60 last:border-0">
-                      <td className="py-3 px-3 text-muted-foreground">{r.line}</td>
-                      <td className="py-3 px-3 text-muted-foreground">{r.date ?? "—"}</td>
-                      <td className="py-3 px-3">{r.name || "—"}</td>
-                      <td className="py-3 px-3 text-muted-foreground">{r.phone || "—"}</td>
-                      <td className="py-3 px-3">{r.product || "—"}</td>
-                      <td className="py-3 px-3 text-muted-foreground">{r.platform || "—"}</td>
-                      <td className="py-3 px-3 tabular-nums">{Number.isFinite(r.totalValue ?? NaN) ? formatBRL(r.totalValue!) : "—"}</td>
-                      <td className="py-3 px-3">
-                        <Tag variant={r.financialStatus === "Pago" ? "success" : r.financialStatus === "Pendente" ? "danger" : "warning"}>
-                          {r.financialStatus || "—"}
-                        </Tag>
-                        {r.statusWarning && r.originalFinancialStatus && (
-                          <div className="mt-1 text-[10px] text-muted-foreground">
-                            original: <span className="line-through">{r.originalFinancialStatus}</span>
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-xs text-amber-600 dark:text-amber-400">
-                        {r.statusWarning ?? "—"}
-                      </td>
-                      <td className="py-3 px-3 text-muted-foreground">{r.clientFound ? "Encontrado" : "Será criado"}</td>
-                      <td className="py-3 px-3"><Tag variant={r.result === "Pronto" ? "success" : "danger"}>{r.result}</Tag></td>
-                      <td className="py-3 px-3 text-destructive">{r.errors.join("; ") || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {rows && rows.length > 300 && (
-                <div className="border-t border-border bg-muted/30 px-3 py-2 text-center text-xs text-muted-foreground">
-                  Exibindo as primeiras 300 linhas de {rows.length}. Todas serão importadas ao confirmar.
-                </div>
-              )}
-            </div>
+          <div className="flex-1 min-h-0 px-6 pb-2">
+            <PreviewVirtualTable rows={rows ?? []} />
           </div>
           <DialogFooter className="shrink-0 border-t border-border bg-background px-6 py-4">
             <Button variant="outline" onClick={() => setRows(null)}>Cancelar</Button>
