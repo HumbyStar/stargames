@@ -428,6 +428,29 @@
   border-top: 1px solid color-mix(in oklch, var(--color-border) 60%, transparent);
   scroll-snap-align: start;
   scroll-snap-stop: always;
+  /* Scrollbar com gutter estável: o conteúdo não "pula" lateralmente
+     quando passa a precisar de scroll. */
+  scrollbar-gutter: stable both-edges;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--color-primary) 70%, transparent) transparent;
+}
+/* Scrollbar dedicada (mesma estética da global, porém com gutter estável). */
+.one-page-section::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.one-page-section::-webkit-scrollbar-track {
+  background: transparent;
+}
+.one-page-section::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--color-primary) 70%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.one-page-section::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+  background-clip: padding-box;
 }
 @media (min-width: 768px) {
   .one-page-section { padding: 130px 40px 80px; }
@@ -450,15 +473,32 @@
    - O cabeçalho fica fixo (sticky) ao topo do container de scroll da seção.
    - O conteúdo da seção rola dentro da própria seção, não da página inteira.
    - Garante que linhas grandes nunca passem por cima do cabeçalho. */
-.one-page-section table thead {
+/* Sticky header das tabelas dentro de seções com scroll próprio.
+   - Sticky precisa que NENHUM ancestral entre a tabela e o container
+     de scroll tenha overflow:hidden; aplicamos overflow:visible nos
+     wrappers internos para garantir o efeito.
+   - z-index elevado evita que <Tag>, badges ou conteúdo absoluto da
+     primeira linha vazem por cima do cabeçalho durante o scroll. */
+.one-page-section table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.one-page-section table thead,
+.one-page-section table thead tr,
+.one-page-section table thead th {
   position: sticky;
   top: 0;
-  z-index: 5;
+  z-index: 20;
   background: var(--color-background);
-  box-shadow: 0 1px 0 0 color-mix(in oklch, var(--color-border) 80%, transparent);
 }
 .one-page-section table thead th {
-  background: var(--color-background);
+  box-shadow: inset 0 -1px 0 0 color-mix(in oklch, var(--color-border) 80%, transparent);
+}
+/* Container <div class="overflow-x-auto"> em volta de tabelas não pode
+   bloquear o sticky vertical — manter overflow-x rolando, mas overflow-y
+   visível para a sticky propagar ao container da seção. */
+.one-page-section .overflow-x-auto {
+  overflow-y: visible;
 }
 
 /* Glowing blue scrollbar — applied globally and inside modals */
