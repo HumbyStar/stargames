@@ -609,7 +609,7 @@ function _FloatingNavbarImpl() {
       }
     };
 
-    if (navHover) {
+    if (navHover || openMobile) {
       clearNavExitTimer();
       setNavDimmed(false);
       setNavProgress("loop");
@@ -633,7 +633,7 @@ function _FloatingNavbarImpl() {
     }, navbarCfg.animation.leaveMs);
 
     return clearNavExitTimer;
-  }, [navHover, scrolled, navbarCfg.animation.leaveMs]);
+  }, [navHover, openMobile, scrolled, navbarCfg.animation.leaveMs]);
 
   useEffect(() => {
     return () => {
@@ -724,7 +724,7 @@ function _FloatingNavbarImpl() {
       {navBorderPath && (
         <svg
           aria-hidden
-          className="nav-progress-ring pointer-events-none absolute inset-0 hidden h-full w-full overflow-visible md:block"
+          className="nav-progress-ring pointer-events-none absolute inset-0 block h-full w-full overflow-visible"
           viewBox={`0 0 ${navSize.width} ${navSize.height}`}
           preserveAspectRatio="none"
         >
