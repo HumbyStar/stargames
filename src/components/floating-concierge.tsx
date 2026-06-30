@@ -27,7 +27,6 @@ export function FloatingConcierge() {
   const importOpen = useUiStore((s) => s.importOpen);
   const settingsOpen = useUiStore((s) => s.settingsOpen);
   const helpOpen = useUiStore((s) => s.helpOpen);
-  const notificationsOpen = useUiStore((s) => s.notificationsOpen);
   const navigate = useNavigate();
 
   const alert = usePriorityAlert();
@@ -49,8 +48,7 @@ export function FloatingConcierge() {
   }, [hydrated, importOpen, open]);
 
   const blocked = importOpen; // não abrir durante importação crítica
-  const otherModalOpen =
-    settingsOpen || helpOpen || notificationsOpen;
+  const otherModalOpen = settingsOpen || helpOpen;
 
   if (conciergeOpen) return null;
 
