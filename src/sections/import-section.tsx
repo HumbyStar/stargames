@@ -2110,27 +2110,48 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             hint="Arraste qualquer arquivo (lista, HTML, CSV, Excel ou ZIP) ou clique"
           />
           <Card title="Formato esperado">
-            <div className="grid gap-2 text-[11px]">
-              <div>
-                <span className="text-muted-foreground">Lista:</span>
-                <code className="block rounded-md bg-muted p-1.5">Nome - Telefone - Produto - Plataforma - Valor - Status</code>
-              </div>
-              <div>
-                <span className="text-muted-foreground">HTML / Notion:</span>
-                <code className="block rounded-md bg-muted p-1.5 leading-snug">Título "Nome - Telefone" + tabela Item/Plataforma/Valor/Pago/Status/Data/Situação.</code>
-              </div>
-              <div>
-                <span className="text-muted-foreground">CSV/Excel:</span>
-                <code className="block rounded-md bg-muted p-1.5 leading-snug">nome, telefone, produto, plataforma, valor_total, valor_pago, status_financeiro, situacao, data_cadastro, data_limite, observacoes</code>
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                <span className="text-muted-foreground">Telefone é o ID. Status: Pago/Reserva/Pendente/MGMV.</span>
-                <div className="flex gap-1.5">
-                  <Button size="sm" variant="outline" onClick={() => downloadModel("csv")}>CSV</Button>
-                  <Button size="sm" variant="outline" onClick={() => downloadModel("xlsx")}>Excel</Button>
+            <Collapsible defaultOpen={false}>
+              <CollapsibleTrigger className="group flex w-full cursor-pointer items-center justify-between gap-2 text-left">
+                <div className="flex flex-wrap gap-3">
+                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <FileText className="size-4" /> Lista
+                  </span>
+                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <FileCode className="size-4" /> HTML / Notion
+                  </span>
+                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <FileSpreadsheet className="size-4" /> CSV / Excel
+                  </span>
+                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <FileArchive className="size-4" /> ZIP
+                  </span>
                 </div>
-              </div>
-            </div>
+                <ChevronDown className="size-4 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="grid gap-2 pt-2 text-[11px]">
+                  <div>
+                    <span className="text-muted-foreground">Lista:</span>
+                    <code className="block rounded-md bg-muted p-1.5">Nome - Telefone - Produto - Plataforma - Valor - Status</code>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">HTML / Notion:</span>
+                    <code className="block rounded-md bg-muted p-1.5 leading-snug">Título "Nome - Telefone" + tabela Item/Plataforma/Valor/Pago/Status/Data/Situação.</code>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">CSV/Excel:</span>
+                    <code className="block rounded-md bg-muted p-1.5 leading-snug">nome, telefone, produto, plataforma, valor_total, valor_pago, status_financeiro, situacao, data_cadastro, data_limite, observacoes</code>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <span className="text-muted-foreground">Telefone é o ID. Status: Pago/Reserva/Pendente/MGMV.</span>
+                    <div className="flex gap-1.5">
+                      <Button size="sm" variant="outline" onClick={() => downloadModel("csv")}>CSV</Button>
+                      <Button size="sm" variant="outline" onClick={() => downloadModel("xlsx")}>Excel</Button>
+                    </div>
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           </Card>
         </div>
 
