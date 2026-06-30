@@ -2385,6 +2385,86 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
 }
 
 function UploadArea({ accept, onFile, hint }: { accept: string; onFile: (f: File) => void; hint: string }) {
+  // placeholder anchor for patch ordering below
+  return _UploadAreaImpl({ accept, onFile, hint });
+}
+
+function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
+  const parentRef = useRef<HTMLDivElement | null>(null);
+  const ROW_HEIGHT = 60;
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 12,
+  });
+
+  const gridCols =
+    "grid-cols-[60px_90px_minmax(140px,1.2fr)_120px_minmax(140px,1.2fr)_110px_100px_120px_minmax(160px,1.4fr)_120px_110px_minmax(140px,1.2fr)]";
+
+  return (
+    <div className="flex h-full flex-col rounded-md border border-border">
+      <div className={cn("grid border-b border-border bg-muted/40 px-3 py-2 text-left text-xs uppercase tracking-wide text-muted-foreground", gridCols)}>
+        <div className="font-medium">Linha</div>
+        <div className="font-medium">Data</div>
+        <div className="font-medium">Nome</div>
+        <div className="font-medium">Telefone</div>
+        <div className="font-medium">Produto</div>
+        <div className="font-medium">Plataforma</div>
+        <div className="font-medium">Valor</div>
+        <div className="font-medium">Status</div>
+        <div className="font-medium">Aviso</div>
+        <div className="font-medium">Cliente</div>
+        <div className="font-medium">Resultado</div>
+        <div className="font-medium">Erro</div>
+      </div>
+      <div ref={parentRef} className="flex-1 min-h-0 overflow-auto" role="rowgroup" aria-rowcount={rows.length}>
+        {rows.length === 0 ? (
+          <div className="p-6 text-center text-sm text-muted-foreground">Nenhuma linha para exibir.</div>
+        ) : (
+          <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
+            {rowVirtualizer.getVirtualItems().map((vi) => {
+              const r = rows[vi.index];
+              return (
+                <div
+                  key={vi.key}
+                  role="row"
+                  aria-rowindex={vi.index + 1}
+                  className={cn("absolute left-0 top-0 grid w-full items-center border-b border-border/60 px-3 text-sm", gridCols)}
+                  style={{ height: vi.size, transform: `translateY(${vi.start}px)` }}
+                >
+                  <div className="text-muted-foreground">{r.line}</div>
+                  <div className="text-muted-foreground">{r.date ?? "—"}</div>
+                  <div className="truncate" title={r.name}>{r.name || "—"}</div>
+                  <div className="text-muted-foreground">{r.phone || "—"}</div>
+                  <div className="truncate" title={r.product}>{r.product || "—"}</div>
+                  <div className="truncate text-muted-foreground">{r.platform || "—"}</div>
+                  <div className="tabular-nums">{Number.isFinite(r.totalValue ?? NaN) ? formatBRL(r.totalValue!) : "—"}</div>
+                  <div>
+                    <Tag variant={r.financialStatus === "Pago" ? "success" : r.financialStatus === "Pendente" ? "danger" : "warning"}>
+                      {r.financialStatus || "—"}
+                    </Tag>
+                  </div>
+                  <div className="truncate text-xs text-amber-600 dark:text-amber-400" title={r.statusWarning ?? ""}>
+                    {r.statusWarning ?? "—"}
+                  </div>
+                  <div className="text-muted-foreground">{r.clientFound ? "Encontrado" : "Será criado"}</div>
+                  <div><Tag variant={r.result === "Pronto" ? "success" : "danger"}>{r.result}</Tag></div>
+                  <div className="truncate text-destructive" title={r.errors.join("; ")}>{r.errors.join("; ") || "—"}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <div className="border-t border-border bg-muted/30 px-3 py-2 text-center text-xs text-muted-foreground">
+        {rows.length} {rows.length === 1 ? "linha" : "linhas"} • virtualização ativa para preservar a performance
+      </div>
+    </div>
+  );
+}
+
+function _UploadAreaImpl({ accept, onFile, hint }: { accept: string; onFile: (f: File) => void; hint: string }) {
   const [drag, setDrag] = useState(false);
   return (
     <label
