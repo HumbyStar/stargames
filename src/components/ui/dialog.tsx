@@ -42,8 +42,10 @@ const DialogContent = React.forwardRef<
         // (.one-page-section): padding superior para liberar o espaço da
         // navbar flutuante, rolagem vertical interna, sem rolagem horizontal.
         "dialog-as-section fixed inset-0 z-50 flex flex-col w-screen h-[100dvh] max-w-none gap-0 overflow-y-auto overflow-x-hidden border-0 bg-background px-6 pt-[120px] pb-14 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-        // Desktop (≥640px): centralizado, max-w-lg padrão (overridável), max-h 90vh, com borda/raio.
-        "sm:fixed sm:inset-auto sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:w-full sm:h-auto sm:max-w-lg sm:max-h-[90vh] sm:gap-4 sm:grid sm:rounded-lg sm:border sm:p-6 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95",
+        // Desktop (≥640px): mesmo padrão visual do modal de Finanças — ocupa
+        // 95vw até 1280px (xl:max-w-7xl), altura limitada a 92vh, distribuindo
+        // o conteúdo internamente sem cortes e sem scroll horizontal.
+        "sm:fixed sm:inset-auto sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:w-full sm:h-auto sm:max-w-[95vw] xl:max-w-7xl sm:max-h-[92vh] sm:gap-4 sm:grid sm:rounded-lg sm:border sm:p-8 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95",
         className,
       )}
       {...props}
