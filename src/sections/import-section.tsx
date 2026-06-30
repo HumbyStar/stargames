@@ -59,7 +59,15 @@ interface ParsedRow {
 }
 
 const VALID_STATUS = ["Pago", "Reserva", "Pendente", "MGMV"] as const;
-const VALID_SITUATION = ["Em Aberto", "Enviado", "Desistiu", "Abandonou"] as const;
+const VALID_SITUATION = [
+  "Em Aberto",
+  "Enviado",
+  "Retirado",
+  "Removido",
+  "Desistiu",
+  "Abandonou",
+  "Resolvido",
+] as const;
 
 const SAMPLE_LIST = `Itens 25/06/2026
 
@@ -121,12 +129,36 @@ const normalizeStatusBR = (s: string): FinancialStatus => {
   return "Pendente";
 };
 
-const normalizeSituationBR = (s: string): Situation => {
-  const v = String(s ?? "").trim().toLowerCase();
-  if (v.includes("entregue") || v.includes("enviado")) return "Enviado";
-  if (v.includes("desistiu")) return "Desistiu";
-  if (v.includes("abandonou")) return "Abandonou";
-  return "Em Aberto";
+/**
+ * Normaliza a coluna "Situação" da planilha do Notion conforme regra de negócio:
+ * - Enviado/Entregue/Retirado → produto entregue (Enviado)
+ * - Removido → Removido
+ * - Desistiu/Cancelou → Desistiu
+ * - Abandonou → Abandonou
+ * - MGMV/Acordo/Parcelado → Resolvido (também marca financialStatus como MGMV
+ *   no caller, via `situationMentionsMgmv`)
+ * - Vazio → "Em Aberto" (ÚNICO caso legítimo)
+ * - Texto preenchido mas não reconhecido → "Resolvido" + flag de revisão,
+ *   pois a regra do Notion é: "se há texto na coluna, há uma solução vigente".
+ *   Isso evita dupla cobrança apontada no bug.
+ */
+const normalizeSituationBR = (
+  s: string,
+): { situation: Situation; unrecognized: boolean } => {
+  const raw = String(s ?? "").trim();
+  if (!raw) return { situation: "Em Aberto", unrecognized: false };
+  const v = raw
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (/(enviad|entreg|retir)/.test(v)) return { situation: "Enviado", unrecognized: false };
+  if (/remov/.test(v)) return { situation: "Removido", unrecognized: false };
+  if (/(desist|cancel)/.test(v)) return { situation: "Desistiu", unrecognized: false };
+  if (/abandon/.test(v)) return { situation: "Abandonou", unrecognized: false };
+  if (/(mgmv|acordo|parcelad)/.test(v)) return { situation: "Resolvido", unrecognized: false };
+  if (/(resolv|quitad|ok|finalizad|concluid)/.test(v))
+    return { situation: "Resolvido", unrecognized: false };
+  return { situation: "Resolvido", unrecognized: true };
 };
 
 const normalizeDateBR = (s: string): string | null => {
@@ -574,8 +606,15 @@ function parseProductsTable(table: Element): NotionProduct[] {
             : "Existe valor pago de entrada, portanto o status correto é Reserva.";
       rowWarnings.push(`Status corrigido de "${originalStatus}" para "${financialStatus}". ${statusWarning}`);
     }
-    const situationN = normalizeSituationBR(situation ?? "");
-    if (!situation) rowWarnings.push('Situação vazia (usado "Em Aberto").');
+    const situationResult = normalizeSituationBR(situation ?? "");
+    const situationN = situationResult.situation;
+    if (!String(situation ?? "").trim()) {
+      rowWarnings.push('Situação vazia (usado "Em Aberto").');
+    } else if (situationResult.unrecognized) {
+      rowWarnings.push(
+        `Situação "${String(situation).trim()}" não reconhecida — marcada como "Resolvido". Verifique a observação no Notion.`,
+      );
+    }
     const registerDate = normalizeDateBR(date ?? "");
     const dueDate = calculateDueDate(financialStatus, registerDate);
     products.push({
@@ -3475,7 +3514,15 @@ interface ManualClient {
   products: ManualProduct[];
 }
 
-const SITUATIONS: Situation[] = ["Em Aberto", "Enviado", "Desistiu", "Abandonou"];
+const SITUATIONS: Situation[] = [
+  "Em Aberto",
+  "Enviado",
+  "Retirado",
+  "Removido",
+  "Desistiu",
+  "Abandonou",
+  "Resolvido",
+];
 
 const newProduct = (): ManualProduct => ({
   id: crypto.randomUUID(),

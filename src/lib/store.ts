@@ -32,7 +32,14 @@ import type { ImportDiagnostics } from "./db-sync";
 export type { ImportDiagnostics } from "./db-sync";
 
 export type FinancialStatus = "Pago" | "Reserva" | "Pendente" | "MGMV";
-export type Situation = "Em Aberto" | "Enviado" | "Desistiu" | "Abandonou" | "Resolvido";
+export type Situation =
+  | "Em Aberto"
+  | "Enviado"
+  | "Retirado"
+  | "Removido"
+  | "Desistiu"
+  | "Abandonou"
+  | "Resolvido";
 
 export interface MGMVInstallment {
   number: number;
@@ -469,7 +476,14 @@ export const useStore = create<State>()((set, get) => ({
           }
           set({
             clients: snap.clients,
-            products: snap.products,
+            products: snap.products.map((p) =>
+              // Fix retroativo: produtos que já foram consolidados em MGMV
+              // não devem permanecer com situation "Em Aberto" (causava dupla
+              // cobrança e inflação em "Valores a Receber").
+              p.financialStatus === "MGMV" && p.situation === "Em Aberto"
+                ? { ...p, situation: "Resolvido" as Situation }
+                : p,
+            ),
             importHistory: snap.importHistory,
             preferences: { ...defaultPreferences, ...snap.preferences },
             rules: { ...defaultRules, ...snap.rules },
@@ -887,9 +901,40 @@ export function shouldAppearInCollection(p: Product) {
     // e a cobrança passa a ser feita pela parcela do acordo (linha consolidada),
     // portanto não devem aparecer como cobrança individual.
     (p.financialStatus === "Reserva" || p.financialStatus === "Pendente") &&
-    p.situation === "Em Aberto" &&
+    isOpenSituation(p) &&
     isOverdue(p.dueDate)
   );
+}
+
+/**
+ * Conjunto único de regra para decidir se um produto ainda está "em aberto"
+ * para fins de cobrança/valores a receber.
+ *
+ * Regras (alinhadas ao Notion):
+ * - Enviado/Retirado → produto entregue
+ * - Removido/Desistiu/Abandonou → cliente abandonou
+ * - Resolvido → marcado manualmente como resolvido
+ * - financialStatus === "MGMV" → consolidado em acordo
+ * Qualquer um desses NÃO é "em aberto", mesmo que o campo situation
+ * tenha vindo da planilha como "Em Aberto" por bug histórico.
+ */
+export function isResolvedSituation(p: Pick<Product, "situation" | "financialStatus">): boolean {
+  if (p.financialStatus === "MGMV") return true;
+  switch (p.situation) {
+    case "Enviado":
+    case "Retirado":
+    case "Removido":
+    case "Desistiu":
+    case "Abandonou":
+    case "Resolvido":
+      return true;
+    default:
+      return false;
+  }
+}
+
+export function isOpenSituation(p: Pick<Product, "situation" | "financialStatus">): boolean {
+  return !isResolvedSituation(p);
 }
 
 export function productCollectionStatus(p: Product): {
@@ -901,6 +946,10 @@ export function productCollectionStatus(p: Product): {
   // exibimos uma tag informativa em vez de "MGMV vencido".
   if (p.financialStatus === "MGMV")
     return { label: "Incluído no MGMV", variant: "neutral" };
+  // Se o produto já foi resolvido (Enviado/Retirado/Removido/Desistiu/
+  // Abandonou/Resolvido), não exibir como vencido — mostrar o estado real.
+  if (isResolvedSituation(p))
+    return { label: p.situation, variant: "neutral" };
   if (p.financialStatus === "Reserva" && isOverdue(p.dueDate))
     return { label: "Reserva vencida", variant: "danger" };
   if (p.financialStatus === "Pendente" && isOverdue(p.dueDate))

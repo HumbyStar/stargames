@@ -7,6 +7,7 @@ import {
   formatDateBR,
   getMGMVDisplay,
   isOverdue,
+  isOpenSituation,
   productCollectionStatus,
   shouldAppearInCollection,
   useStore,
@@ -161,7 +162,7 @@ export function CollectionSection({
       if (filter === "mgmv" || filter === "mgmv_vencido")
         if (row.kind !== "mgmv") return false;
       if (filter === "em_aberto")
-        if (row.kind === "product" && row.product.situation !== "Em Aberto") return false;
+        if (row.kind === "product" && !isOpenSituation(row.product)) return false;
 
       // Filtros de pasta / status financeiro / situação
       const rowClient =
