@@ -11,6 +11,7 @@ export type ConciergeIntent =
   | "open_section"
   | "open_client_create"
   | "open_product_create"
+  | "create_task"
   | "ambiguous"
   | "unknown";
 
@@ -38,6 +39,20 @@ export type ConciergeSection =
   | "config"
   | "equipe";
 
+export type ConciergeTaskType =
+  | "cobranca"
+  | "mgmv"
+  | "envio"
+  | "importacao"
+  | "revisao_ia"
+  | "cadastro"
+  | "financeiro"
+  | "atendimento"
+  | "leiloes"
+  | "dados_inconsistentes";
+
+export type ConciergePriority = "baixa" | "media" | "alta" | "urgente";
+
 export interface ConciergeIntentResult {
   intent: ConciergeIntent;
   confidence: number;
@@ -46,6 +61,13 @@ export interface ConciergeIntentResult {
   clientQuery?: string;
   message?: string;
   requiresConfirmation?: boolean;
+  // create_task
+  taskType?: ConciergeTaskType;
+  suggestedTitle?: string;
+  suggestedDescription?: string;
+  suggestedPriority?: ConciergePriority;
+  linkedFilter?: Record<string, string | number | boolean | null> | null;
+  linkedEntityType?: "client" | "product" | "mgmv_agreement" | "mgmv_installment" | "collection" | "import_batch" | null;
 }
 
 const SYSTEM_PROMPT = `Você é o interpretador de intenção do Concierge Operacional da Star Games (gestão de cobranças, MGMV e envios).
@@ -58,6 +80,7 @@ Intents possíveis:
 - "open_section": navegar para uma seção. Preencha section.
 - "open_client_create": cadastrar novo cliente.
 - "open_product_create": adicionar produto. Se o usuário citou cliente, preencha clientQuery.
+- "create_task": criar uma tarefa operacional. Preencha taskType, suggestedTitle, suggestedDescription, suggestedPriority, e quando aplicável linkedFilter + linkedEntityType. SEMPRE marque requiresConfirmation=true.
 - "ambiguous": comando vago, peça esclarecimento curto em message.
 - "unknown": fora do escopo. Em message, oriente o usuário.
 
@@ -78,10 +101,20 @@ cardId aceitos:
 
 section aceitos: "dashboard", "clientes", "collection", "mgmv", "import", "config", "equipe".
 
+taskType aceitos: "cobranca","mgmv","envio","importacao","revisao_ia","cadastro","financeiro","atendimento","leiloes","dados_inconsistentes".
+
+Exemplos de mapeamento de tarefa:
+- "criar tarefa para cobrar reservas vencidas" → taskType=cobranca, prioridade=alta, linkedFilter={context:"collection",financialStatus:"Reserva",overdue:true}.
+- "criar tarefa para revisar MGMV pendente" → taskType=mgmv, prioridade=alta, linkedFilter={context:"mgmv",reviewStatus:"review_required"}.
+- "criar tarefa para enviar produtos pagos" → taskType=envio, prioridade=media, linkedFilter={context:"shipping",financialStatus:"Pago",situation:"Em Aberto"}.
+- "criar tarefa para revisar importação com erro" → taskType=importacao, prioridade=media.
+- "criar tarefa para financeiro verificar pagamentos" → taskType=financeiro, prioridade=media.
+Se o usuário só disser "criar tarefa" sem detalhar, devolva intent=ambiguous pedindo o tipo.
+
 Se a ação for crítica (marcar pago, excluir, remarcar, salvar importação, marcar enviado, cancelar acordo, alterar status), defina requiresConfirmation: true e direcione para abrir o cliente/registro (search_client) — NUNCA execute direto.
 
 Responda APENAS com JSON válido neste formato:
-{"intent":"...","confidence":0..1,"cardId":"...","section":"...","clientQuery":"...","message":"...","requiresConfirmation":false}
+{"intent":"...","confidence":0..1,"cardId":"...","section":"...","clientQuery":"...","message":"...","requiresConfirmation":false,"taskType":"...","suggestedTitle":"...","suggestedDescription":"...","suggestedPriority":"...","linkedFilter":{},"linkedEntityType":"..."}
 
 Omita campos que não se aplicam. confidence reflete sua certeza.`;
 

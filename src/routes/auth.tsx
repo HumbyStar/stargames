@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { claimSession } from "@/lib/session-guard.functions";
 import { SESSION_ID_KEY } from "@/components/session-guard";
+import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -106,8 +107,17 @@ function AuthPage() {
     <div className="min-h-screen grid place-items-center bg-background bg-gradient-to-b from-background via-background to-accent/30 px-4">
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center gap-3">
-          <div className="grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-primary to-[oklch(0.65_0.22_280)] text-primary-foreground font-bold text-2xl shadow-lg">
-            S
+          <div className="relative">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-[-12px] rounded-full bg-[radial-gradient(circle_at_center,color-mix(in_oklch,var(--color-primary)_45%,transparent)_0%,transparent_70%)] blur-xl"
+            />
+            <img
+              src={mascotAsset.url}
+              alt="Concierge Operacional"
+              draggable={false}
+              className="relative size-24 rounded-full object-cover ring-2 ring-primary/40 shadow-xl"
+            />
           </div>
           <div className="text-center">
             <h1 className="text-xl font-semibold tracking-tight">Star Games</h1>

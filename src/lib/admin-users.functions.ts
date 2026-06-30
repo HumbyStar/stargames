@@ -29,7 +29,26 @@ export interface AdminUserRow {
   lastSignInAt: string | null;
   banned: boolean;
   roles: AppRole[];
+  responsibilities: UserResponsibility[];
+  canReceiveTasks: boolean;
 }
+
+export type UserResponsibility =
+  | "cobranca"
+  | "mgmv"
+  | "envio"
+  | "importacao"
+  | "revisao_ia"
+  | "cadastro"
+  | "financeiro"
+  | "atendimento"
+  | "leiloes"
+  | "admin";
+
+const responsibilityEnum = z.enum([
+  "cobranca","mgmv","envio","importacao","revisao_ia",
+  "cadastro","financeiro","atendimento","leiloes","admin",
+]);
 
 export const listUsers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -49,8 +68,12 @@ export const listUsers = createServerFn({ method: "GET" })
       .in("user_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
     const { data: profilesRows } = await supabaseAdmin
       .from("profiles")
-      .select("id, display_name")
+      .select("id, display_name, can_receive_tasks")
       .in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
+    const { data: respRows } = await supabaseAdmin
+      .from("user_responsibilities")
+      .select("user_id, responsibility")
+      .in("user_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
 
     const rolesByUser = new Map<string, AppRole[]>();
     for (const r of rolesRows ?? []) {
@@ -58,17 +81,29 @@ export const listUsers = createServerFn({ method: "GET" })
       arr.push(r.role as AppRole);
       rolesByUser.set(r.user_id, arr);
     }
-    const profileByUser = new Map<string, string | null>();
-    for (const p of profilesRows ?? []) profileByUser.set(p.id, p.display_name ?? null);
+    const profileByUser = new Map<string, { name: string | null; canReceive: boolean }>();
+    for (const p of profilesRows ?? [])
+      profileByUser.set((p as any).id, {
+        name: (p as any).display_name ?? null,
+        canReceive: (p as any).can_receive_tasks ?? true,
+      });
+    const respByUser = new Map<string, UserResponsibility[]>();
+    for (const r of respRows ?? []) {
+      const arr = respByUser.get((r as any).user_id) ?? [];
+      arr.push((r as any).responsibility as UserResponsibility);
+      respByUser.set((r as any).user_id, arr);
+    }
 
     return usersData.users.map<AdminUserRow>((u) => ({
       id: u.id,
       email: u.email ?? null,
-      fullName: profileByUser.get(u.id) ?? null,
+      fullName: profileByUser.get(u.id)?.name ?? null,
       createdAt: u.created_at,
       lastSignInAt: u.last_sign_in_at ?? null,
       banned: Boolean((u as any).banned_until),
       roles: rolesByUser.get(u.id) ?? [],
+      responsibilities: respByUser.get(u.id) ?? [],
+      canReceiveTasks: profileByUser.get(u.id)?.canReceive ?? true,
     }));
   });
 
@@ -199,5 +234,35 @@ export const deleteUser = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
     if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+const respSchema = z.object({
+  userId: z.string().uuid(),
+  responsibilities: z.array(responsibilityEnum),
+  canReceiveTasks: z.boolean(),
+});
+
+export const updateUserResponsibilities = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => respSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("profiles").upsert({
+      id: data.userId,
+      can_receive_tasks: data.canReceiveTasks,
+    } as any);
+    await supabaseAdmin.from("user_responsibilities").delete().eq("user_id", data.userId);
+    if (data.responsibilities.length > 0) {
+      const rows = Array.from(new Set(data.responsibilities)).map((r) => ({
+        user_id: data.userId,
+        responsibility: r,
+      }));
+      const { error } = await supabaseAdmin
+        .from("user_responsibilities")
+        .upsert(rows, { onConflict: "user_id,responsibility", ignoreDuplicates: true });
+      if (error) throw new Error(error.message);
+    }
     return { ok: true };
   });

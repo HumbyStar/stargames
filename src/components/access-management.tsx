@@ -53,7 +53,9 @@ import {
   resetUserPassword,
   setUserBanned,
   deleteUser,
+  updateUserResponsibilities,
   type AdminUserRow,
+  type UserResponsibility,
 } from "@/lib/admin-users.functions";
 import {
   listRolePermissions,
@@ -73,6 +75,22 @@ const ROLES: AppRole[] = [
   "operator",
   "viewer",
 ];
+const RESPONSIBILITIES: UserResponsibility[] = [
+  "cobranca","mgmv","envio","importacao","revisao_ia",
+  "cadastro","financeiro","atendimento","leiloes","admin",
+];
+const RESPONSIBILITY_LABELS: Record<UserResponsibility, string> = {
+  cobranca: "Cobrança",
+  mgmv: "MGMV",
+  envio: "Envio",
+  importacao: "Importação",
+  revisao_ia: "Revisão IA",
+  cadastro: "Cadastro",
+  financeiro: "Financeiro",
+  atendimento: "Atendimento",
+  leiloes: "Leilões",
+  admin: "Admin",
+};
 const ROLE_LABELS: Record<AppRole, string> = {
   admin_master: "Admin Master",
   admin: "Administrador",
@@ -208,6 +226,7 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
   const [createOpen, setCreateOpen] = useState(false);
   const [resetUser, setResetUser] = useState<AdminUserRow | null>(null);
   const [rolesUser, setRolesUser] = useState<AdminUserRow | null>(null);
+  const [respUser, setRespUser] = useState<AdminUserRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminUserRow | null>(null);
 
   const invalidate = () => {
@@ -255,6 +274,7 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
               <TableHead>E-mail</TableHead>
               <TableHead>Nome</TableHead>
               <TableHead>Papéis</TableHead>
+              <TableHead>Responsabilidades</TableHead>
               <TableHead>Último login</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Ações</TableHead>
@@ -262,7 +282,7 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground">Carregando...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground">Carregando...</TableCell></TableRow>
             )}
             {users?.map((u) => (
               <TableRow key={u.id}>
@@ -276,6 +296,21 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
                     ))}
                   </div>
                 </TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {(u.responsibilities ?? []).length === 0 && (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                    {(u.responsibilities ?? []).map((r) => (
+                      <Badge key={r} variant="outline" className="text-[10px]">
+                        {RESPONSIBILITY_LABELS[r as UserResponsibility] ?? r}
+                      </Badge>
+                    ))}
+                    {u.canReceiveTasks === false && (
+                      <Badge variant="destructive" className="text-[10px]">não recebe tarefas</Badge>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell className="text-xs text-muted-foreground">
                   {u.lastSignInAt ? new Date(u.lastSignInAt).toLocaleString("pt-BR") : "nunca"}
                 </TableCell>
@@ -286,6 +321,9 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
                   <div className="flex justify-end gap-1">
                     <Button size="sm" variant="ghost" title="Editar papéis" onClick={() => setRolesUser(u)}>
                       <UserCog className="size-4" />
+                    </Button>
+                    <Button size="sm" variant="ghost" title="Responsabilidades" onClick={() => setRespUser(u)}>
+                      <ShieldCheck className="size-4" />
                     </Button>
                     <Button size="sm" variant="ghost" title="Redefinir senha" onClick={() => setResetUser(u)}>
                       <KeyRound className="size-4" />
@@ -313,7 +351,7 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
               </TableRow>
             ))}
             {!isLoading && users && users.length === 0 && (
-              <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground">Nenhum usuário.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground">Nenhum usuário.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -322,6 +360,7 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
       <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={invalidate} />
       <ResetPasswordDialog user={resetUser} onClose={() => setResetUser(null)} />
       <EditRolesDialog user={rolesUser} onClose={() => setRolesUser(null)} onSaved={invalidate} />
+      <EditResponsibilitiesDialog user={respUser} onClose={() => setRespUser(null)} onSaved={invalidate} />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
         <AlertDialogContent>
@@ -424,6 +463,92 @@ function RolesPicker({ value, onChange }: { value: AppRole[]; onChange: (r: AppR
         );
       })}
     </div>
+  );
+}
+
+function EditResponsibilitiesDialog({
+  user,
+  onClose,
+  onSaved,
+}: {
+  user: AdminUserRow | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [resp, setResp] = useState<UserResponsibility[]>([]);
+  const [canReceive, setCanReceive] = useState(true);
+  const [primed, setPrimed] = useState<string | null>(null);
+
+  if (user && primed !== user.id) {
+    setPrimed(user.id);
+    setResp(user.responsibilities ?? []);
+    setCanReceive(user.canReceiveTasks ?? true);
+  }
+
+  const fn = useServerFn(updateUserResponsibilities);
+  const mut = useMutation({
+    mutationFn: () =>
+      fn({
+        data: {
+          userId: user!.id,
+          responsibilities: resp,
+          canReceiveTasks: canReceive,
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Responsabilidades atualizadas.");
+      onSaved();
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <Dialog open={!!user} onOpenChange={(v) => { if (!v) { setPrimed(null); onClose(); } }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ShieldCheck className="size-4" /> Responsabilidades operacionais
+          </DialogTitle>
+          <DialogDescription>
+            {user?.email}. O Concierge usa essas responsabilidades para sugerir responsáveis em novas tarefas.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            {RESPONSIBILITIES.map((r) => {
+              const checked = resp.includes(r);
+              return (
+                <label key={r} className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background/50 p-2 text-sm">
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={(v) =>
+                      setResp(
+                        v
+                          ? Array.from(new Set([...resp, r]))
+                          : resp.filter((x) => x !== r),
+                      )
+                    }
+                  />
+                  {RESPONSIBILITY_LABELS[r]}
+                </label>
+              );
+            })}
+          </div>
+          <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background/50 p-2 text-sm">
+            <Checkbox
+              checked={canReceive}
+              onCheckedChange={(v) => setCanReceive(!!v)}
+            />
+            Pode receber tarefas atribuídas pelo Concierge
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={() => mut.mutate()} disabled={mut.isPending}>Salvar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
