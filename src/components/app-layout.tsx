@@ -684,7 +684,7 @@ function _FloatingNavbarImpl() {
       {navBorderPath && (
         <svg
           aria-hidden
-          className="nav-progress-ring pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+          className="nav-progress-ring pointer-events-none absolute inset-0 hidden h-full w-full overflow-visible md:block"
           viewBox={`0 0 ${navSize.width} ${navSize.height}`}
           preserveAspectRatio="none"
         >
