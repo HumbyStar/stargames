@@ -25,6 +25,8 @@ import {
   getMGMVDisplay,
   getProductDisplayDueDate,
   isOverdue,
+  isOpenSituation,
+  isResolvedSituation,
   productCollectionStatus,
   useStore,
   type Client,
@@ -55,17 +57,18 @@ function generalStatus(
   const ps = products.filter((p) => p.clientId === client.id);
   if (
     ps.some(
-      (p) => p.financialStatus === "Reserva" && p.situation === "Em Aberto" && isOverdue(p.dueDate),
+      (p) => p.financialStatus === "Reserva" && isOpenSituation(p) && isOverdue(p.dueDate),
     )
   )
     return { label: "Reserva vencida", variant: "danger" };
-  if (ps.some((p) => p.financialStatus === "Pendente" && p.situation === "Em Aberto"))
+  if (ps.some((p) => p.financialStatus === "Pendente" && isOpenSituation(p)))
     return { label: "Pendente", variant: "danger" };
   if (client.mgmv && client.mgmv.installments.some((i) => !i.paid))
     return { label: "MGMV", variant: "primary" };
-  if (ps.some((p) => p.financialStatus === "Pago" && p.situation === "Em Aberto"))
+  if (ps.some((p) => p.financialStatus === "Pago" && isOpenSituation(p)))
     return { label: "Pago ag. envio", variant: "success" };
-  if (ps.some((p) => p.situation === "Enviado")) return { label: "Enviado", variant: "neutral" };
+  if (ps.some((p) => isResolvedSituation(p) && p.financialStatus !== "MGMV"))
+    return { label: "Enviado", variant: "neutral" };
   if (ps.length === 0) return { label: "Sem produtos", variant: "neutral" };
   return { label: "Em dia", variant: "success" };
 }
@@ -153,7 +156,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           const ps = products.filter((p) => p.clientId === c.id);
           const totalPurchased = ps.reduce((a, p) => a + p.totalValue, 0);
           const totalOpen = ps
-            .filter((p) => p.situation === "Em Aberto")
+            .filter((p) => isOpenSituation(p))
             .reduce((a, p) => a + (p.totalValue - p.paidValue), 0);
           const last = ps
             .map((p) => p.registerDate)
