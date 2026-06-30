@@ -894,9 +894,40 @@ export function shouldAppearInCollection(p: Product) {
     // e a cobrança passa a ser feita pela parcela do acordo (linha consolidada),
     // portanto não devem aparecer como cobrança individual.
     (p.financialStatus === "Reserva" || p.financialStatus === "Pendente") &&
-    p.situation === "Em Aberto" &&
+    isOpenSituation(p) &&
     isOverdue(p.dueDate)
   );
+}
+
+/**
+ * Conjunto único de regra para decidir se um produto ainda está "em aberto"
+ * para fins de cobrança/valores a receber.
+ *
+ * Regras (alinhadas ao Notion):
+ * - Enviado/Retirado → produto entregue
+ * - Removido/Desistiu/Abandonou → cliente abandonou
+ * - Resolvido → marcado manualmente como resolvido
+ * - financialStatus === "MGMV" → consolidado em acordo
+ * Qualquer um desses NÃO é "em aberto", mesmo que o campo situation
+ * tenha vindo da planilha como "Em Aberto" por bug histórico.
+ */
+export function isResolvedSituation(p: Pick<Product, "situation" | "financialStatus">): boolean {
+  if (p.financialStatus === "MGMV") return true;
+  switch (p.situation) {
+    case "Enviado":
+    case "Retirado":
+    case "Removido":
+    case "Desistiu":
+    case "Abandonou":
+    case "Resolvido":
+      return true;
+    default:
+      return false;
+  }
+}
+
+export function isOpenSituation(p: Pick<Product, "situation" | "financialStatus">): boolean {
+  return !isResolvedSituation(p);
 }
 
 export function productCollectionStatus(p: Product): {
