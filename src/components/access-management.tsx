@@ -53,7 +53,9 @@ import {
   resetUserPassword,
   setUserBanned,
   deleteUser,
+  updateUserResponsibilities,
   type AdminUserRow,
+  type UserResponsibility,
 } from "@/lib/admin-users.functions";
 import {
   listRolePermissions,
@@ -73,6 +75,22 @@ const ROLES: AppRole[] = [
   "operator",
   "viewer",
 ];
+const RESPONSIBILITIES: UserResponsibility[] = [
+  "cobranca","mgmv","envio","importacao","revisao_ia",
+  "cadastro","financeiro","atendimento","leiloes","admin",
+];
+const RESPONSIBILITY_LABELS: Record<UserResponsibility, string> = {
+  cobranca: "Cobrança",
+  mgmv: "MGMV",
+  envio: "Envio",
+  importacao: "Importação",
+  revisao_ia: "Revisão IA",
+  cadastro: "Cadastro",
+  financeiro: "Financeiro",
+  atendimento: "Atendimento",
+  leiloes: "Leilões",
+  admin: "Admin",
+};
 const ROLE_LABELS: Record<AppRole, string> = {
   admin_master: "Admin Master",
   admin: "Administrador",
