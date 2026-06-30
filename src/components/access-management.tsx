@@ -57,11 +57,7 @@ import {
   type AdminUserRow,
   type UserResponsibility,
 } from "@/lib/admin-users.functions";
-import {
-  listRolePermissions,
-  type AppPermission,
-  type AppRole,
-} from "@/lib/permissions.functions";
+import { listRolePermissions, type AppPermission, type AppRole } from "@/lib/permissions.functions";
 
 const ROLES: AppRole[] = [
   "admin_master",
@@ -76,8 +72,16 @@ const ROLES: AppRole[] = [
   "viewer",
 ];
 const RESPONSIBILITIES: UserResponsibility[] = [
-  "cobranca","mgmv","envio","importacao","revisao_ia",
-  "cadastro","financeiro","atendimento","leiloes","admin",
+  "cobranca",
+  "mgmv",
+  "envio",
+  "importacao",
+  "revisao_ia",
+  "cadastro",
+  "financeiro",
+  "atendimento",
+  "leiloes",
+  "admin",
 ];
 const RESPONSIBILITY_LABELS: Record<UserResponsibility, string> = {
   cobranca: "Cobrança",
@@ -191,7 +195,11 @@ export function AccessManagementDialog({
           </TabsList>
 
           <TabsContent value="users" className="mt-4">
-            {isAdmin ? <UsersTab onChanged={refreshPerms} currentUserId={access?.userId ?? null} /> : <NotAdminNotice />}
+            {isAdmin ? (
+              <UsersTab onChanged={refreshPerms} currentUserId={access?.userId ?? null} />
+            ) : (
+              <NotAdminNotice />
+            )}
           </TabsContent>
 
           <TabsContent value="roles" className="mt-4">
@@ -215,7 +223,13 @@ function NotAdminNotice() {
   );
 }
 
-function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; currentUserId: string | null }) {
+function UsersTab({
+  onChanged,
+  currentUserId,
+}: {
+  onChanged: () => void;
+  currentUserId: string | null;
+}) {
   const qc = useQueryClient();
   const listFn = useServerFn(listUsers);
   const { data: users, isLoading } = useQuery({
@@ -236,8 +250,7 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
 
   const banFn = useServerFn(setUserBanned);
   const banMut = useMutation({
-    mutationFn: (vars: { userId: string; banned: boolean }) =>
-      banFn({ data: vars }),
+    mutationFn: (vars: { userId: string; banned: boolean }) => banFn({ data: vars }),
     onSuccess: () => {
       toast.success("Status atualizado.");
       invalidate();
@@ -282,7 +295,11 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground">Carregando...</TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+                  Carregando...
+                </TableCell>
+              </TableRow>
             )}
             {users?.map((u) => (
               <TableRow key={u.id}>
@@ -290,9 +307,13 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
                 <TableCell>{u.fullName ?? "—"}</TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
-                    {u.roles.length === 0 && <span className="text-xs text-muted-foreground">sem papel</span>}
+                    {u.roles.length === 0 && (
+                      <span className="text-xs text-muted-foreground">sem papel</span>
+                    )}
                     {u.roles.map((r) => (
-                      <Badge key={r} variant="secondary" className="text-xs">{ROLE_LABELS[r]}</Badge>
+                      <Badge key={r} variant="secondary" className="text-xs">
+                        {ROLE_LABELS[r]}
+                      </Badge>
                     ))}
                   </div>
                 </TableCell>
@@ -307,7 +328,9 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
                       </Badge>
                     ))}
                     {u.canReceiveTasks === false && (
-                      <Badge variant="destructive" className="text-[10px]">não recebe tarefas</Badge>
+                      <Badge variant="destructive" className="text-[10px]">
+                        não recebe tarefas
+                      </Badge>
                     )}
                   </div>
                 </TableCell>
@@ -315,17 +338,36 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
                   {u.lastSignInAt ? new Date(u.lastSignInAt).toLocaleString("pt-BR") : "nunca"}
                 </TableCell>
                 <TableCell>
-                  {u.banned ? <Badge variant="destructive">Desativado</Badge> : <Badge>Ativo</Badge>}
+                  {u.banned ? (
+                    <Badge variant="destructive">Desativado</Badge>
+                  ) : (
+                    <Badge>Ativo</Badge>
+                  )}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
-                    <Button size="sm" variant="ghost" title="Editar papéis" onClick={() => setRolesUser(u)}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      title="Editar papéis"
+                      onClick={() => setRolesUser(u)}
+                    >
                       <UserCog className="size-4" />
                     </Button>
-                    <Button size="sm" variant="ghost" title="Responsabilidades" onClick={() => setRespUser(u)}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      title="Responsabilidades"
+                      onClick={() => setRespUser(u)}
+                    >
                       <ShieldCheck className="size-4" />
                     </Button>
-                    <Button size="sm" variant="ghost" title="Redefinir senha" onClick={() => setResetUser(u)}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      title="Redefinir senha"
+                      onClick={() => setResetUser(u)}
+                    >
                       <KeyRound className="size-4" />
                     </Button>
                     <Button
@@ -351,7 +393,11 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
               </TableRow>
             ))}
             {!isLoading && users && users.length === 0 && (
-              <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground">Nenhum usuário.</TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+                  Nenhum usuário.
+                </TableCell>
+              </TableRow>
             )}
           </TableBody>
         </Table>
@@ -360,7 +406,11 @@ function UsersTab({ onChanged, currentUserId }: { onChanged: () => void; current
       <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={invalidate} />
       <ResetPasswordDialog user={resetUser} onClose={() => setResetUser(null)} />
       <EditRolesDialog user={rolesUser} onClose={() => setRolesUser(null)} onSaved={invalidate} />
-      <EditResponsibilitiesDialog user={respUser} onClose={() => setRespUser(null)} onSaved={invalidate} />
+      <EditResponsibilitiesDialog
+        user={respUser}
+        onClose={() => setRespUser(null)}
+        onSaved={invalidate}
+      />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
         <AlertDialogContent>
@@ -398,12 +448,16 @@ function CreateUserDialog({
 
   const createFn = useServerFn(createUser);
   const mut = useMutation({
-    mutationFn: () => createFn({ data: { email, password, fullName: fullName || undefined, roles } }),
+    mutationFn: () =>
+      createFn({ data: { email, password, fullName: fullName || undefined, roles } }),
     onSuccess: () => {
       toast.success("Usuário criado. Ele já pode entrar com o e-mail e a senha definidos.");
       onCreated();
       onOpenChange(false);
-      setEmail(""); setFullName(""); setPassword(""); setRoles(["viewer"]);
+      setEmail("");
+      setFullName("");
+      setPassword("");
+      setRoles(["viewer"]);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -412,23 +466,42 @@ function CreateUserDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><UserPlus className="size-4" /> Novo usuário</DialogTitle>
-          <DialogDescription>Defina e-mail e senha iniciais; o usuário poderá alterá-la depois.</DialogDescription>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="size-4" /> Novo usuário
+          </DialogTitle>
+          <DialogDescription>
+            Defina e-mail e senha iniciais; o usuário poderá alterá-la depois.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1">
             <Label>E-mail</Label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="usuario@empresa.com" />
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="usuario@empresa.com"
+            />
           </div>
           <div className="space-y-1">
             <Label>Nome completo</Label>
-            <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Opcional" />
+            <Input
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Opcional"
+            />
           </div>
           <div className="space-y-1">
             <Label>Senha inicial</Label>
             <div className="flex gap-2">
-              <Input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 8 caracteres" />
-              <Button type="button" variant="outline" onClick={() => setPassword(randomPassword())}>Gerar</Button>
+              <Input
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Mínimo 8 caracteres"
+              />
+              <Button type="button" variant="outline" onClick={() => setPassword(randomPassword())}>
+                Gerar
+              </Button>
             </div>
           </div>
           <div className="space-y-1">
@@ -437,8 +510,13 @@ function CreateUserDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={() => mut.mutate()} disabled={mut.isPending || !email || password.length < 8 || roles.length === 0}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={() => mut.mutate()}
+            disabled={mut.isPending || !email || password.length < 8 || roles.length === 0}
+          >
             Criar usuário
           </Button>
         </DialogFooter>
@@ -453,10 +531,15 @@ function RolesPicker({ value, onChange }: { value: AppRole[]; onChange: (r: AppR
       {ROLES.map((r) => {
         const checked = value.includes(r);
         return (
-          <label key={r} className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background/50 p-2 text-sm">
+          <label
+            key={r}
+            className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background/50 p-2 text-sm"
+          >
             <Checkbox
               checked={checked}
-              onCheckedChange={(v) => onChange(v ? Array.from(new Set([...value, r])) : value.filter((x) => x !== r))}
+              onCheckedChange={(v) =>
+                onChange(v ? Array.from(new Set([...value, r])) : value.filter((x) => x !== r))
+              }
             />
             {ROLE_LABELS[r]}
           </label>
@@ -504,14 +587,23 @@ function EditResponsibilitiesDialog({
   });
 
   return (
-    <Dialog open={!!user} onOpenChange={(v) => { if (!v) { setPrimed(null); onClose(); } }}>
+    <Dialog
+      open={!!user}
+      onOpenChange={(v) => {
+        if (!v) {
+          setPrimed(null);
+          onClose();
+        }
+      }}
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldCheck className="size-4" /> Responsabilidades operacionais
           </DialogTitle>
           <DialogDescription>
-            {user?.email}. O Concierge usa essas responsabilidades para sugerir responsáveis em novas tarefas.
+            {user?.email}. O Concierge usa essas responsabilidades para sugerir responsáveis em
+            novas tarefas.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -519,15 +611,14 @@ function EditResponsibilitiesDialog({
             {RESPONSIBILITIES.map((r) => {
               const checked = resp.includes(r);
               return (
-                <label key={r} className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background/50 p-2 text-sm">
+                <label
+                  key={r}
+                  className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background/50 p-2 text-sm"
+                >
                   <Checkbox
                     checked={checked}
                     onCheckedChange={(v) =>
-                      setResp(
-                        v
-                          ? Array.from(new Set([...resp, r]))
-                          : resp.filter((x) => x !== r),
-                      )
+                      setResp(v ? Array.from(new Set([...resp, r])) : resp.filter((x) => x !== r))
                     }
                   />
                   {RESPONSIBILITY_LABELS[r]}
@@ -536,28 +627,39 @@ function EditResponsibilitiesDialog({
             })}
           </div>
           <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background/50 p-2 text-sm">
-            <Checkbox
-              checked={canReceive}
-              onCheckedChange={(v) => setCanReceive(!!v)}
-            />
+            <Checkbox checked={canReceive} onCheckedChange={(v) => setCanReceive(!!v)} />
             Pode receber tarefas atribuídas pelo Concierge
           </label>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={() => mut.mutate()} disabled={mut.isPending}>Salvar</Button>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={() => mut.mutate()} disabled={mut.isPending}>
+            Salvar
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-function ResetPasswordDialog({ user, onClose }: { user: AdminUserRow | null; onClose: () => void }) {
+function ResetPasswordDialog({
+  user,
+  onClose,
+}: {
+  user: AdminUserRow | null;
+  onClose: () => void;
+}) {
   const [pw, setPw] = useState("");
   const fn = useServerFn(resetUserPassword);
   const mut = useMutation({
     mutationFn: () => fn({ data: { userId: user!.id, newPassword: pw } }),
-    onSuccess: () => { toast.success("Senha redefinida."); setPw(""); onClose(); },
+    onSuccess: () => {
+      toast.success("Senha redefinida.");
+      setPw("");
+      onClose();
+    },
     onError: (e: Error) => toast.error(e.message),
   });
   return (
@@ -570,20 +672,38 @@ function ResetPasswordDialog({ user, onClose }: { user: AdminUserRow | null; onC
         <div className="space-y-2">
           <Label>Nova senha</Label>
           <div className="flex gap-2">
-            <Input value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Mínimo 8 caracteres" />
-            <Button variant="outline" type="button" onClick={() => setPw(randomPassword())}>Gerar</Button>
+            <Input
+              value={pw}
+              onChange={(e) => setPw(e.target.value)}
+              placeholder="Mínimo 8 caracteres"
+            />
+            <Button variant="outline" type="button" onClick={() => setPw(randomPassword())}>
+              Gerar
+            </Button>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={() => mut.mutate()} disabled={mut.isPending || pw.length < 8}>Redefinir</Button>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={() => mut.mutate()} disabled={mut.isPending || pw.length < 8}>
+            Redefinir
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-function EditRolesDialog({ user, onClose, onSaved }: { user: AdminUserRow | null; onClose: () => void; onSaved: () => void }) {
+function EditRolesDialog({
+  user,
+  onClose,
+  onSaved,
+}: {
+  user: AdminUserRow | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [roles, setRoles] = useState<AppRole[]>(user?.roles ?? []);
   // sync when user changes
   if (user && roles !== user.roles && roles.length === 0 && user.roles.length > 0) {
@@ -592,20 +712,37 @@ function EditRolesDialog({ user, onClose, onSaved }: { user: AdminUserRow | null
   const fn = useServerFn(updateUserRoles);
   const mut = useMutation({
     mutationFn: () => fn({ data: { userId: user!.id, roles } }),
-    onSuccess: () => { toast.success("Papéis atualizados."); onSaved(); onClose(); },
+    onSuccess: () => {
+      toast.success("Papéis atualizados.");
+      onSaved();
+      onClose();
+    },
     onError: (e: Error) => toast.error(e.message),
   });
   return (
-    <Dialog open={!!user} onOpenChange={(v) => { if (!v) { setRoles([]); onClose(); } }}>
+    <Dialog
+      open={!!user}
+      onOpenChange={(v) => {
+        if (!v) {
+          setRoles([]);
+          onClose();
+        }
+      }}
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Editar papéis</DialogTitle>
           <DialogDescription>{user?.email}</DialogDescription>
         </DialogHeader>
-        <RolesPicker value={roles.length ? roles : user?.roles ?? []} onChange={setRoles} />
+        <RolesPicker value={roles.length ? roles : (user?.roles ?? [])} onChange={setRoles} />
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={() => mut.mutate()} disabled={mut.isPending || (roles.length || user?.roles.length || 0) === 0}>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={() => mut.mutate()}
+            disabled={mut.isPending || (roles.length || user?.roles.length || 0) === 0}
+          >
             Salvar
           </Button>
         </DialogFooter>
@@ -633,7 +770,11 @@ function RolesTab() {
         <TableHeader>
           <TableRow>
             <TableHead>Permissão</TableHead>
-            {ROLES.map((r) => <TableHead key={r} className="text-center">{ROLE_LABELS[r]}</TableHead>)}
+            {ROLES.map((r) => (
+              <TableHead key={r} className="text-center">
+                {ROLE_LABELS[r]}
+              </TableHead>
+            ))}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -642,7 +783,11 @@ function RolesTab() {
               <TableCell className="text-sm">{PERM_LABELS[perm]}</TableCell>
               {ROLES.map((r) => (
                 <TableCell key={r} className="text-center">
-                  {matrix.get(r)?.has(perm) ? <span className="text-primary">●</span> : <span className="text-muted-foreground/40">○</span>}
+                  {matrix.get(r)?.has(perm) ? (
+                    <span className="text-primary">●</span>
+                  ) : (
+                    <span className="text-muted-foreground/40">○</span>
+                  )}
                 </TableCell>
               ))}
             </TableRow>
@@ -659,15 +804,22 @@ function AccountTab() {
   const [loading, setLoading] = useState(false);
 
   async function submit() {
-    if (pw.length < 8) { toast.error("Mínimo 8 caracteres."); return; }
-    if (pw !== pw2) { toast.error("As senhas não conferem."); return; }
+    if (pw.length < 8) {
+      toast.error("Mínimo 8 caracteres.");
+      return;
+    }
+    if (pw !== pw2) {
+      toast.error("As senhas não conferem.");
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password: pw });
     setLoading(false);
     if (error) toast.error(error.message);
     else {
       toast.success("Senha alterada.");
-      setPw(""); setPw2("");
+      setPw("");
+      setPw2("");
     }
   }
 
@@ -682,7 +834,9 @@ function AccountTab() {
         <Label>Confirmar nova senha</Label>
         <Input type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} />
       </div>
-      <Button onClick={submit} disabled={loading}>Alterar senha</Button>
+      <Button onClick={submit} disabled={loading}>
+        Alterar senha
+      </Button>
     </div>
   );
 }

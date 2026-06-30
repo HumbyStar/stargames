@@ -102,14 +102,10 @@ function DiagBox({
   );
 }
 
-const dangerCatalog: Record<
-  DangerAction,
-  { title: string; description: string; cta: string }
-> = {
+const dangerCatalog: Record<DangerAction, { title: string; description: string; cta: string }> = {
   deleteImportedData: {
     title: "Excluir dados importados",
-    description:
-      "Remove o histórico de importações. Clientes e produtos permanecem intactos.",
+    description: "Remove o histórico de importações. Clientes e produtos permanecem intactos.",
     cta: "Excluir importações",
   },
   deleteAllClients: {
@@ -120,8 +116,7 @@ const dangerCatalog: Record<
   },
   deleteAllProducts: {
     title: "Excluir todos os produtos",
-    description:
-      "Remove permanentemente todos os produtos cadastrados. Os clientes permanecem.",
+    description: "Remove permanentemente todos os produtos cadastrados. Os clientes permanecem.",
     cta: "Excluir produtos",
   },
   resetSystem: {
@@ -152,9 +147,7 @@ function FieldRow({
     <div className="flex items-start justify-between gap-4 py-2">
       <div className="min-w-0">
         <p className="text-sm font-medium">{label}</p>
-        {description ? (
-          <p className="text-xs text-muted-foreground">{description}</p>
-        ) : null}
+        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
       </div>
       <div className="shrink-0">{children}</div>
     </div>
@@ -178,10 +171,9 @@ function toCSV(rows: Array<Record<string, unknown>>) {
     const s = String(v ?? "");
     return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  return [
-    headers.join(","),
-    ...rows.map((r) => headers.map((h) => esc(r[h])).join(",")),
-  ].join("\n");
+  return [headers.join(","), ...rows.map((r) => headers.map((h) => esc(r[h])).join(","))].join(
+    "\n",
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -201,7 +193,11 @@ function PrimaryCard({
   title: string;
   description: string;
   stats: Array<{ label: string; value: string | number; tone?: "default" | "warning" | "danger" }>;
-  actions: Array<{ label: string; onClick: () => void; variant?: "default" | "outline" | "secondary" }>;
+  actions: Array<{
+    label: string;
+    onClick: () => void;
+    variant?: "default" | "outline" | "secondary";
+  }>;
   tone?: "primary" | "amber";
   onOpen: () => void;
 }) {
@@ -210,9 +206,7 @@ function PrimaryCard({
       ? "border-amber-500/30 bg-gradient-to-br from-amber-500/[0.08] via-card to-card"
       : "border-primary/30 bg-gradient-to-br from-primary/[0.08] via-card to-card";
   const toneIcon =
-    tone === "amber"
-      ? "bg-amber-500/15 text-amber-500"
-      : "bg-primary/15 text-primary";
+    tone === "amber" ? "bg-amber-500/15 text-amber-500" : "bg-primary/15 text-primary";
   return (
     <button
       type="button"
@@ -386,8 +380,12 @@ export function ConfiguracoesSection() {
 
   const [prefDraft, setPrefDraft] = useState(preferences);
   const [rulesDraft, setRulesDraft] = useState(rules);
-  useEffect(() => { setPrefDraft(preferences); }, [preferences]);
-  useEffect(() => { setRulesDraft(rules); }, [rules]);
+  useEffect(() => {
+    setPrefDraft(preferences);
+  }, [preferences]);
+  useEffect(() => {
+    setRulesDraft(rules);
+  }, [rules]);
 
   const [dangerOpen, setDangerOpen] = useState(false);
   const [dangerAction, setDangerAction] = useState<DangerAction | null>(null);
@@ -430,7 +428,14 @@ export function ConfiguracoesSection() {
     let csv = "";
     let filename = "";
     if (kind === "clientes") {
-      csv = toCSV(clients.map((c) => ({ id: c.id, nome: c.name, telefone: c.phone, observacoes: c.notes ?? "" })));
+      csv = toCSV(
+        clients.map((c) => ({
+          id: c.id,
+          nome: c.name,
+          telefone: c.phone,
+          observacoes: c.notes ?? "",
+        })),
+      );
       filename = "clientes.csv";
     } else if (kind === "produtos") {
       csv = toCSV(
@@ -467,7 +472,8 @@ export function ConfiguracoesSection() {
   };
 
   const handleTemplate = (kind: "csv" | "excel") => {
-    const headers = "nome,telefone,produto,plataforma,valor_total,valor_pago,status_financeiro,situacao,data_cadastro,data_vencimento";
+    const headers =
+      "nome,telefone,produto,plataforma,valor_total,valor_pago,status_financeiro,situacao,data_cadastro,data_vencimento";
     if (kind === "csv") {
       downloadFile("modelo_importacao.csv", headers + "\n", "text/csv;charset=utf-8");
     } else {
@@ -479,13 +485,17 @@ export function ConfiguracoesSection() {
   const lastImport = importHistory[0];
   const hasPreviewActive = (diag?.importProgressRows ?? 0) > 0;
   const hasMgmvInconsistency =
-    (diag?.mgmvClientsWithoutAgreement ?? 0) > 0 ||
-    (diag?.mgmvProductsWithoutAgreementId ?? 0) > 0;
+    (diag?.mgmvClientsWithoutAgreement ?? 0) > 0 || (diag?.mgmvProductsWithoutAgreementId ?? 0) > 0;
   const hasDuplicates = duplicateGroups.length > 0;
   const hasImportErrors = (lastImport?.errors ?? 0) > 0;
 
   const alerts = useMemo(() => {
-    const arr: Array<{ key: string; tone: "danger" | "warning"; label: string; onClick: () => void }> = [];
+    const arr: Array<{
+      key: string;
+      tone: "danger" | "warning";
+      label: string;
+      onClick: () => void;
+    }> = [];
     if (hasPreviewActive)
       arr.push({
         key: "preview",
@@ -515,12 +525,25 @@ export function ConfiguracoesSection() {
         onClick: () => setView("import"),
       });
     return arr;
-  }, [hasPreviewActive, hasImportErrors, hasDuplicates, hasMgmvInconsistency, diag, duplicateGroups, lastImport]);
+  }, [
+    hasPreviewActive,
+    hasImportErrors,
+    hasDuplicates,
+    hasMgmvInconsistency,
+    diag,
+    duplicateGroups,
+    lastImport,
+  ]);
 
   // Detalhe: header com botão voltar
   const DetailHeader = ({ title, description }: { title: string; description?: string }) => (
     <div className="mb-4 flex items-start gap-3">
-      <Button variant="outline" size="sm" onClick={() => setView("home")} className="shrink-0 gap-1.5">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setView("home")}
+        className="shrink-0 gap-1.5"
+      >
         <ArrowLeft className="size-4" /> Voltar
       </Button>
       <div className="min-w-0">
@@ -590,11 +613,22 @@ export function ConfiguracoesSection() {
                 },
               ]}
               actions={[
-                { label: "Abrir importação", variant: "default", onClick: () => { closeSettings(); setTimeout(() => openImportModal(), 0); } },
+                {
+                  label: "Abrir importação",
+                  variant: "default",
+                  onClick: () => {
+                    closeSettings();
+                    setTimeout(() => openImportModal(), 0);
+                  },
+                },
                 {
                   label: "Limpar cache temporário",
                   variant: "outline",
-                  onClick: () => { clearImportCache(); toast.success("Cache temporário limpo."); void refreshDiag(); },
+                  onClick: () => {
+                    clearImportCache();
+                    toast.success("Cache temporário limpo.");
+                    void refreshDiag();
+                  },
                 },
                 { label: "Ver diagnóstico", variant: "outline", onClick: () => setView("import") },
                 { label: "Histórico", variant: "outline", onClick: () => setView("history") },
@@ -621,8 +655,16 @@ export function ConfiguracoesSection() {
                 },
               ]}
               actions={[
-                { label: "Gerenciar usuários", variant: "default", onClick: () => setAccessOpen(true) },
-                { label: "Definir responsabilidades", variant: "outline", onClick: () => setAccessOpen(true) },
+                {
+                  label: "Gerenciar usuários",
+                  variant: "default",
+                  onClick: () => setAccessOpen(true),
+                },
+                {
+                  label: "Definir responsabilidades",
+                  variant: "outline",
+                  onClick: () => setAccessOpen(true),
+                },
                 { label: "Ver permissões", variant: "outline", onClick: () => setAccessOpen(true) },
                 { label: "Segurança", variant: "outline", onClick: () => setView("security") },
               ]}
@@ -716,13 +758,17 @@ export function ConfiguracoesSection() {
               <div className="grid gap-2 rounded-md border border-border/60 bg-card/50 p-3 text-xs">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span>Clientes MGMV sem acordo oficial</span>
-                  <Tag variant={diag && diag.mgmvClientsWithoutAgreement > 0 ? "danger" : "success"}>
+                  <Tag
+                    variant={diag && diag.mgmvClientsWithoutAgreement > 0 ? "danger" : "success"}
+                  >
                     {diag?.mgmvClientsWithoutAgreement ?? "—"}
                   </Tag>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span>Produtos marcados MGMV sem mgmv_agreement_id</span>
-                  <Tag variant={diag && diag.mgmvProductsWithoutAgreementId > 0 ? "danger" : "success"}>
+                  <Tag
+                    variant={diag && diag.mgmvProductsWithoutAgreementId > 0 ? "danger" : "success"}
+                  >
                     {diag?.mgmvProductsWithoutAgreementId ?? "—"}
                   </Tag>
                 </div>
@@ -747,7 +793,9 @@ export function ConfiguracoesSection() {
                   variant="secondary"
                   onClick={() => {
                     clearImportCache();
-                    toast.success("Cache temporário da importação limpo. Dados oficiais preservados.");
+                    toast.success(
+                      "Cache temporário da importação limpo. Dados oficiais preservados.",
+                    );
                     void refreshDiag();
                   }}
                 >
@@ -755,7 +803,10 @@ export function ConfiguracoesSection() {
                 </Button>
                 <Button
                   size="sm"
-                  onClick={() => { closeSettings(); setTimeout(() => openImportModal(), 0); }}
+                  onClick={() => {
+                    closeSettings();
+                    setTimeout(() => openImportModal(), 0);
+                  }}
                 >
                   Abrir importação
                 </Button>
@@ -765,22 +816,46 @@ export function ConfiguracoesSection() {
 
           <Card title="Importação e Exportação">
             <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
-              <Button variant="outline" onClick={() => handleTemplate("csv")} className="justify-start gap-2 min-h-11">
+              <Button
+                variant="outline"
+                onClick={() => handleTemplate("csv")}
+                className="justify-start gap-2 min-h-11"
+              >
                 <FileText className="size-4" /> Baixar modelo CSV
               </Button>
-              <Button variant="outline" onClick={() => handleTemplate("excel")} className="justify-start gap-2 min-h-11">
+              <Button
+                variant="outline"
+                onClick={() => handleTemplate("excel")}
+                className="justify-start gap-2 min-h-11"
+              >
                 <FileSpreadsheet className="size-4" /> Baixar modelo Excel
               </Button>
-              <Button variant="outline" onClick={() => handleExport("clientes")} className="justify-start gap-2 min-h-11">
+              <Button
+                variant="outline"
+                onClick={() => handleExport("clientes")}
+                className="justify-start gap-2 min-h-11"
+              >
                 <Download className="size-4" /> Exportar clientes
               </Button>
-              <Button variant="outline" onClick={() => handleExport("produtos")} className="justify-start gap-2 min-h-11">
+              <Button
+                variant="outline"
+                onClick={() => handleExport("produtos")}
+                className="justify-start gap-2 min-h-11"
+              >
                 <Download className="size-4" /> Exportar produtos
               </Button>
-              <Button variant="outline" onClick={() => handleExport("cobrancas")} className="justify-start gap-2 min-h-11">
+              <Button
+                variant="outline"
+                onClick={() => handleExport("cobrancas")}
+                className="justify-start gap-2 min-h-11"
+              >
                 <Download className="size-4" /> Exportar cobranças
               </Button>
-              <Button variant="outline" onClick={() => setView("history")} className="justify-start gap-2 min-h-11">
+              <Button
+                variant="outline"
+                onClick={() => setView("history")}
+                className="justify-start gap-2 min-h-11"
+              >
                 <History className="size-4" /> Ver histórico
               </Button>
             </div>
@@ -805,14 +880,32 @@ export function ConfiguracoesSection() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium">{h.file}</p>
-                          <p className="text-xs text-muted-foreground">{formatDateBR(h.date)} · {h.source}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDateBR(h.date)} · {h.source}
+                          </p>
                         </div>
                         <Tag variant={statusVariant[h.status]}>{h.status}</Tag>
                       </div>
                       <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
-                        <div><span className="text-muted-foreground">Clientes</span><div className="font-semibold tabular-nums">{h.clientsCreated}</div></div>
-                        <div><span className="text-muted-foreground">Produtos</span><div className="font-semibold tabular-nums">{h.productsAdded}</div></div>
-                        <div><span className="text-muted-foreground">Erros</span><div className={cn("font-semibold tabular-nums", h.errors > 0 && "text-destructive")}>{h.errors}</div></div>
+                        <div>
+                          <span className="text-muted-foreground">Clientes</span>
+                          <div className="font-semibold tabular-nums">{h.clientsCreated}</div>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Produtos</span>
+                          <div className="font-semibold tabular-nums">{h.productsAdded}</div>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Erros</span>
+                          <div
+                            className={cn(
+                              "font-semibold tabular-nums",
+                              h.errors > 0 && "text-destructive",
+                            )}
+                          >
+                            {h.errors}
+                          </div>
+                        </div>
                       </div>
                     </li>
                   ))}
@@ -834,11 +927,17 @@ export function ConfiguracoesSection() {
                     <TableBody>
                       {importHistory.map((h) => (
                         <TableRow key={h.id}>
-                          <TableCell className="whitespace-nowrap">{formatDateBR(h.date)}</TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {formatDateBR(h.date)}
+                          </TableCell>
                           <TableCell>{h.source}</TableCell>
                           <TableCell className="font-medium">{h.file}</TableCell>
-                          <TableCell className="text-right tabular-nums">{h.clientsCreated}</TableCell>
-                          <TableCell className="text-right tabular-nums">{h.productsAdded}</TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {h.clientsCreated}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {h.productsAdded}
+                          </TableCell>
                           <TableCell className="text-right tabular-nums">{h.errors}</TableCell>
                           <TableCell>
                             <Tag variant={statusVariant[h.status]}>{h.status}</Tag>
@@ -856,21 +955,28 @@ export function ConfiguracoesSection() {
 
       {view === "duplicates" && (
         <>
-          <DetailHeader title="Clientes duplicados" description="Detecta e unifica clientes pelo telefone ou nome." />
+          <DetailHeader
+            title="Clientes duplicados"
+            description="Detecta e unifica clientes pelo telefone ou nome."
+          />
           <Card title="Clientes duplicados">
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                Detecta clientes com o mesmo telefone (ou mesmo nome quando o telefone está vazio) e unifica em um único cliente primário, preservando produtos, acordos MGMV e observações.
+                Detecta clientes com o mesmo telefone (ou mesmo nome quando o telefone está vazio) e
+                unifica em um único cliente primário, preservando produtos, acordos MGMV e
+                observações.
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <Tag variant={hasDuplicates ? "warning" : "success"}>
                   {duplicateGroups.length} grupo(s) duplicado(s)
                 </Tag>
                 <Tag variant="neutral">
-                  {duplicateGroups.reduce((s, g) => s + g.duplicateIds.length, 0)} cliente(s) a remover
+                  {duplicateGroups.reduce((s, g) => s + g.duplicateIds.length, 0)} cliente(s) a
+                  remover
                 </Tag>
                 <Tag variant="neutral">
-                  {duplicateGroups.reduce((s, g) => s + g.productsToReassign, 0)} produto(s) a reatribuir
+                  {duplicateGroups.reduce((s, g) => s + g.productsToReassign, 0)} produto(s) a
+                  reatribuir
                 </Tag>
               </div>
 
@@ -881,7 +987,9 @@ export function ConfiguracoesSection() {
                       <li key={g.key} className="flex flex-wrap items-center justify-between gap-2">
                         <span className="min-w-0 truncate">
                           <strong>{g.name}</strong>{" "}
-                          <span className="text-muted-foreground">({g.phone || "sem telefone"})</span>
+                          <span className="text-muted-foreground">
+                            ({g.phone || "sem telefone"})
+                          </span>
                         </span>
                         <span className="text-muted-foreground">
                           remove {g.duplicateIds.length} · move {g.productsToReassign} prod
@@ -889,7 +997,9 @@ export function ConfiguracoesSection() {
                       </li>
                     ))}
                     {duplicateGroups.length > 50 && (
-                      <li className="text-muted-foreground">… e mais {duplicateGroups.length - 50} grupo(s)</li>
+                      <li className="text-muted-foreground">
+                        … e mais {duplicateGroups.length - 50} grupo(s)
+                      </li>
                     )}
                   </ul>
                 </div>
@@ -902,11 +1012,18 @@ export function ConfiguracoesSection() {
                   onClick={async () => {
                     if (!hasDuplicates) return;
                     const total = duplicateGroups.reduce((s, g) => s + g.duplicateIds.length, 0);
-                    if (!confirm(`Unificar ${duplicateGroups.length} grupo(s)? ${total} cliente(s) duplicado(s) serão removidos e seus produtos/acordos reatribuídos. Esta ação não pode ser desfeita.`)) return;
+                    if (
+                      !confirm(
+                        `Unificar ${duplicateGroups.length} grupo(s)? ${total} cliente(s) duplicado(s) serão removidos e seus produtos/acordos reatribuídos. Esta ação não pode ser desfeita.`,
+                      )
+                    )
+                      return;
                     setMergeBusy(true);
                     try {
                       const r = await mergeDuplicateClients();
-                      toast.success(`Unificação concluída: ${r.groups} grupo(s), ${r.removed} removido(s), ${r.reassignedProducts} produto(s) reatribuído(s).`);
+                      toast.success(
+                        `Unificação concluída: ${r.groups} grupo(s), ${r.removed} removido(s), ${r.reassignedProducts} produto(s) reatribuído(s).`,
+                      );
                       await refreshSnapshot();
                       await refreshDiag();
                     } catch (err) {
@@ -930,7 +1047,10 @@ export function ConfiguracoesSection() {
 
       {view === "preferences" && (
         <>
-          <DetailHeader title="Tema e aparência" description="Preferências visuais e de formatação." />
+          <DetailHeader
+            title="Tema e aparência"
+            description="Preferências visuais e de formatação."
+          />
           <Card title="Preferências do Sistema">
             <div className="space-y-4">
               <div className="space-y-1.5">
@@ -946,8 +1066,15 @@ export function ConfiguracoesSection() {
               <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Moeda padrão</Label>
-                  <Select value={prefDraft.currency} onValueChange={(v) => setPrefDraft({ ...prefDraft, currency: v as typeof prefDraft.currency })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Select
+                    value={prefDraft.currency}
+                    onValueChange={(v) =>
+                      setPrefDraft({ ...prefDraft, currency: v as typeof prefDraft.currency })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="BRL">BRL — Real Brasileiro</SelectItem>
                       <SelectItem value="USD">USD — Dólar</SelectItem>
@@ -957,8 +1084,15 @@ export function ConfiguracoesSection() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Formato de data</Label>
-                  <Select value={prefDraft.dateFormat} onValueChange={(v) => setPrefDraft({ ...prefDraft, dateFormat: v as typeof prefDraft.dateFormat })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Select
+                    value={prefDraft.dateFormat}
+                    onValueChange={(v) =>
+                      setPrefDraft({ ...prefDraft, dateFormat: v as typeof prefDraft.dateFormat })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="DD/MM/AAAA">DD/MM/AAAA</SelectItem>
                       <SelectItem value="AAAA-MM-DD">AAAA-MM-DD</SelectItem>
@@ -968,18 +1102,37 @@ export function ConfiguracoesSection() {
               </div>
 
               <div className="rounded-lg border border-border bg-background/40 px-3">
-                <FieldRow label="Modo compacto de tabelas" description="Reduz o espaçamento das linhas.">
-                  <Switch checked={prefDraft.compactTables} onCheckedChange={(v) => setPrefDraft({ ...prefDraft, compactTables: v })} />
+                <FieldRow
+                  label="Modo compacto de tabelas"
+                  description="Reduz o espaçamento das linhas."
+                >
+                  <Switch
+                    checked={prefDraft.compactTables}
+                    onCheckedChange={(v) => setPrefDraft({ ...prefDraft, compactTables: v })}
+                  />
                 </FieldRow>
-                <FieldRow label="Exibir alertas no Dashboard" description="Mostra avisos operacionais no topo.">
-                  <Switch checked={prefDraft.showDashboardAlerts} onCheckedChange={(v) => setPrefDraft({ ...prefDraft, showDashboardAlerts: v })} />
+                <FieldRow
+                  label="Exibir alertas no Dashboard"
+                  description="Mostra avisos operacionais no topo."
+                >
+                  <Switch
+                    checked={prefDraft.showDashboardAlerts}
+                    onCheckedChange={(v) => setPrefDraft({ ...prefDraft, showDashboardAlerts: v })}
+                  />
                 </FieldRow>
               </div>
 
               <div className="space-y-1.5">
                 <Label>Tema da interface</Label>
-                <Select value={prefDraft.theme} onValueChange={(v) => setPrefDraft({ ...prefDraft, theme: v as typeof prefDraft.theme })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select
+                  value={prefDraft.theme}
+                  onValueChange={(v) =>
+                    setPrefDraft({ ...prefDraft, theme: v as typeof prefDraft.theme })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="light">Claro</SelectItem>
                     <SelectItem value="dark">Escuro</SelectItem>
@@ -1000,7 +1153,10 @@ export function ConfiguracoesSection() {
 
       {view === "rules" && (
         <>
-          <DetailHeader title="Regras operacionais" description="Prazos, bloqueios e regras de Collection." />
+          <DetailHeader
+            title="Regras operacionais"
+            description="Prazos, bloqueios e regras de Collection."
+          />
           <Card title="Regras Operacionais">
             <div className="space-y-4">
               <div className="space-y-1.5">
@@ -1012,7 +1168,12 @@ export function ConfiguracoesSection() {
                     min={1}
                     max={365}
                     value={rulesDraft.reservaDaysDefault}
-                    onChange={(e) => setRulesDraft({ ...rulesDraft, reservaDaysDefault: Math.max(1, Number(e.target.value) || 1) })}
+                    onChange={(e) =>
+                      setRulesDraft({
+                        ...rulesDraft,
+                        reservaDaysDefault: Math.max(1, Number(e.target.value) || 1),
+                      })
+                    }
                     className="w-28"
                   />
                   <span className="text-sm text-muted-foreground">dias</span>
@@ -1021,19 +1182,44 @@ export function ConfiguracoesSection() {
 
               <div className="rounded-lg border border-border bg-background/40 px-3">
                 <FieldRow label="Bloquear nova reserva para cliente com MGMV ativo">
-                  <Switch checked={rulesDraft.blockReserveOnActiveMGMV} onCheckedChange={(v) => setRulesDraft({ ...rulesDraft, blockReserveOnActiveMGMV: v })} />
+                  <Switch
+                    checked={rulesDraft.blockReserveOnActiveMGMV}
+                    onCheckedChange={(v) =>
+                      setRulesDraft({ ...rulesDraft, blockReserveOnActiveMGMV: v })
+                    }
+                  />
                 </FieldRow>
                 <FieldRow label="Ocultar desistências da Collection">
-                  <Switch checked={rulesDraft.hideDesistenciasFromCollection} onCheckedChange={(v) => setRulesDraft({ ...rulesDraft, hideDesistenciasFromCollection: v })} />
+                  <Switch
+                    checked={rulesDraft.hideDesistenciasFromCollection}
+                    onCheckedChange={(v) =>
+                      setRulesDraft({ ...rulesDraft, hideDesistenciasFromCollection: v })
+                    }
+                  />
                 </FieldRow>
                 <FieldRow label="Ocultar abandonos da Collection">
-                  <Switch checked={rulesDraft.hideAbandonosFromCollection} onCheckedChange={(v) => setRulesDraft({ ...rulesDraft, hideAbandonosFromCollection: v })} />
+                  <Switch
+                    checked={rulesDraft.hideAbandonosFromCollection}
+                    onCheckedChange={(v) =>
+                      setRulesDraft({ ...rulesDraft, hideAbandonosFromCollection: v })
+                    }
+                  />
                 </FieldRow>
                 <FieldRow label="Calcular vencimento automaticamente para Reserva">
-                  <Switch checked={rulesDraft.autoCalculateReservaDueDate} onCheckedChange={(v) => setRulesDraft({ ...rulesDraft, autoCalculateReservaDueDate: v })} />
+                  <Switch
+                    checked={rulesDraft.autoCalculateReservaDueDate}
+                    onCheckedChange={(v) =>
+                      setRulesDraft({ ...rulesDraft, autoCalculateReservaDueDate: v })
+                    }
+                  />
                 </FieldRow>
                 <FieldRow label="Considerar Pendente vencido como inadimplente">
-                  <Switch checked={rulesDraft.treatOverduePendenteAsDelinquent} onCheckedChange={(v) => setRulesDraft({ ...rulesDraft, treatOverduePendenteAsDelinquent: v })} />
+                  <Switch
+                    checked={rulesDraft.treatOverduePendenteAsDelinquent}
+                    onCheckedChange={(v) =>
+                      setRulesDraft({ ...rulesDraft, treatOverduePendenteAsDelinquent: v })
+                    }
+                  />
                 </FieldRow>
               </div>
 
@@ -1049,26 +1235,46 @@ export function ConfiguracoesSection() {
 
       {view === "security" && (
         <>
-          <DetailHeader title="Segurança e Acesso" description="Confirmações, auditoria e gestão de usuários." />
+          <DetailHeader
+            title="Segurança e Acesso"
+            description="Confirmações, auditoria e gestão de usuários."
+          />
           <Card title="Segurança e Acesso">
             <div className="space-y-4">
               <div className="rounded-lg border border-border bg-background/40 px-3">
                 <FieldRow label="Exigir confirmação antes de excluir dados">
-                  <Switch checked={security.requireConfirmBeforeDelete} onCheckedChange={(v) => setSecurity({ requireConfirmBeforeDelete: v })} />
+                  <Switch
+                    checked={security.requireConfirmBeforeDelete}
+                    onCheckedChange={(v) => setSecurity({ requireConfirmBeforeDelete: v })}
+                  />
                 </FieldRow>
                 <FieldRow label="Bloquear exclusão em massa sem senha">
-                  <Switch checked={security.blockMassDeleteWithoutPassword} onCheckedChange={(v) => setSecurity({ blockMassDeleteWithoutPassword: v })} />
+                  <Switch
+                    checked={security.blockMassDeleteWithoutPassword}
+                    onCheckedChange={(v) => setSecurity({ blockMassDeleteWithoutPassword: v })}
+                  />
                 </FieldRow>
                 <FieldRow label="Ativar log de auditoria">
-                  <Switch checked={security.enableAuditLog} onCheckedChange={(v) => setSecurity({ enableAuditLog: v })} />
+                  <Switch
+                    checked={security.enableAuditLog}
+                    onCheckedChange={(v) => setSecurity({ enableAuditLog: v })}
+                  />
                 </FieldRow>
               </div>
 
               <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
-                <Button variant="outline" className="gap-2 justify-start min-h-11" onClick={() => setAccessOpen(true)}>
+                <Button
+                  variant="outline"
+                  className="gap-2 justify-start min-h-11"
+                  onClick={() => setAccessOpen(true)}
+                >
                   <Users className="size-4" /> Gerenciar usuários
                 </Button>
-                <Button variant="outline" className="gap-2 justify-start min-h-11" onClick={() => setAccessOpen(true)}>
+                <Button
+                  variant="outline"
+                  className="gap-2 justify-start min-h-11"
+                  onClick={() => setAccessOpen(true)}
+                >
                   <KeyRound className="size-4" /> Alterar senha administrativa
                 </Button>
               </div>
@@ -1086,14 +1292,20 @@ export function ConfiguracoesSection() {
 
       {view === "navbar" && (
         <>
-          <DetailHeader title="Navbar" description="Reordenar ícones, ocultar itens e ajustar animações." />
+          <DetailHeader
+            title="Navbar"
+            description="Reordenar ícones, ocultar itens e ajustar animações."
+          />
           <NavbarSettingsCard />
         </>
       )}
 
       {view === "danger" && (
         <>
-          <DetailHeader title="Zona de perigo" description="Ações irreversíveis. Use com cuidado." />
+          <DetailHeader
+            title="Zona de perigo"
+            description="Ações irreversíveis. Use com cuidado."
+          />
           <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-5 shadow-xs">
             <div className="mb-4 flex items-start gap-3">
               <div className="grid size-9 shrink-0 place-items-center rounded-full bg-destructive/15 text-destructive">
@@ -1125,7 +1337,15 @@ export function ConfiguracoesSection() {
       )}
 
       {/* Modal confirmação Zona de Perigo */}
-      <Dialog open={dangerOpen} onOpenChange={(v) => { if (!v) { setDangerOpen(false); setConfirmText(""); } }}>
+      <Dialog
+        open={dangerOpen}
+        onOpenChange={(v) => {
+          if (!v) {
+            setDangerOpen(false);
+            setConfirmText("");
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
@@ -1133,13 +1353,16 @@ export function ConfiguracoesSection() {
               {dangerAction ? dangerCatalog[dangerAction].title : "Confirmar exclusão"}
             </DialogTitle>
             <DialogDescription>
-              {dangerAction ? dangerCatalog[dangerAction].description : "Essa ação não pode ser desfeita."}
+              {dangerAction
+                ? dangerCatalog[dangerAction].description
+                : "Essa ação não pode ser desfeita."}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2">
             <Label htmlFor="confirm-input">
-              Digite <span className="font-mono font-semibold text-destructive">EXCLUIR</span> para confirmar.
+              Digite <span className="font-mono font-semibold text-destructive">EXCLUIR</span> para
+              confirmar.
             </Label>
             <Input
               id="confirm-input"
@@ -1152,8 +1375,14 @@ export function ConfiguracoesSection() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDangerOpen(false)}>Cancelar</Button>
-            <Button variant="destructive" disabled={confirmText !== "EXCLUIR"} onClick={confirmDanger}>
+            <Button variant="outline" onClick={() => setDangerOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={confirmText !== "EXCLUIR"}
+              onClick={confirmDanger}
+            >
               Confirmar Exclusão
             </Button>
           </DialogFooter>
