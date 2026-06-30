@@ -2081,8 +2081,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         description="Importe clientes e produtos por lista, HTML, CSV ou Excel."
       />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="flex">
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div className="space-y-3">
           <UploadArea
             accept=".txt,.html,.htm,.csv,.xlsx,.xls,.zip"
             onFile={(f) => {
@@ -2090,44 +2090,46 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               if (ext === "zip") void handleZipFile(f);
               else void handleFile(f);
             }}
-            hint="Arraste qualquer arquivo aqui (lista, HTML, CSV, Excel ou ZIP do Notion) ou clique para selecionar"
-            tall
+            hint="Arraste qualquer arquivo (lista, HTML, CSV, Excel ou ZIP) ou clique"
           />
+          <Card title="Formato esperado">
+            <div className="grid gap-2 text-[11px]">
+              <div>
+                <span className="text-muted-foreground">Lista:</span>
+                <code className="block rounded-md bg-muted p-1.5">Nome - Telefone - Produto - Plataforma - Valor - Status</code>
+              </div>
+              <div>
+                <span className="text-muted-foreground">HTML / Notion:</span>
+                <code className="block rounded-md bg-muted p-1.5 leading-snug">Título "Nome - Telefone" + tabela Item/Plataforma/Valor/Pago/Status/Data/Situação.</code>
+              </div>
+              <div>
+                <span className="text-muted-foreground">CSV/Excel:</span>
+                <code className="block rounded-md bg-muted p-1.5 leading-snug">nome, telefone, produto, plataforma, valor_total, valor_pago, status_financeiro, situacao, data_cadastro, data_limite, observacoes</code>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <span className="text-muted-foreground">Telefone é o ID. Status: Pago/Reserva/Pendente/MGMV.</span>
+                <div className="flex gap-1.5">
+                  <Button size="sm" variant="outline" onClick={() => downloadModel("csv")}>CSV</Button>
+                  <Button size="sm" variant="outline" onClick={() => downloadModel("xlsx")}>Excel</Button>
+                </div>
+              </div>
+            </div>
+          </Card>
         </div>
 
-        <div className="space-y-4">
+        <div>
           <Card>
-            <div className="mb-2 flex items-center justify-between">
+            <div className="mb-2 flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">Importar clientes por lista</h3>
               <Button size="sm" onClick={validateText} disabled={aiLoading}>
                 <Brain className="size-4" />
                 {aiLoading ? "Analisando..." : "Validar com IA"}
               </Button>
             </div>
-            <TextDropzone value={text} onChange={setText} onFile={handleFile} />
-            <p className="mt-2 text-xs text-muted-foreground">
-              Cole a lista (Nome - Telefone - Produto - Plataforma - Valor - Status) ou arraste um .txt. A IA corrige erros comuns.
+            <TextDropzone value={text} onChange={setText} onFile={handleFile} compact />
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              Cole a lista ou arraste um .txt. A IA corrige erros comuns.
             </p>
-          </Card>
-
-          <Card title="Formato esperado">
-            <p className="text-xs text-muted-foreground">Lista:</p>
-            <code className="block rounded-md bg-muted p-2 text-xs">Nome - Telefone - Produto - Plataforma - Valor - Status</code>
-            <p className="mt-3 text-xs text-muted-foreground">HTML / Notion:</p>
-            <code className="block rounded-md bg-muted p-2 text-[10px] leading-relaxed">
-              Título "Nome - Telefone" + tabela com Item, Plataforma, Valor, Valor Pago, Status, Data, Situação.
-            </code>
-            <p className="mt-3 text-xs text-muted-foreground">CSV/Excel — colunas:</p>
-            <code className="block rounded-md bg-muted p-2 text-[10px] leading-relaxed">
-              nome, telefone, produto, plataforma, valor_total, valor_pago, status_financeiro, situacao, data_cadastro, data_limite, observacoes
-            </code>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Telefone é o identificador. Status: Pago, Reserva, Pendente, MGMV. Situação: Em Aberto, Enviado, Desistiu, Abandonou.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => downloadModel("csv")}>Modelo CSV</Button>
-              <Button size="sm" variant="outline" onClick={() => downloadModel("xlsx")}>Modelo Excel</Button>
-            </div>
           </Card>
         </div>
       </div>
