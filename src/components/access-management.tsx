@@ -466,6 +466,92 @@ function RolesPicker({ value, onChange }: { value: AppRole[]; onChange: (r: AppR
   );
 }
 
+function EditResponsibilitiesDialog({
+  user,
+  onClose,
+  onSaved,
+}: {
+  user: AdminUserRow | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [resp, setResp] = useState<UserResponsibility[]>([]);
+  const [canReceive, setCanReceive] = useState(true);
+  const [primed, setPrimed] = useState<string | null>(null);
+
+  if (user && primed !== user.id) {
+    setPrimed(user.id);
+    setResp(user.responsibilities ?? []);
+    setCanReceive(user.canReceiveTasks ?? true);
+  }
+
+  const fn = useServerFn(updateUserResponsibilities);
+  const mut = useMutation({
+    mutationFn: () =>
+      fn({
+        data: {
+          userId: user!.id,
+          responsibilities: resp,
+          canReceiveTasks: canReceive,
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Responsabilidades atualizadas.");
+      onSaved();
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <Dialog open={!!user} onOpenChange={(v) => { if (!v) { setPrimed(null); onClose(); } }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ShieldCheck className="size-4" /> Responsabilidades operacionais
+          </DialogTitle>
+          <DialogDescription>
+            {user?.email}. O Concierge usa essas responsabilidades para sugerir responsáveis em novas tarefas.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            {RESPONSIBILITIES.map((r) => {
+              const checked = resp.includes(r);
+              return (
+                <label key={r} className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background/50 p-2 text-sm">
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={(v) =>
+                      setResp(
+                        v
+                          ? Array.from(new Set([...resp, r]))
+                          : resp.filter((x) => x !== r),
+                      )
+                    }
+                  />
+                  {RESPONSIBILITY_LABELS[r]}
+                </label>
+              );
+            })}
+          </div>
+          <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background/50 p-2 text-sm">
+            <Checkbox
+              checked={canReceive}
+              onCheckedChange={(v) => setCanReceive(!!v)}
+            />
+            Pode receber tarefas atribuídas pelo Concierge
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={() => mut.mutate()} disabled={mut.isPending}>Salvar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ResetPasswordDialog({ user, onClose }: { user: AdminUserRow | null; onClose: () => void }) {
   const [pw, setPw] = useState("");
   const fn = useServerFn(resetUserPassword);
