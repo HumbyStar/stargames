@@ -48,6 +48,12 @@ export type ImportProgressState = {
     errorEntries: number;
     skippedAfterCorrection: number;
   };
+  ignoredItems?: Array<{
+    client: string;
+    product: string;
+    date: string;
+    folder: string;
+  }>;
   done: boolean;
   resumed?: boolean; // carregado do banco após reload
 };
