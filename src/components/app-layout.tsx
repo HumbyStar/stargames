@@ -1023,19 +1023,25 @@ function _FloatingNavbarImpl() {
           >
             <Upload className="size-5" />
           </button>
-          <button
-            type="button"
-            onClick={openNotifications}
-            aria-label="Notificações"
-            className="md:hidden relative grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+          <NotificationsDropdown
+            open={notificationsOpen}
+            onClose={closeNotifications}
+            align="end"
           >
-            <Bell className="size-5" />
-            {unreadCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 grid min-w-[16px] h-4 px-1 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground shadow-sm">
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            )}
-          </button>
+            <button
+              type="button"
+              onClick={openNotifications}
+              aria-label="Notificações"
+              className="md:hidden relative grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+            >
+              <Bell className="size-5" />
+              {unreadCount > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 grid min-w-[16px] h-4 px-1 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground shadow-sm">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+          </NotificationsDropdown>
           <button
             type="button"
             onClick={() => scrollToSection("equipe")}
