@@ -78,20 +78,16 @@ export const heartbeatSession = createServerFn({ method: "POST" })
     const internal = await hasAnyInternalRole(supabase, userId);
     if (!internal) return { valid: false, reason: "no_internal_access" };
 
-    const { data: existing } = await supabase
-      .from("active_sessions")
-      .select("session_id")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (!existing || existing.session_id !== data.sessionId) {
-      return { valid: false, reason: "replaced" };
-    }
-
+    // Sessões concorrentes liberadas: cada dispositivo mantém o próprio
+    // heartbeat sem expulsar os outros. O dispositivo em uso sempre permanece
+    // ativo. A tabela ainda registra a última sessão vista, apenas para
+    // auditoria — nunca rejeitamos por "replaced".
     await supabase
       .from("active_sessions")
-      .update({ last_seen: new Date().toISOString() })
-      .eq("user_id", userId);
+      .upsert(
+        { user_id: userId, session_id: data.sessionId, last_seen: new Date().toISOString() },
+        { onConflict: "user_id" },
+      );
     return { valid: true };
   });
 
