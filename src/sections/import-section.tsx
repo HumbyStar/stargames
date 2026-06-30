@@ -1462,6 +1462,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     const folders = Array.from(byFolder.keys());
 
     const startedAtISO = new Date().toISOString();
+    const recordsTotal = Array.from(byFolder.values()).reduce((acc, arr) => acc + arr.length, 0);
+    let recordsProcessed = 0;
     const initialState: ImportProgressState = {
       fileHash: zipData.fileHash,
       zipName: zipData.zipName,
@@ -1471,6 +1473,11 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       messages: [`📦 Abrindo ZIP "${zipData.zipName}"…`, `🗂️ ${folders.length} pasta(s) na esteira.`],
       errors: [],
       stats: { ...stats },
+      recordsTotal,
+      recordsProcessed: 0,
+      currentBatchSize: 0,
+      currentBatchProcessed: 0,
+      retrying: null,
       done: false,
     };
     setImportProgress(initialState);
