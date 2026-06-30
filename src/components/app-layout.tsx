@@ -1253,15 +1253,6 @@ function GlobalModals() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={notificationsOpen} onOpenChange={(o) => (o ? null : closeNotifications())}>
- <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Notificações</DialogTitle>
-            <DialogDescription>Alertas e avisos recentes da operação.</DialogDescription>
-          </DialogHeader>
-          <NotificationsPanel onOpenClient={() => closeNotifications()} />
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={financeOpen} onOpenChange={(o) => (o ? null : closeFinance())}>
  <DialogContent>
