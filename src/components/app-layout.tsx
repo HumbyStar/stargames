@@ -285,22 +285,28 @@ function NavLink({
       aria-label={label}
       title={compact ? label : undefined}
       className={cn(
-        "flex items-center gap-2 rounded-full text-sm font-medium transition-all duration-300 hover:-translate-y-0.5 active:scale-95",
+        // Anima apenas propriedades baratas (transform/colors/shadow) para
+        // evitar reflow durante o scroll. `will-change-transform` deixa o
+        // compositor reservar uma camada, eliminando travadas no hover.
+        "flex items-center gap-2 rounded-full text-sm font-medium will-change-transform transition-[transform,background-color,color,box-shadow] duration-200 ease-out hover:-translate-y-0.5 active:scale-95",
         compact ? "size-10 justify-center px-0 py-0" : "px-4 py-2",
         active
-          ? "bg-primary text-primary-foreground shadow-sm"
+          ? "bg-primary text-primary-foreground shadow-sm scale-[1.06] hover:-translate-y-0"
           : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground",
       )}
     >
       <Icon
         className={cn(
-          "transition-all duration-[700ms] ease-[cubic-bezier(0.32,0.72,0,1)] shrink-0",
+          // Trocado de transition-all 700ms para apenas transform/color em
+          // 200ms — o 700ms causava "rastro" visível durante a troca de
+          // seção ativa quando o usuário rolava rápido entre seções.
+          "transition-[transform,color] duration-200 ease-out shrink-0",
           compact ? "size-5" : "size-4 opacity-90",
         )}
       />
       <span
         className={cn(
-          "overflow-hidden whitespace-nowrap transition-all duration-[700ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
+          "overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-300 ease-out",
           compact ? "max-w-0 opacity-0" : "max-w-[140px] opacity-100",
         )}
       >
