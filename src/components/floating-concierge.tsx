@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useUiStore } from "@/lib/ui-store";
 import { useStore } from "@/lib/store";
 import { usePriorityAlert, conciergePrefs } from "@/lib/concierge-priority";
@@ -27,6 +28,7 @@ export function FloatingConcierge() {
   const settingsOpen = useUiStore((s) => s.settingsOpen);
   const helpOpen = useUiStore((s) => s.helpOpen);
   const notificationsOpen = useUiStore((s) => s.notificationsOpen);
+  const navigate = useNavigate();
 
   const alert = usePriorityAlert();
   const triedRef = useRef(false);
@@ -66,8 +68,8 @@ export function FloatingConcierge() {
       toast.info("Feche o modal atual para abrir o Concierge.");
       return;
     }
-    open();
     conciergePrefs.markOpened();
+    navigate({ to: "/nikostart" });
   };
 
   return (
