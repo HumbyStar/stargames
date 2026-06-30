@@ -409,51 +409,20 @@
   max-width: 1440px;
   margin: 0 auto;
   padding: 0;
-  height: 100vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scroll-snap-type: y mandatory;
-  scrollbar-width: none;
-}
-.page-container::-webkit-scrollbar {
-  display: none;
 }
 
 /* One-page sections */
 .one-page-section {
-  height: 100vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 120px 24px 56px;
+  padding: 32px 24px 56px;
+  /* Compensa a navbar fixa (60px) ao usar scrollIntoView. */
+  scroll-margin-top: 76px;
   border-top: 1px solid color-mix(in oklch, var(--color-border) 60%, transparent);
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-  /* Scrollbar com gutter estável: o conteúdo não "pula" lateralmente
-     quando passa a precisar de scroll. */
-  scrollbar-gutter: stable both-edges;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklch, var(--color-primary) 70%, transparent) transparent;
-}
-/* Scrollbar dedicada (mesma estética da global, porém com gutter estável). */
-.one-page-section::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-.one-page-section::-webkit-scrollbar-track {
-  background: transparent;
-}
-.one-page-section::-webkit-scrollbar-thumb {
-  background: color-mix(in oklch, var(--color-primary) 70%, transparent);
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-.one-page-section::-webkit-scrollbar-thumb:hover {
-  background: var(--color-primary);
-  background-clip: padding-box;
 }
 @media (min-width: 768px) {
-  .one-page-section { padding: 130px 40px 80px; }
+  .one-page-section { padding: 40px 40px 80px; }
+}
+.one-page-section:first-of-type {
+  padding-top: 96px;
 }
 .one-page-section:first-of-type {
   border-top: none;
@@ -462,11 +431,8 @@
 /* Neutralize one-page-section sizing when rendered inside a dialog/modal */
 [role="dialog"] .one-page-section,
 [role="alertdialog"] .one-page-section {
-  height: auto;
-  overflow: visible;
   padding: 0;
   border-top: none;
-  scroll-snap-align: none;
 }
 
 /* Tabela dentro de uma seção one-page:
