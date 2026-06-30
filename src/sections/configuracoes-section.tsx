@@ -23,8 +23,10 @@ import {
   UserCog,
   AlertTriangle,
   CheckCircle2,
+  Brain,
 } from "lucide-react";
 import { Card, PageHeader, Tag } from "@/components/ui-bits";
+import { AiTrainingModal } from "@/components/ai-training-modal";
 import { Button } from "@/components/ui/button";
 import { AccessManagementDialog } from "@/components/access-management";
 import { Input } from "@/components/ui/input";
@@ -358,6 +360,7 @@ export function ConfiguracoesSection() {
   const [diagLoading, setDiagLoading] = useState(false);
   const [mergeBusy, setMergeBusy] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
+  const [aiTrainingOpen, setAiTrainingOpen] = useState(false);
   const duplicateGroups = findDuplicateClientGroups();
 
   const refreshDiag = async () => {
@@ -733,6 +736,13 @@ export function ConfiguracoesSection() {
               summary="Ações irreversíveis: limpar bases, resetar sistema."
               status="Use com cuidado"
               onOpen={() => setView("danger")}
+            />
+            <SecondaryCard
+              icon={Brain}
+              title="Treinar I.A"
+              summary="Onboarding guiado + análise do sistema para gerar automações Python que reduzem o uso de IA."
+              status="Modo CEO"
+              onOpen={() => setAiTrainingOpen(true)}
             />
           </div>
         </>
@@ -1390,6 +1400,7 @@ export function ConfiguracoesSection() {
       </Dialog>
 
       <AccessManagementDialog open={accessOpen} onOpenChange={setAccessOpen} />
+      <AiTrainingModal open={aiTrainingOpen} onOpenChange={setAiTrainingOpen} />
     </section>
   );
 }
