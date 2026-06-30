@@ -2118,6 +2118,12 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           if (importProgress?.done) onScrollTo("clientes");
         }}
         onDiscard={discardProgress}
+        onResume={(file) => {
+          // Fecha o aviso e dispara o mesmo fluxo de ZIP — duplicatas serão
+          // detectadas pelo fileHash + dedup por cliente/produto/data.
+          setImportProgress(null);
+          void handleZipFile(file);
+        }}
       />
 
       <Dialog open={zipFailuresOpen} onOpenChange={setZipFailuresOpen}>
