@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Folder, Filter, Maximize2, Minimize2, X } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
-import { LoadMoreButton } from "@/components/load-more-button";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { useSectionCompact } from "@/lib/use-section-compact";
 import { Button } from "@/components/ui/button";
@@ -102,8 +101,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   );
   const [periodFilter, setPeriodFilter] = usePersistedState<string>("clientes.period", "Todos");
   const [folderFilter, setFolderFilter] = usePersistedState<string>("clientes.folder", "Todas");
-  const [pageSize, setPageSize] = usePersistedState<number>("clientes.pageSize", 10);
-  const [visibleCount, setVisibleCount] = useState<number>(10);
   const [compact, setCompact] = useSectionCompact("clientes");
   const [showFilters, setShowFilters] = useState(true);
   const { expanded: listExpanded, expand: expandList } = useListExpansion("clients");
@@ -234,25 +231,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     folderFilter,
   ]);
 
-  // Reseta a janela visível ao mudar filtros ou tamanho de carga.
-  useEffect(() => {
-    setVisibleCount(pageSize);
-  }, [
-    pageSize,
-    search,
-    chip,
-    financialFilter,
-    situationFilter,
-    platformFilter,
-    periodFilter,
-    folderFilter,
-  ]);
-
-  const pagedRows = useMemo(
-    () => rows.slice(0, Math.min(visibleCount, rows.length)),
-    [rows, visibleCount],
-  );
-  const hasMore = pagedRows.length < rows.length;
+  const pagedRows = rows;
 
   const activeFilterCount =
     (chip !== "todos" ? 1 : 0) +
@@ -404,18 +383,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               {compact ? "Expandir" : "Compactar"}
             </Button>
             <ListExpansionToggle section="clients" />
-            <select
-              value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
-              className="h-9 rounded-md border border-input bg-background px-2 text-xs"
-              title="Máximo de linhas por carga"
-            >
-              {[10, 20, 30, 40, 50].map((n) => (
-                <option key={n} value={n}>
-                  Máx. {n}
-                </option>
-              ))}
-            </select>
           </div>
 
           {showFilters && (
@@ -678,16 +645,8 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
             {rows.length > 0 && (
               <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
                 <span>
-                  Exibindo {pagedRows.length} de {rows.length} cliente(s)
+                  {rows.length} cliente(s) carregado(s)
                 </span>
-                {hasMore ? (
-                  <LoadMoreButton
-                    count={Math.min(pageSize, rows.length - pagedRows.length)}
-                    onClick={() => setVisibleCount((c) => c + pageSize)}
-                  />
-                ) : (
-                  <span>Todos os clientes carregados.</span>
-                )}
               </div>
             )}
           </>

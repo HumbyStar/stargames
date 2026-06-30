@@ -26,7 +26,6 @@ import {
   Folder,
   X,
 } from "lucide-react";
-import { LoadMoreButton } from "@/components/load-more-button";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { useSectionCompact } from "@/lib/use-section-compact";
 import {
@@ -58,8 +57,6 @@ type Period =
   | "personalizado"
   | "maximo";
 
-const PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50] as const;
-const DEFAULT_PAGE_SIZE = 50;
 
 type SavedFilter = {
   id: string;
@@ -86,8 +83,6 @@ export function CollectionSection({
   const [period, setPeriod] = usePersistedState<Period>("collection.period", "todos");
   const [customFrom, setCustomFrom] = usePersistedState<string>("collection.customFrom", "");
   const [customTo, setCustomTo] = usePersistedState<string>("collection.customTo", "");
-  const [pageSize, setPageSize] = usePersistedState<number>("collection.pageSize", DEFAULT_PAGE_SIZE);
-  const [visibleCount, setVisibleCount] = useState<number>(DEFAULT_PAGE_SIZE);
   const [compact, setCompact] = useSectionCompact("collection");
   const [payTarget, setPayTarget] = useState<{ id: string; remaining: number; productName: string } | null>(null);
   const [payAmount, setPayAmount] = useState("");
@@ -250,14 +245,7 @@ export function CollectionSection({
     });
   }, [allRows, filter, period, customFrom, customTo, search, folderFilter, financialFilter, situationFilter, clients]);
 
-  const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
-
-  // Reseta a janela visível ao mudar filtros/tamanho.
-  useEffect(() => {
-    setVisibleCount(pageSize);
-  }, [pageSize, filter, period, customFrom, customTo, search, folderFilter, financialFilter, situationFilter]);
-
-  const hasMore = visible.length < filtered.length;
+  const visible = filtered;
 
   const totalAtraso =
     overdueProducts.reduce((a, p) => a + (p.totalValue - p.paidValue), 0) +
@@ -540,18 +528,6 @@ export function CollectionSection({
               {compact ? "Expandir" : "Compactar"}
             </Button>
             <ListExpansionToggle section="collection" />
-            <select
-              value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
-              className="h-9 rounded-md border border-input bg-background px-2 text-xs"
-              title="Máximo de linhas por carga"
-            >
-              {PAGE_SIZE_OPTIONS.map((n) => (
-                <option key={n} value={n}>
-                  Máx. {n}
-                </option>
-              ))}
-            </select>
           </div>
 
           {showFilters && (
@@ -727,7 +703,7 @@ export function CollectionSection({
         )}
         {listExpanded && (
         <>
-        <div className="mt-4 overflow-x-auto">
+        <div className="table-scroll-y mt-4 max-h-[28rem] overflow-x-auto rounded-md border border-border/60">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -920,21 +896,13 @@ export function CollectionSection({
         {filtered.length > 0 && (
           <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
             <span className="text-center">
-              Mostrando {Math.min(visible.length, filtered.length)} de {filtered.length} cobranças encontradas
+              {filtered.length} cobranças encontradas
               {period === "maximo" && filtered.length > 200 && (
                 <span className="ml-2 text-amber-500">
                   (modo Máximo — muitos registros podem ser exibidos)
                 </span>
               )}
             </span>
-            {hasMore ? (
-              <LoadMoreButton
-                count={Math.min(pageSize, filtered.length - visible.length)}
-                onClick={() => setVisibleCount((c) => c + pageSize)}
-              />
-            ) : (
-              <span>Todas as cobranças carregadas.</span>
-            )}
           </div>
         )}
         </>

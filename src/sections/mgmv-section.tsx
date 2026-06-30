@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
-import { LoadMoreButton } from "@/components/load-more-button";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import {
   formatBRL,
@@ -132,8 +131,6 @@ export function MGMVSection({
   const [aiTarget, setAiTarget] = useState<string | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
   const { expanded: listExpanded, expand: expandList } = useListExpansion("mgmv");
-  const [pageSize, setPageSize] = usePersistedState<number>("mgmv.pageSize", 10);
-  const [visibleCount, setVisibleCount] = useState<number>(10);
 
   /**
    * Aplica filtro a partir do clique em um card de resumo, mantendo o
@@ -269,15 +266,7 @@ export function MGMVSection({
     });
   }, [rows, search, chip, products]);
 
-  useEffect(() => {
-    setVisibleCount(pageSize);
-  }, [pageSize, search, chip]);
-
-  const pagedRows = useMemo(
-    () => filtered.slice(0, Math.min(visibleCount, filtered.length)),
-    [filtered, visibleCount],
-  );
-  const hasMore = pagedRows.length < filtered.length;
+  const pagedRows = filtered;
 
   const chips: { id: MgmvChip; label: string; count?: number }[] = [
     { id: "todos", label: "Todos", count: stats.clientes },
@@ -394,16 +383,6 @@ export function MGMVSection({
               )}
             </div>
             <ListExpansionToggle section="mgmv" />
-            <select
-              value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
-              className="h-9 rounded-md border border-input bg-background px-2 text-xs"
-              title="Máximo de linhas por carga"
-            >
-              {[10, 20, 30, 40, 50].map((n) => (
-                <option key={n} value={n}>Máx. {n}</option>
-              ))}
-            </select>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -446,7 +425,7 @@ export function MGMVSection({
         )}
         {listExpanded && (
       <>
-      <div className="mt-4 overflow-x-auto rounded-xl border border-border bg-card shadow-xs">
+      <div className="table-scroll-y mt-4 max-h-[28rem] overflow-x-auto rounded-xl border border-border bg-card shadow-xs">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-card/95 backdrop-blur">
               <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -665,15 +644,7 @@ export function MGMVSection({
       </div>
       {filtered.length > 0 && (
         <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
-          <span>Exibindo {pagedRows.length} de {filtered.length} acordo(s)</span>
-          {hasMore ? (
-            <LoadMoreButton
-              count={Math.min(pageSize, filtered.length - pagedRows.length)}
-              onClick={() => setVisibleCount((c) => c + pageSize)}
-            />
-          ) : (
-            <span>Todos os acordos carregados.</span>
-          )}
+          <span>{filtered.length} acordo(s) carregado(s)</span>
         </div>
       )}
       </>
