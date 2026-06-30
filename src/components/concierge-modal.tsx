@@ -274,6 +274,7 @@ export function ConciergeModal() {
   } | null>(null);
   const [taskDraft, setTaskDraft] = useState<ConciergeTaskDraft | null>(null);
   const [taskPickerOpen, setTaskPickerOpen] = useState(false);
+  const [integrityOpen, setIntegrityOpen] = useState(false);
 
   const canCreateTasks = useMemo(
     () =>
@@ -517,6 +518,7 @@ export function ConciergeModal() {
     if (a.cardId) return openCard(a.cardId as ConciergeCardId);
     if (a.custom === "new-client") return dispatchNewClient();
     if (a.custom === "add-product") return dispatchAddProduct();
+    if (a.custom === "validate-data") return setIntegrityOpen(true);
   };
 
   /* -------------------------- Picker de ambiguidade -------------------------- */
@@ -840,6 +842,7 @@ export function ConciergeModal() {
           setTaskDraft(makeDefaultDraft(taskType));
         }}
       />
+      <DataIntegrityPanel open={integrityOpen} onClose={() => setIntegrityOpen(false)} />
     </>
   );
 }
