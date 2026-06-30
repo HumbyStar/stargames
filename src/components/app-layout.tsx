@@ -712,8 +712,8 @@ function _FloatingNavbarImpl() {
   }, []);
 
   useEffect(() => {
-    // Scroll global: observa as seções relativas ao viewport (root:null) e
-    // marca como ativa a que estiver cruzando a linha de mira central.
+    const container = document.querySelector<HTMLElement>(".page-container");
+    if (!container) return;
     const sectionObserver = new IntersectionObserver(
       (entries) => {
         const visible = entries
@@ -722,7 +722,7 @@ function _FloatingNavbarImpl() {
         if (visible?.target.id) setActiveSection(visible.target.id);
       },
       {
-        root: null,
+        root: container,
         rootMargin: "-40% 0px -40% 0px",
         threshold: [0, 0.01, 0.1, 0.25, 0.5, 0.75, 1],
       },
@@ -747,17 +747,16 @@ function _FloatingNavbarImpl() {
         observeAll();
       });
     });
-    mo.observe(document.body, { childList: true, subtree: true });
+    mo.observe(container, { childList: true, subtree: true });
 
-    // Scrolled flag: sentinela invisível no topo do body relativa ao viewport.
     const sentinel = document.createElement("div");
     sentinel.setAttribute("aria-hidden", "true");
     sentinel.style.cssText =
       "position:absolute;top:0;left:0;width:1px;height:32px;pointer-events:none;";
-    document.body.prepend(sentinel);
+    container.prepend(sentinel);
     const scrollObserver = new IntersectionObserver(
       ([entry]) => setScrolled(!entry.isIntersecting),
-      { root: null, threshold: 0 },
+      { root: container, threshold: 0 },
     );
     scrollObserver.observe(sentinel);
 
