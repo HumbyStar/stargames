@@ -258,6 +258,56 @@ function SearchBox({
   );
 }
 
+function NotificationsDropdown({
+  children,
+  className,
+  align = "end",
+  open,
+  onClose,
+}: {
+  children: ReactNode;
+  className?: string;
+  align?: "start" | "center" | "end";
+  open: boolean;
+  onClose: () => void;
+}) {
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) onClose();
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [open, onClose]);
+
+  return (
+    <div ref={wrapRef} className={cn("relative", className)}>
+      {children}
+      {open && (
+        <div
+          className={cn(
+            "absolute top-[calc(100%+8px)] z-50 max-h-[min(70vh,420px)] w-[380px] max-w-[calc(100vw-32px)] overflow-auto rounded-2xl border border-border bg-popover/95 p-3 shadow-xl backdrop-blur",
+            align === "end" && "right-0",
+            align === "start" && "left-0",
+            align === "center" && "left-1/2 -translate-x-1/2",
+          )}
+        >
+          <NotificationsPanel onOpenClient={onClose} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NavLink({
   id,
   label,
