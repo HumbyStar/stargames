@@ -1029,6 +1029,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   const [tab, setTab] = useState("text");
   const [text, setText] = useState(SAMPLE_LIST);
   const [rows, setRows] = useState<ParsedRow[] | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const [notion, setNotion] = useState<NotionParseResult | null>(null);
   const [htmlText, setHtmlText] = useState("");
   const [zipData, setZipData] = useState<ZipPreviewData | null>(null);
