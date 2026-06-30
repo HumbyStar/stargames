@@ -665,6 +665,7 @@ function _FloatingNavbarImpl() {
       data-scrolled={scrolled ? "true" : "false"}
       data-dimmed={navDimmed ? "true" : "false"}
       data-anim={navbarCfg.animation.disabled ? "off" : "on"}
+      data-search={searchOpen ? "open" : "closed"}
       style={{
         ["--nav-anim-hover" as string]: `${navbarCfg.animation.hoverMs}ms`,
         ["--nav-anim-leave" as string]: `${navbarCfg.animation.leaveMs}ms`,
@@ -777,60 +778,50 @@ function _FloatingNavbarImpl() {
       </div>
 
       {openMobile && (
-        <div className="absolute left-2 right-2 top-[calc(100%+8px)] rounded-2xl border border-border bg-popover shadow-lg md:hidden overflow-hidden">
-          <div className="p-3 border-b border-border">
-            <SearchBox className="w-full" />
-          </div>
-          <nav className="flex flex-col py-1">
-            {navItems.map((i) => {
-              const Icon = i.icon;
-              const active = activeSection === i.id;
-              return (
-                <a
-                  key={i.id}
-                  href={`#${i.id}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setOpenMobile(false);
-                    scrollToSection(i.id);
-                  }}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3 text-sm font-medium",
-                    active ? "text-primary bg-primary/5" : "text-foreground",
-                  )}
-                >
-                  <Icon className="size-4 opacity-80" />
-                  {i.label}
-                </a>
-              );
-            })}
-          </nav>
-          <div className="border-t border-border flex flex-col py-1">
-            <button onClick={() => { setOpenMobile(false); openImport(); }} className="flex items-center gap-3 px-4 py-3 text-sm text-foreground text-left">
-              <Upload className="size-4 opacity-80" /> Importar
-            </button>
-            <button onClick={() => { setOpenMobile(false); openNotifications(); }} className="flex items-center gap-3 px-4 py-3 text-sm text-foreground text-left">
-              <Bell className="size-4 opacity-80" /> Notificações
-              {unreadCount > 0 && (
-                <span className="ml-auto grid min-w-[18px] h-[18px] px-1 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </button>
-            <button onClick={() => { setOpenMobile(false); openHelp(); }} className="flex items-center gap-3 px-4 py-3 text-sm text-foreground text-left">
-              <HelpCircle className="size-4 opacity-80" /> Ajuda
-            </button>
-            <button onClick={() => { setOpenMobile(false); openSettings(); }} className="flex items-center gap-3 px-4 py-3 text-sm text-foreground text-left">
-              <Settings className="size-4 opacity-80" /> Configurações
-            </button>
-            <button onClick={() => { setOpenMobile(false); toggleTheme(); }} className="flex items-center gap-3 px-4 py-3 text-sm text-foreground text-left">
-              {isDark ? <Sun className="size-4 opacity-80" /> : <Moon className="size-4 opacity-80" />}
-              {isDark ? "Modo claro" : "Modo escuro"}
-            </button>
-            <button onClick={() => { setOpenMobile(false); void handleSignOut(); }} className="flex items-center gap-3 px-4 py-3 text-sm text-destructive text-left">
-              <LogOut className="size-4" /> Sair
-            </button>
-          </div>
+        <div className="absolute right-2 top-[calc(100%+8px)] w-60 rounded-xl border border-border bg-popover shadow-lg md:hidden overflow-hidden">
+          {navItems.map((i) => {
+            const Icon = i.icon;
+            const active = activeSection === i.id;
+            return (
+              <button
+                key={i.id}
+                onClick={() => { setOpenMobile(false); scrollToSection(i.id); }}
+                className={cn(
+                  "flex w-full items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-accent",
+                  active && "text-primary",
+                )}
+              >
+                <Icon className="size-4 opacity-80" />
+                {i.label}
+              </button>
+            );
+          })}
+          <div className="h-px bg-border" />
+          <button onClick={() => { setOpenMobile(false); openImport(); }} className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-accent">
+            <Upload className="size-4 opacity-80" /> Importar
+          </button>
+          <button onClick={() => { setOpenMobile(false); openNotifications(); }} className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-accent">
+            <Bell className="size-4 opacity-80" /> Notificações
+            {unreadCount > 0 && (
+              <span className="ml-auto grid min-w-[18px] h-[18px] px-1 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </button>
+          <button onClick={() => { setOpenMobile(false); openHelp(); }} className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-accent">
+            <HelpCircle className="size-4 opacity-80" /> Ajuda
+          </button>
+          <button onClick={() => { setOpenMobile(false); openSettings(); }} className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-accent">
+            <Settings className="size-4 opacity-80" /> Configurações
+          </button>
+          <button onClick={() => { setOpenMobile(false); toggleTheme(); }} className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-accent">
+            {isDark ? <Sun className="size-4 opacity-80" /> : <Moon className="size-4 opacity-80" />}
+            {isDark ? "Modo claro" : "Modo escuro"}
+          </button>
+          <div className="h-px bg-border" />
+          <button onClick={() => { setOpenMobile(false); void handleSignOut(); }} className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-destructive text-left hover:bg-destructive/10">
+            <LogOut className="size-4" /> Sair
+          </button>
         </div>
       )}
     </nav>
