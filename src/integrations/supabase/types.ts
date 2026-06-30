@@ -758,6 +758,7 @@ export type Database = {
         Returns: boolean
       }
       can_view_team_tasks: { Args: { _user_id: string }; Returns: boolean }
+      has_any_internal_role: { Args: { _user_id: string }; Returns: boolean }
       has_permission: {
         Args: {
           _permission: Database["public"]["Enums"]["app_permission"]
