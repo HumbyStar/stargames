@@ -957,6 +957,22 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   const [zipFailuresOpen, setZipFailuresOpen] = useState(false);
   const [importProgress, setImportProgress] = useState<ImportProgressState | null>(null);
   const [progressRowId, setProgressRowId] = useState<string | null>(null);
+  const importRunning = !!(importProgress && !importProgress.done && !importProgress.resumed);
+
+  // Trava de navegação reforçada: intercepta qualquer mudança de rota com
+  // um modal de confirmação enquanto a importação está em andamento.
+  useBlocker({
+    shouldBlockFn: () => importRunning,
+    withResolver: true,
+    blockerFn: async () => {
+      return await new Promise<boolean>((resolve) => {
+        const ok = window.confirm(
+          "⚠️ Importação em andamento!\n\nSair agora vai interromper o processamento — itens já importados ficam salvos, mas você precisará reenviar o ZIP para continuar.\n\nDeseja realmente sair desta tela?",
+        );
+        resolve(ok);
+      });
+    },
+  });
 
   // Persiste o estado de progresso no banco (best-effort, não bloqueia a UI).
   const persistProgress = async (state: ImportProgressState) => {
