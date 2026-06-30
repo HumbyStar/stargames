@@ -59,7 +59,15 @@ interface ParsedRow {
 }
 
 const VALID_STATUS = ["Pago", "Reserva", "Pendente", "MGMV"] as const;
-const VALID_SITUATION = ["Em Aberto", "Enviado", "Desistiu", "Abandonou"] as const;
+const VALID_SITUATION = [
+  "Em Aberto",
+  "Enviado",
+  "Retirado",
+  "Removido",
+  "Desistiu",
+  "Abandonou",
+  "Resolvido",
+] as const;
 
 const SAMPLE_LIST = `Itens 25/06/2026
 
