@@ -258,6 +258,56 @@ function SearchBox({
   );
 }
 
+function NotificationsDropdown({
+  children,
+  className,
+  align = "end",
+  open,
+  onClose,
+}: {
+  children: ReactNode;
+  className?: string;
+  align?: "start" | "center" | "end";
+  open: boolean;
+  onClose: () => void;
+}) {
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) onClose();
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [open, onClose]);
+
+  return (
+    <div ref={wrapRef} className={cn("relative", className)}>
+      {children}
+      {open && (
+        <div
+          className={cn(
+            "absolute top-[calc(100%+8px)] z-50 max-h-[min(70vh,420px)] w-[380px] max-w-[calc(100vw-32px)] overflow-auto rounded-2xl border border-border bg-popover/95 p-3 shadow-xl backdrop-blur",
+            align === "end" && "right-0",
+            align === "start" && "left-0",
+            align === "center" && "left-1/2 -translate-x-1/2",
+          )}
+        >
+          <NotificationsPanel onOpenClient={onClose} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NavLink({
   id,
   label,
@@ -388,7 +438,6 @@ interface RightNavIconProps {
   onFinance: () => void;
   onImport: () => void;
   onSettings: () => void;
-  onNotifications: () => void;
   onHelp: () => void;
   onToggleTheme: () => void;
   onSignOut: () => void;
@@ -403,13 +452,15 @@ function RightNavIcon({
   onFinance,
   onImport,
   onSettings,
-  onNotifications,
   onHelp,
   onToggleTheme,
   onSignOut,
 }: RightNavIconProps) {
   const baseBtn =
     "group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90";
+  const openNotifications = useUiStore((s) => s.openNotifications);
+  const closeNotifications = useUiStore((s) => s.closeNotifications);
+  const notificationsOpen = useUiStore((s) => s.notificationsOpen);
   switch (id) {
     case "search":
       return <InlineSearch open={searchOpen} onToggle={onSearch} />;
@@ -463,26 +514,28 @@ function RightNavIcon({
       );
     case "notifications":
       return (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={onNotifications}
-              aria-label="Notificações"
-              className={cn(baseBtn, "relative")}
-            >
-              <Bell className="size-5 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
-              {unreadCount > 0 && (
-                <>
-                  <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary animate-pulse" />
-                  <span className="absolute -right-0.5 -top-0.5 grid min-w-[16px] h-4 px-1 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground shadow-sm animate-in zoom-in-75 duration-200">
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </span>
-                </>
-              )}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Notificações</TooltipContent>
-        </Tooltip>
+        <NotificationsDropdown
+          open={notificationsOpen}
+          onClose={closeNotifications}
+          align="end"
+        >
+          <button
+            type="button"
+            onClick={openNotifications}
+            aria-label="Notificações"
+            className={cn(baseBtn, "relative")}
+          >
+            <Bell className="size-5 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
+            {unreadCount > 0 && (
+              <>
+                <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary animate-pulse" />
+                <span className="absolute -right-0.5 -top-0.5 grid min-w-[16px] h-4 px-1 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground shadow-sm animate-in zoom-in-75 duration-200">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              </>
+            )}
+          </button>
+        </NotificationsDropdown>
       );
     case "help":
       return (
@@ -663,6 +716,8 @@ function _FloatingNavbarImpl() {
   const openSettings = useUiStore((s) => s.openSettings);
   const openHelp = useUiStore((s) => s.openHelp);
   const openNotifications = useUiStore((s) => s.openNotifications);
+  const closeNotifications = useUiStore((s) => s.closeNotifications);
+  const notificationsOpen = useUiStore((s) => s.notificationsOpen);
   const openConcierge = useUiStore((s) => s.openConcierge);
   const openFinance = useUiStore((s) => s.openFinance);
   const { unreadCount } = useNotifications();
@@ -953,7 +1008,6 @@ function _FloatingNavbarImpl() {
                 onFinance={openFinance}
                 onImport={openImport}
                 onSettings={openSettings}
-                onNotifications={openNotifications}
                 onHelp={openHelp}
                 onToggleTheme={toggleTheme}
                 onSignOut={handleSignOut}
@@ -969,19 +1023,25 @@ function _FloatingNavbarImpl() {
           >
             <Upload className="size-5" />
           </button>
-          <button
-            type="button"
-            onClick={openNotifications}
-            aria-label="Notificações"
-            className="md:hidden relative grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+          <NotificationsDropdown
+            open={notificationsOpen}
+            onClose={closeNotifications}
+            align="end"
           >
-            <Bell className="size-5" />
-            {unreadCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 grid min-w-[16px] h-4 px-1 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground shadow-sm">
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            )}
-          </button>
+            <button
+              type="button"
+              onClick={openNotifications}
+              aria-label="Notificações"
+              className="md:hidden relative grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
+            >
+              <Bell className="size-5" />
+              {unreadCount > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 grid min-w-[16px] h-4 px-1 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground shadow-sm">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+          </NotificationsDropdown>
           <button
             type="button"
             onClick={() => scrollToSection("equipe")}
@@ -1146,8 +1206,6 @@ function GlobalModals() {
   const closeSettings = useUiStore((s) => s.closeSettings);
   const helpOpen = useUiStore((s) => s.helpOpen);
   const closeHelp = useUiStore((s) => s.closeHelp);
-  const notificationsOpen = useUiStore((s) => s.notificationsOpen);
-  const closeNotifications = useUiStore((s) => s.closeNotifications);
   const financeOpen = useUiStore((s) => s.financeOpen);
   const closeFinance = useUiStore((s) => s.closeFinance);
 
@@ -1193,15 +1251,6 @@ function GlobalModals() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={notificationsOpen} onOpenChange={(o) => (o ? null : closeNotifications())}>
- <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Notificações</DialogTitle>
-            <DialogDescription>Alertas e avisos recentes da operação.</DialogDescription>
-          </DialogHeader>
-          <NotificationsPanel onOpenClient={() => closeNotifications()} />
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={financeOpen} onOpenChange={(o) => (o ? null : closeFinance())}>
  <DialogContent>

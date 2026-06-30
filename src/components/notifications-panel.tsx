@@ -49,14 +49,14 @@ export function NotificationsPanel({ onOpenClient }: { onOpenClient?: (clientId:
             />
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-2">
-                <p className="truncate text-sm font-semibold">
+                <p className="line-clamp-2 text-sm font-semibold">
                   {n.title}
                 </p>
                 <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
                   {notificationTypeLabels[n.type].label.split(" ")[0]}
                 </span>
               </div>
-              <p className="mt-0.5 text-xs text-muted-foreground">{n.description}</p>
+              <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.description}</p>
               <p className="mt-1 text-[10px] text-muted-foreground">
                 {formatDateBR(n.createdAt)}
               </p>
