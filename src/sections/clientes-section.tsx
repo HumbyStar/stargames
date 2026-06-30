@@ -529,7 +529,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
         )}
         {listExpanded && (
           <>
-            <div className="mt-5 overflow-x-auto">
+            <div className="table-scroll-y mt-5 max-h-[28rem] overflow-x-auto rounded-md border border-border/60">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
