@@ -711,24 +711,27 @@ function _FloatingNavbarImpl() {
   useEffect(() => {
     const container = document.querySelector<HTMLElement>(".page-container");
     if (!container) return;
-    const sectionObserver = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        if (visible?.target.id) setActiveSection(visible.target.id);
-      },
-      {
-        root: container,
-        // Linha de mira mais estreita: a seção ativa muda assim que o topo
-        // ou o inferior cruza a faixa central, reconhecendo entrada/saída
-        // pelas bordas tanto descendo quanto subindo.
-        rootMargin: "-45% 0px -45% 0px",
-        threshold: [0, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1],
-      },
-    );
+
+    // Debounce de troca de seção: evita "tremor" da navbar quando o
+    // usuário rola muito rápido. A última seção dominante vence após o
+    // pequeno intervalo abaixo.
+    let pendingId: string | null = null;
+    let debounceTimer: number | null = null;
+    const flushActive = () => {
+      if (pendingId) setActiveSection(pendingId);
+      pendingId = null;
+      debounceTimer = null;
+    };
+    const queueActive = (id: string) => {
+      pendingId = id;
+      if (debounceTimer != null) return;
+      debounceTimer = window.setTimeout(flushActive, 90);
+    };
+
+    let sectionObserver: IntersectionObserver | null = null;
     const observed = new WeakSet<Element>();
     const observeAll = () => {
+      if (!sectionObserver) return;
       for (const item of navItems) {
         const el = document.getElementById(item.id);
         if (el && !observed.has(el)) {
@@ -737,7 +740,30 @@ function _FloatingNavbarImpl() {
         }
       }
     };
-    observeAll();
+    const buildObserver = () => {
+      if (sectionObserver) sectionObserver.disconnect();
+      // Limpa o set para reobservar todas as seções com os novos limites.
+      for (const item of navItems) {
+        const el = document.getElementById(item.id);
+        if (el) observed.delete(el);
+      }
+      sectionObserver = new IntersectionObserver(
+        (entries) => {
+          const visible = entries
+            .filter((e) => e.isIntersecting)
+            .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+          if (visible?.target.id) queueActive(visible.target.id);
+        },
+        {
+          root: container,
+          rootMargin: "-45% 0px -45% 0px",
+          threshold: [0, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1],
+        },
+      );
+      observeAll();
+    };
+    buildObserver();
+
     let scheduled = false;
     const mo = new MutationObserver(() => {
       if (scheduled) return;
@@ -748,6 +774,16 @@ function _FloatingNavbarImpl() {
       });
     });
     mo.observe(container, { childList: true, subtree: true });
+
+    // Resize / orientationchange: recalcula limites do observer (o
+    // rootMargin é em % da altura da viewport, então mudou de tamanho).
+    let resizeTimer: number | null = null;
+    const onResize = () => {
+      if (resizeTimer != null) window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(buildObserver, 120);
+    };
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
 
     const sentinel = document.createElement("div");
     sentinel.setAttribute("aria-hidden", "true");
@@ -761,15 +797,56 @@ function _FloatingNavbarImpl() {
     scrollObserver.observe(sentinel);
 
     return () => {
-      sectionObserver.disconnect();
+      sectionObserver?.disconnect();
       scrollObserver.disconnect();
       mo.disconnect();
       sentinel.remove();
+      if (debounceTimer != null) window.clearTimeout(debounceTimer);
+      if (resizeTimer != null) window.clearTimeout(resizeTimer);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
     };
   }, []);
 
   // Navbar is always compact on desktop; hovering triggers a looping conic glow.
   const isCompact = true;
+
+  // Restauração de scroll: salva a posição do .page-container em
+  // sessionStorage e restaura no mount (sem saltos visíveis: usa "auto"
+  // antes do paint via rAF).
+  useEffect(() => {
+    const container = document.querySelector<HTMLElement>(".page-container");
+    if (!container) return;
+    const KEY = "app:scrollY";
+    const ACTIVE_KEY = "app:activeSection";
+    // Restaurar antes do primeiro paint.
+    const savedY = Number(sessionStorage.getItem(KEY) ?? "0");
+    const savedActive = sessionStorage.getItem(ACTIVE_KEY);
+    if (savedActive) setActiveSection(savedActive);
+    if (savedY > 0) {
+      requestAnimationFrame(() => {
+        container.scrollTo({ top: savedY, behavior: "auto" });
+      });
+    }
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        sessionStorage.setItem(KEY, String(container.scrollTop));
+      });
+    };
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  // Persiste a seção ativa para restaurar entre reloads.
+  useEffect(() => {
+    if (activeSection) sessionStorage.setItem("app:activeSection", activeSection);
+  }, [activeSection]);
 
   return (
     <TooltipProvider delayDuration={150}>
