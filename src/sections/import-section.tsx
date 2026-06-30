@@ -53,6 +53,7 @@ import {
   FileArchive,
   ChevronDown,
   Search,
+  Loader2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { analyzeListWithAI } from "@/lib/list-ai-analyze.functions";
@@ -1028,6 +1029,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   const [tab, setTab] = useState("text");
   const [text, setText] = useState(SAMPLE_LIST);
   const [rows, setRows] = useState<ParsedRow[] | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const [notion, setNotion] = useState<NotionParseResult | null>(null);
   const [htmlText, setHtmlText] = useState("");
   const [zipData, setZipData] = useState<ZipPreviewData | null>(null);
@@ -1935,8 +1937,11 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     if (!rows) return;
     const ready = rows.filter((r) => r.result === "Pronto");
     if (ready.length === 0) return toast.error("Nenhuma linha válida.");
-    let createdClients = 0;
-    ready.forEach((r) => {
+    setConfirming(true);
+    const toastId = toast.loading(`Importando ${ready.length} registro(s)...`);
+    try {
+      let createdClients = 0;
+      ready.forEach((r) => {
       let client = findClientByPhone(r.phone);
       if (!client) {
         client = addClient({ name: r.name, phone: r.phone });
@@ -1966,10 +1971,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         dueDate: dueISO,
         notes: r.notes,
       });
-    });
-    const importSource = tab === "csv" ? "CSV" : tab === "excel" ? "Excel" : "Texto";
-    const fileHash = await sha1Hex(JSON.stringify(ready));
-    addImportHistory({
+      });
+      const importSource = tab === "csv" ? "CSV" : tab === "excel" ? "Excel" : "Texto";
+      const fileHash = await sha1Hex(JSON.stringify(ready));
+      addImportHistory({
       source: importSource,
       file: importSource === "Texto" ? "importacao-manual.txt" : `importacao-${tab}`,
       clientsCreated: createdClients,
@@ -1977,21 +1982,27 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       errors: rows.length - ready.length,
       status: rows.length - ready.length > 0 ? "Com avisos" : "Concluído",
       fileHash,
-    });
-    const savedHistory = useStore.getState().importHistory[0];
-    if (savedHistory) {
+      });
+      const savedHistory = useStore.getState().importHistory[0];
+      if (savedHistory) {
       await persistConfirmedImport({
         clients: useStore.getState().clients,
         products: useStore.getState().products,
         history: savedHistory,
       });
+      }
+      toast.success(
+        `${ready.length} registro(s) importados • ${createdClients} cliente(s) novos • ${rows.length - ready.length} erro(s) ignorados`,
+        { id: toastId },
+      );
+      setRows(null);
+      setText("");
+      onScrollTo("clientes");
+    } catch (err) {
+      toast.error(`Falha ao importar: ${(err as Error).message ?? "erro inesperado"}`, { id: toastId });
+    } finally {
+      setConfirming(false);
     }
-    toast.success(
-      `${ready.length} registro(s) importados • ${createdClients} cliente(s) novos • ${rows.length - ready.length} erro(s) ignorados`,
-    );
-    setRows(null);
-    setText("");
-    onScrollTo("clientes");
   };
 
   const confirmNotionImport = async () => {
@@ -2294,8 +2305,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!rows} onOpenChange={(o) => { if (!o) setRows(null); }}>
- <DialogContent className="overflow-hidden flex flex-col p-0 max-h-[90vh] w-[95vw] sm:max-w-5xl">
+      <Dialog open={!!rows} onOpenChange={(o) => { if (!o && !confirming) setRows(null); }}>
+  <DialogContent className="overflow-hidden flex flex-col p-0 max-h-[90vh] w-[95vw] sm:max-w-5xl">
           <DialogHeader className="px-6 pt-6">
             <DialogTitle>Preview da importação</DialogTitle>
             <DialogDescription>
@@ -2313,9 +2324,18 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             <PreviewVirtualTable rows={rows ?? []} />
           </div>
           <DialogFooter className="shrink-0 flex-col gap-2 border-t border-border bg-background px-6 py-4 sm:flex-row sm:justify-center">
-            <Button variant="outline" onClick={() => setRows(null)}>Cancelar</Button>
-            <Button onClick={confirmImport} disabled={summary.ok === 0}>
-              Confirmar Importação ({summary.ok})
+            <Button variant="outline" onClick={() => setRows(null)} disabled={confirming}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmImport} disabled={summary.ok === 0 || confirming}>
+              {confirming ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Importando...
+                </>
+              ) : (
+                <>Confirmar Importação ({summary.ok})</>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2429,28 +2449,30 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
         </div>
       </div>
       <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
-        <div
-          className={cn(
-            "grid shrink-0 items-center gap-0 border-b border-border bg-muted/40 px-2 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground",
-            gridCols,
-          )}
-        >
-          <div className="font-medium">#</div>
-          <div className="font-medium">Nome</div>
-          <div className="font-medium">Telefone</div>
-          <div className="font-medium">Produto</div>
-          <div className="font-medium">Plataforma</div>
-          <div className="font-medium">Valor</div>
-          <div className="font-medium">Status</div>
-          <div className="font-medium">Result.</div>
-          <div className="font-medium">Aviso / Erro</div>
-        </div>
-        <div
-          ref={parentRef}
-          className="flex-1 min-h-0 overflow-y-auto"
-          role="rowgroup"
-          aria-rowcount={filteredRows.length}
-        >
+        <div className="flex h-full min-h-0 flex-col overflow-x-auto">
+          <div className="flex min-w-[860px] flex-1 min-h-0 flex-col">
+            <div
+              className={cn(
+                "grid shrink-0 items-center gap-0 border-b border-border bg-muted/60 px-2 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground backdrop-blur",
+                gridCols,
+              )}
+            >
+              <div className="font-medium">#</div>
+              <div className="font-medium">Nome</div>
+              <div className="font-medium">Telefone</div>
+              <div className="font-medium">Produto</div>
+              <div className="font-medium">Plataforma</div>
+              <div className="font-medium">Valor</div>
+              <div className="font-medium">Status</div>
+              <div className="font-medium">Result.</div>
+              <div className="font-medium">Aviso / Erro</div>
+            </div>
+            <div
+              ref={parentRef}
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
+              role="rowgroup"
+              aria-rowcount={filteredRows.length}
+            >
           {filteredRows.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">
               {rows.length === 0 ? "Nenhuma linha para exibir." : "Nenhum resultado para o filtro."}
@@ -2460,6 +2482,7 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
               {rowVirtualizer.getVirtualItems().map((vi) => {
                 const r = filteredRows[vi.index];
                 const aviso = r.errors.join("; ") || r.statusWarning || "";
+                const isError = r.result === "Erro";
                 const avisoTone = r.errors.length
                   ? "text-destructive"
                   : r.statusWarning
@@ -2472,6 +2495,7 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
                     aria-rowindex={vi.index + 1}
                     className={cn(
                       "absolute left-0 top-0 grid w-full items-center border-b border-border/60 px-2 text-xs",
+                      isError && "bg-destructive/10 border-l-2 border-l-destructive",
                       gridCols,
                     )}
                     style={{ height: vi.size, transform: `translateY(${vi.start}px)` }}
@@ -2508,6 +2532,8 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
               })}
             </div>
           )}
+            </div>
+          </div>
         </div>
         <div className="border-t border-border bg-muted/30 px-3 py-1.5 text-center text-[11px] text-muted-foreground">
           {filteredRows.length} de {rows.length} {rows.length === 1 ? "linha" : "linhas"}
