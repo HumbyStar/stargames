@@ -1583,6 +1583,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           ...prev,
           currentIdx: i + 1,
           stats: { ...stats },
+          ignoredItems: ignoredItems.slice(),
           messages: [
             ...prev.messages,
             `✅ "${folder}" — ${dC} novo(s), ${dU} atualizado(s), ${dP} produto(s).`,
@@ -1624,6 +1625,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         currentIdx: folders.length,
         done: true,
         stats: { ...stats },
+        ignoredItems: ignoredItems.slice(),
         messages: [
           ...prev.messages,
           `🏁 Concluído em ${((performance.now() - startedAt) / 1000).toFixed(1)}s.`,
