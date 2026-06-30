@@ -2333,6 +2333,15 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           <div className="flex flex-1 min-h-0 flex-col px-6 pb-2">
             <PreviewVirtualTable rows={rows ?? []} />
           </div>
+          <div
+            aria-live="polite"
+            aria-atomic="true"
+            className="sr-only"
+          >
+            {confirming
+              ? "Importando registros, aguarde..."
+              : `Pronto para importar. ${summary.ok} ${summary.ok === 1 ? "registro válido" : "registros válidos"}${summary.err ? `, ${summary.err} com erro` : ""}.`}
+          </div>
           <DialogFooter className="shrink-0 flex-col gap-2 border-t border-border bg-background px-6 py-4 sm:flex-row sm:justify-center">
             <Button variant="outline" onClick={() => setRows(null)} disabled={confirming}>
               Cancelar
