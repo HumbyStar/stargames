@@ -1582,6 +1582,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           ? {
               ...prev,
               currentIdx: i,
+              currentBatchSize: entries.length,
+              currentBatchProcessed: 0,
               messages: [...prev.messages, `📂 Entrando em "${folder}" (${entries.length} cliente${entries.length === 1 ? "" : "s"})…`],
             }
           : prev,
@@ -1589,6 +1591,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       await wait(500);
       const before = { ...stats };
       const folderErrors: string[] = [];
+      let batchDone = 0;
       entries.forEach((entry) => {
         try {
           processEntry(entry);
@@ -1596,6 +1599,13 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           const msg = err instanceof Error ? err.message : String(err);
           folderErrors.push(`${folder} › ${entry.client?.name ?? "?"}: ${msg}`);
           stats.errorEntries++;
+        }
+        batchDone++;
+        recordsProcessed++;
+        if (batchDone % 25 === 0) {
+          setImportProgress((prev) =>
+            prev ? { ...prev, currentBatchProcessed: batchDone, recordsProcessed } : prev,
+          );
         }
       });
       const dC = stats.createdClients - before.createdClients;
@@ -1609,6 +1619,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           currentIdx: i + 1,
           stats: { ...stats },
           ignoredItems: ignoredItems.slice(),
+          recordsProcessed,
+          currentBatchProcessed: entries.length,
           messages: [
             ...prev.messages,
             `✅ "${folder}" — ${dC} novo(s), ${dU} atualizado(s), ${dP} produto(s).`,
@@ -1617,7 +1629,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         };
         return nextState;
       });
-      if (nextState) void persistProgress(nextState);
+      if (nextState) {
+        // Aguarda persistência com retentativa automática — não perde progresso de rede.
+        await persistProgressWithRetry(nextState, i);
+      }
       await wait(450);
     }
 
