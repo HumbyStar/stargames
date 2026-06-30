@@ -409,20 +409,42 @@
   max-width: 1440px;
   margin: 0 auto;
   padding: 0;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-snap-type: y mandatory;
+  /* Scrollbar visível para permitir navegar entre seções arrastando. */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--color-primary) 70%, transparent) transparent;
+}
+.page-container::-webkit-scrollbar {
+  width: 10px;
+}
+.page-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+.page-container::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--color-primary) 70%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.page-container::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+  background-clip: padding-box;
 }
 
 /* One-page sections */
 .one-page-section {
-  padding: 32px 24px 56px;
-  /* Compensa a navbar fixa (60px) ao usar scrollIntoView. */
-  scroll-margin-top: 76px;
+  min-height: 100vh;
+  padding: 120px 24px 56px;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  scroll-margin-top: 0;
   border-top: 1px solid color-mix(in oklch, var(--color-border) 60%, transparent);
 }
 @media (min-width: 768px) {
-  .one-page-section { padding: 40px 40px 80px; }
-}
-.one-page-section:first-of-type {
-  padding-top: 96px;
+  .one-page-section { padding: 130px 40px 80px; }
 }
 .one-page-section:first-of-type {
   border-top: none;
@@ -431,8 +453,10 @@
 /* Neutralize one-page-section sizing when rendered inside a dialog/modal */
 [role="dialog"] .one-page-section,
 [role="alertdialog"] .one-page-section {
+  min-height: 0;
   padding: 0;
   border-top: none;
+  scroll-snap-align: none;
 }
 
 /* Tabela dentro de uma seção one-page:
