@@ -2305,8 +2305,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!rows} onOpenChange={(o) => { if (!o) setRows(null); }}>
- <DialogContent className="overflow-hidden flex flex-col p-0 max-h-[90vh] w-[95vw] sm:max-w-5xl">
+      <Dialog open={!!rows} onOpenChange={(o) => { if (!o && !confirming) setRows(null); }}>
+  <DialogContent className="overflow-hidden flex flex-col p-0 max-h-[90vh] w-[95vw] sm:max-w-5xl">
           <DialogHeader className="px-6 pt-6">
             <DialogTitle>Preview da importação</DialogTitle>
             <DialogDescription>
@@ -2324,9 +2324,18 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             <PreviewVirtualTable rows={rows ?? []} />
           </div>
           <DialogFooter className="shrink-0 flex-col gap-2 border-t border-border bg-background px-6 py-4 sm:flex-row sm:justify-center">
-            <Button variant="outline" onClick={() => setRows(null)}>Cancelar</Button>
-            <Button onClick={confirmImport} disabled={summary.ok === 0}>
-              Confirmar Importação ({summary.ok})
+            <Button variant="outline" onClick={() => setRows(null)} disabled={confirming}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmImport} disabled={summary.ok === 0 || confirming}>
+              {confirming ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Importando...
+                </>
+              ) : (
+                <>Confirmar Importação ({summary.ok})</>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
