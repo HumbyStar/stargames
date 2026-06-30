@@ -32,7 +32,14 @@ import type { ImportDiagnostics } from "./db-sync";
 export type { ImportDiagnostics } from "./db-sync";
 
 export type FinancialStatus = "Pago" | "Reserva" | "Pendente" | "MGMV";
-export type Situation = "Em Aberto" | "Enviado" | "Desistiu" | "Abandonou" | "Resolvido";
+export type Situation =
+  | "Em Aberto"
+  | "Enviado"
+  | "Retirado"
+  | "Removido"
+  | "Desistiu"
+  | "Abandonou"
+  | "Resolvido";
 
 export interface MGMVInstallment {
   number: number;
