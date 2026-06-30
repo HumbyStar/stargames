@@ -446,6 +446,7 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          can_receive_tasks: boolean
           created_at: string
           display_name: string | null
           id: string
@@ -453,6 +454,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          can_receive_tasks?: boolean
           created_at?: string
           display_name?: string | null
           id: string
@@ -460,6 +462,7 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          can_receive_tasks?: boolean
           created_at?: string
           display_name?: string | null
           id?: string
@@ -638,12 +641,17 @@ export type Database = {
           description: string | null
           due_at: string | null
           id: string
+          linked_entity_id: string | null
+          linked_entity_type: string | null
+          linked_filter: Json | null
           position: number
           priority: string
           product_id: string | null
+          source: string
           started_at: string | null
           status: string
           tags: string[]
+          task_type: string | null
           title: string
           updated_at: string
         }
@@ -657,12 +665,17 @@ export type Database = {
           description?: string | null
           due_at?: string | null
           id?: string
+          linked_entity_id?: string | null
+          linked_entity_type?: string | null
+          linked_filter?: Json | null
           position?: number
           priority?: string
           product_id?: string | null
+          source?: string
           started_at?: string | null
           status?: string
           tags?: string[]
+          task_type?: string | null
           title: string
           updated_at?: string
         }
@@ -676,14 +689,40 @@ export type Database = {
           description?: string | null
           due_at?: string | null
           id?: string
+          linked_entity_id?: string | null
+          linked_entity_type?: string | null
+          linked_filter?: Json | null
           position?: number
           priority?: string
           product_id?: string | null
+          source?: string
           started_at?: string | null
           status?: string
           tags?: string[]
+          task_type?: string | null
           title?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      user_responsibilities: {
+        Row: {
+          created_at: string
+          id: string
+          responsibility: Database["public"]["Enums"]["user_responsibility"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          responsibility: Database["public"]["Enums"]["user_responsibility"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          responsibility?: Database["public"]["Enums"]["user_responsibility"]
+          user_id?: string
         }
         Relationships: []
       }
@@ -767,6 +806,17 @@ export type Database = {
         | "envio"
         | "mgmv"
       punch_kind: "in" | "lunch_out" | "lunch_in" | "out"
+      user_responsibility:
+        | "cobranca"
+        | "mgmv"
+        | "envio"
+        | "importacao"
+        | "revisao_ia"
+        | "cadastro"
+        | "financeiro"
+        | "atendimento"
+        | "leiloes"
+        | "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -928,6 +978,18 @@ export const Constants = {
         "mgmv",
       ],
       punch_kind: ["in", "lunch_out", "lunch_in", "out"],
+      user_responsibility: [
+        "cobranca",
+        "mgmv",
+        "envio",
+        "importacao",
+        "revisao_ia",
+        "cadastro",
+        "financeiro",
+        "atendimento",
+        "leiloes",
+        "admin",
+      ],
     },
   },
 } as const
