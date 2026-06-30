@@ -1098,6 +1098,11 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             skippedAfterCorrection: 0,
           },
           ignoredItems: restoredIgnored,
+          recordsTotal: Number((stats as { recordsTotal?: number }).recordsTotal ?? 0),
+          recordsProcessed: Number((stats as { recordsProcessed?: number }).recordsProcessed ?? 0),
+          currentBatchSize: 0,
+          currentBatchProcessed: 0,
+          retrying: null,
           done: false,
           resumed: true,
         });
