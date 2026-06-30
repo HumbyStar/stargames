@@ -21,7 +21,7 @@ export interface AutomationSuggestion {
 
 export interface TrainingProfile {
   user_id: string;
-  business_facts: Record<string, unknown>;
+  business_facts: Record<string, string>;
   onboarding_answers: OnboardingAnswer[];
   documents: TrainingDoc[];
   onboarding_completed: boolean;
