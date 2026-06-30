@@ -297,10 +297,10 @@ function InlineSearch({ open, onToggle }: { open: boolean; onToggle: () => void 
       ref={wrapRef}
       data-tour="global-search"
       className={cn(
-        "hidden md:flex items-center h-10 rounded-full overflow-hidden transition-[width,background-color,box-shadow] duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
+        "hidden md:flex items-center h-10 rounded-full transition-[width,background-color,box-shadow] duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
         open
-          ? "w-[260px] bg-background border border-border shadow-sm"
-          : "w-10 bg-transparent border border-transparent",
+          ? "w-[260px] bg-background border border-border shadow-sm overflow-visible"
+          : "w-10 bg-transparent border border-transparent overflow-hidden",
       )}
     >
       <button
