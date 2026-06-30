@@ -946,6 +946,10 @@ export function productCollectionStatus(p: Product): {
   // exibimos uma tag informativa em vez de "MGMV vencido".
   if (p.financialStatus === "MGMV")
     return { label: "Incluído no MGMV", variant: "neutral" };
+  // Se o produto já foi resolvido (Enviado/Retirado/Removido/Desistiu/
+  // Abandonou/Resolvido), não exibir como vencido — mostrar o estado real.
+  if (isResolvedSituation(p))
+    return { label: p.situation, variant: "neutral" };
   if (p.financialStatus === "Reserva" && isOverdue(p.dueDate))
     return { label: "Reserva vencida", variant: "danger" };
   if (p.financialStatus === "Pendente" && isOverdue(p.dueDate))
