@@ -737,6 +737,13 @@ export function ConfiguracoesSection() {
               status="Use com cuidado"
               onOpen={() => setView("danger")}
             />
+            <SecondaryCard
+              icon={Brain}
+              title="Treinar I.A"
+              summary="Onboarding guiado + análise do sistema para gerar automações Python que reduzem o uso de IA."
+              status="Modo CEO"
+              onOpen={() => setAiTrainingOpen(true)}
+            />
           </div>
         </>
       )}
