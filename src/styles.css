@@ -446,6 +446,21 @@
   scroll-snap-align: none;
 }
 
+/* Tabela dentro de uma seção one-page:
+   - O cabeçalho fica fixo (sticky) ao topo do container de scroll da seção.
+   - O conteúdo da seção rola dentro da própria seção, não da página inteira.
+   - Garante que linhas grandes nunca passem por cima do cabeçalho. */
+.one-page-section table thead {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--color-background);
+  box-shadow: 0 1px 0 0 color-mix(in oklch, var(--color-border) 80%, transparent);
+}
+.one-page-section table thead th {
+  background: var(--color-background);
+}
+
 /* Glowing blue scrollbar — applied globally and inside modals */
 *::-webkit-scrollbar {
   width: 10px;
