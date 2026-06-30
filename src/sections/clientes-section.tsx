@@ -383,18 +383,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               {compact ? "Expandir" : "Compactar"}
             </Button>
             <ListExpansionToggle section="clients" />
-            <select
-              value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
-              className="h-9 rounded-md border border-input bg-background px-2 text-xs"
-              title="Máximo de linhas por carga"
-            >
-              {[10, 20, 30, 40, 50].map((n) => (
-                <option key={n} value={n}>
-                  Máx. {n}
-                </option>
-              ))}
-            </select>
           </div>
 
           {showFilters && (
@@ -657,16 +645,8 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
             {rows.length > 0 && (
               <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
                 <span>
-                  Exibindo {pagedRows.length} de {rows.length} cliente(s)
+                  {rows.length} cliente(s) carregado(s)
                 </span>
-                {hasMore ? (
-                  <LoadMoreButton
-                    count={Math.min(pageSize, rows.length - pagedRows.length)}
-                    onClick={() => setVisibleCount((c) => c + pageSize)}
-                  />
-                ) : (
-                  <span>Todos os clientes carregados.</span>
-                )}
               </div>
             )}
           </>
