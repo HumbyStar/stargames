@@ -286,19 +286,16 @@ function NavLink({
         // Anima apenas propriedades baratas (transform/colors/shadow) para
         // evitar reflow durante o scroll. `will-change-transform` deixa o
         // compositor reservar uma camada, eliminando travadas no hover.
-        "flex items-center gap-2 rounded-full text-sm font-medium will-change-transform transition-[transform,background-color,color,box-shadow] duration-200 ease-out hover:-translate-y-0.5 active:scale-95",
+        "flex items-center gap-2 rounded-full text-sm font-medium will-change-transform transition-[transform,background-color,color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 active:scale-95",
         compact ? "size-10 justify-center px-0 py-0" : "px-4 py-2",
         active
-          ? "bg-primary text-primary-foreground shadow-sm scale-[1.06] hover:-translate-y-0"
+          ? "bg-primary text-primary-foreground shadow-sm scale-[1.08] hover:-translate-y-0"
           : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground",
       )}
     >
       <Icon
         className={cn(
-          // Trocado de transition-all 700ms para apenas transform/color em
-          // 200ms — o 700ms causava "rastro" visível durante a troca de
-          // seção ativa quando o usuário rolava rápido entre seções.
-          "transition-[transform,color] duration-200 ease-out shrink-0",
+          "transition-[transform,color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] shrink-0",
           compact ? "size-5" : "size-4 opacity-90",
         )}
       />
@@ -723,8 +720,11 @@ function _FloatingNavbarImpl() {
       },
       {
         root: container,
-        rootMargin: "-40% 0px -40% 0px",
-        threshold: [0, 0.01, 0.1, 0.25, 0.5, 0.75, 1],
+        // Linha de mira mais estreita: a seção ativa muda assim que o topo
+        // ou o inferior cruza a faixa central, reconhecendo entrada/saída
+        // pelas bordas tanto descendo quanto subindo.
+        rootMargin: "-45% 0px -45% 0px",
+        threshold: [0, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1],
       },
     );
     const observed = new WeakSet<Element>();

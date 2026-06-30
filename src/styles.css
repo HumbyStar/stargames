@@ -437,14 +437,14 @@
 /* One-page sections */
 .one-page-section {
   min-height: 100vh;
-  padding: 120px 24px 56px;
+  padding: 84px 24px 24px;
   scroll-snap-align: start;
   scroll-snap-stop: always;
   scroll-margin-top: 0;
   border-top: 1px solid color-mix(in oklch, var(--color-border) 60%, transparent);
 }
 @media (min-width: 768px) {
-  .one-page-section { padding: 130px 40px 80px; }
+  .one-page-section { padding: 90px 40px 32px; }
 }
 .one-page-section:first-of-type {
   border-top: none;
