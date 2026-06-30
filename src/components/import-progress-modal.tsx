@@ -54,6 +54,11 @@ export type ImportProgressState = {
     date: string;
     folder: string;
   }>;
+  recordsTotal?: number;
+  recordsProcessed?: number;
+  currentBatchSize?: number;
+  currentBatchProcessed?: number;
+  retrying?: { attempt: number; reason: string } | null;
   done: boolean;
   resumed?: boolean; // carregado do banco após reload
 };
