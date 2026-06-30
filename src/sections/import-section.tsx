@@ -2125,7 +2125,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       />
 
       <Dialog open={zipFailuresOpen} onOpenChange={setZipFailuresOpen}>
-        <DialogContent className="max-w-2xl">
+ <DialogContent>
           <DialogHeader>
             <DialogTitle>
               {zipData?.parseFailures.length ?? 0} arquivo(s) não puderam ser lidos
@@ -2166,7 +2166,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       </Dialog>
 
       <Dialog open={!!rows} onOpenChange={(o) => { if (!o) setRows(null); }}>
-        <DialogContent className="max-w-[95vw] sm:max-w-6xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+ <DialogContent className="overflow-hidden flex flex-col p-0">
           <DialogHeader className="px-6 pt-6">
             <DialogTitle>Preview da importação</DialogTitle>
             <DialogDescription>
@@ -3290,7 +3290,7 @@ function ZipPreview({
       </Accordion>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
+ <DialogContent>
           <DialogHeader>
             <DialogTitle>Confirmar Importação</DialogTitle>
             <DialogDescription>

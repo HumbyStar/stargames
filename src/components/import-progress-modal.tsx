@@ -114,7 +114,7 @@ export function ImportProgressModal({
     const s = state.stats;
     return (
       <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-        <DialogContent className="max-w-2xl border-emerald-500/40 bg-gradient-to-b from-emerald-500/10 via-background to-emerald-500/5">
+ <DialogContent className="border-emerald-500/40 bg-gradient-to-b from-emerald-500/10 via-background to-emerald-500/5">
           <DialogHeader className="sr-only">
             <DialogTitle>Importação concluída</DialogTitle>
             <DialogDescription>Resumo da importação</DialogDescription>
@@ -184,7 +184,7 @@ export function ImportProgressModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o && (state.done || state.resumed)) onClose(); }}>
-      <DialogContent className="max-w-3xl" onInteractOutside={(e) => { if (!state.done) e.preventDefault(); }}>
+ <DialogContent onInteractOutside={(e) => { if (!state.done) e.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {state.resumed ? (

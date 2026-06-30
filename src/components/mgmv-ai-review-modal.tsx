@@ -202,7 +202,7 @@ export function MgmvAiReviewModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl">
+ <DialogContent>
         <DialogHeader>
           <DialogTitle>Revisão assistida por IA</DialogTitle>
           <DialogDescription>

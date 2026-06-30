@@ -689,7 +689,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
 
       {/* Modal cliente em tela cheia */}
       <Dialog open={!!drawerClient} onOpenChange={(o) => !o && setDrawerClientId(null)}>
-        <DialogContent className="max-w-[min(1200px,95vw)] sm:max-h-[92vh] sm:p-8">
+ <DialogContent>
           {drawerClient && (
             <ClientDrawer
               client={drawerClient}
@@ -1117,7 +1117,7 @@ function ClientModal({
         }
       }}
     >
-      <DialogContent className="max-w-xl sm:p-8">
+ <DialogContent>
         <DialogHeader>
           <DialogTitle className="text-xl">
             {state.client ? "Editar Cliente" : "Adicionar Cliente"}
@@ -1223,7 +1223,7 @@ function ProductModal({
         }
       }}
     >
-      <DialogContent className="max-w-3xl sm:max-h-[92vh] sm:p-8">
+ <DialogContent>
         <DialogHeader>
           <DialogTitle className="text-xl">
             {initial ? "Editar Produto" : "Adicionar Produto"}
