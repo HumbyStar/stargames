@@ -58,8 +58,6 @@ type Period =
   | "personalizado"
   | "maximo";
 
-const PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50] as const;
-const DEFAULT_PAGE_SIZE = 50;
 
 type SavedFilter = {
   id: string;
@@ -86,8 +84,6 @@ export function CollectionSection({
   const [period, setPeriod] = usePersistedState<Period>("collection.period", "todos");
   const [customFrom, setCustomFrom] = usePersistedState<string>("collection.customFrom", "");
   const [customTo, setCustomTo] = usePersistedState<string>("collection.customTo", "");
-  const [pageSize, setPageSize] = usePersistedState<number>("collection.pageSize", DEFAULT_PAGE_SIZE);
-  const [visibleCount, setVisibleCount] = useState<number>(DEFAULT_PAGE_SIZE);
   const [compact, setCompact] = useSectionCompact("collection");
   const [payTarget, setPayTarget] = useState<{ id: string; remaining: number; productName: string } | null>(null);
   const [payAmount, setPayAmount] = useState("");
@@ -250,14 +246,7 @@ export function CollectionSection({
     });
   }, [allRows, filter, period, customFrom, customTo, search, folderFilter, financialFilter, situationFilter, clients]);
 
-  const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
-
-  // Reseta a janela visível ao mudar filtros/tamanho.
-  useEffect(() => {
-    setVisibleCount(pageSize);
-  }, [pageSize, filter, period, customFrom, customTo, search, folderFilter, financialFilter, situationFilter]);
-
-  const hasMore = visible.length < filtered.length;
+  const visible = filtered;
 
   const totalAtraso =
     overdueProducts.reduce((a, p) => a + (p.totalValue - p.paidValue), 0) +
