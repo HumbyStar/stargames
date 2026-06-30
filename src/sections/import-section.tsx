@@ -3,6 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Accordion,
@@ -51,6 +52,7 @@ import {
   FileSpreadsheet,
   FileArchive,
   ChevronDown,
+  Search,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { analyzeListWithAI } from "@/lib/list-ai-analyze.functions";
