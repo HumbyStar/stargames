@@ -51,7 +51,13 @@ export const getMyAccess = createServerFn({ method: "GET" })
     const { supabase, userId, claims } = context;
 
     // Bootstrap: se ainda não há admin, promove o usuário atual.
-    await supabase.rpc("bootstrap_first_admin");
+    // A função é restrita ao service_role, então usamos o admin client.
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      await supabaseAdmin.rpc("bootstrap_first_admin");
+    } catch {
+      // bootstrap é best-effort; ignora falhas
+    }
 
     const { data: rolesRows } = await supabase
       .from("user_roles")
