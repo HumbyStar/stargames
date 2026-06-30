@@ -500,6 +500,11 @@
 .one-page-section .overflow-x-auto {
   overflow-y: visible;
 }
+/* Quando uma tabela precisa de scroll vertical próprio (lista controlada
+   pela barra interna), aplicar .table-scroll-y junto de overflow-x-auto. */
+.one-page-section .table-scroll-y {
+  overflow-y: auto !important;
+}
 
 /* Glowing blue scrollbar — applied globally and inside modals */
 *::-webkit-scrollbar {
