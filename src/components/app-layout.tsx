@@ -716,6 +716,8 @@ function _FloatingNavbarImpl() {
   const openSettings = useUiStore((s) => s.openSettings);
   const openHelp = useUiStore((s) => s.openHelp);
   const openNotifications = useUiStore((s) => s.openNotifications);
+  const closeNotifications = useUiStore((s) => s.closeNotifications);
+  const notificationsOpen = useUiStore((s) => s.notificationsOpen);
   const openConcierge = useUiStore((s) => s.openConcierge);
   const openFinance = useUiStore((s) => s.openFinance);
   const { unreadCount } = useNotifications();
