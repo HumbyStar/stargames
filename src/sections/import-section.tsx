@@ -959,19 +959,13 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   const [progressRowId, setProgressRowId] = useState<string | null>(null);
   const importRunning = !!(importProgress && !importProgress.done && !importProgress.resumed);
 
-  // Trava de navegação reforçada: intercepta qualquer mudança de rota com
-  // um modal de confirmação enquanto a importação está em andamento.
-  useBlocker({
+  // Trava de navegação reforçada: intercepta qualquer mudança de rota e
+  // dispara um modal de confirmação enquanto a importação está rodando.
+  // `enableBeforeUnload` também segura reload/fechar aba.
+  const blocker = useBlocker({
     shouldBlockFn: () => importRunning,
+    enableBeforeUnload: () => importRunning,
     withResolver: true,
-    blockerFn: async () => {
-      return await new Promise<boolean>((resolve) => {
-        const ok = window.confirm(
-          "⚠️ Importação em andamento!\n\nSair agora vai interromper o processamento — itens já importados ficam salvos, mas você precisará reenviar o ZIP para continuar.\n\nDeseja realmente sair desta tela?",
-        );
-        resolve(ok);
-      });
-    },
   });
 
   // Persiste o estado de progresso no banco (best-effort, não bloqueia a UI).
