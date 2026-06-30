@@ -804,7 +804,7 @@ function _FloatingNavbarImpl() {
         <div
           id="mobile-nav-menu"
           role="menu"
-          className="absolute right-2 top-[calc(100%+8px)] z-50 w-[280px] max-w-[calc(100vw-32px)] max-h-[calc(100vh-120px)] overflow-y-auto rounded-2xl border border-border bg-popover/95 backdrop-blur-xl shadow-xl ring-1 ring-foreground/5 md:hidden p-1.5 animate-in fade-in slide-in-from-top-2 duration-200"
+          className="absolute right-2 top-[calc(100%+8px)] z-50 w-[260px] max-w-[calc(100vw-32px)] rounded-2xl border border-border bg-popover/95 backdrop-blur-xl shadow-xl ring-1 ring-foreground/5 md:hidden p-1.5 animate-in fade-in slide-in-from-top-2 duration-200"
         >
           {navItems.map((i) => {
             const Icon = i.icon;
