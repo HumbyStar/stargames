@@ -271,6 +271,62 @@ function FloatingNavbar() {
   return _FloatingNavbarImpl();
 }
 
+function InlineSearch({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (open) requestAnimationFrame(() => inputRef.current?.focus());
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) {
+        // delegate to parent — parent owns the open state
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+  return (
+    <div
+      ref={wrapRef}
+      data-tour="global-search"
+      className={cn(
+        "hidden md:flex items-center h-10 rounded-full overflow-hidden transition-[width,background-color,box-shadow] duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
+        open
+          ? "w-[260px] bg-background border border-border shadow-sm"
+          : "w-10 bg-transparent border border-transparent",
+      )}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={open ? "Fechar busca" : "Buscar"}
+        className={cn(
+          "grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors",
+          !open && "hover:bg-foreground/10 hover:text-foreground",
+          open && "text-foreground",
+        )}
+      >
+        <Search className="size-5" />
+      </button>
+      <div
+        className={cn(
+          "min-w-0 flex-1 transition-opacity duration-300",
+          open ? "opacity-100 delay-150" : "opacity-0 pointer-events-none",
+        )}
+      >
+        {open && (
+          <SearchBox
+            inputRef={inputRef}
+            className="[&_input]:h-10 [&_input]:border-0 [&_input]:bg-transparent [&_input]:pl-1 [&_input]:pr-3 [&_input]:rounded-none [&_input]:focus:bg-transparent [&>svg]:hidden"
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface RightNavIconProps {
   id: NavbarIconId;
   isDark: boolean;
