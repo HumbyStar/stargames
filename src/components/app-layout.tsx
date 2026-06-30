@@ -794,18 +794,17 @@ function _FloatingNavbarImpl() {
           aria-expanded={openMobile}
           aria-controls="mobile-nav-menu"
         >
-          <span key={openMobile ? "x" : "menu"} className="inline-flex animate-in fade-in zoom-in-75 duration-200">
-            {openMobile ? <X className="size-5" /> : <Menu className="size-5" />}
-          </span>
+          <Menu className="size-5" />
         </button>
       </div>
-
-      {openMobile && (
-        <div
-          id="mobile-nav-menu"
-          role="menu"
-          className="absolute right-2 top-[calc(100%+8px)] z-50 w-[260px] max-w-[calc(100vw-32px)] rounded-2xl border border-border bg-popover/95 backdrop-blur-xl shadow-xl ring-1 ring-foreground/5 md:hidden p-1.5 animate-in fade-in slide-in-from-top-2 duration-200"
-        >
+    </nav>
+    {openMobile && (
+      <div
+        id="mobile-nav-menu"
+        role="menu"
+        style={{ top: `${(navRef.current?.getBoundingClientRect().bottom ?? 64) + 8}px` }}
+        className="fixed right-4 z-[60] w-[260px] max-w-[calc(100vw-32px)] rounded-2xl border border-border bg-popover/95 backdrop-blur-xl shadow-xl ring-1 ring-foreground/5 md:hidden p-1.5 animate-in fade-in slide-in-from-top-2 duration-200"
+      >
           {navItems.map((i) => {
             const Icon = i.icon;
             const active = activeSection === i.id;
@@ -855,7 +854,6 @@ function _FloatingNavbarImpl() {
           </button>
         </div>
       )}
-    </nav>
     </TooltipProvider>
   );
 }
