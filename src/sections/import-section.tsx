@@ -982,6 +982,14 @@ function validateRows(
     if (!r.product) errors.push("Produto sem nome");
     if (r.totalValue === null || !Number.isFinite(r.totalValue) || r.totalValue <= 0) errors.push("Valor inválido");
     if (r.situation && !VALID_SITUATION.includes(r.situation as (typeof VALID_SITUATION)[number])) errors.push("Situação inválida");
+    if (
+      String(r.financialStatus).toLowerCase() === "reserva" &&
+      r.paidValue !== null &&
+      Number.isFinite(r.paidValue) &&
+      (r.paidValue as number) < 10
+    ) {
+      errors.push("Valor mínimo de reserva é R$ 10");
+    }
     const found = phoneDigits ? findClientByPhone(phoneDigits) : undefined;
     const originalStatus = r.financialStatus;
     const total = Number(r.totalValue) || 0;
