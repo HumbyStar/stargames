@@ -438,7 +438,6 @@ interface RightNavIconProps {
   onFinance: () => void;
   onImport: () => void;
   onSettings: () => void;
-  onNotifications: () => void;
   onHelp: () => void;
   onToggleTheme: () => void;
   onSignOut: () => void;
@@ -453,13 +452,15 @@ function RightNavIcon({
   onFinance,
   onImport,
   onSettings,
-  onNotifications,
   onHelp,
   onToggleTheme,
   onSignOut,
 }: RightNavIconProps) {
   const baseBtn =
     "group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90";
+  const openNotifications = useUiStore((s) => s.openNotifications);
+  const closeNotifications = useUiStore((s) => s.closeNotifications);
+  const notificationsOpen = useUiStore((s) => s.notificationsOpen);
   switch (id) {
     case "search":
       return <InlineSearch open={searchOpen} onToggle={onSearch} />;
