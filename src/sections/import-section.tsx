@@ -1432,6 +1432,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       errorEntries: 0,
       skippedAfterCorrection: 0,
     };
+    const ignoredItems: NonNullable<ImportProgressState["ignoredItems"]> = [];
 
     // Agrupa entradas por pasta para processamento lazy/calmo.
     const byFolder = new Map<string, typeof zipData.entries>();
@@ -1488,6 +1489,14 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         if (!p.selected || p.errors.length > 0 || !p.product) return;
         if (p.duplicate) {
           stats.ignoredDuplicates++;
+          if (ignoredItems.length < 500) {
+            ignoredItems.push({
+              client: entry.client.name || entry.client.phone || "?",
+              product: p.product,
+              date: p.registerDate || "",
+              folder: entry.folderName || "(raiz)",
+            });
+          }
           return;
         }
         // Se o cliente tem um acordo MGMV aplicado nesta importação, qualquer
