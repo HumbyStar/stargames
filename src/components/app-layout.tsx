@@ -609,7 +609,7 @@ function _FloatingNavbarImpl() {
       }
     };
 
-    if (navHover) {
+    if (navHover || openMobile) {
       clearNavExitTimer();
       setNavDimmed(false);
       setNavProgress("loop");
@@ -633,7 +633,7 @@ function _FloatingNavbarImpl() {
     }, navbarCfg.animation.leaveMs);
 
     return clearNavExitTimer;
-  }, [navHover, scrolled, navbarCfg.animation.leaveMs]);
+  }, [navHover, openMobile, scrolled, navbarCfg.animation.leaveMs]);
 
   useEffect(() => {
     return () => {
