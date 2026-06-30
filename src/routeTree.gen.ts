@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated.index'
+import { Route as AuthenticatedQaRouteImport } from './routes/_authenticated.qa'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -27,27 +28,40 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedQaRoute = AuthenticatedQaRouteImport.update({
+  id: '/qa',
+  path: '/qa',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
+  '/qa': typeof AuthenticatedQaRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
+  '/qa': typeof AuthenticatedQaRoute
   '/': typeof AuthenticatedIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/qa': typeof AuthenticatedQaRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth'
+  fullPaths: '/' | '/auth' | '/qa'
   fileRoutesByTo: FileRoutesByTo
-  to: '/auth' | '/'
-  id: '__root__' | '/_authenticated' | '/auth' | '/_authenticated/'
+  to: '/auth' | '/qa' | '/'
+  id:
+    | '__root__'
+    | '/_authenticated'
+    | '/auth'
+    | '/_authenticated/qa'
+    | '/_authenticated/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -78,14 +92,23 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/qa': {
+      id: '/_authenticated/qa'
+      path: '/qa'
+      fullPath: '/qa'
+      preLoaderRoute: typeof AuthenticatedQaRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedQaRoute: typeof AuthenticatedQaRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedQaRoute: AuthenticatedQaRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }
 
