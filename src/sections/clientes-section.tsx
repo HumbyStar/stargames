@@ -141,6 +141,12 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const productsByClient = new Map<string, typeof products>();
+    for (const p of products) {
+      const arr = productsByClient.get(p.clientId);
+      if (arr) arr.push(p);
+      else productsByClient.set(p.clientId, [p]);
+    }
     return (
       clients
         // Seção Clientes lista apenas clientes comuns. Clientes MGMV (com
@@ -151,7 +157,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           return !isMgmv;
         })
         .map((c) => {
-          const ps = products.filter((p) => p.clientId === c.id);
+          const ps = productsByClient.get(c.id) ?? [];
           const totalPurchased = ps.reduce((a, p) => a + p.totalValue, 0);
           const totalOpen = ps
             .filter((p) => isOpenSituation(p))
