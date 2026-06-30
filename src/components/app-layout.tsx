@@ -712,6 +712,9 @@ function _FloatingNavbarImpl() {
     if (!container) return;
 
     // Active section: observa cada seção e marca como ativa quando entra na viewport.
+    // Active section: usa rootMargin centrado para que a seção mais próxima
+    // do meio do viewport seja a ativa, atualizando em tempo real durante o
+    // scroll. Re-observa quando seções lazy montam (substituem o wrapper).
     const sectionObserver = new IntersectionObserver(
       (entries) => {
         const visible = entries
@@ -719,12 +722,24 @@ function _FloatingNavbarImpl() {
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
         if (visible?.target.id) setActiveSection(visible.target.id);
       },
-      { root: container, threshold: [0.25, 0.5, 0.75] },
+      {
+        root: container,
+        // "linha de mira" central: o que estiver cruzando ~40% do viewport vence.
+        rootMargin: "-40% 0px -40% 0px",
+        threshold: [0, 0.01, 0.1, 0.25, 0.5, 0.75, 1],
+      },
     );
-    for (const item of navItems) {
-      const el = document.getElementById(item.id);
-      if (el) sectionObserver.observe(el);
-    }
+    const observeAll = () => {
+      for (const item of navItems) {
+        const el = document.getElementById(item.id);
+        if (el) sectionObserver.observe(el);
+      }
+    };
+    observeAll();
+    // MutationObserver para reaplicar a observação quando seções lazy
+    // são montadas e novos elementos com o id alvo entram no DOM.
+    const mo = new MutationObserver(() => observeAll());
+    mo.observe(container, { childList: true, subtree: true });
 
     // Scrolled flag: usa uma sentinela invisível no topo, sem ler scrollTop.
     // Quando a sentinela some da viewport => página rolou.
@@ -751,6 +766,7 @@ function _FloatingNavbarImpl() {
     return () => {
       sectionObserver.disconnect();
       scrollObserver.disconnect();
+      mo.disconnect();
       sentinel.remove();
       container.removeEventListener("scroll", onScroll);
       window.removeEventListener("scroll", onScroll);

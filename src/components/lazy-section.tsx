@@ -57,7 +57,7 @@ export function LazySection({
   return (
     <div
       ref={ref}
-      id={!visible ? anchorId : undefined}
+      id={anchorId}
       style={visible ? undefined : { minHeight }}
     >
       {visible ? (
