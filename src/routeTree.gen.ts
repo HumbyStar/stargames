@@ -13,6 +13,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated.index'
 import { Route as AuthenticatedQaRouteImport } from './routes/_authenticated.qa'
+import { Route as AuthenticatedNikostartRouteImport } from './routes/_authenticated.nikostart'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -33,14 +34,21 @@ const AuthenticatedQaRoute = AuthenticatedQaRouteImport.update({
   path: '/qa',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedNikostartRoute = AuthenticatedNikostartRouteImport.update({
+  id: '/nikostart',
+  path: '/nikostart',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
+  '/nikostart': typeof AuthenticatedNikostartRoute
   '/qa': typeof AuthenticatedQaRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
+  '/nikostart': typeof AuthenticatedNikostartRoute
   '/qa': typeof AuthenticatedQaRoute
   '/': typeof AuthenticatedIndexRoute
 }
@@ -48,18 +56,20 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/nikostart': typeof AuthenticatedNikostartRoute
   '/_authenticated/qa': typeof AuthenticatedQaRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/qa'
+  fullPaths: '/' | '/auth' | '/nikostart' | '/qa'
   fileRoutesByTo: FileRoutesByTo
-  to: '/auth' | '/qa' | '/'
+  to: '/auth' | '/nikostart' | '/qa' | '/'
   id:
     | '__root__'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/nikostart'
     | '/_authenticated/qa'
     | '/_authenticated/'
   fileRoutesById: FileRoutesById
@@ -99,15 +109,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedQaRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/nikostart': {
+      id: '/_authenticated/nikostart'
+      path: '/nikostart'
+      fullPath: '/nikostart'
+      preLoaderRoute: typeof AuthenticatedNikostartRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedNikostartRoute: typeof AuthenticatedNikostartRoute
   AuthenticatedQaRoute: typeof AuthenticatedQaRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedNikostartRoute: AuthenticatedNikostartRoute,
   AuthenticatedQaRoute: AuthenticatedQaRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }
