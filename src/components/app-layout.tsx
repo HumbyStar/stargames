@@ -1206,8 +1206,6 @@ function GlobalModals() {
   const closeSettings = useUiStore((s) => s.closeSettings);
   const helpOpen = useUiStore((s) => s.helpOpen);
   const closeHelp = useUiStore((s) => s.closeHelp);
-  const notificationsOpen = useUiStore((s) => s.notificationsOpen);
-  const closeNotifications = useUiStore((s) => s.closeNotifications);
   const financeOpen = useUiStore((s) => s.financeOpen);
   const closeFinance = useUiStore((s) => s.closeFinance);
 
