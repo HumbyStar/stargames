@@ -973,7 +973,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     try {
       const { data: userRes } = await supabase.auth.getUser();
       const uid = userRes.user?.id;
-      if (!uid) return;
+      if (!uid) return { ok: false as const, error: "Sem usuário autenticado" };
       const payload = {
         user_id: uid,
         file_hash: state.fileHash,
@@ -987,6 +987,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           ...state.stats,
           resetVersion: getResetVersion(),
           ignoredItems: (state.ignoredItems ?? []).slice(-500),
+          recordsTotal: state.recordsTotal ?? 0,
+          recordsProcessed: state.recordsProcessed ?? 0,
         },
         done: state.done,
         started_at: state.startedAt,
@@ -998,11 +1000,46 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         .maybeSingle();
       if (error) {
         console.warn("[import_progress] upsert falhou", error.message);
-        return;
+        return { ok: false as const, error: error.message };
       }
       if (data?.id) setProgressRowId(data.id);
+      return { ok: true as const };
     } catch (err) {
       console.warn("[import_progress] erro inesperado", err);
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) };
+    }
+  };
+
+  // Persiste com retentativa exponencial. Sob falhas de rede, NÃO perde o progresso:
+  // mantém o estado em memória, sinaliza retentativa no modal e tenta novamente até
+  // suceder (ou até o usuário fechar a aba). Continua no mesmo lote depois.
+  const persistProgressWithRetry = async (state: ImportProgressState, batchIdx: number) => {
+    const maxBackoffMs = 15000;
+    let attempt = 0;
+    while (true) {
+      const res = await persistProgress(state);
+      if (res?.ok) {
+        if (attempt > 0) {
+          setImportProgress((prev) => (prev ? { ...prev, retrying: null } : prev));
+        }
+        return;
+      }
+      attempt++;
+      const reason = res?.error ?? "rede indisponível";
+      console.warn(`[import_progress] tentativa ${attempt} no lote ${batchIdx} falhou: ${reason}`);
+      setImportProgress((prev) =>
+        prev ? { ...prev, retrying: { attempt, reason } } : prev,
+      );
+      const wait = Math.min(maxBackoffMs, 800 * 2 ** Math.min(attempt - 1, 6));
+      await new Promise<void>((r) => setTimeout(r, wait));
+      // Loop indefinidamente — o modal exibe a retentativa; o lote não avança até persistir.
+      if (attempt >= 50) {
+        // safety: após 50 tentativas (~10 min), encerra a espera e segue, mas mantém aviso
+        setImportProgress((prev) =>
+          prev ? { ...prev, retrying: { attempt, reason: `${reason} (continuando offline)` } } : prev,
+        );
+        return;
+      }
     }
   };
 
@@ -1061,6 +1098,11 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             skippedAfterCorrection: 0,
           },
           ignoredItems: restoredIgnored,
+          recordsTotal: Number((stats as { recordsTotal?: number }).recordsTotal ?? 0),
+          recordsProcessed: Number((stats as { recordsProcessed?: number }).recordsProcessed ?? 0),
+          currentBatchSize: 0,
+          currentBatchProcessed: 0,
+          retrying: null,
           done: false,
           resumed: true,
         });
@@ -1462,6 +1504,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     const folders = Array.from(byFolder.keys());
 
     const startedAtISO = new Date().toISOString();
+    const recordsTotal = Array.from(byFolder.values()).reduce((acc, arr) => acc + arr.length, 0);
+    let recordsProcessed = 0;
     const initialState: ImportProgressState = {
       fileHash: zipData.fileHash,
       zipName: zipData.zipName,
@@ -1471,6 +1515,11 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       messages: [`📦 Abrindo ZIP "${zipData.zipName}"…`, `🗂️ ${folders.length} pasta(s) na esteira.`],
       errors: [],
       stats: { ...stats },
+      recordsTotal,
+      recordsProcessed: 0,
+      currentBatchSize: 0,
+      currentBatchProcessed: 0,
+      retrying: null,
       done: false,
     };
     setImportProgress(initialState);
@@ -1575,6 +1624,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           ? {
               ...prev,
               currentIdx: i,
+              currentBatchSize: entries.length,
+              currentBatchProcessed: 0,
               messages: [...prev.messages, `📂 Entrando em "${folder}" (${entries.length} cliente${entries.length === 1 ? "" : "s"})…`],
             }
           : prev,
@@ -1582,6 +1633,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       await wait(500);
       const before = { ...stats };
       const folderErrors: string[] = [];
+      let batchDone = 0;
       entries.forEach((entry) => {
         try {
           processEntry(entry);
@@ -1589,6 +1641,13 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           const msg = err instanceof Error ? err.message : String(err);
           folderErrors.push(`${folder} › ${entry.client?.name ?? "?"}: ${msg}`);
           stats.errorEntries++;
+        }
+        batchDone++;
+        recordsProcessed++;
+        if (batchDone % 25 === 0) {
+          setImportProgress((prev) =>
+            prev ? { ...prev, currentBatchProcessed: batchDone, recordsProcessed } : prev,
+          );
         }
       });
       const dC = stats.createdClients - before.createdClients;
@@ -1602,6 +1661,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           currentIdx: i + 1,
           stats: { ...stats },
           ignoredItems: ignoredItems.slice(),
+          recordsProcessed,
+          currentBatchProcessed: entries.length,
           messages: [
             ...prev.messages,
             `✅ "${folder}" — ${dC} novo(s), ${dU} atualizado(s), ${dP} produto(s).`,
@@ -1610,7 +1671,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         };
         return nextState;
       });
-      if (nextState) void persistProgress(nextState);
+      if (nextState) {
+        // Aguarda persistência com retentativa automática — não perde progresso de rede.
+        await persistProgressWithRetry(nextState, i);
+      }
       await wait(450);
     }
 
@@ -1651,7 +1715,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       };
       return finalState;
     });
-    if (finalState) await persistProgress(finalState);
+    if (finalState) await persistProgressWithRetry(finalState, folders.length);
     try {
       const { data: userRes } = await supabase.auth.getUser();
       const uid = userRes.user?.id;
