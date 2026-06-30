@@ -120,14 +120,12 @@ export function MGMVSection({
 }: {
   onScrollTo: (id: string) => void;
 }) {
-  const {
-    clients,
-    products,
-    openClient,
-    payMGMVInstallment,
-    setMGMVAgreement,
-    applyAiReviewToAgreement,
-  } = useStore();
+  const clients = useStore((s) => s.clients);
+  const products = useStore((s) => s.products);
+  const openClient = useStore((s) => s.openClient);
+  const payMGMVInstallment = useStore((s) => s.payMGMVInstallment);
+  const setMGMVAgreement = useStore((s) => s.setMGMVAgreement);
+  const applyAiReviewToAgreement = useStore((s) => s.applyAiReviewToAgreement);
   const [chip, setChip] = usePersistedState<MgmvChip>("mgmv.chip", "todos");
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
