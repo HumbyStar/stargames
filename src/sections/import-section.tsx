@@ -873,6 +873,27 @@ function parseTextList(input: string): Omit<ParsedRow, "clientFound" | "result" 
   return productLines.map((line, idx) => {
     const parts = line.split("-").map((s) => s.trim());
     const [name, phone, product, platform, value, status] = parts;
+    // Normaliza status do formato padrão. Regras:
+    //  - "Reserva"        → financialStatus "Reserva", paidValue padrão R$10
+    //  - "Reserva(30)"    → financialStatus "Reserva", paidValue R$30
+    //  - "Pago"/"Pendente"/"MGMV" passam direto
+    //  - vazio/desconhecido fica como veio para o validateRows tratar
+    const rawStatus = String(status ?? "").trim();
+    const statusLower = rawStatus.toLowerCase();
+    let normalizedStatus = rawStatus;
+    let paidValue: number | null = null;
+    if (/^reserva\b/.test(statusLower)) {
+      const m = rawStatus.match(/\(\s*([\d.,]+)\s*\)/);
+      paidValue = m ? parseValue(m[1]) : 10;
+      if (!Number.isFinite(paidValue)) paidValue = 10;
+      normalizedStatus = "Reserva";
+    } else if (statusLower.includes("pago")) {
+      normalizedStatus = "Pago";
+    } else if (statusLower.includes("mgmv")) {
+      normalizedStatus = "MGMV";
+    } else if (statusLower.includes("pendente")) {
+      normalizedStatus = "Pendente";
+    }
     return {
       line: idx + 1,
       date: headerDate,
@@ -881,8 +902,8 @@ function parseTextList(input: string): Omit<ParsedRow, "clientFound" | "result" 
       product: product ?? "",
       platform: platform ?? "",
       totalValue: parseValue(value),
-      paidValue: null,
-      financialStatus: status ?? "",
+      paidValue,
+      financialStatus: normalizedStatus,
       situation: "Em Aberto",
       registerDate: headerDate ? brDateToISO(headerDate) : null,
       dueDate: null,
