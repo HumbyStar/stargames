@@ -1,56 +1,72 @@
-## Diagnóstico
+## Diagnóstico da lentidão
 
-O bug está concentrado no **importador**, na função `normalizeSituationBR` em `src/sections/import-section.tsx` (linhas 124–130). Hoje ela só reconhece 3 termos da planilha do Notion:
+Mapeei a árvore principal (`/` → `OnePage`) e os pontos críticos de performance. A lentidão tem 4 causas combinadas:
 
-- `entregue` / `enviado` → `Enviado`
-- `desistiu` → `Desistiu`
-- `abandonou` → `Abandonou`
-- **qualquer outra coisa → `Em Aberto`** ← causa do bug
+### 1. A home renderiza TODAS as sessões grandes ao mesmo tempo
+`src/routes/_authenticated.index.tsx` monta simultaneamente `DashboardSection`, `ClientesSection` (1.378 linhas), `EquipeSection` (764), `MGMVSection` (719) e `CollectionSection` (979) — todas com tabelas, filtros e cálculos. Cada navegação por âncora (`#clientes`, `#mgmv`, etc.) só rola a página; o React continua mantendo tudo montado e re-renderizando.
 
-Consequência: quando a planilha vem com `Retirado`, `Removido`, `MGMV`, ou qualquer variação não prevista (acentos, abreviações, "OK", "Quitado", etc.), a importação grava `situation = "Em Aberto"`. A partir daí, as regras `shouldAppearInCollection`, `generalStatus` e o `totalOpen` da seção Clientes — que filtram por `situation === "Em Aberto"` — exibem o cliente como em cobrança e inflam "Valores a Receber".
+### 2. `useStore()` sem seletor causa re-render em cascata
+Locais que assinam o store inteiro (qualquer mudança de qualquer campo dispara render completo das sessões pesadas):
+- `_authenticated.index.tsx:48` → `const { clients, products } = useStore();`
+- `clientes-section.tsx:89` → desestruturação ampla
+- `collection-section.tsx:80`
+- `mgmv-section.tsx:130`
+- `import-section.tsx:983`
+- `dashboard-drilldown-modal.tsx:327`
+- `concierge-modal.tsx`, `finance-dashboard.tsx`
 
-A regra correta (PDF):
-- **Enviado / Retirado** → produto entregue (`Enviado`)
-- **Removido / Desistiu** → cliente abandonou (`Desistiu` / `Abandonou`)
-- **MGMV** → produto consolidado em acordo (`Resolvido`, com `financialStatus = MGMV`)
-- **Em branco** → único caso que vira `Em Aberto`
-- **Qualquer outro texto preenchido** → NÃO é "Em Aberto"; marcar como `Resolvido` e sinalizar para revisão manual (pode haver observação no Notion)
+Zustand sem seletor compara por igualdade referencial do estado inteiro — qualquer `set(...)` re-renderiza tudo. Combinado com (1), uma única edição (pagamento, abrir cliente, mudar filtro persistido) re-renderiza ~7.000 linhas de JSX.
 
-## Mudanças
+### 3. Filtros pesados sem memoização estável
+`clientes-section` reconstrói `rows` (lista, soma, status por cliente) a cada render. Como dependências instáveis vêm de `useStore()` sem selector, `useMemo` não ajuda (o array `clients/products` é nova referência a cada `set`). O mesmo padrão aparece em `collection-section` e `mgmv-section`.
 
-### 1. `src/lib/store.ts`
-- Estender o tipo `Situation` para incluir `"Retirado"` e `"Removido"` (mapeáveis 1:1 às regras do Notion), mantendo retrocompatibilidade.
-- Adicionar helper `isResolvedSituation(p)` que retorna `true` para `Enviado | Retirado | Removido | Desistiu | Abandonou | Resolvido` ou quando `financialStatus === "MGMV"`.
-- Em `shouldAppearInCollection`: trocar a checagem `situation === "Em Aberto"` por `!isResolvedSituation(p)` — assim só entra na cobrança quem realmente está em aberto.
+### 4. Persistência síncrona em cada mutação
+Cada `addProduct`, `updateProduct`, `registerPayment` chama `dbUpsertProduct` dentro do `set` (linhas 513–651 em `store.ts`). São N chamadas sequenciais ao backend durante operações em lote (importação, pagamentos múltiplos), o que trava a UI thread porque o `set` é processado de forma contígua.
 
-### 2. `src/sections/import-section.tsx` — coração da correção
-- Reescrever `normalizeSituationBR` para:
-  - Normalizar removendo acentos e espaços.
-  - Reconhecer explicitamente: `enviado|entregue|entreguei|retirado|retirou` → `Enviado`; `removido|removi|removeu` → `Removido`; `desistiu|desistencia|cancelou` → `Desistiu`; `abandonou|abandono` → `Abandonou`; `mgmv|acordo|parcelado` → `Resolvido` (e sinalizar para o caller marcar `financialStatus = MGMV`).
-  - **Situação vazia** → `Em Aberto` (única forma legítima de chegar nesse estado).
-  - **Texto preenchido mas não reconhecido** → retornar `Resolvido` + warning "Situação '<valor original>' não reconhecida — verifique observação no Notion." Isso evita a dupla cobrança citada no PDF.
-- Em `parseProductsTable` (linha ~577): trocar o warning genérico "Situação vazia" para deixar claro que **só vazio** vira `Em Aberto`; quando o reconhecedor retornar `Resolvido` por fallback, propagar o warning para a UI de revisão da importação.
-- Atualizar `VALID_SITUATION` e `SITUATIONS` (linhas 62, 3478) para incluir `Retirado`, `Removido` e `Resolvido` nas validações e selects do editor manual da importação.
+## Mudanças propostas
 
-### 3. `src/sections/clientes-section.tsx`
-- `totalOpen` (linha 155): trocar `p.situation === "Em Aberto"` por `!isResolvedSituation(p)` para o total bater com a nova regra.
-- `generalStatus` (linhas 58, 62, 66): mesma troca, garantindo que clientes com produtos `Retirado/Removido/Resolvido` não apareçam como "Reserva vencida" / "Pendente".
+### A. Code-splitting da home — ganho principal
+- `src/routes/_authenticated.index.tsx`: converter `ClientesSection`, `EquipeSection`, `MGMVSection`, `CollectionSection` em `lazy()` envoltos em `<Suspense fallback={<SectionSkeleton />}>`.
+- Carregar cada sessão apenas quando entra no viewport (`IntersectionObserver` em um wrapper `<LazySection id="clientes">`). Resultado: a primeira pintura mostra só Dashboard; as outras sessões só montam ao rolar/navegar até elas.
+- Arquivos novos: `src/components/lazy-section.tsx`.
 
-### 4. `src/sections/collection-section.tsx`
-- Filtro `em_aberto` (linha 163): aplicar `!isResolvedSituation(p)` em vez do label atual, para o card "Em aberto" refletir só os realmente abertos.
-- Garantir que `productCollectionStatus` retorne label neutro ("Resolvido", "Enviado", "Removido") quando o produto não está mais em aberto, para não aparecer como vencido no histórico.
+### B. Trocar `useStore()` por seletores granulares
+Refatorar os 7 pontos listados acima para selecionar apenas o que cada componente usa, com `useShallow` quando precisar de várias propriedades:
+- `import { useShallow } from "zustand/react/shallow"`
+- Ex.: `const { clients, products } = useStore(useShallow((s) => ({ clients: s.clients, products: s.products })))`
+- Ações (`addClient`, `updateProduct`, etc.) viram seletores individuais — funções têm referência estável, então não causam render.
 
-### 5. Migração one-shot dos dados já importados (rodada local no store)
-- Em `src/lib/store.ts`, no bloco de auto-sincronização já existente (linha ~1197), adicionar uma passada única que: para todo `Product` com `situation === "Em Aberto"` cujo `financialStatus === "MGMV"`, reescrever para `Resolvido`. Isso conserta retroativamente clientes MGMV que já foram importados errado, sem precisar reimportar.
-- Para os demais casos (Retirado/Removido vindos como "Em Aberto"), não há como inferir automaticamente — esses só são corrigidos na próxima importação. Documentar isso no resumo final do importador (já existe o painel de itens ignorados/avisos).
+Sem isso, o code-split de (A) é parcialmente desperdiçado: abrir um modal ainda dispararia render das sessões montadas.
+
+### C. Memoização efetiva nas sessões pesadas
+Depois de (B), `useMemo` em `rows`/`filtered`/`totals` passa a funcionar (deps estáveis). Estabilizar:
+- `clientes-section.tsx` `rows` (linhas 144–214)
+- `collection-section.tsx` filtro `em_aberto` e listas derivadas
+- `mgmv-section.tsx` agregações por cliente
+- Indexar `products` por `clientId` uma única vez com `useMemo(() => groupBy(products, 'clientId'), [products])` para eliminar o `products.filter(p => p.clientId === c.id)` em O(N×M).
+
+### D. Debounce de persistência no store
+Em `src/lib/store.ts`, trocar as chamadas diretas `dbUpsertProduct(...)` dentro de `set(...)` por um agregador `queueProductUpsert(prod)` que coalesça por `id` e faz `dbUpsertProductsAsync(batch)` em `requestIdleCallback`/microtask. Mesmo padrão para `dbUpsertClient`. Mutações isoladas pela UI continuam com latência similar; operações em lote (importação, regravação de situações no `hydrate`) deixam de bloquear.
+
+### E. Quick wins adicionais
+- `src/components/app-layout.tsx` (1.086 linhas com vários `useEffect`): mover handlers de scroll/intersection para `passive: true` e garantir cleanup; revisar o `useEffect` na linha 1024 (`setTimeout` sem cleanup).
+- `tutorial-runner.tsx`: o loop `setTimeout(tryFind, 120)` por 20 tentativas (linhas 89–91) roda em paralelo com renders pesados. Adicionar guarda `cancelled` no cleanup.
 
 ## Validação
 
-- Atualizar/estender `src/sections/import-section.mgmv.test.ts` (ou criar `import-section.situation.test.ts`) cobrindo: planilha com Situação `Retirado`, `Removido`, `MGMV`, `Enviado`, vazia, e texto desconhecido — verificando o `situation` resultante e a lista de warnings.
-- Rodar `tsgo --noEmit` e `bunx vitest run` para garantir tipagem e testes.
-- Smoke manual: importar um ZIP de exemplo e conferir que o card "Em aberto" e "Valores a Receber" não contam mais os clientes com Situação preenchida.
+- `tsgo --noEmit` e `bunx vitest run` (54 testes existentes).
+- Smoke com Playwright headless: medir `performance.now()` entre o clique em "Ver Clientes" e a primeira pintura visível da tabela; alvo < 500 ms com ~1k clientes / ~3k produtos.
+- Verificar via React DevTools Profiler (manual) que abrir/fechar um modal não re-renderiza `ClientesSection` quando o foco está no Dashboard.
+
+## Ordem de execução (incremental, cada passo é mergeable)
+
+1. (B) Seletores granulares — refator mecânico, baixo risco.
+2. (A) Lazy sections + IntersectionObserver — maior ganho perceptível.
+3. (C) Memoização e índice por `clientId`.
+4. (D) Debounce de upsert.
+5. (E) Limpeza de efeitos.
 
 ## Fora de escopo
 
-- Nenhuma mudança em RLS, schema do banco ou edge functions — o bug é 100% client-side de parsing/exibição.
-- Sem alteração nos fluxos de MGMV, IA, ou Treinar I.A.
+- Sem mudanças de schema, RLS, edge functions ou regras de negócio (MGMV, importador, IA).
+- Sem alteração visual; apenas estrutura de render e persistência.

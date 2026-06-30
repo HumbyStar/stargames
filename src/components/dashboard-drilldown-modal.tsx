@@ -323,8 +323,12 @@ export function DashboardDrilldownModal({
   origin?: string;
   onBackToConcierge?: () => void;
 }) {
-  const { clients, products, openClient, registerPayment, setProductSituation, payMGMVInstallment } =
-    useStore();
+  const clients = useStore((s) => s.clients);
+  const products = useStore((s) => s.products);
+  const openClient = useStore((s) => s.openClient);
+  const registerPayment = useStore((s) => s.registerPayment);
+  const setProductSituation = useStore((s) => s.setProductSituation);
+  const payMGMVInstallment = useStore((s) => s.payMGMVInstallment);
   const [search, setSearch] = useState("");
 
   const config = cardId ? CARDS[cardId] : null;

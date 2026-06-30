@@ -970,17 +970,15 @@ function validateRows(
 }
 
 export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void }) {
-  const {
-    findClientByPhone,
-    addClient,
-    updateClient,
-    addProduct,
-    openClient,
-    updateClientNotes,
-    setMGMVAgreement,
-    addImportHistory,
-    persistConfirmedImport,
-  } = useStore();
+  const findClientByPhone = useStore((s) => s.findClientByPhone);
+  const addClient = useStore((s) => s.addClient);
+  const updateClient = useStore((s) => s.updateClient);
+  const addProduct = useStore((s) => s.addProduct);
+  const openClient = useStore((s) => s.openClient);
+  const updateClientNotes = useStore((s) => s.updateClientNotes);
+  const setMGMVAgreement = useStore((s) => s.setMGMVAgreement);
+  const addImportHistory = useStore((s) => s.addImportHistory);
+  const persistConfirmedImport = useStore((s) => s.persistConfirmedImport);
   const products = useStore((s) => s.products);
   const clients = useStore((s) => s.clients);
   const importHistory = useStore((s) => s.importHistory);

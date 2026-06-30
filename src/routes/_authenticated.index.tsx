@@ -1,16 +1,26 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useState } from "react";
+import { lazy, useCallback, useMemo, useState } from "react";
 import { AppLayout } from "@/components/app-layout";
 import { Alert, Card, MetricCard, PageHeader, StackedBar } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { useStore, isOverdue, shouldAppearInCollection, formatBRL } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
-import { ClientesSection } from "@/sections/clientes-section";
-import { CollectionSection } from "@/sections/collection-section";
-import { MGMVSection } from "@/sections/mgmv-section";
-import { EquipeSection } from "@/sections/equipe-section";
 import { DashboardIntegrityCard } from "@/components/dashboard-integrity-card";
 import { DashboardDrilldownModal, type DashboardCardId } from "@/components/dashboard-drilldown-modal";
+import { LazySection } from "@/components/lazy-section";
+
+const ClientesSection = lazy(() =>
+  import("@/sections/clientes-section").then((m) => ({ default: m.ClientesSection })),
+);
+const CollectionSection = lazy(() =>
+  import("@/sections/collection-section").then((m) => ({ default: m.CollectionSection })),
+);
+const MGMVSection = lazy(() =>
+  import("@/sections/mgmv-section").then((m) => ({ default: m.MGMVSection })),
+);
+const EquipeSection = lazy(() =>
+  import("@/sections/equipe-section").then((m) => ({ default: m.EquipeSection })),
+);
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
@@ -36,51 +46,109 @@ function OnePage() {
   return (
     <AppLayout>
       <DashboardSection onScrollTo={onScrollTo} />
-      <ClientesSection onScrollTo={onScrollTo} />
-      <EquipeSection />
-      <MGMVSection onScrollTo={onScrollTo} />
-      <CollectionSection onScrollTo={onScrollTo} />
+      <LazySection anchorId="clientes">
+        <ClientesSection onScrollTo={onScrollTo} />
+      </LazySection>
+      <LazySection anchorId="equipe">
+        <EquipeSection />
+      </LazySection>
+      <LazySection anchorId="mgmv">
+        <MGMVSection onScrollTo={onScrollTo} />
+      </LazySection>
+      <LazySection anchorId="collection">
+        <CollectionSection onScrollTo={onScrollTo} />
+      </LazySection>
     </AppLayout>
   );
 }
 
 function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) {
-  const { clients, products } = useStore();
+  const clients = useStore((s) => s.clients);
+  const products = useStore((s) => s.products);
   const openImport = useUiStore((s) => s.openImport);
   const [activeCard, setActiveCard] = useState<DashboardCardId | null>(null);
   const openCard = (id: DashboardCardId) => setActiveCard(id);
 
-  const overdueProducts = products.filter(shouldAppearInCollection);
-  const reservasAtivas = products.filter(
-    (p) => p.financialStatus === "Reserva" && p.situation === "Em Aberto",
-  ).length;
-  const reservasVencidas = products.filter(
-    (p) => p.financialStatus === "Reserva" && p.situation === "Em Aberto" && isOverdue(p.dueDate),
-  ).length;
-  const pendencias = products.filter(
-    (p) => p.financialStatus === "Pendente" && p.situation === "Em Aberto",
-  ).length;
-  const clientesMGMV = clients.filter((c) => c.mgmv).length;
-  const mgmvVencidas = clients.reduce(
-    (acc, c) =>
-      acc + (c.mgmv?.installments.filter((i) => !i.paid && isOverdue(i.dueDate)).length ?? 0),
-    0,
-  );
-  const pagosAgEnvio = products.filter(
-    (p) => p.financialStatus === "Pago" && p.situation === "Em Aberto",
-  ).length;
-  const enviados = products.filter((p) => p.situation === "Enviado").length;
-  const desistencias = products.filter((p) => p.situation === "Desistiu").length;
-  const abandonos = products.filter((p) => p.situation === "Abandonou").length;
+  const stats = useMemo(() => {
+    let reservasAtivas = 0;
+    let reservasVencidas = 0;
+    let pendencias = 0;
+    let pagosAgEnvio = 0;
+    let enviados = 0;
+    let desistencias = 0;
+    let abandonos = 0;
+    let aberto = 0;
+    let finPago = 0;
+    let finReserva = 0;
+    let finMGMV = 0;
+    let finPend = 0;
+    const overdueProducts: typeof products = [];
+    for (const p of products) {
+      if (p.financialStatus === "Reserva" && p.situation === "Em Aberto") {
+        reservasAtivas++;
+        if (isOverdue(p.dueDate)) reservasVencidas++;
+      }
+      if (p.financialStatus === "Pendente" && p.situation === "Em Aberto") pendencias++;
+      if (p.financialStatus === "Pago" && p.situation === "Em Aberto") pagosAgEnvio++;
+      if (p.situation === "Em Aberto") aberto++;
+      if (p.situation === "Enviado") enviados++;
+      else if (p.situation === "Desistiu") desistencias++;
+      else if (p.situation === "Abandonou") abandonos++;
+      if (p.financialStatus === "Pago") finPago++;
+      else if (p.financialStatus === "Reserva") finReserva++;
+      else if (p.financialStatus === "MGMV") finMGMV++;
+      else if (p.financialStatus === "Pendente") finPend++;
+      if (shouldAppearInCollection(p)) overdueProducts.push(p);
+    }
+    return {
+      reservasAtivas,
+      reservasVencidas,
+      pendencias,
+      pagosAgEnvio,
+      enviados,
+      desistencias,
+      abandonos,
+      aberto,
+      finPago,
+      finReserva,
+      finMGMV,
+      finPend,
+      overdueProducts,
+    };
+  }, [products]);
+
+  const { clientesMGMV, mgmvVencidas } = useMemo(() => {
+    let cm = 0;
+    let mv = 0;
+    for (const c of clients) {
+      if (c.mgmv) cm++;
+      if (c.mgmv) {
+        for (const i of c.mgmv.installments) {
+          if (!i.paid && isOverdue(i.dueDate)) mv++;
+        }
+      }
+    }
+    return { clientesMGMV: cm, mgmvVencidas: mv };
+  }, [clients]);
+
+  const {
+    reservasAtivas,
+    reservasVencidas,
+    pendencias,
+    pagosAgEnvio,
+    enviados,
+    desistencias,
+    abandonos,
+    aberto,
+    finPago,
+    finReserva,
+    finMGMV,
+    finPend,
+    overdueProducts,
+  } = stats;
 
   const total = products.length || 1;
   const pct = (n: number) => Math.round((n / total) * 100);
-  const finPago = products.filter((p) => p.financialStatus === "Pago").length;
-  const finReserva = products.filter((p) => p.financialStatus === "Reserva").length;
-  const finMGMV = products.filter((p) => p.financialStatus === "MGMV").length;
-  const finPend = products.filter((p) => p.financialStatus === "Pendente").length;
-
-  const aberto = products.filter((p) => p.situation === "Em Aberto").length;
 
   return (
     <section id="dashboard" data-tour="dashboard-section" className="one-page-section">
