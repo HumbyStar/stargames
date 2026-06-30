@@ -35,6 +35,87 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_automations: {
+        Row: {
+          applies_to: string
+          created_at: string
+          description: string
+          estimated_ai_savings: string
+          id: string
+          name: string
+          python_code: string
+          reasoning: string
+          scope: string
+          status: string
+          trigger: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          applies_to?: string
+          created_at?: string
+          description?: string
+          estimated_ai_savings?: string
+          id?: string
+          name: string
+          python_code?: string
+          reasoning?: string
+          scope?: string
+          status?: string
+          trigger?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          applies_to?: string
+          created_at?: string
+          description?: string
+          estimated_ai_savings?: string
+          id?: string
+          name?: string
+          python_code?: string
+          reasoning?: string
+          scope?: string
+          status?: string
+          trigger?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_training_profile: {
+        Row: {
+          business_facts: Json
+          created_at: string
+          documents: Json
+          last_analysis_at: string | null
+          onboarding_answers: Json
+          onboarding_completed: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          business_facts?: Json
+          created_at?: string
+          documents?: Json
+          last_analysis_at?: string | null
+          onboarding_answers?: Json
+          onboarding_completed?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          business_facts?: Json
+          created_at?: string
+          documents?: Json
+          last_analysis_at?: string | null
+          onboarding_answers?: Json
+          onboarding_completed?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       app_settings: {
         Row: {
           id: string
