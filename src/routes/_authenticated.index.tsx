@@ -1,16 +1,26 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useState } from "react";
+import { lazy, useCallback, useState } from "react";
 import { AppLayout } from "@/components/app-layout";
 import { Alert, Card, MetricCard, PageHeader, StackedBar } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { useStore, isOverdue, shouldAppearInCollection, formatBRL } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
-import { ClientesSection } from "@/sections/clientes-section";
-import { CollectionSection } from "@/sections/collection-section";
-import { MGMVSection } from "@/sections/mgmv-section";
-import { EquipeSection } from "@/sections/equipe-section";
 import { DashboardIntegrityCard } from "@/components/dashboard-integrity-card";
 import { DashboardDrilldownModal, type DashboardCardId } from "@/components/dashboard-drilldown-modal";
+import { LazySection } from "@/components/lazy-section";
+
+const ClientesSection = lazy(() =>
+  import("@/sections/clientes-section").then((m) => ({ default: m.ClientesSection })),
+);
+const CollectionSection = lazy(() =>
+  import("@/sections/collection-section").then((m) => ({ default: m.CollectionSection })),
+);
+const MGMVSection = lazy(() =>
+  import("@/sections/mgmv-section").then((m) => ({ default: m.MGMVSection })),
+);
+const EquipeSection = lazy(() =>
+  import("@/sections/equipe-section").then((m) => ({ default: m.EquipeSection })),
+);
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
@@ -36,16 +46,25 @@ function OnePage() {
   return (
     <AppLayout>
       <DashboardSection onScrollTo={onScrollTo} />
-      <ClientesSection onScrollTo={onScrollTo} />
-      <EquipeSection />
-      <MGMVSection onScrollTo={onScrollTo} />
-      <CollectionSection onScrollTo={onScrollTo} />
+      <LazySection anchorId="clientes">
+        <ClientesSection onScrollTo={onScrollTo} />
+      </LazySection>
+      <LazySection anchorId="equipe">
+        <EquipeSection />
+      </LazySection>
+      <LazySection anchorId="mgmv">
+        <MGMVSection onScrollTo={onScrollTo} />
+      </LazySection>
+      <LazySection anchorId="collection">
+        <CollectionSection onScrollTo={onScrollTo} />
+      </LazySection>
     </AppLayout>
   );
 }
 
 function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) {
-  const { clients, products } = useStore();
+  const clients = useStore((s) => s.clients);
+  const products = useStore((s) => s.products);
   const openImport = useUiStore((s) => s.openImport);
   const [activeCard, setActiveCard] = useState<DashboardCardId | null>(null);
   const openCard = (id: DashboardCardId) => setActiveCard(id);
