@@ -171,7 +171,7 @@ export function AccessManagementDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl">
+ <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldCheck className="size-5" /> Gerenciar acesso
@@ -569,7 +569,7 @@ function CreateUserDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+ <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="size-4" /> Novo usuário
@@ -701,7 +701,7 @@ function EditResponsibilitiesDialog({
         }
       }}
     >
-      <DialogContent>
+ <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldCheck className="size-4" /> Responsabilidades operacionais
@@ -769,7 +769,7 @@ function ResetPasswordDialog({
   });
   return (
     <Dialog open={!!user} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent>
+ <DialogContent>
         <DialogHeader>
           <DialogTitle>Redefinir senha</DialogTitle>
           <DialogDescription>{user?.email}</DialogDescription>
@@ -834,7 +834,7 @@ function EditRolesDialog({
         }
       }}
     >
-      <DialogContent>
+ <DialogContent>
         <DialogHeader>
           <DialogTitle>Editar papéis</DialogTitle>
           <DialogDescription>{user?.email}</DialogDescription>

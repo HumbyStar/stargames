@@ -177,7 +177,7 @@ function FeedbackDialog({ open, onClose, onDone }: { open: boolean; onClose: () 
 
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? null : onClose())}>
-      <DialogContent className="max-w-md">
+ <DialogContent>
         <DialogHeader>
           <DialogTitle>Feedback do dia</DialogTitle>
           <DialogDescription>

@@ -288,7 +288,7 @@ export function ListImportModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => (v ? onOpenChange(true) : close())}>
-      <DialogContent className="max-w-6xl">
+ <DialogContent>
         <DialogHeader>
           <DialogTitle>Importar lista de grupos</DialogTitle>
           <DialogDescription>
@@ -647,7 +647,7 @@ function EditRowDialog({
   });
   return (
     <Dialog open onOpenChange={(v) => (!v ? onClose() : null)}>
-      <DialogContent className="max-w-lg">
+ <DialogContent>
         <DialogHeader>
           <DialogTitle>Editar linha</DialogTitle>
           <DialogDescription>Linha {row.lineNumber} • {row.sourceGroup}</DialogDescription>

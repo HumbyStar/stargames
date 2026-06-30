@@ -1346,7 +1346,7 @@ export function ConfiguracoesSection() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-md">
+ <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="size-5" />

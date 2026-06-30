@@ -1030,7 +1030,7 @@ function GlobalModals() {
   return (
     <>
       <Dialog open={importOpen} onOpenChange={(o) => (o ? null : closeImport())}>
-        <DialogContent data-tour="import-modal" className="max-w-6xl sm:max-h-[92vh]">
+ <DialogContent data-tour="import-modal">
           <DialogHeader className="sr-only">
             <DialogTitle>Importação</DialogTitle>
             <DialogDescription>Importe clientes e produtos em massa.</DialogDescription>
@@ -1040,7 +1040,7 @@ function GlobalModals() {
       </Dialog>
 
       <Dialog open={settingsOpen} onOpenChange={(o) => (o ? null : closeSettings())}>
-        <DialogContent data-tour="settings-modal" className="max-w-5xl sm:max-h-[92vh]">
+ <DialogContent data-tour="settings-modal">
           <DialogHeader className="sr-only">
             <DialogTitle>Configurações</DialogTitle>
             <DialogDescription>Preferências, regras e zona de perigo.</DialogDescription>
@@ -1050,7 +1050,7 @@ function GlobalModals() {
       </Dialog>
 
       <Dialog open={helpOpen} onOpenChange={(o) => (o ? null : closeHelp())}>
-        <DialogContent className="max-w-3xl sm:max-h-[92vh]">
+ <DialogContent>
           <DialogHeader className="sr-only">
             <DialogTitle>Central de Ajuda</DialogTitle>
             <DialogDescription>Tutoriais guiados visuais.</DialogDescription>
@@ -1060,7 +1060,7 @@ function GlobalModals() {
       </Dialog>
 
       <Dialog open={notificationsOpen} onOpenChange={(o) => (o ? null : closeNotifications())}>
-        <DialogContent className="max-w-md sm:max-h-[85vh]">
+ <DialogContent>
           <DialogHeader>
             <DialogTitle>Notificações</DialogTitle>
             <DialogDescription>Alertas e avisos recentes da operação.</DialogDescription>
@@ -1070,7 +1070,7 @@ function GlobalModals() {
       </Dialog>
 
       <Dialog open={financeOpen} onOpenChange={(o) => (o ? null : closeFinance())}>
-        <DialogContent className="max-w-[95vw] xl:max-w-7xl sm:max-h-[92vh]">
+ <DialogContent>
           <DialogHeader className="sr-only">
             <DialogTitle>Finanças</DialogTitle>
             <DialogDescription>Dashboard financeiro consolidado.</DialogDescription>

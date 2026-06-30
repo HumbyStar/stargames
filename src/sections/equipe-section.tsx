@@ -406,7 +406,7 @@ function CreateTaskDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? null : onClose())}>
-      <DialogContent className="max-w-lg">
+ <DialogContent>
         <DialogHeader>
           <DialogTitle>Nova tarefa</DialogTitle>
           <DialogDescription>
@@ -569,7 +569,7 @@ function TaskDetailDialog({
 
   return (
     <Dialog open={!!task} onOpenChange={(o) => (o ? null : onClose())}>
-      <DialogContent className="max-w-2xl">
+ <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-start gap-2">
             <span className="flex-1">{task.title}</span>
@@ -740,7 +740,7 @@ function CompletionDialog({ task, onClose }: { task: TeamTask | null; onClose: (
 
   return (
     <Dialog open={!!task} onOpenChange={(o) => (o ? null : onClose())}>
-      <DialogContent className="max-w-md">
+ <DialogContent>
         <DialogHeader>
           <DialogTitle>Concluir tarefa</DialogTitle>
           <DialogDescription>

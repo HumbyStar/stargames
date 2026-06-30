@@ -396,7 +396,7 @@ export function DashboardDrilldownModal({
 
   return (
     <Dialog open={!!cardId} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-4xl">
+ <DialogContent>
         <DialogHeader>
           <DialogTitle>{config.title}</DialogTitle>
           <DialogDescription>{config.description}</DialogDescription>
