@@ -94,17 +94,7 @@ export function ImportProgressModal({
   const resumeInputRef = useRef<HTMLInputElement | null>(null);
   const running = !!(state && !state.done && !state.resumed);
 
-  // Trava saída acidental enquanto a importação está rodando.
-  useEffect(() => {
-    if (!running) return;
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = "";
-      return "";
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [running]);
+  // Aviso de reload/fechar aba é gerido pelo router via useBlocker no parent.
 
   useEffect(() => {
     if (!state || state.done || state.resumed) return;
