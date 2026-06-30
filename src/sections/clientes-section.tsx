@@ -511,7 +511,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
 
       {/* Modal cliente em tela cheia */}
       <Dialog open={!!drawerClient} onOpenChange={(o) => !o && setDrawerClientId(null)}>
-        <DialogContent className="max-w-[min(1200px,95vw)] max-h-[92vh] overflow-y-auto p-8">
+        <DialogContent className="max-w-[min(1200px,95vw)] sm:max-h-[92vh] sm:p-8">
           {drawerClient && (
             <ClientDrawer
               client={drawerClient}
