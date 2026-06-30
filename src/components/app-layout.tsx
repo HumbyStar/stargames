@@ -530,6 +530,27 @@ function _FloatingNavbarImpl() {
     return () => document.removeEventListener("mousedown", onDown);
   }, [searchOpen]);
 
+  // Close mobile menu on outside click / ESC / page scroll.
+  useEffect(() => {
+    if (!openMobile) return;
+    const onDown = (e: MouseEvent) => {
+      if (!navRef.current?.contains(e.target as Node)) setOpenMobile(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenMobile(false);
+    };
+    const container = document.querySelector<HTMLElement>(".page-container");
+    const onScroll = () => setOpenMobile(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    container?.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      container?.removeEventListener("scroll", onScroll);
+    };
+  }, [openMobile]);
+
   useEffect(() => {
     if (typeof document === "undefined") return;
     const stored = localStorage.getItem("theme");
@@ -684,7 +705,7 @@ function _FloatingNavbarImpl() {
       {navBorderPath && (
         <svg
           aria-hidden
-          className="nav-progress-ring pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+          className="nav-progress-ring pointer-events-none absolute inset-0 hidden h-full w-full overflow-visible md:block"
           viewBox={`0 0 ${navSize.width} ${navSize.height}`}
           preserveAspectRatio="none"
         >
@@ -770,6 +791,8 @@ function _FloatingNavbarImpl() {
           className="group md:hidden grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 active:scale-90"
           onClick={() => setOpenMobile((v) => !v)}
           aria-label="Menu"
+          aria-expanded={openMobile}
+          aria-controls="mobile-nav-menu"
         >
           <span key={openMobile ? "x" : "menu"} className="inline-flex animate-in fade-in zoom-in-75 duration-200">
             {openMobile ? <X className="size-5" /> : <Menu className="size-5" />}
@@ -778,49 +801,57 @@ function _FloatingNavbarImpl() {
       </div>
 
       {openMobile && (
-        <div className="absolute right-2 top-[calc(100%+8px)] w-60 rounded-xl border border-border bg-popover shadow-lg md:hidden overflow-hidden">
+        <div
+          id="mobile-nav-menu"
+          role="menu"
+          className="absolute right-2 top-[calc(100%+8px)] z-50 w-[280px] max-w-[calc(100vw-32px)] max-h-[calc(100vh-120px)] overflow-y-auto rounded-2xl border border-border bg-popover/95 backdrop-blur-xl shadow-xl ring-1 ring-foreground/5 md:hidden p-1.5 animate-in fade-in slide-in-from-top-2 duration-200"
+        >
           {navItems.map((i) => {
             const Icon = i.icon;
             const active = activeSection === i.id;
             return (
               <button
                 key={i.id}
+                role="menuitem"
                 onClick={() => { setOpenMobile(false); scrollToSection(i.id); }}
                 className={cn(
-                  "flex w-full items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-accent",
-                  active && "text-primary",
+                  "flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left transition-colors",
+                  active
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-foreground/90 hover:bg-accent",
                 )}
               >
-                <Icon className="size-4 opacity-80" />
-                {i.label}
+                <Icon className={cn("size-4 shrink-0", active ? "text-primary" : "opacity-70")} />
+                <span className="flex-1 truncate">{i.label}</span>
               </button>
             );
           })}
-          <div className="h-px bg-border" />
-          <button onClick={() => { setOpenMobile(false); openImport(); }} className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-accent">
-            <Upload className="size-4 opacity-80" /> Importar
+          <div className="my-1.5 h-px bg-border/70" />
+          <button role="menuitem" onClick={() => { setOpenMobile(false); openImport(); }} className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent">
+            <Upload className="size-4 opacity-70 shrink-0" /> Importar
           </button>
-          <button onClick={() => { setOpenMobile(false); openNotifications(); }} className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-accent">
-            <Bell className="size-4 opacity-80" /> Notificações
+          <button role="menuitem" onClick={() => { setOpenMobile(false); openNotifications(); }} className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent">
+            <Bell className="size-4 opacity-70 shrink-0" />
+            <span className="flex-1">Notificações</span>
             {unreadCount > 0 && (
-              <span className="ml-auto grid min-w-[18px] h-[18px] px-1 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+              <span className="grid min-w-[18px] h-[18px] px-1 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
           </button>
-          <button onClick={() => { setOpenMobile(false); openHelp(); }} className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-accent">
-            <HelpCircle className="size-4 opacity-80" /> Ajuda
+          <button role="menuitem" onClick={() => { setOpenMobile(false); openHelp(); }} className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent">
+            <HelpCircle className="size-4 opacity-70 shrink-0" /> Ajuda
           </button>
-          <button onClick={() => { setOpenMobile(false); openSettings(); }} className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-accent">
-            <Settings className="size-4 opacity-80" /> Configurações
+          <button role="menuitem" onClick={() => { setOpenMobile(false); openSettings(); }} className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent">
+            <Settings className="size-4 opacity-70 shrink-0" /> Configurações
           </button>
-          <button onClick={() => { setOpenMobile(false); toggleTheme(); }} className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-accent">
-            {isDark ? <Sun className="size-4 opacity-80" /> : <Moon className="size-4 opacity-80" />}
+          <div className="my-1.5 h-px bg-border/70" />
+          <button role="menuitem" onClick={() => { setOpenMobile(false); toggleTheme(); }} className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent">
+            {isDark ? <Sun className="size-4 opacity-70 shrink-0" /> : <Moon className="size-4 opacity-70 shrink-0" />}
             {isDark ? "Modo claro" : "Modo escuro"}
           </button>
-          <div className="h-px bg-border" />
-          <button onClick={() => { setOpenMobile(false); void handleSignOut(); }} className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-destructive text-left hover:bg-destructive/10">
-            <LogOut className="size-4" /> Sair
+          <button role="menuitem" onClick={() => { setOpenMobile(false); void handleSignOut(); }} className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-destructive hover:bg-destructive/10">
+            <LogOut className="size-4 shrink-0" /> Sair
           </button>
         </div>
       )}
