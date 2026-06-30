@@ -275,6 +275,7 @@ interface RightNavIconProps {
   id: NavbarIconId;
   isDark: boolean;
   unreadCount: number;
+  searchOpen: boolean;
   onSearch: () => void;
   onFinance: () => void;
   onImport: () => void;
@@ -289,6 +290,7 @@ function RightNavIcon({
   id,
   isDark,
   unreadCount,
+  searchOpen,
   onSearch,
   onFinance,
   onImport,
@@ -303,14 +305,7 @@ function RightNavIcon({
   switch (id) {
     case "search":
       return (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button type="button" data-tour="global-search" onClick={onSearch} aria-label="Buscar" className={baseBtn}>
-              <Search className="size-5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Buscar</TooltipContent>
-        </Tooltip>
+        <InlineSearch open={searchOpen} onToggle={onSearch} />
       );
     case "finance":
       return (
