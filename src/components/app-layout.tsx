@@ -811,6 +811,43 @@ function _FloatingNavbarImpl() {
   // Navbar is always compact on desktop; hovering triggers a looping conic glow.
   const isCompact = true;
 
+  // Restauração de scroll: salva a posição do .page-container em
+  // sessionStorage e restaura no mount (sem saltos visíveis: usa "auto"
+  // antes do paint via rAF).
+  useEffect(() => {
+    const container = document.querySelector<HTMLElement>(".page-container");
+    if (!container) return;
+    const KEY = "app:scrollY";
+    const ACTIVE_KEY = "app:activeSection";
+    // Restaurar antes do primeiro paint.
+    const savedY = Number(sessionStorage.getItem(KEY) ?? "0");
+    const savedActive = sessionStorage.getItem(ACTIVE_KEY);
+    if (savedActive) setActiveSection(savedActive);
+    if (savedY > 0) {
+      requestAnimationFrame(() => {
+        container.scrollTo({ top: savedY, behavior: "auto" });
+      });
+    }
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        sessionStorage.setItem(KEY, String(container.scrollTop));
+      });
+    };
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  // Persiste a seção ativa para restaurar entre reloads.
+  useEffect(() => {
+    if (activeSection) sessionStorage.setItem("app:activeSection", activeSection);
+  }, [activeSection]);
+
   return (
     <TooltipProvider delayDuration={150}>
       <nav
