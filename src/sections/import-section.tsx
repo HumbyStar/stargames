@@ -2354,7 +2354,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       </Dialog>
 
       <Dialog open={!!rows} onOpenChange={(o) => { if (!o) setRows(null); }}>
- <DialogContent className="overflow-hidden flex flex-col p-0">
+ <DialogContent className="overflow-hidden flex flex-col p-0 max-h-[90vh] w-[95vw] sm:max-w-5xl">
           <DialogHeader className="px-6 pt-6">
             <DialogTitle>Preview da importação</DialogTitle>
             <DialogDescription>
@@ -2368,7 +2368,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             <MetricCard label="Clientes novos" value={summary.newC} />
             <MetricCard label="Produtos prontos" value={summary.ready} status="primary" />
           </div>
-          <div className="flex-1 overflow-auto px-6 pb-2">
+          <div className="flex-1 min-h-0 overflow-auto px-6 pb-2">
             <div className="rounded-md border border-border">
               <table className="w-full text-sm">
                 <thead>
@@ -2388,7 +2388,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                   </tr>
                 </thead>
                 <tbody>
-                  {rows?.map((r, idx) => (
+                  {rows?.slice(0, 300).map((r, idx) => (
                     <tr key={idx} className="border-b border-border/60 last:border-0">
                       <td className="py-3 px-3 text-muted-foreground">{r.line}</td>
                       <td className="py-3 px-3 text-muted-foreground">{r.date ?? "—"}</td>
@@ -2417,9 +2417,14 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                   ))}
                 </tbody>
               </table>
+              {rows && rows.length > 300 && (
+                <div className="border-t border-border bg-muted/30 px-3 py-2 text-center text-xs text-muted-foreground">
+                  Exibindo as primeiras 300 linhas de {rows.length}. Todas serão importadas ao confirmar.
+                </div>
+              )}
             </div>
           </div>
-          <DialogFooter className="px-6 pb-6">
+          <DialogFooter className="shrink-0 border-t border-border bg-background px-6 py-4">
             <Button variant="outline" onClick={() => setRows(null)}>Cancelar</Button>
             <Button onClick={confirmImport} disabled={summary.ok === 0}>
               Confirmar Importação ({summary.ok})
