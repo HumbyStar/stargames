@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Folder, Filter, Maximize2, Minimize2, X } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
-import { LoadMoreButton } from "@/components/load-more-button";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { useSectionCompact } from "@/lib/use-section-compact";
 import { Button } from "@/components/ui/button";
@@ -102,8 +101,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   );
   const [periodFilter, setPeriodFilter] = usePersistedState<string>("clientes.period", "Todos");
   const [folderFilter, setFolderFilter] = usePersistedState<string>("clientes.folder", "Todas");
-  const [pageSize, setPageSize] = usePersistedState<number>("clientes.pageSize", 10);
-  const [visibleCount, setVisibleCount] = useState<number>(10);
   const [compact, setCompact] = useSectionCompact("clientes");
   const [showFilters, setShowFilters] = useState(true);
   const { expanded: listExpanded, expand: expandList } = useListExpansion("clients");
@@ -234,25 +231,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     folderFilter,
   ]);
 
-  // Reseta a janela visível ao mudar filtros ou tamanho de carga.
-  useEffect(() => {
-    setVisibleCount(pageSize);
-  }, [
-    pageSize,
-    search,
-    chip,
-    financialFilter,
-    situationFilter,
-    platformFilter,
-    periodFilter,
-    folderFilter,
-  ]);
-
-  const pagedRows = useMemo(
-    () => rows.slice(0, Math.min(visibleCount, rows.length)),
-    [rows, visibleCount],
-  );
-  const hasMore = pagedRows.length < rows.length;
+  const pagedRows = rows;
 
   const activeFilterCount =
     (chip !== "todos" ? 1 : 0) +
