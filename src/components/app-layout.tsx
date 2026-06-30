@@ -485,6 +485,7 @@ function _FloatingNavbarImpl() {
   const [navSize, setNavSize] = useState({ width: 0, height: 0 });
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
+  const mobileMenuRef = useRef<HTMLDivElement | null>(null);
   const navExitTimerRef = useRef<number | null>(null);
   const navBorderPath = useMemo(() => {
     // Desenha o path exatamente sobre a borda do pill da navbar.
@@ -534,7 +535,10 @@ function _FloatingNavbarImpl() {
   useEffect(() => {
     if (!openMobile) return;
     const onDown = (e: MouseEvent) => {
-      if (!navRef.current?.contains(e.target as Node)) setOpenMobile(false);
+      const t = e.target as Node;
+      if (navRef.current?.contains(t)) return;
+      if (mobileMenuRef.current?.contains(t)) return;
+      setOpenMobile(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpenMobile(false);
