@@ -735,16 +735,29 @@ function _FloatingNavbarImpl() {
         threshold: [0, 0.01, 0.1, 0.25, 0.5, 0.75, 1],
       },
     );
+    const observed = new WeakSet<Element>();
     const observeAll = () => {
       for (const item of navItems) {
         const el = document.getElementById(item.id);
-        if (el) sectionObserver.observe(el);
+        if (el && !observed.has(el)) {
+          observed.add(el);
+          sectionObserver.observe(el);
+        }
       }
     };
     observeAll();
     // MutationObserver para reaplicar a observação quando seções lazy
-    // são montadas e novos elementos com o id alvo entram no DOM.
-    const mo = new MutationObserver(() => observeAll());
+    // são montadas. Batched via rAF para não dispar a cada mutação durante
+    // o scroll/render.
+    let scheduled = false;
+    const mo = new MutationObserver(() => {
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(() => {
+        scheduled = false;
+        observeAll();
+      });
+    });
     mo.observe(container, { childList: true, subtree: true });
 
     // Scrolled flag: usa uma sentinela invisível no topo, sem ler scrollTop.
