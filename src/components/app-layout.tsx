@@ -712,13 +712,8 @@ function _FloatingNavbarImpl() {
   }, []);
 
   useEffect(() => {
-    const container = document.querySelector<HTMLElement>(".page-container");
-    if (!container) return;
-
-    // Active section: observa cada seção e marca como ativa quando entra na viewport.
-    // Active section: usa rootMargin centrado para que a seção mais próxima
-    // do meio do viewport seja a ativa, atualizando em tempo real durante o
-    // scroll. Re-observa quando seções lazy montam (substituem o wrapper).
+    // Scroll global: observa as seções relativas ao viewport (root:null) e
+    // marca como ativa a que estiver cruzando a linha de mira central.
     const sectionObserver = new IntersectionObserver(
       (entries) => {
         const visible = entries
@@ -727,8 +722,7 @@ function _FloatingNavbarImpl() {
         if (visible?.target.id) setActiveSection(visible.target.id);
       },
       {
-        root: container,
-        // "linha de mira" central: o que estiver cruzando ~40% do viewport vence.
+        root: null,
         rootMargin: "-40% 0px -40% 0px",
         threshold: [0, 0.01, 0.1, 0.25, 0.5, 0.75, 1],
       },
@@ -744,9 +738,6 @@ function _FloatingNavbarImpl() {
       }
     };
     observeAll();
-    // MutationObserver para reaplicar a observação quando seções lazy
-    // são montadas. Batched via rAF para não dispar a cada mutação durante
-    // o scroll/render.
     let scheduled = false;
     const mo = new MutationObserver(() => {
       if (scheduled) return;
@@ -756,37 +747,25 @@ function _FloatingNavbarImpl() {
         observeAll();
       });
     });
-    mo.observe(container, { childList: true, subtree: true });
+    mo.observe(document.body, { childList: true, subtree: true });
 
-    // Scrolled flag: usa uma sentinela invisível no topo, sem ler scrollTop.
-    // Quando a sentinela some da viewport => página rolou.
+    // Scrolled flag: sentinela invisível no topo do body relativa ao viewport.
     const sentinel = document.createElement("div");
     sentinel.setAttribute("aria-hidden", "true");
     sentinel.style.cssText =
       "position:absolute;top:0;left:0;width:1px;height:32px;pointer-events:none;";
-    container.prepend(sentinel);
+    document.body.prepend(sentinel);
     const scrollObserver = new IntersectionObserver(
       ([entry]) => setScrolled(!entry.isIntersecting),
-      { root: container, threshold: 0 },
+      { root: null, threshold: 0 },
     );
     scrollObserver.observe(sentinel);
-
-    // Fallback: também escuta o evento de scroll real (sem ler scrollTop)
-    // para reagir imediatamente em qualquer interação do usuário.
-    const onScroll = () => {
-      // Apenas garante reavaliação dos observers em browsers que demoram
-      // a despachar o IntersectionObserver durante scroll inercial.
-    };
-    container.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("scroll", onScroll, { passive: true });
 
     return () => {
       sectionObserver.disconnect();
       scrollObserver.disconnect();
       mo.disconnect();
       sentinel.remove();
-      container.removeEventListener("scroll", onScroll);
-      window.removeEventListener("scroll", onScroll);
     };
   }, []);
 
