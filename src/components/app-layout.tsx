@@ -777,7 +777,6 @@ function _FloatingNavbarImpl() {
       </div>
 
       {openMobile && (
-      {openMobile && (
         <div className="absolute left-2 right-2 top-[calc(100%+8px)] rounded-2xl border border-border bg-popover shadow-lg md:hidden overflow-hidden">
           <div className="p-3 border-b border-border">
             <SearchBox className="w-full" />
