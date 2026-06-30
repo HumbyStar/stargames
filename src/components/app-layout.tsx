@@ -766,6 +766,7 @@ function _FloatingNavbarImpl() {
     return () => {
       sectionObserver.disconnect();
       scrollObserver.disconnect();
+      mo.disconnect();
       sentinel.remove();
       container.removeEventListener("scroll", onScroll);
       window.removeEventListener("scroll", onScroll);
