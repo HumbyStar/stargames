@@ -288,7 +288,15 @@ export function ImportProgressModal({
           </DialogTitle>
           <DialogDescription>
             {state.resumed
-              ? <>A importação anterior de <span className="font-medium text-foreground">{state.zipName}</span> ficou pendente. Reenvie o mesmo ZIP para continuar de onde parou — a IA detecta duplicatas automaticamente.</>
+              ? (
+                <>
+                  A importação anterior de <span className="font-medium text-foreground">{state.zipName}</span> ficou pendente.{" "}
+                  Reenvie <span className="font-medium text-foreground">exatamente o mesmo ZIP</span> e continuaremos de onde parou —{" "}
+                  <span className="font-medium text-foreground">{state.stats.createdClients + state.stats.updatedClients}</span> cliente(s) e{" "}
+                  <span className="font-medium text-foreground">{state.stats.createdProducts}</span> produto(s) já foram processados e serão{" "}
+                  <span className="font-medium text-foreground">pulados automaticamente</span> pela detecção de duplicatas (cliente + produto + data).
+                </>
+              )
               : currentFolder
                 ? <>Lote atual: <span className="font-medium text-foreground">{currentFolder}</span> — {tip} A tela fica travada até concluir, processando 100% dos arquivos sem limites.</>
                 : "Preparando a esteira…"}
