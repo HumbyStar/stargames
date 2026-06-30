@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,8 @@ import {
   Lock,
   PhoneCall,
   RefreshCcw,
+  RotateCw,
+  Upload,
   ShieldCheck,
   Sparkles,
   Timer,
@@ -72,14 +75,17 @@ export function ImportProgressModal({
   open,
   onClose,
   onDiscard,
+  onResume,
 }: {
   state: ImportProgressState | null;
   open: boolean;
   onClose: () => void;
   onDiscard?: () => void;
+  onResume?: (file: File) => void;
 }) {
   const [now, setNow] = useState(() => Date.now());
   const [countdown, setCountdown] = useState<number | null>(null);
+  const resumeInputRef = useRef<HTMLInputElement | null>(null);
   const running = !!(state && !state.done && !state.resumed);
 
   // Trava saída acidental enquanto a importação está rodando.
@@ -126,6 +132,29 @@ export function ImportProgressModal({
   // Tela de sucesso dedicada
   if (state.done && !state.resumed) {
     const s = state.stats;
+    const totalClients = s.createdClients + s.updatedClients;
+    const successItems = ([
+      { label: "Clientes novos", value: s.createdClients, tone: "ok" as const },
+      { label: "Clientes atualizados", value: s.updatedClients, tone: "info" as const },
+      { label: "Produtos importados", value: s.createdProducts, tone: "ok" as const },
+      { label: "Acordos MGMV criados", value: s.createdAgreements, tone: "ok" as const },
+      { label: "Acordos MGMV substituídos", value: s.replacedAgreements, tone: "info" as const },
+      { label: "Telefones auto-corrigidos", value: s.skippedAfterCorrection, tone: "info" as const },
+    ]).filter((i) => i.value > 0);
+    const softAlerts = ([
+      {
+        label: "Duplicatas ignoradas",
+        value: s.ignoredDuplicates,
+        tone: "warn" as const,
+        hint: "Produtos já existentes (mesmo cliente, nome e data) — não foram reprocessados.",
+      },
+      {
+        label: "Entradas com erro",
+        value: s.errorEntries,
+        tone: "danger" as const,
+        hint: "Linhas que não puderam ser importadas por dados inválidos ou ausentes.",
+      },
+    ]).filter((i) => i.value > 0);
     return (
       <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
  <DialogContent className="border-emerald-500/40 bg-gradient-to-b from-emerald-500/10 via-background to-emerald-500/5">
@@ -133,9 +162,9 @@ export function ImportProgressModal({
             <DialogTitle>Importação concluída</DialogTitle>
             <DialogDescription>Resumo da importação</DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col items-center gap-5 py-6 text-center">
-            <div className="relative grid h-24 w-24 place-items-center rounded-full bg-emerald-500/15 ring-8 ring-emerald-500/10 animate-scale-in">
-              <CheckCircle2 className="h-14 w-14 text-emerald-600 dark:text-emerald-400" />
+          <div className="flex flex-col items-center gap-5 py-2 text-center">
+            <div className="relative grid h-20 w-20 place-items-center rounded-full bg-emerald-500/15 ring-8 ring-emerald-500/10 animate-scale-in">
+              <CheckCircle2 className="h-12 w-12 text-emerald-600 dark:text-emerald-400" />
               <span className="absolute inset-0 rounded-full ring-2 ring-emerald-500/40 animate-ping" />
             </div>
             <div className="space-y-1 animate-fade-in">
@@ -146,10 +175,10 @@ export function ImportProgressModal({
                 Sua importação de <span className="font-medium text-foreground">{state.zipName}</span> foi concluída com sucesso e os dados já estão atualizados na sua operação.
               </p>
             </div>
-            <div className="grid w-full max-w-md grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid w-full max-w-2xl grid-cols-2 gap-2 sm:grid-cols-4">
               <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-2">
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Clientes</div>
-                <div className="font-mono text-lg font-semibold text-emerald-700 dark:text-emerald-300">{s.createdClients + s.updatedClients}</div>
+                <div className="font-mono text-lg font-semibold text-emerald-700 dark:text-emerald-300">{totalClients}</div>
               </div>
               <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-2">
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Produtos</div>
@@ -164,6 +193,49 @@ export function ImportProgressModal({
                 <div className="font-mono text-lg font-semibold text-emerald-700 dark:text-emerald-300">{state.folders.length}</div>
               </div>
             </div>
+
+            {(successItems.length > 0 || softAlerts.length > 0) && (
+              <div className="grid w-full max-w-2xl gap-3 text-left sm:grid-cols-2">
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                    <CheckCircle2 className="h-4 w-4" /> Importado com sucesso
+                  </div>
+                  {successItems.length === 0 ? (
+                    <div className="text-xs text-muted-foreground">Nenhum item novo desta vez.</div>
+                  ) : (
+                    <ul className="space-y-1 text-xs">
+                      {successItems.map((i) => (
+                        <li key={i.label} className="flex items-center justify-between gap-2">
+                          <span className="text-muted-foreground">{i.label}</span>
+                          <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-300">{i.value}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-300">
+                    <AlertTriangle className="h-4 w-4" /> Alertas suaves
+                  </div>
+                  {softAlerts.length === 0 ? (
+                    <div className="text-xs text-muted-foreground">Sem duplicatas nem erros — importação 100% limpa.</div>
+                  ) : (
+                    <ul className="space-y-2 text-xs">
+                      {softAlerts.map((i) => (
+                        <li key={i.label} className="space-y-0.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className={i.tone === "danger" ? "text-destructive" : "text-amber-700 dark:text-amber-300"}>{i.label}</span>
+                            <span className={`font-mono font-semibold ${i.tone === "danger" ? "text-destructive" : "text-amber-700 dark:text-amber-300"}`}>{i.value}</span>
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">{i.hint}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="text-xs text-muted-foreground">
               Fechando em <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">{countdown ?? 5}</span>s…
             </div>
@@ -216,7 +288,15 @@ export function ImportProgressModal({
           </DialogTitle>
           <DialogDescription>
             {state.resumed
-              ? <>A importação anterior de <span className="font-medium text-foreground">{state.zipName}</span> ficou pendente. Reenvie o mesmo ZIP para continuar de onde parou — a IA detecta duplicatas automaticamente.</>
+              ? (
+                <>
+                  A importação anterior de <span className="font-medium text-foreground">{state.zipName}</span> ficou pendente.{" "}
+                  Reenvie <span className="font-medium text-foreground">exatamente o mesmo ZIP</span> e continuaremos de onde parou —{" "}
+                  <span className="font-medium text-foreground">{state.stats.createdClients + state.stats.updatedClients}</span> cliente(s) e{" "}
+                  <span className="font-medium text-foreground">{state.stats.createdProducts}</span> produto(s) já foram processados e serão{" "}
+                  <span className="font-medium text-foreground">pulados automaticamente</span> pela detecção de duplicatas (cliente + produto + data).
+                </>
+              )
               : currentFolder
                 ? <>Lote atual: <span className="font-medium text-foreground">{currentFolder}</span> — {tip} A tela fica travada até concluir, processando 100% dos arquivos sem limites.</>
                 : "Preparando a esteira…"}
@@ -288,6 +368,28 @@ export function ImportProgressModal({
 
         {state.resumed && (
           <DialogFooter>
+            {onResume && (
+              <>
+                <input
+                  ref={resumeInputRef}
+                  type="file"
+                  accept=".zip"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) onResume(f);
+                    e.target.value = "";
+                  }}
+                />
+                <Button
+                  onClick={() => resumeInputRef.current?.click()}
+                  className="gap-2"
+                >
+                  <RotateCw className="h-4 w-4" />
+                  Reenviar o mesmo ZIP e retomar
+                </Button>
+              </>
+            )}
             {onDiscard && (
               <Button variant="ghost" onClick={onDiscard}>Descartar progresso</Button>
             )}
