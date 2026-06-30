@@ -1400,6 +1400,7 @@ export function ConfiguracoesSection() {
       </Dialog>
 
       <AccessManagementDialog open={accessOpen} onOpenChange={setAccessOpen} />
+      <AiTrainingModal open={aiTrainingOpen} onOpenChange={setAiTrainingOpen} />
     </section>
   );
 }
