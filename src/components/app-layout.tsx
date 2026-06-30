@@ -1006,7 +1006,6 @@ function _FloatingNavbarImpl() {
                 onFinance={openFinance}
                 onImport={openImport}
                 onSettings={openSettings}
-                onNotifications={openNotifications}
                 onHelp={openHelp}
                 onToggleTheme={toggleTheme}
                 onSignOut={handleSignOut}
