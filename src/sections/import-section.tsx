@@ -1710,7 +1710,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       };
       return finalState;
     });
-    if (finalState) await persistProgress(finalState);
+    if (finalState) await persistProgressWithRetry(finalState, folders.length);
     try {
       const { data: userRes } = await supabase.auth.getUser();
       const uid = userRes.user?.id;
