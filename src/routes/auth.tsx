@@ -32,8 +32,6 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [conflictOpen, setConflictOpen] = useState(false);
-  const [conflictLastSeen, setConflictLastSeen] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -41,15 +39,14 @@ function AuthPage() {
     });
   }, [navigate]);
 
-  async function attemptClaim(force: boolean) {
+  async function attemptClaim() {
     const sessionId = newSessionId();
-    const res = await claimSession({ data: { sessionId, force } });
+    const res = await claimSession({ data: { sessionId, force: true } });
     if (res.ok) {
       try {
         localStorage.setItem(SESSION_ID_KEY, sessionId);
       } catch {}
       toast.success("Bem-vindo!");
-      setConflictOpen(false);
       navigate({ to: "/", replace: true });
       return;
     }
@@ -62,14 +59,7 @@ function AuthPage() {
       });
       return;
     }
-    // session_already_active
-    setConflictLastSeen(res.lastSeen);
-    setConflictOpen(true);
-    toast.warning("Sessão ativa em outro dispositivo", {
-      description:
-        "Esta conta já está conectada. Encerre a outra sessão ou use 'Forçar entrada' para assumir o acesso.",
-      duration: 9000,
-    });
+    // Sessões concorrentes liberadas — outros retornos não bloqueiam.
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -81,23 +71,11 @@ function AuthPage() {
         toast.error("Falha ao entrar", { description: error.message });
         return;
       }
-      await attemptClaim(false);
+      await attemptClaim();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro inesperado";
       toast.error("Não foi possível concluir o login", { description: msg });
       await supabase.auth.signOut();
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function onForce() {
-    setLoading(true);
-    try {
-      await attemptClaim(true);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Erro inesperado";
-      toast.error("Falha ao assumir a sessão", { description: msg });
     } finally {
       setLoading(false);
     }
