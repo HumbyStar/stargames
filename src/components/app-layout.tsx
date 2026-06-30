@@ -514,26 +514,28 @@ function RightNavIcon({
       );
     case "notifications":
       return (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={onNotifications}
-              aria-label="Notificações"
-              className={cn(baseBtn, "relative")}
-            >
-              <Bell className="size-5 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
-              {unreadCount > 0 && (
-                <>
-                  <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary animate-pulse" />
-                  <span className="absolute -right-0.5 -top-0.5 grid min-w-[16px] h-4 px-1 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground shadow-sm animate-in zoom-in-75 duration-200">
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </span>
-                </>
-              )}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Notificações</TooltipContent>
-        </Tooltip>
+        <NotificationsDropdown
+          open={notificationsOpen}
+          onClose={closeNotifications}
+          align="end"
+        >
+          <button
+            type="button"
+            onClick={openNotifications}
+            aria-label="Notificações"
+            className={cn(baseBtn, "relative")}
+          >
+            <Bell className="size-5 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
+            {unreadCount > 0 && (
+              <>
+                <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary animate-pulse" />
+                <span className="absolute -right-0.5 -top-0.5 grid min-w-[16px] h-4 px-1 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground shadow-sm animate-in zoom-in-75 duration-200">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              </>
+            )}
+          </button>
+        </NotificationsDropdown>
       );
     case "help":
       return (
