@@ -529,18 +529,6 @@ export function CollectionSection({
               {compact ? "Expandir" : "Compactar"}
             </Button>
             <ListExpansionToggle section="collection" />
-            <select
-              value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
-              className="h-9 rounded-md border border-input bg-background px-2 text-xs"
-              title="Máximo de linhas por carga"
-            >
-              {PAGE_SIZE_OPTIONS.map((n) => (
-                <option key={n} value={n}>
-                  Máx. {n}
-                </option>
-              ))}
-            </select>
           </div>
 
           {showFilters && (
@@ -716,7 +704,7 @@ export function CollectionSection({
         )}
         {listExpanded && (
         <>
-        <div className="mt-4 overflow-x-auto">
+        <div className="table-scroll-y mt-4 max-h-[28rem] overflow-x-auto rounded-md border border-border/60">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -909,21 +897,13 @@ export function CollectionSection({
         {filtered.length > 0 && (
           <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
             <span className="text-center">
-              Mostrando {Math.min(visible.length, filtered.length)} de {filtered.length} cobranças encontradas
+              {filtered.length} cobranças encontradas
               {period === "maximo" && filtered.length > 200 && (
                 <span className="ml-2 text-amber-500">
                   (modo Máximo — muitos registros podem ser exibidos)
                 </span>
               )}
             </span>
-            {hasMore ? (
-              <LoadMoreButton
-                count={Math.min(pageSize, filtered.length - visible.length)}
-                onClick={() => setVisibleCount((c) => c + pageSize)}
-              />
-            ) : (
-              <span>Todas as cobranças carregadas.</span>
-            )}
           </div>
         )}
         </>
