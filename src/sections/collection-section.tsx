@@ -26,7 +26,6 @@ import {
   Folder,
   X,
 } from "lucide-react";
-import { LoadMoreButton } from "@/components/load-more-button";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { useSectionCompact } from "@/lib/use-section-compact";
 import {
