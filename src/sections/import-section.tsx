@@ -1,4 +1,6 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { cn } from "@/lib/utils";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -1837,6 +1839,16 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   };
 
   const [aiLoading, setAiLoading] = useState(false);
+  // Token incremental para descartar respostas obsoletas / fluxos cancelados.
+  // Não dá para abortar a chamada do server function por dentro, mas
+  // ignorar o resultado garante que estado e toasts não escapem.
+  const aiRequestIdRef = useRef(0);
+  useEffect(() => {
+    return () => {
+      // Marca todas as requisições pendentes como obsoletas no unmount.
+      aiRequestIdRef.current += 1;
+    };
+  }, []);
   const validateText = async () => {
     if (!text.trim()) return toast.error("Cole os dados para validar.");
     // HTML continua com parser dedicado; texto puro vai direto para a IA.
@@ -1848,8 +1860,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       return;
     }
     setAiLoading(true);
+    const requestId = ++aiRequestIdRef.current;
     try {
       const { rows: aiRows } = await analyzeListWithAI({ data: { text } });
+      if (requestId !== aiRequestIdRef.current) return; // resposta obsoleta
       if (aiRows.length === 0) {
         toast.warning("A IA não identificou clientes na lista.");
         return;
@@ -1879,10 +1893,11 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         `IA encontrou ${aiRows.length} cliente(s)${fixed ? ` • ${fixed} com correções automáticas` : ""}`,
       );
     } catch (err) {
+      if (requestId !== aiRequestIdRef.current) return;
       const msg = err instanceof Error ? err.message : "Falha ao analisar com IA";
       toast.error("Não foi possível analisar a lista", { description: msg });
     } finally {
-      setAiLoading(false);
+      if (requestId === aiRequestIdRef.current) setAiLoading(false);
     }
   };
 
@@ -2368,61 +2383,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             <MetricCard label="Clientes novos" value={summary.newC} />
             <MetricCard label="Produtos prontos" value={summary.ready} status="primary" />
           </div>
-          <div className="flex-1 min-h-0 overflow-auto px-6 pb-2">
-            <div className="rounded-md border border-border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="py-2 px-3 font-medium">Linha</th>
-                    <th className="py-2 px-3 font-medium">Data</th>
-                    <th className="py-2 px-3 font-medium">Nome</th>
-                    <th className="py-2 px-3 font-medium">Telefone</th>
-                    <th className="py-2 px-3 font-medium">Produto</th>
-                    <th className="py-2 px-3 font-medium">Plataforma</th>
-                    <th className="py-2 px-3 font-medium">Valor</th>
-                    <th className="py-2 px-3 font-medium">Status</th>
-                    <th className="py-2 px-3 font-medium">Aviso</th>
-                    <th className="py-2 px-3 font-medium">Cliente</th>
-                    <th className="py-2 px-3 font-medium">Resultado</th>
-                    <th className="py-2 px-3 font-medium">Erro</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows?.slice(0, 300).map((r, idx) => (
-                    <tr key={idx} className="border-b border-border/60 last:border-0">
-                      <td className="py-3 px-3 text-muted-foreground">{r.line}</td>
-                      <td className="py-3 px-3 text-muted-foreground">{r.date ?? "—"}</td>
-                      <td className="py-3 px-3">{r.name || "—"}</td>
-                      <td className="py-3 px-3 text-muted-foreground">{r.phone || "—"}</td>
-                      <td className="py-3 px-3">{r.product || "—"}</td>
-                      <td className="py-3 px-3 text-muted-foreground">{r.platform || "—"}</td>
-                      <td className="py-3 px-3 tabular-nums">{Number.isFinite(r.totalValue ?? NaN) ? formatBRL(r.totalValue!) : "—"}</td>
-                      <td className="py-3 px-3">
-                        <Tag variant={r.financialStatus === "Pago" ? "success" : r.financialStatus === "Pendente" ? "danger" : "warning"}>
-                          {r.financialStatus || "—"}
-                        </Tag>
-                        {r.statusWarning && r.originalFinancialStatus && (
-                          <div className="mt-1 text-[10px] text-muted-foreground">
-                            original: <span className="line-through">{r.originalFinancialStatus}</span>
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-xs text-amber-600 dark:text-amber-400">
-                        {r.statusWarning ?? "—"}
-                      </td>
-                      <td className="py-3 px-3 text-muted-foreground">{r.clientFound ? "Encontrado" : "Será criado"}</td>
-                      <td className="py-3 px-3"><Tag variant={r.result === "Pronto" ? "success" : "danger"}>{r.result}</Tag></td>
-                      <td className="py-3 px-3 text-destructive">{r.errors.join("; ") || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {rows && rows.length > 300 && (
-                <div className="border-t border-border bg-muted/30 px-3 py-2 text-center text-xs text-muted-foreground">
-                  Exibindo as primeiras 300 linhas de {rows.length}. Todas serão importadas ao confirmar.
-                </div>
-              )}
-            </div>
+          <div className="flex-1 min-h-0 px-6 pb-2">
+            <PreviewVirtualTable rows={rows ?? []} />
           </div>
           <DialogFooter className="shrink-0 border-t border-border bg-background px-6 py-4">
             <Button variant="outline" onClick={() => setRows(null)}>Cancelar</Button>
@@ -2437,6 +2399,86 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
 }
 
 function UploadArea({ accept, onFile, hint }: { accept: string; onFile: (f: File) => void; hint: string }) {
+  // placeholder anchor for patch ordering below
+  return _UploadAreaImpl({ accept, onFile, hint });
+}
+
+function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
+  const parentRef = useRef<HTMLDivElement | null>(null);
+  const ROW_HEIGHT = 60;
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 12,
+  });
+
+  const gridCols =
+    "grid-cols-[60px_90px_minmax(140px,1.2fr)_120px_minmax(140px,1.2fr)_110px_100px_120px_minmax(160px,1.4fr)_120px_110px_minmax(140px,1.2fr)]";
+
+  return (
+    <div className="flex h-full flex-col rounded-md border border-border">
+      <div className={cn("grid border-b border-border bg-muted/40 px-3 py-2 text-left text-xs uppercase tracking-wide text-muted-foreground", gridCols)}>
+        <div className="font-medium">Linha</div>
+        <div className="font-medium">Data</div>
+        <div className="font-medium">Nome</div>
+        <div className="font-medium">Telefone</div>
+        <div className="font-medium">Produto</div>
+        <div className="font-medium">Plataforma</div>
+        <div className="font-medium">Valor</div>
+        <div className="font-medium">Status</div>
+        <div className="font-medium">Aviso</div>
+        <div className="font-medium">Cliente</div>
+        <div className="font-medium">Resultado</div>
+        <div className="font-medium">Erro</div>
+      </div>
+      <div ref={parentRef} className="flex-1 min-h-0 overflow-auto" role="rowgroup" aria-rowcount={rows.length}>
+        {rows.length === 0 ? (
+          <div className="p-6 text-center text-sm text-muted-foreground">Nenhuma linha para exibir.</div>
+        ) : (
+          <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
+            {rowVirtualizer.getVirtualItems().map((vi) => {
+              const r = rows[vi.index];
+              return (
+                <div
+                  key={vi.key}
+                  role="row"
+                  aria-rowindex={vi.index + 1}
+                  className={cn("absolute left-0 top-0 grid w-full items-center border-b border-border/60 px-3 text-sm", gridCols)}
+                  style={{ height: vi.size, transform: `translateY(${vi.start}px)` }}
+                >
+                  <div className="text-muted-foreground">{r.line}</div>
+                  <div className="text-muted-foreground">{r.date ?? "—"}</div>
+                  <div className="truncate" title={r.name}>{r.name || "—"}</div>
+                  <div className="text-muted-foreground">{r.phone || "—"}</div>
+                  <div className="truncate" title={r.product}>{r.product || "—"}</div>
+                  <div className="truncate text-muted-foreground">{r.platform || "—"}</div>
+                  <div className="tabular-nums">{Number.isFinite(r.totalValue ?? NaN) ? formatBRL(r.totalValue!) : "—"}</div>
+                  <div>
+                    <Tag variant={r.financialStatus === "Pago" ? "success" : r.financialStatus === "Pendente" ? "danger" : "warning"}>
+                      {r.financialStatus || "—"}
+                    </Tag>
+                  </div>
+                  <div className="truncate text-xs text-amber-600 dark:text-amber-400" title={r.statusWarning ?? ""}>
+                    {r.statusWarning ?? "—"}
+                  </div>
+                  <div className="text-muted-foreground">{r.clientFound ? "Encontrado" : "Será criado"}</div>
+                  <div><Tag variant={r.result === "Pronto" ? "success" : "danger"}>{r.result}</Tag></div>
+                  <div className="truncate text-destructive" title={r.errors.join("; ")}>{r.errors.join("; ") || "—"}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <div className="border-t border-border bg-muted/30 px-3 py-2 text-center text-xs text-muted-foreground">
+        {rows.length} {rows.length === 1 ? "linha" : "linhas"} • virtualização ativa para preservar a performance
+      </div>
+    </div>
+  );
+}
+
+function _UploadAreaImpl({ accept, onFile, hint }: { accept: string; onFile: (f: File) => void; hint: string }) {
   const [drag, setDrag] = useState(false);
   return (
     <label

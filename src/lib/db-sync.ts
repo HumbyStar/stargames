@@ -308,6 +308,79 @@ export function dbUpsertProduct(p: Product): void {
   });
 }
 
+// ----- Coalesced (debounced) upserts -----
+// Em importações/edições em lote, várias mutações no mesmo produto/cliente
+// disparam um upsert individual para cada chamada. A fila abaixo agrupa as
+// últimas versões por id e envia em lotes, reduzindo pressão no backend
+// sem perder consistência (sempre vence o estado mais recente).
+const pendingProductUpserts = new Map<string, Product>();
+const pendingClientUpserts = new Map<string, Client>();
+let productFlushTimer: ReturnType<typeof setTimeout> | null = null;
+let clientFlushTimer: ReturnType<typeof setTimeout> | null = null;
+const FLUSH_DELAY_MS = 250;
+
+function scheduleProductFlush() {
+  if (productFlushTimer) return;
+  productFlushTimer = setTimeout(() => {
+    productFlushTimer = null;
+    void flushPendingProductUpserts();
+  }, FLUSH_DELAY_MS);
+}
+
+function scheduleClientFlush() {
+  if (clientFlushTimer) return;
+  clientFlushTimer = setTimeout(() => {
+    clientFlushTimer = null;
+    void flushPendingClientUpserts();
+  }, FLUSH_DELAY_MS);
+}
+
+export function queueProductUpsert(p: Product): void {
+  pendingProductUpserts.set(p.id, p);
+  scheduleProductFlush();
+}
+
+export function queueClientUpsert(c: Client): void {
+  pendingClientUpserts.set(c.id, c);
+  scheduleClientFlush();
+}
+
+export async function flushPendingProductUpserts(): Promise<void> {
+  if (pendingProductUpserts.size === 0) return;
+  const batch = Array.from(pendingProductUpserts.values());
+  pendingProductUpserts.clear();
+  await dbUpsertProductsAsync(batch);
+}
+
+export async function flushPendingClientUpserts(): Promise<void> {
+  if (pendingClientUpserts.size === 0) return;
+  const batch = Array.from(pendingClientUpserts.values());
+  pendingClientUpserts.clear();
+  await dbUpsertClientsAsync(batch);
+}
+
+export async function flushAllPendingUpserts(): Promise<void> {
+  if (productFlushTimer) {
+    clearTimeout(productFlushTimer);
+    productFlushTimer = null;
+  }
+  if (clientFlushTimer) {
+    clearTimeout(clientFlushTimer);
+    clientFlushTimer = null;
+  }
+  await Promise.all([flushPendingProductUpserts(), flushPendingClientUpserts()]);
+}
+
+if (typeof window !== "undefined") {
+  // Garante que mutações pendentes sejam empurradas antes do unload.
+  window.addEventListener("beforeunload", () => {
+    void flushAllPendingUpserts();
+  });
+  window.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") void flushAllPendingUpserts();
+  });
+}
+
 export function dbInsertHistory(h: ImportHistoryEntry): void {
   void supabase.from("import_history").upsert(historyToRow(h)).then(({ error }) => {
     if (error) logErr("insertHistory", error);

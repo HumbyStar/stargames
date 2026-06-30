@@ -76,12 +76,15 @@ function SearchBox({
   onFocusChange?: (focused: boolean) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const clients = useStore((s) => s.clients);
   const products = useStore((s) => s.products);
   const openClient = useStore((s) => s.openClient);
+  const listboxId = "global-search-listbox";
+  const optionId = (idx: number) => `${listboxId}-opt-${idx}`;
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -91,8 +94,15 @@ function SearchBox({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
+  // Debounce do termo de busca para evitar reprocessar a cada tecla em listas
+  // grandes. Limpa o timer no unmount para não vazar callbacks.
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedQuery(query), 120);
+    return () => window.clearTimeout(id);
+  }, [query]);
+
   const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = debouncedQuery.trim().toLowerCase();
     if (!q)
       return [] as Array<
         | { type: "client"; id: string; title: string; subtitle: string }
@@ -126,11 +136,11 @@ function SearchBox({
         };
       });
     return [...clientMatches, ...productMatches];
-  }, [query, clients, products]);
+  }, [debouncedQuery, clients, products]);
 
   useEffect(() => {
     setActive(0);
-  }, [query]);
+  }, [debouncedQuery]);
 
   const handleSelect = (item: (typeof results)[number]) => {
     const clientId = item.type === "client" ? item.id : item.clientId;
@@ -147,6 +157,13 @@ function SearchBox({
         type="search"
         ref={inputRef}
         value={query}
+        role="combobox"
+        aria-expanded={open && !!query.trim()}
+        aria-controls={listboxId}
+        aria-autocomplete="list"
+        aria-activedescendant={
+          open && results.length > 0 ? optionId(active) : undefined
+        }
         onChange={(e) => {
           setQuery(e.target.value);
           setOpen(true);
@@ -175,15 +192,44 @@ function SearchBox({
         className="h-9 w-full rounded-full border border-border bg-background/60 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none transition focus:border-primary/40 focus:bg-background"
       />
       {open && query.trim() && (
-        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 max-h-80 overflow-auto rounded-2xl border border-border bg-popover/95 p-1 shadow-xl backdrop-blur">
-          {results.length === 0 ? (
-            <div className="px-3 py-4 text-center text-sm text-muted-foreground">
-              Nenhum resultado encontrado
+        <div
+          id={listboxId}
+          role="listbox"
+          aria-label="Resultados da busca"
+          className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 max-h-80 overflow-auto rounded-2xl border border-border bg-popover/95 p-1 shadow-xl backdrop-blur"
+        >
+          {debouncedQuery !== query.trim() && results.length === 0 ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex items-center justify-center gap-2 px-4 py-6 text-sm text-muted-foreground"
+            >
+              <Search className="size-4 animate-pulse" />
+              <span>Buscando...</span>
+            </div>
+          ) : results.length === 0 ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex flex-col items-center justify-center gap-2 px-4 py-8 text-center"
+            >
+              <div className="grid size-10 place-items-center rounded-full bg-muted text-muted-foreground">
+                <Search className="size-5" />
+              </div>
+              <p className="text-sm font-medium text-foreground">
+                Nenhum resultado para “{query.trim()}”
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Tente outro nome, telefone ou produto.
+              </p>
             </div>
           ) : (
             results.map((item, idx) => (
               <button
                 key={`${item.type}-${item.id}`}
+                id={optionId(idx)}
+                role="option"
+                aria-selected={idx === active}
                 onMouseEnter={() => setActive(idx)}
                 onClick={() => handleSelect(item)}
                 className={cn(

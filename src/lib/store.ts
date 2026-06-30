@@ -12,8 +12,8 @@ import {
   dbUpsertProductsAsync,
   dbSaveSettings,
   flushUiStateNow,
-  dbUpsertClient,
-  dbUpsertProduct,
+  queueClientUpsert,
+  queueProductUpsert,
   loadSnapshot,
   migrateLocalStorageOnce,
   primeUiState,
@@ -510,14 +510,14 @@ export const useStore = create<State>()((set, get) => ({
       addClient: (c) => {
         const client = { ...c, id: uid() };
         set((s) => ({ clients: [...s.clients, client] }));
-        dbUpsertClient(client);
+        queueClientUpsert(client);
         return client;
       },
       updateClient: (id, patch) =>
         set((s) => {
           const clients = s.clients.map((c) => (c.id === id ? { ...c, ...patch } : c));
           const updated = clients.find((c) => c.id === id);
-          if (updated) dbUpsertClient(updated);
+          if (updated) queueClientUpsert(updated);
           return { clients };
         }),
       findClientByPhone: (phone) =>
@@ -525,14 +525,14 @@ export const useStore = create<State>()((set, get) => ({
       addProduct: (p) =>
         set((s) => {
           const prod = { ...p, id: uid() };
-          dbUpsertProduct(prod);
+          queueProductUpsert(prod);
           return { products: [...s.products, prod] };
         }),
       updateProduct: (id, patch) =>
         set((s) => {
           const products = s.products.map((p) => (p.id === id ? { ...p, ...patch } : p));
           const updated = products.find((p) => p.id === id);
-          if (updated) dbUpsertProduct(updated);
+          if (updated) queueProductUpsert(updated);
           return { products };
         }),
       registerPayment: (productId, amount) =>
@@ -547,7 +547,7 @@ export const useStore = create<State>()((set, get) => ({
             return { ...p, paidValue, financialStatus: nextStatus };
           });
           const updated = products.find((p) => p.id === productId);
-          if (updated) dbUpsertProduct(updated);
+          if (updated) queueProductUpsert(updated);
           return { products };
         }),
       markResolved: (productId) =>
@@ -556,7 +556,7 @@ export const useStore = create<State>()((set, get) => ({
             p.id === productId ? { ...p, situation: "Resolvido" as Situation } : p,
           );
           const updated = products.find((p) => p.id === productId);
-          if (updated) dbUpsertProduct(updated);
+          if (updated) queueProductUpsert(updated);
           return { products };
         }),
       setProductSituation: (productId, situation) =>
@@ -565,21 +565,21 @@ export const useStore = create<State>()((set, get) => ({
             p.id === productId ? { ...p, situation } : p,
           );
           const updated = products.find((p) => p.id === productId);
-          if (updated) dbUpsertProduct(updated);
+          if (updated) queueProductUpsert(updated);
           return { products };
         }),
       updateProductNotes: (productId, notes) =>
         set((s) => {
           const products = s.products.map((p) => (p.id === productId ? { ...p, notes } : p));
           const updated = products.find((p) => p.id === productId);
-          if (updated) dbUpsertProduct(updated);
+          if (updated) queueProductUpsert(updated);
           return { products };
         }),
       updateClientNotes: (clientId, notes) =>
         set((s) => {
           const clients = s.clients.map((c) => (c.id === clientId ? { ...c, notes } : c));
           const updated = clients.find((c) => c.id === clientId);
-          if (updated) dbUpsertClient(updated);
+          if (updated) queueClientUpsert(updated);
           return { clients };
         }),
       payMGMVInstallment: (clientId, installmentNumber) =>
@@ -600,7 +600,7 @@ export const useStore = create<State>()((set, get) => ({
           });
           const updated = clients.find((c) => c.id === clientId);
           if (updated) {
-            dbUpsertClient(updated);
+            queueClientUpsert(updated);
             dbSyncAgreementForClient(updated);
           }
           return { clients };
@@ -620,7 +620,7 @@ export const useStore = create<State>()((set, get) => ({
           );
           const updated = clients.find((c) => c.id === clientId);
           if (updated) {
-            dbUpsertClient(updated);
+            queueClientUpsert(updated);
             dbSyncAgreementForClient(updated);
           }
           return { clients };
@@ -648,7 +648,7 @@ export const useStore = create<State>()((set, get) => ({
         }));
         const updated = get().clients.find((c) => c.id === clientId);
         if (updated) {
-          dbUpsertClient(updated);
+          queueClientUpsert(updated);
           await dbSyncAgreementForClientAsync(updated);
           await dbInsertMgmvReviewAuditLog({
             clientId,
