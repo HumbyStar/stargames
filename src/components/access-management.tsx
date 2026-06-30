@@ -280,7 +280,112 @@ function UsersTab({
         </Button>
       </div>
 
-      <div className="max-h-[420px] overflow-auto rounded-md border border-border">
+      {/* Mobile: cards empilhados, sem scroll lateral */}
+      <div className="space-y-3 sm:hidden">
+        {isLoading && (
+          <p className="text-center text-sm text-muted-foreground">Carregando...</p>
+        )}
+        {!isLoading && users && users.length === 0 && (
+          <p className="text-center text-sm text-muted-foreground">Nenhum usuário.</p>
+        )}
+        {users?.map((u) => (
+          <div
+            key={u.id}
+            className="rounded-lg border border-border bg-card p-3 space-y-2 text-sm"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium break-all">{u.email ?? "—"}</p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {u.fullName ?? "—"}
+                </p>
+              </div>
+              {u.banned ? (
+                <Badge variant="destructive" className="shrink-0">
+                  Desativado
+                </Badge>
+              ) : (
+                <Badge className="shrink-0">Ativo</Badge>
+              )}
+            </div>
+
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                Papéis
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {u.roles.length === 0 && (
+                  <span className="text-xs text-muted-foreground">sem papel</span>
+                )}
+                {u.roles.map((r) => (
+                  <Badge key={r} variant="secondary" className="text-xs">
+                    {ROLE_LABELS[r]}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                Responsabilidades
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {(u.responsibilities ?? []).length === 0 && (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+                {(u.responsibilities ?? []).map((r) => (
+                  <Badge key={r} variant="outline" className="text-[10px]">
+                    {RESPONSIBILITY_LABELS[r as UserResponsibility] ?? r}
+                  </Badge>
+                ))}
+                {u.canReceiveTasks === false && (
+                  <Badge variant="destructive" className="text-[10px]">
+                    não recebe tarefas
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Último login:{" "}
+              {u.lastSignInAt ? new Date(u.lastSignInAt).toLocaleString("pt-BR") : "nunca"}
+            </p>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <Button size="sm" variant="outline" onClick={() => setRolesUser(u)} className="gap-1">
+                <UserCog className="size-4" /> Papéis
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setRespUser(u)} className="gap-1">
+                <ShieldCheck className="size-4" /> Resp.
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setResetUser(u)} className="gap-1">
+                <KeyRound className="size-4" /> Senha
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={u.id === currentUserId}
+                onClick={() => banMut.mutate({ userId: u.id, banned: !u.banned })}
+                className="gap-1"
+              >
+                <UserMinus className="size-4" /> {u.banned ? "Reativar" : "Desativar"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={u.id === currentUserId}
+                onClick={() => setDeleteTarget(u)}
+                className="col-span-2 gap-1 text-destructive"
+              >
+                <Trash2 className="size-4" /> Excluir
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: tabela */}
+      <div className="hidden sm:block max-h-[420px] overflow-auto rounded-md border border-border">
         <Table className="min-w-[720px]">
           <TableHeader>
             <TableRow>
@@ -765,8 +870,33 @@ function RolesTab() {
   if (isLoading) return <p className="text-sm text-muted-foreground">Carregando...</p>;
 
   return (
-    <div className="overflow-auto rounded-md border border-border">
-      <Table className="min-w-[900px]">
+    <>
+      {/* Mobile: cards por papel, sem scroll lateral */}
+      <div className="space-y-3 sm:hidden">
+        {ROLES.map((r) => {
+          const perms = ALL_PERMISSIONS.filter((p) => matrix.get(r)?.has(p));
+          return (
+            <div key={r} className="rounded-lg border border-border bg-card p-3 space-y-2">
+              <p className="font-medium text-sm">{ROLE_LABELS[r]}</p>
+              {perms.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Sem permissões.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1">
+                  {perms.map((p) => (
+                    <Badge key={p} variant="secondary" className="text-[10px]">
+                      {PERM_LABELS[p]}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop: matriz */}
+      <div className="hidden sm:block overflow-auto rounded-md border border-border">
+        <Table className="min-w-[900px]">
         <TableHeader>
           <TableRow>
             <TableHead>Permissão</TableHead>
@@ -794,7 +924,8 @@ function RolesTab() {
           ))}
         </TableBody>
       </Table>
-    </div>
+      </div>
+    </>
   );
 }
 
