@@ -129,12 +129,36 @@ const normalizeStatusBR = (s: string): FinancialStatus => {
   return "Pendente";
 };
 
-const normalizeSituationBR = (s: string): Situation => {
-  const v = String(s ?? "").trim().toLowerCase();
-  if (v.includes("entregue") || v.includes("enviado")) return "Enviado";
-  if (v.includes("desistiu")) return "Desistiu";
-  if (v.includes("abandonou")) return "Abandonou";
-  return "Em Aberto";
+/**
+ * Normaliza a coluna "Situação" da planilha do Notion conforme regra de negócio:
+ * - Enviado/Entregue/Retirado → produto entregue (Enviado)
+ * - Removido → Removido
+ * - Desistiu/Cancelou → Desistiu
+ * - Abandonou → Abandonou
+ * - MGMV/Acordo/Parcelado → Resolvido (também marca financialStatus como MGMV
+ *   no caller, via `situationMentionsMgmv`)
+ * - Vazio → "Em Aberto" (ÚNICO caso legítimo)
+ * - Texto preenchido mas não reconhecido → "Resolvido" + flag de revisão,
+ *   pois a regra do Notion é: "se há texto na coluna, há uma solução vigente".
+ *   Isso evita dupla cobrança apontada no bug.
+ */
+const normalizeSituationBR = (
+  s: string,
+): { situation: Situation; unrecognized: boolean } => {
+  const raw = String(s ?? "").trim();
+  if (!raw) return { situation: "Em Aberto", unrecognized: false };
+  const v = raw
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (/(enviad|entreg|retir)/.test(v)) return { situation: "Enviado", unrecognized: false };
+  if (/remov/.test(v)) return { situation: "Removido", unrecognized: false };
+  if (/(desist|cancel)/.test(v)) return { situation: "Desistiu", unrecognized: false };
+  if (/abandon/.test(v)) return { situation: "Abandonou", unrecognized: false };
+  if (/(mgmv|acordo|parcelad)/.test(v)) return { situation: "Resolvido", unrecognized: false };
+  if (/(resolv|quitad|ok|finalizad|concluid)/.test(v))
+    return { situation: "Resolvido", unrecognized: false };
+  return { situation: "Resolvido", unrecognized: true };
 };
 
 const normalizeDateBR = (s: string): string | null => {
