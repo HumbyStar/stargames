@@ -518,6 +518,7 @@ function RightNavIcon({
           open={notificationsOpen}
           onClose={closeNotifications}
           align="end"
+          className="hidden md:block"
         >
           <button
             type="button"
@@ -1027,6 +1028,7 @@ function _FloatingNavbarImpl() {
             open={notificationsOpen}
             onClose={closeNotifications}
             align="end"
+            className="md:hidden"
           >
             <button
               type="button"
