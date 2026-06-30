@@ -220,6 +220,10 @@
       max-width: clamp(720px, 60vw, 960px);
     }
   }
+  /* When inline search is open, give the navbar room to breathe */
+  .floating-navbar[data-mode="compact"][data-search="open"] {
+    max-width: min(96vw, 1180px);
+  }
 }
 /* hover detection handled via window mousemove (no overlay needed) */
 
