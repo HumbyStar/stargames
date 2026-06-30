@@ -2155,6 +2155,41 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         }}
       />
 
+      {/* Modal de confirmação de saída — só aparece se o usuário tentar
+          navegar para outra rota enquanto a importação está rodando. */}
+      <Dialog
+        open={blocker.status === "blocked"}
+        onOpenChange={(o) => { if (!o && blocker.status === "blocked") blocker.reset(); }}
+      >
+        <DialogContent className="border-amber-500/50 bg-gradient-to-b from-amber-500/10 via-background to-background sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+              ⚠️ Importação em andamento
+            </DialogTitle>
+            <DialogDescription>
+              Sair desta tela agora vai <span className="font-medium text-foreground">interromper o processamento</span>.
+              Os itens já importados ficam salvos no banco, e você poderá <span className="font-medium text-foreground">reenviar o mesmo ZIP</span> para retomar — duplicatas serão puladas automaticamente.
+              <br /><br />
+              Tem certeza que deseja sair?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => blocker.status === "blocked" && blocker.reset()}
+            >
+              Continuar importando
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => blocker.status === "blocked" && blocker.proceed()}
+            >
+              Sair mesmo assim
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={zipFailuresOpen} onOpenChange={setZipFailuresOpen}>
  <DialogContent>
           <DialogHeader>
