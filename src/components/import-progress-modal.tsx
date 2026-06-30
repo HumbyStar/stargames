@@ -114,7 +114,14 @@ export function ImportProgressModal({
 
   // Auto-close em 5s quando concluído com sucesso (sem ser retomado)
   useEffect(() => {
-    if (!state?.done || state.resumed) {
+    // Se há duplicatas ou erros para revisar, não auto-fecha — usuário decide.
+    const hasReviewItems =
+      !!state && (
+        (state.ignoredItems?.length ?? 0) > 0 ||
+        state.stats.errorEntries > 0 ||
+        state.errors.length > 0
+      );
+    if (!state?.done || state.resumed || hasReviewItems) {
       setCountdown(null);
       return;
     }
