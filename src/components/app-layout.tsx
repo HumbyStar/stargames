@@ -720,8 +720,11 @@ function _FloatingNavbarImpl() {
       },
       {
         root: container,
-        rootMargin: "-40% 0px -40% 0px",
-        threshold: [0, 0.01, 0.1, 0.25, 0.5, 0.75, 1],
+        // Linha de mira mais estreita: a seção ativa muda assim que o topo
+        // ou o inferior cruza a faixa central, reconhecendo entrada/saída
+        // pelas bordas tanto descendo quanto subindo.
+        rootMargin: "-45% 0px -45% 0px",
+        threshold: [0, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1],
       },
     );
     const observed = new WeakSet<Element>();
