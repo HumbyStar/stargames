@@ -61,8 +61,6 @@ const navItems: ReadonlyArray<{
 function scrollToSection(id: string) {
   const el = document.getElementById(id);
   if (!el) return;
-  // sempre rola a seção alvo para o topo do próprio container interno
-  el.scrollTo({ top: 0, behavior: "auto" });
   el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
