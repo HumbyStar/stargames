@@ -35,6 +35,7 @@ import { ImportCard, ImportCardsGrid } from "@/components/import-cards";
 import { Users, ShieldCheck, Box, Wallet, AlertOctagon, Brain } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { analyzeListWithAI } from "@/lib/list-ai-analyze.functions";
+import { useBlocker } from "@tanstack/react-router";
 
 interface ParsedRow {
   line: number;
@@ -956,6 +957,16 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   const [zipFailuresOpen, setZipFailuresOpen] = useState(false);
   const [importProgress, setImportProgress] = useState<ImportProgressState | null>(null);
   const [progressRowId, setProgressRowId] = useState<string | null>(null);
+  const importRunning = !!(importProgress && !importProgress.done && !importProgress.resumed);
+
+  // Trava de navegação reforçada: intercepta qualquer mudança de rota e
+  // dispara um modal de confirmação enquanto a importação está rodando.
+  // `enableBeforeUnload` também segura reload/fechar aba.
+  const blocker = useBlocker({
+    shouldBlockFn: () => importRunning,
+    enableBeforeUnload: () => importRunning,
+    withResolver: true,
+  });
 
   // Persiste o estado de progresso no banco (best-effort, não bloqueia a UI).
   const persistProgress = async (state: ImportProgressState) => {
@@ -972,7 +983,11 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         total: state.folders.length,
         messages: state.messages.slice(-200),
         errors: state.errors.slice(-200),
-        stats: { ...state.stats, resetVersion: getResetVersion() },
+        stats: {
+          ...state.stats,
+          resetVersion: getResetVersion(),
+          ignoredItems: (state.ignoredItems ?? []).slice(-500),
+        },
         done: state.done,
         started_at: state.startedAt,
       };
@@ -1025,6 +1040,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           return;
         }
         setProgressRowId(data.id);
+        const restoredIgnored =
+          (stats as { ignoredItems?: ImportProgressState["ignoredItems"] }).ignoredItems ?? [];
         setImportProgress({
           fileHash: data.file_hash,
           zipName: data.zip_name,
@@ -1043,6 +1060,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             errorEntries: 0,
             skippedAfterCorrection: 0,
           },
+          ignoredItems: restoredIgnored,
           done: false,
           resumed: true,
         });
@@ -1432,6 +1450,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       errorEntries: 0,
       skippedAfterCorrection: 0,
     };
+    const ignoredItems: NonNullable<ImportProgressState["ignoredItems"]> = [];
 
     // Agrupa entradas por pasta para processamento lazy/calmo.
     const byFolder = new Map<string, typeof zipData.entries>();
@@ -1488,6 +1507,14 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         if (!p.selected || p.errors.length > 0 || !p.product) return;
         if (p.duplicate) {
           stats.ignoredDuplicates++;
+          if (ignoredItems.length < 500) {
+            ignoredItems.push({
+              client: entry.client.name || entry.client.phone || "?",
+              product: p.product,
+              date: p.registerDate || "",
+              folder: entry.folderName || "(raiz)",
+            });
+          }
           return;
         }
         // Se o cliente tem um acordo MGMV aplicado nesta importação, qualquer
@@ -1574,6 +1601,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           ...prev,
           currentIdx: i + 1,
           stats: { ...stats },
+          ignoredItems: ignoredItems.slice(),
           messages: [
             ...prev.messages,
             `✅ "${folder}" — ${dC} novo(s), ${dU} atualizado(s), ${dP} produto(s).`,
@@ -1615,6 +1643,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         currentIdx: folders.length,
         done: true,
         stats: { ...stats },
+        ignoredItems: ignoredItems.slice(),
         messages: [
           ...prev.messages,
           `🏁 Concluído em ${((performance.now() - startedAt) / 1000).toFixed(1)}s.`,
@@ -2125,6 +2154,41 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           void handleZipFile(file);
         }}
       />
+
+      {/* Modal de confirmação de saída — só aparece se o usuário tentar
+          navegar para outra rota enquanto a importação está rodando. */}
+      <Dialog
+        open={blocker.status === "blocked"}
+        onOpenChange={(o) => { if (!o && blocker.status === "blocked") blocker.reset(); }}
+      >
+        <DialogContent className="border-amber-500/50 bg-gradient-to-b from-amber-500/10 via-background to-background sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+              ⚠️ Importação em andamento
+            </DialogTitle>
+            <DialogDescription>
+              Sair desta tela agora vai <span className="font-medium text-foreground">interromper o processamento</span>.
+              Os itens já importados ficam salvos no banco, e você poderá <span className="font-medium text-foreground">reenviar o mesmo ZIP</span> para retomar — duplicatas serão puladas automaticamente.
+              <br /><br />
+              Tem certeza que deseja sair?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => blocker.status === "blocked" && blocker.reset()}
+            >
+              Continuar importando
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => blocker.status === "blocked" && blocker.proceed()}
+            >
+              Sair mesmo assim
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={zipFailuresOpen} onOpenChange={setZipFailuresOpen}>
  <DialogContent>

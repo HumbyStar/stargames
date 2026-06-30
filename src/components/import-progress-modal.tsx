@@ -48,6 +48,12 @@ export type ImportProgressState = {
     errorEntries: number;
     skippedAfterCorrection: number;
   };
+  ignoredItems?: Array<{
+    client: string;
+    product: string;
+    date: string;
+    folder: string;
+  }>;
   done: boolean;
   resumed?: boolean; // carregado do banco após reload
 };
@@ -88,17 +94,7 @@ export function ImportProgressModal({
   const resumeInputRef = useRef<HTMLInputElement | null>(null);
   const running = !!(state && !state.done && !state.resumed);
 
-  // Trava saída acidental enquanto a importação está rodando.
-  useEffect(() => {
-    if (!running) return;
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = "";
-      return "";
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [running]);
+  // Aviso de reload/fechar aba é gerido pelo router via useBlocker no parent.
 
   useEffect(() => {
     if (!state || state.done || state.resumed) return;
@@ -108,7 +104,14 @@ export function ImportProgressModal({
 
   // Auto-close em 5s quando concluído com sucesso (sem ser retomado)
   useEffect(() => {
-    if (!state?.done || state.resumed) {
+    // Se há duplicatas ou erros para revisar, não auto-fecha — usuário decide.
+    const hasReviewItems =
+      !!state && (
+        (state.ignoredItems?.length ?? 0) > 0 ||
+        state.stats.errorEntries > 0 ||
+        state.errors.length > 0
+      );
+    if (!state?.done || state.resumed || hasReviewItems) {
       setCountdown(null);
       return;
     }
@@ -236,9 +239,54 @@ export function ImportProgressModal({
               </div>
             )}
 
-            <div className="text-xs text-muted-foreground">
-              Fechando em <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">{countdown ?? 5}</span>s…
-            </div>
+            {(state.ignoredItems?.length ?? 0) > 0 && (
+              <details className="w-full max-w-2xl rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-left">
+                <summary className="flex cursor-pointer items-center justify-between gap-2 text-sm font-semibold text-amber-700 dark:text-amber-300">
+                  <span className="flex items-center gap-2">
+                    <Copy className="h-4 w-4" /> Ver duplicatas ignoradas ({state.ignoredItems!.length})
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Critérios: cliente + produto + data</span>
+                </summary>
+                <div className="mt-3 space-y-2">
+                  <p className="text-[11px] text-muted-foreground">
+                    Estes itens já existiam na sua base e <span className="font-medium text-foreground">não foram reprocessados</span>. A detecção compara, para cada produto, o cliente (por telefone), o nome do produto e a data de cadastro — combinação exata = duplicata.
+                  </p>
+                  <div className="max-h-56 overflow-y-auto rounded-md border border-amber-500/20 bg-background/50">
+                    <table className="w-full text-[11px]">
+                      <thead className="sticky top-0 bg-muted/80 text-left text-muted-foreground">
+                        <tr>
+                          <th className="px-2 py-1 font-medium">Cliente</th>
+                          <th className="px-2 py-1 font-medium">Produto</th>
+                          <th className="px-2 py-1 font-medium">Data</th>
+                          <th className="px-2 py-1 font-medium">Pasta</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {state.ignoredItems!.slice(0, 200).map((it, i) => (
+                          <tr key={i} className="border-t border-amber-500/10">
+                            <td className="px-2 py-1 truncate max-w-[14ch]">{it.client}</td>
+                            <td className="px-2 py-1 truncate max-w-[20ch]">{it.product}</td>
+                            <td className="px-2 py-1 font-mono">{it.date || "—"}</td>
+                            <td className="px-2 py-1 truncate max-w-[16ch] text-muted-foreground">{it.folder}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {state.ignoredItems!.length > 200 && (
+                    <div className="text-[11px] text-muted-foreground">
+                      Mostrando 200 de {state.ignoredItems!.length}. Os demais seguem o mesmo critério.
+                    </div>
+                  )}
+                </div>
+              </details>
+            )}
+
+            {countdown !== null && (
+              <div className="text-xs text-muted-foreground">
+                Fechando em <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">{countdown}</span>s…
+              </div>
+            )}
             <Button
               onClick={onClose}
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
