@@ -973,7 +973,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     try {
       const { data: userRes } = await supabase.auth.getUser();
       const uid = userRes.user?.id;
-      if (!uid) return;
+      if (!uid) return { ok: false as const, error: "Sem usuário autenticado" };
       const payload = {
         user_id: uid,
         file_hash: state.fileHash,
@@ -987,6 +987,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           ...state.stats,
           resetVersion: getResetVersion(),
           ignoredItems: (state.ignoredItems ?? []).slice(-500),
+          recordsTotal: state.recordsTotal ?? 0,
+          recordsProcessed: state.recordsProcessed ?? 0,
         },
         done: state.done,
         started_at: state.startedAt,
@@ -998,11 +1000,46 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         .maybeSingle();
       if (error) {
         console.warn("[import_progress] upsert falhou", error.message);
-        return;
+        return { ok: false as const, error: error.message };
       }
       if (data?.id) setProgressRowId(data.id);
+      return { ok: true as const };
     } catch (err) {
       console.warn("[import_progress] erro inesperado", err);
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) };
+    }
+  };
+
+  // Persiste com retentativa exponencial. Sob falhas de rede, NÃO perde o progresso:
+  // mantém o estado em memória, sinaliza retentativa no modal e tenta novamente até
+  // suceder (ou até o usuário fechar a aba). Continua no mesmo lote depois.
+  const persistProgressWithRetry = async (state: ImportProgressState, batchIdx: number) => {
+    const maxBackoffMs = 15000;
+    let attempt = 0;
+    while (true) {
+      const res = await persistProgress(state);
+      if (res?.ok) {
+        if (attempt > 0) {
+          setImportProgress((prev) => (prev ? { ...prev, retrying: null } : prev));
+        }
+        return;
+      }
+      attempt++;
+      const reason = res?.error ?? "rede indisponível";
+      console.warn(`[import_progress] tentativa ${attempt} no lote ${batchIdx} falhou: ${reason}`);
+      setImportProgress((prev) =>
+        prev ? { ...prev, retrying: { attempt, reason } } : prev,
+      );
+      const wait = Math.min(maxBackoffMs, 800 * 2 ** Math.min(attempt - 1, 6));
+      await new Promise<void>((r) => setTimeout(r, wait));
+      // Loop indefinidamente — o modal exibe a retentativa; o lote não avança até persistir.
+      if (attempt >= 50) {
+        // safety: após 50 tentativas (~10 min), encerra a espera e segue, mas mantém aviso
+        setImportProgress((prev) =>
+          prev ? { ...prev, retrying: { attempt, reason: `${reason} (continuando offline)` } } : prev,
+        );
+        return;
+      }
     }
   };
 
