@@ -1937,8 +1937,11 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     if (!rows) return;
     const ready = rows.filter((r) => r.result === "Pronto");
     if (ready.length === 0) return toast.error("Nenhuma linha válida.");
-    let createdClients = 0;
-    ready.forEach((r) => {
+    setConfirming(true);
+    const toastId = toast.loading(`Importando ${ready.length} registro(s)...`);
+    try {
+      let createdClients = 0;
+      ready.forEach((r) => {
       let client = findClientByPhone(r.phone);
       if (!client) {
         client = addClient({ name: r.name, phone: r.phone });
@@ -1968,10 +1971,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         dueDate: dueISO,
         notes: r.notes,
       });
-    });
-    const importSource = tab === "csv" ? "CSV" : tab === "excel" ? "Excel" : "Texto";
-    const fileHash = await sha1Hex(JSON.stringify(ready));
-    addImportHistory({
+      });
+      const importSource = tab === "csv" ? "CSV" : tab === "excel" ? "Excel" : "Texto";
+      const fileHash = await sha1Hex(JSON.stringify(ready));
+      addImportHistory({
       source: importSource,
       file: importSource === "Texto" ? "importacao-manual.txt" : `importacao-${tab}`,
       clientsCreated: createdClients,
@@ -1979,21 +1982,27 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       errors: rows.length - ready.length,
       status: rows.length - ready.length > 0 ? "Com avisos" : "Concluído",
       fileHash,
-    });
-    const savedHistory = useStore.getState().importHistory[0];
-    if (savedHistory) {
+      });
+      const savedHistory = useStore.getState().importHistory[0];
+      if (savedHistory) {
       await persistConfirmedImport({
         clients: useStore.getState().clients,
         products: useStore.getState().products,
         history: savedHistory,
       });
+      }
+      toast.success(
+        `${ready.length} registro(s) importados • ${createdClients} cliente(s) novos • ${rows.length - ready.length} erro(s) ignorados`,
+        { id: toastId },
+      );
+      setRows(null);
+      setText("");
+      onScrollTo("clientes");
+    } catch (err) {
+      toast.error(`Falha ao importar: ${(err as Error).message ?? "erro inesperado"}`, { id: toastId });
+    } finally {
+      setConfirming(false);
     }
-    toast.success(
-      `${ready.length} registro(s) importados • ${createdClients} cliente(s) novos • ${rows.length - ready.length} erro(s) ignorados`,
-    );
-    setRows(null);
-    setText("");
-    onScrollTo("clientes");
   };
 
   const confirmNotionImport = async () => {
