@@ -304,10 +304,14 @@ export function extractPaymentDate(
     );
     if (iso) return new Date(`${iso}T12:00:00`).toISOString();
   }
-  // "dia DD de MES (de AAAA)?"
-  const named = fragment.match(
-    /dia\s+(\d{1,2})\s+de\s+([A-Za-zÀ-ÿ]+)(?:\s+de\s+(\d{4}))?/i,
-  );
+  // "dia DD de MES (de AAAA)?", ou "DD de MES (de AAAA)?" (sem "dia"),
+  // ou "DD MES" (ex.: "6 Junho"). Só aceita quando MES é um nome de mês
+  // reconhecido (MONTH_NAMES), para evitar falsos positivos.
+  const named =
+    fragment.match(
+      /(?:\bdia\s+)?(\d{1,2})\s+de\s+([A-Za-zÀ-ÿ]+)(?:\s+de\s+(\d{4}))?/i,
+    ) ||
+    fragment.match(/\b(\d{1,2})\s+([A-Za-zÀ-ÿ]{3,})(?:\s+de\s+(\d{4}))?/i);
   if (named) {
     const day = Number(named[1]);
     const monthKey = stripAccents(named[2]);

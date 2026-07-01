@@ -58,8 +58,15 @@ export function applySuggestionToAgreement(
     const hasDiscount = !paid && number === discountTarget && discountValue > 0;
     const effectiveValue = hasDiscount ? Math.max(0, V - discountValue) : V;
     let dueDate: string;
+    // paidAt vindo da IA (paidDates[number-1] em YYYY-MM-DD), quando existir.
+    const aiPaidDateRaw =
+      paid && Array.isArray(s.paidDates) ? s.paidDates[i] : undefined;
+    const aiPaidIso =
+      aiPaidDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(aiPaidDateRaw)
+        ? new Date(`${aiPaidDateRaw}T12:00:00`).toISOString()
+        : undefined;
     if (paid) {
-      dueDate = prior?.paidAt ?? prior?.dueDate ?? fallbackDue;
+      dueDate = aiPaidIso ?? prior?.paidAt ?? prior?.dueDate ?? fallbackDue;
     } else if (lastPaidDate && number > lastPaidNumber) {
       dueDate = addMonthsClampDay(lastPaidDate, number - lastPaidNumber).toISOString();
     } else {
@@ -71,7 +78,7 @@ export function applySuggestionToAgreement(
       dueDate,
       value: effectiveValue,
       paid,
-      paidAt: paid ? prior?.paidAt ?? nowIso : undefined,
+      paidAt: paid ? aiPaidIso ?? prior?.paidAt ?? nowIso : undefined,
       paidAmount: paid
         ? V
         : isPartial
@@ -82,11 +89,41 @@ export function applySuggestionToAgreement(
     };
   });
 
-  return {
+  // Recalcula os vencimentos das parcelas pendentes: parcela N+1 = último
+  // pagamento + 1 mês, e assim por diante. Como as parcelas pagas agora
+  // carregam a paidAt correta (extraída pela IA), o cálculo bate certinho.
+  const agreementBeforeRecalc: MGMVAgreement = {
     startDate: current.startDate,
     totalDebt: T,
     installments,
   };
+  // Compute lastPaidDate for the new installments (aiPaidIso may have moved it).
+  let newLastPaidNumber = 0;
+  let newLastPaidDate: Date | null = null;
+  for (const it of installments) {
+    if (it.paid) {
+      const iso = it.paidAt ?? it.dueDate;
+      if (iso) {
+        newLastPaidNumber = it.number;
+        newLastPaidDate = new Date(iso);
+      }
+    }
+  }
+  if (newLastPaidDate) {
+    for (let idx = 0; idx < installments.length; idx++) {
+      const it = installments[idx];
+      if (!it.paid && it.number > newLastPaidNumber) {
+        installments[idx] = {
+          ...it,
+          dueDate: addMonthsClampDay(
+            newLastPaidDate,
+            it.number - newLastPaidNumber,
+          ).toISOString(),
+        };
+      }
+    }
+  }
+  return agreementBeforeRecalc;
 }
 
 /**
