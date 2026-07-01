@@ -743,6 +743,16 @@ export function ListImportModal({
           />
         )}
       </DialogContent>
+
+      {/* Mesma esteira visual do fluxo de ZIP/Notion durante a persistência */}
+      <ImportProgressModal
+        state={progressState}
+        open={!!progressState}
+        onClose={() => {
+          setProgressState(null);
+          close();
+        }}
+      />
     </Dialog>
   );
 }
