@@ -48,6 +48,13 @@ export interface MGMVInstallment {
   value: number;
   paid: boolean;
   paidAt?: string;
+  /**
+   * Valor efetivamente pago desta parcela. Quando ausente, assume-se
+   * `value` se `paid=true`, ou 0 se `paid=false`. Quando presente e menor
+   * que `value`, representa um pagamento parcial (parcela permanece
+   * pendente até a soma atingir `value`).
+   */
+  paidAmount?: number;
 }
 
 export interface MGMVAgreement {
