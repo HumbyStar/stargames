@@ -122,7 +122,13 @@ Se as contas não fecharem, mantenha os valores conforme o texto e adicione um w
 Retorne apenas o objeto JSON.`;
 
 function buildUserPrompt(input: MgmvAiReviewInput): string {
+  const today = new Date();
+  const todayIso = today.toISOString().slice(0, 10);
+  const currentYear = today.getFullYear();
   return [
+    `Data de hoje: ${todayIso} (ano corrente: ${currentYear}).`,
+    `IMPORTANTE: quando o texto trouxer datas SEM ano (ex.: "6 de Abril", "12 Maio"), use o ANO CORRENTE (${currentYear}) — NUNCA use 2023/2024 por padrão.`,
+    "",
     `Cliente: ${input.clientName}`,
     input.clientPhone ? `Telefone: ${input.clientPhone}` : "",
     "",
