@@ -212,6 +212,29 @@ describe("MGMV — parcelas pagas com data por extenso (cenário do usuário)", 
   });
 });
 
+describe("MGMV — não confunde '1/4 Parcela paga' com parcela nº 4", () => {
+  const notes = [
+    "MGMV: 600 dividido em 3x de 200 reais",
+    "→ 1/4 Parcela paga (50 reais) - 19 de Junho",
+  ].join("\n");
+
+  it("não marca nenhuma parcela como quitada (50 < 200)", () => {
+    const a = extractMGMVAgreementFromNotes(notes)!;
+    expect(a.installments.filter((i) => i.paid)).toHaveLength(0);
+  });
+
+  it("registra pagamento parcial de R$50 na parcela 1", () => {
+    const a = extractMGMVAgreementFromNotes(notes)!;
+    expect(a.installments[0].paidAmount).toBe(50);
+    expect(a.installments[0].paid).toBe(false);
+  });
+
+  it("marca acordo como review_required por conflito 1/4 vs 3x", () => {
+    const a = extractMGMVAgreementFromNotes(notes)!;
+    expect(a.reviewStatus).toBe("review_required");
+  });
+});
+
 describe("addMonthsClampDay", () => {
   it("preserva o mesmo dia quando possível", () => {
     const d = addMonthsClampDay(new Date(2026, 4, 29), 1);
