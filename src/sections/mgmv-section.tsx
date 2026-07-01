@@ -95,6 +95,10 @@ function buildRow(client: Client, agreement: MGMVAgreement): MgmvRow {
     agreement.totalDebt > 0 &&
     Math.abs(sumByInstallments - agreement.totalDebt) > 0.01;
 
+  // Heurística: notas fora do formato limpo que o parser sabe ler viram
+  // "review_required" para forçar o botão "Consultar IA" a aparecer no card.
+  const notesSuspect = notesLookSuspect(client.notes ?? "", agreement);
+
   let status: MgmvRow["status"] = "Ativo";
   if (pendingCount === 0) status = "Quitado";
   else if (agreement.installments.some((i) => !i.paid && isOverdue(i.dueDate))) {
@@ -108,7 +112,7 @@ function buildRow(client: Client, agreement: MGMVAgreement): MgmvRow {
       ? agreement.reviewStatus
       : null;
   const reviewStatus: MgmvRow["reviewStatus"] =
-    preserved ?? (hasMismatch ? "review_required" : "none");
+    preserved ?? (hasMismatch || notesSuspect ? "review_required" : "none");
 
   return {
     client,
@@ -122,8 +126,89 @@ function buildRow(client: Client, agreement: MGMVAgreement): MgmvRow {
     partialPaidAmount,
     status,
     reviewStatus,
-    hasMismatch,
+    hasMismatch: hasMismatch || notesSuspect,
   };
+}
+
+/**
+ * Retorna true quando a observação MGMV apresenta padrões que o parser por
+ * regra não modela com segurança — força "Consultar IA".
+ *
+ * Sinais considerados suspeitos:
+ * - Fração "X/Y Parcela" onde Y ≠ nº de parcelas detectadas.
+ * - Valor entre parênteses após "paga" (pagamento parcial explícito).
+ * - Palavras "parcial", "sinal", "entrada", "adiantado", "desconto",
+ *   "renegocia", "quebrada", "restante", "abateu".
+ * - Mais de um "dividido em Nx de V" (múltiplos acordos no mesmo cliente).
+ * - Setas/continuação "→" ou "->" seguidas de menção a parcela/valor,
+ *   indicando anotação livre além do template.
+ * - Valor monetário no texto que não bate com totalDebt nem com value da parcela.
+ */
+function notesLookSuspect(notes: string, agreement: MGMVAgreement): boolean {
+  if (!notes) return false;
+  const raw = notes.replace(/\s+/g, " ").trim();
+  if (!raw) return false;
+  const lower = raw.toLowerCase();
+
+  // Só analisa se há indício de bloco MGMV.
+  if (!/mgmv/i.test(raw)) return false;
+
+  const count = agreement.installments.length;
+
+  // 1) Fração X/Y Parcela com Y diferente do total detectado.
+  const frac = raw.match(/(\d+)\s*\/\s*(\d+)\s*[ºª]?\s*parcela/i);
+  if (frac) {
+    const y = Number(frac[2]);
+    if (Number.isFinite(y) && y !== count) return true;
+  }
+
+  // 2) Pagamento parcial explícito: "(50 reais)" após "paga".
+  if (/paga[^.\n]*\([^)]*\bR?\$?\s*\d/i.test(raw)) return true;
+
+  // 3) Palavras-chave livres que não fazem parte do template.
+  const suspiciousWords = [
+    "parcial",
+    "sinal",
+    "entrada",
+    "adiantad",
+    "desconto",
+    "renegoci",
+    "quebrad",
+    "restante",
+    "abate",
+    "acréscim",
+    "acrescim",
+    "juros",
+    "atraso",
+  ];
+  if (suspiciousWords.some((w) => lower.includes(w))) return true;
+
+  // 4) Mais de um "dividido em".
+  const dividedMatches = raw.match(/dividid[oa]s?\s+em/gi);
+  if (dividedMatches && dividedMatches.length > 1) return true;
+
+  // 5) Anotação livre com "→"/"->" mencionando parcela ou valor.
+  if (/(→|->)[^\n]{0,80}(parcela|reais|r\$)/i.test(raw)) return true;
+
+  // 6) Valores monetários explícitos (R$ ou "reais") que não batem com
+  //    totalDebt nem com value da parcela — indica anotação além do template.
+  const value = agreement.installments[0]?.value ?? 0;
+  const total = agreement.totalDebt ?? 0;
+  const moneyMatches = Array.from(
+    raw.matchAll(
+      /(?:R\$\s*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?|\d+(?:[.,]\d{1,2})?)|(\d+(?:[.,]\d{1,2})?)\s*reais)/gi,
+    ),
+  );
+  const parsed = moneyMatches
+    .map((m) => Number((m[1] ?? m[2] ?? "").replace(/\./g, "").replace(",", ".")))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  const eps = 0.5;
+  const foreign = parsed.filter(
+    (n) => Math.abs(n - total) > eps && Math.abs(n - value) > eps,
+  );
+  if (foreign.length > 0) return true;
+
+  return false;
 }
 
 export function MGMVSection({
