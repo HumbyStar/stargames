@@ -1,5 +1,6 @@
 import type { MGMVAgreement, MGMVInstallment } from "@/lib/store";
 import type { MgmvAiReviewSuggestion } from "@/lib/mgmv-ai-review.functions";
+import { addMonthsClampDay } from "@/sections/import-section";
 
 /**
  * Aplica uma sugestão da IA sobre um acordo MGMV, preservando dueDates e
@@ -23,6 +24,20 @@ export function applySuggestionToAgreement(
     new Date().toISOString();
   const nowIso = new Date().toISOString();
 
+  // Última parcela paga (com data) — base para recalcular vencimentos das
+  // parcelas pendentes: cada uma cai +1 mês em relação à anterior, começando
+  // por lastPaidDate + 1 mês.
+  let lastPaidNumber = 0;
+  let lastPaidDate: Date | null = null;
+  for (let n = 1; n <= P; n++) {
+    const prior = existing.find((x) => x.number === n);
+    const iso = prior?.paidAt ?? prior?.dueDate;
+    if (iso) {
+      lastPaidNumber = n;
+      lastPaidDate = new Date(iso);
+    }
+  }
+
   const installments: MGMVInstallment[] = Array.from({ length: N }, (_, i) => {
     const number = i + 1;
     const prior = existing.find((x) => x.number === number);
@@ -42,10 +57,18 @@ export function applySuggestionToAgreement(
         : 0;
     const hasDiscount = !paid && number === discountTarget && discountValue > 0;
     const effectiveValue = hasDiscount ? Math.max(0, V - discountValue) : V;
+    let dueDate: string;
+    if (paid) {
+      dueDate = prior?.paidAt ?? prior?.dueDate ?? fallbackDue;
+    } else if (lastPaidDate && number > lastPaidNumber) {
+      dueDate = addMonthsClampDay(lastPaidDate, number - lastPaidNumber).toISOString();
+    } else {
+      dueDate = prior?.dueDate ?? fallbackDue;
+    }
     return {
       number,
       total: N,
-      dueDate: prior?.dueDate ?? fallbackDue,
+      dueDate,
       value: effectiveValue,
       paid,
       paidAt: paid ? prior?.paidAt ?? nowIso : undefined,

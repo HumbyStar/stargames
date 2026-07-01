@@ -30,6 +30,7 @@ import {
 } from "./db-sync";
 import type { ImportDiagnostics } from "./db-sync";
 export type { ImportDiagnostics } from "./db-sync";
+import { recalcPendingDueDates } from "./mgmv-schedule";
 
 export type FinancialStatus = "Pago" | "Reserva" | "Pendente" | "MGMV";
 export type Situation =
@@ -593,17 +594,17 @@ export const useStore = create<State>()((set, get) => ({
         set((s) => {
           const clients = s.clients.map((c) => {
             if (c.id !== clientId || !c.mgmv) return c;
-            return {
-              ...c,
-              mgmv: {
-                ...c.mgmv,
-                installments: c.mgmv.installments.map((i) =>
-                  i.number === installmentNumber
-                    ? { ...i, paid: true, paidAt: new Date().toISOString() }
-                    : i,
-                ),
-              },
+            const updatedAgreement = {
+              ...c.mgmv,
+              installments: c.mgmv.installments.map((i) =>
+                i.number === installmentNumber
+                  ? { ...i, paid: true, paidAt: new Date().toISOString() }
+                  : i,
+              ),
             };
+            // Recalcula os vencimentos das parcelas pendentes com base na
+            // última parcela paga (data de pagamento + 1 mês por parcela).
+            return { ...c, mgmv: recalcPendingDueDates(updatedAgreement) };
           });
           const updated = clients.find((c) => c.id === clientId);
           if (updated) {
@@ -614,14 +615,17 @@ export const useStore = create<State>()((set, get) => ({
         }),
       setMGMVAgreement: (clientId, agreement) =>
         set((s) => {
+          const nextAgreement = agreement
+            ? recalcPendingDueDates(agreement)
+            : agreement;
           const clients = s.clients.map((c) =>
             c.id === clientId
               ? {
                   ...c,
-                  mgmv: agreement,
+                  mgmv: nextAgreement,
                   // Ao receber um acordo MGMV, o cliente é reclassificado
                   // automaticamente. Ao remover o acordo, volta a ser comum.
-                  clientType: (agreement ? "mgmv" : "common") as "mgmv" | "common",
+                  clientType: (nextAgreement ? "mgmv" : "common") as "mgmv" | "common",
                 }
               : c,
           );
