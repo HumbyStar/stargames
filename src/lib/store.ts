@@ -706,17 +706,20 @@ export const useStore = create<State>()((set, get) => ({
           };
         }),
       persistConfirmedImport: async ({ clients, products, history }) => {
-        await dbUpsertClientsAsync(clients);
-        await dbUpsertProductsAsync(products);
-        await dbUpsertHistoryAsync(history);
-        // Persistência oficial MGMV: para todo cliente com acordo, grava
-        // mgmv_agreements + mgmv_installments e atualiza flags dos produtos.
+        // Paraleliza os 3 upserts principais — cada um já faz chunks internos.
+        // Ganho grande vs. o await sequencial anterior, sobretudo em confirmações
+        // pequenas onde a latência de rede domina.
         const mgmvClients = clients.filter(
           (c) => c.mgmv && c.mgmv.installments.length > 0,
         );
-        if (mgmvClients.length > 0) {
-          await dbSyncAgreementsBulkAsync(mgmvClients);
-        }
+        await Promise.all([
+          dbUpsertClientsAsync(clients),
+          dbUpsertProductsAsync(products),
+          dbUpsertHistoryAsync(history),
+          mgmvClients.length > 0
+            ? dbSyncAgreementsBulkAsync(mgmvClients)
+            : Promise.resolve(),
+        ]);
       },
       executeDangerAction: async (action) => {
         clearImportRuntimeState();
