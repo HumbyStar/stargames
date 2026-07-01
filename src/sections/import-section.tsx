@@ -3434,17 +3434,9 @@ function ZipPreview({
     [byFolder, filteredIds],
   );
 
-  // Mantém sempre uma pasta aberta. Se a aberta sumir do filtro, abre a próxima.
-  const [openFolder, setOpenFolder] = useState<string>("");
-  useEffect(() => {
-    if (visibleFolders.length === 0) {
-      if (openFolder) setOpenFolder("");
-      return;
-    }
-    if (!visibleFolders.some((g) => g.folder === openFolder)) {
-      setOpenFolder(visibleFolders[0].folder);
-    }
-  }, [visibleFolders, openFolder]);
+  // Todas as pastas iniciam minimizadas para reduzir a altura da onepage.
+  // O usuário abre/fecha manualmente quantas quiser.
+  const [openFolders, setOpenFolders] = useState<string[]>([]);
 
   const selectedEntries = data.entries.filter((e) => e.selected && !e.criticalError);
   const summary = useMemo(() => {
@@ -3763,15 +3755,14 @@ function ZipPreview({
       </Card>
 
       <Accordion
-        type="single"
-        collapsible
-        value={openFolder}
-        onValueChange={(v) => setOpenFolder(v)}
+        type="multiple"
+        value={openFolders}
+        onValueChange={(v) => setOpenFolders(v as string[])}
         className="space-y-4"
       >
         {visibleFolders.map(({ folder, entries: entriesInFolder, visible }) => {
           const allSel = entriesInFolder.every((e) => e.selected || e.criticalError);
-          const isOpenFolder = openFolder === folder;
+          const isOpenFolder = openFolders.includes(folder);
           return (
             <AccordionItem
               key={folder}
@@ -3798,9 +3789,9 @@ function ZipPreview({
               <AccordionContent>
                 <div className="p-5">
                   {isOpenFolder && (
-                  <div className="overflow-x-auto">
+                  <div className="max-h-[280px] overflow-auto rounded-md border border-border">
                 <table className="w-full text-sm">
-                  <thead>
+                  <thead className="sticky top-0 bg-card z-10">
                     <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                       <th className="py-2 pr-3 font-medium">Sel</th>
                       <th className="py-2 pr-3 font-medium">Arquivo</th>
