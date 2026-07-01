@@ -34,7 +34,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ImportSection } from "@/sections/import-section";
 import { ConfiguracoesSection } from "@/sections/configuracoes-section";
 import { NotificationsPanel } from "@/components/notifications-panel";
 import { useNotifications } from "@/lib/notifications";
@@ -56,6 +55,7 @@ const navItems: ReadonlyArray<{
   { id: "equipe", label: "Equipe", icon: KanbanSquare },
   { id: "mgmv", label: "MGMV", icon: Sparkles },
   { id: "collection", label: "Collection", icon: Wallet },
+  { id: "import", label: "Importar", icon: Upload },
 ];
 
 function scrollToSection(id: string) {
@@ -993,7 +993,7 @@ function _FloatingNavbarImpl() {
         </div>
 
         <div className="ml-auto flex items-center gap-1.5 md:gap-2 md:pl-2">
-          {visibleIds.map((iconId) => {
+          {visibleIds.filter((id) => id !== "import").map((iconId) => {
             const meta = getIconMeta(iconId);
             if (!meta) return null;
             return (
@@ -1016,14 +1016,6 @@ function _FloatingNavbarImpl() {
             );
           })}
           {/* Mobile-only quick actions */}
-          <button
-            type="button"
-            onClick={openImport}
-            aria-label="Importar"
-            className="md:hidden grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-primary/10 hover:text-primary active:scale-90"
-          >
-            <Upload className="size-5" />
-          </button>
           <NotificationsDropdown
             open={notificationsOpen}
             onClose={closeNotifications}
@@ -1202,8 +1194,6 @@ export function AppLayout({ children }: { children?: ReactNode }) {
 }
 
 function GlobalModals() {
-  const importOpen = useUiStore((s) => s.importOpen);
-  const closeImport = useUiStore((s) => s.closeImport);
   const settingsOpen = useUiStore((s) => s.settingsOpen);
   const closeSettings = useUiStore((s) => s.closeSettings);
   const helpOpen = useUiStore((s) => s.helpOpen);
@@ -1211,28 +1201,8 @@ function GlobalModals() {
   const financeOpen = useUiStore((s) => s.financeOpen);
   const closeFinance = useUiStore((s) => s.closeFinance);
 
-  // onScrollTo dentro dos modais: fecha o modal e rola até a seção alvo.
-  const handleScrollTo = (id: string) => {
-    closeImport();
-    closeSettings();
-    setTimeout(() => {
-      const el = document.getElementById(id);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 60);
-  };
-
   return (
     <>
-      <Dialog open={importOpen} onOpenChange={(o) => (o ? null : closeImport())}>
- <DialogContent data-tour="import-modal">
-          <DialogHeader className="sr-only">
-            <DialogTitle>Importação</DialogTitle>
-            <DialogDescription>Importe clientes e produtos em massa.</DialogDescription>
-          </DialogHeader>
-          <ImportSection onScrollTo={handleScrollTo} />
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={settingsOpen} onOpenChange={(o) => (o ? null : closeSettings())}>
  <DialogContent data-tour="settings-modal">
           <DialogHeader className="sr-only">

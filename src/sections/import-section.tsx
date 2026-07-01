@@ -2187,109 +2187,233 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     }
   };
 
+  const hasPreview = !!rows || !!notion || !!zipData;
+  const [importAccordion, setImportAccordion] = useState<string[]>(["import-mass"]);
+  useEffect(() => {
+    if (!hasPreview) return;
+    setImportAccordion((prev) => (prev.includes("import-preview") ? prev : [...prev, "import-preview"]));
+    if (typeof document === "undefined") return;
+    // pequeno delay para o accordion abrir antes do scroll
+    const t = window.setTimeout(() => {
+      document.getElementById("import-preview-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [hasPreview]);
+
   return (
     <section id="import" className="one-page-section">
       <PageHeader
-        title="Importação em Massa"
-        description="Importe clientes e produtos por lista, HTML, CSV ou Excel."
+        title="Importação"
+        description="Importe clientes e produtos em três etapas: massa, preview e assistência da IA."
       />
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <div className="space-y-3">
-          <UploadArea
-            accept=".txt,.html,.htm,.csv,.xlsx,.xls,.zip"
-            onFile={(f) => {
-              const ext = f.name.toLowerCase().split(".").pop();
-              if (ext === "zip") void handleZipFile(f);
-              else void handleFile(f);
-            }}
-            hint="Arraste qualquer arquivo (lista, HTML, CSV, Excel ou ZIP) ou clique"
-          />
-          <Card title="Formato esperado">
-            <Collapsible defaultOpen={false}>
-              <CollapsibleTrigger className="group flex w-full cursor-pointer items-center justify-between gap-2 text-left">
-                <div className="flex flex-wrap gap-3">
-                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                    <FileText className="size-4" /> Lista
-                  </span>
-                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                    <FileCode className="size-4" /> HTML / Notion
-                  </span>
-                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                    <FileSpreadsheet className="size-4" /> CSV / Excel
-                  </span>
-                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                    <FileArchive className="size-4" /> ZIP
-                  </span>
-                </div>
-                <ChevronDown className="size-4 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="grid gap-2 pt-2 text-[11px]">
-                  <div>
-                    <span className="text-muted-foreground">Lista:</span>
-                    <code className="block rounded-md bg-muted p-1.5">Nome - Telefone - Produto - Plataforma - Valor - Status</code>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">HTML / Notion:</span>
-                    <code className="block rounded-md bg-muted p-1.5 leading-snug">Título "Nome - Telefone" + tabela Item/Plataforma/Valor/Pago/Status/Data/Situação.</code>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">CSV/Excel:</span>
-                    <code className="block rounded-md bg-muted p-1.5 leading-snug">nome, telefone, produto, plataforma, valor_total, valor_pago, status_financeiro, situacao, data_cadastro, data_limite, observacoes</code>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                    <span className="text-muted-foreground">Telefone é o ID. Status: Pago/Reserva/Pendente/MGMV.</span>
-                    <div className="flex gap-1.5">
-                      <Button size="sm" variant="outline" onClick={() => downloadModel("csv")}>CSV</Button>
-                      <Button size="sm" variant="outline" onClick={() => downloadModel("xlsx")}>Excel</Button>
-                    </div>
-                  </div>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-          </Card>
-        </div>
-
-        <div>
-          <Card>
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold">Importar clientes por lista</h3>
-              <Button size="sm" onClick={validateText} disabled={aiLoading}>
-                <Brain className="size-4" />
-                {aiLoading ? "Analisando..." : "Validar com IA"}
-              </Button>
+      <Accordion
+        type="multiple"
+        value={importAccordion}
+        onValueChange={(v) => setImportAccordion(v as string[])}
+        className="space-y-3"
+      >
+        {/* Parte 1 — Importação em massa */}
+        <AccordionItem
+          value="import-mass"
+          className="overflow-hidden rounded-2xl border border-border bg-card shadow-xs"
+        >
+          <AccordionTrigger className="px-4 py-3 text-left text-sm font-semibold hover:no-underline">
+            <span className="flex items-center gap-2">
+              <span className="grid size-6 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">1</span>
+              Importação em massa
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="px-4 pb-4">
+            <div className="grid gap-3 lg:grid-cols-2">
+              <div className="space-y-3">
+                <UploadArea
+                  accept=".txt,.html,.htm,.csv,.xlsx,.xls,.zip"
+                  onFile={(f) => {
+                    const ext = f.name.toLowerCase().split(".").pop();
+                    if (ext === "zip") void handleZipFile(f);
+                    else void handleFile(f);
+                  }}
+                  hint="Arraste qualquer arquivo (lista, HTML, CSV, Excel ou ZIP) ou clique"
+                />
+                <Card title="Formato esperado">
+                  <Collapsible defaultOpen={false}>
+                    <CollapsibleTrigger className="group flex w-full cursor-pointer items-center justify-between gap-2 text-left">
+                      <div className="flex flex-wrap gap-3">
+                        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <FileText className="size-4" /> Lista
+                        </span>
+                        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <FileCode className="size-4" /> HTML / Notion
+                        </span>
+                        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <FileSpreadsheet className="size-4" /> CSV / Excel
+                        </span>
+                        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <FileArchive className="size-4" /> ZIP
+                        </span>
+                      </div>
+                      <ChevronDown className="size-4 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="grid gap-2 pt-2 text-[11px]">
+                        <div>
+                          <span className="text-muted-foreground">Lista:</span>
+                          <code className="block rounded-md bg-muted p-1.5">Nome - Telefone - Produto - Plataforma - Valor - Status</code>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">HTML / Notion:</span>
+                          <code className="block rounded-md bg-muted p-1.5 leading-snug">Título "Nome - Telefone" + tabela Item/Plataforma/Valor/Pago/Status/Data/Situação.</code>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">CSV/Excel:</span>
+                          <code className="block rounded-md bg-muted p-1.5 leading-snug">nome, telefone, produto, plataforma, valor_total, valor_pago, status_financeiro, situacao, data_cadastro, data_limite, observacoes</code>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                          <span className="text-muted-foreground">Telefone é o ID. Status: Pago/Reserva/Pendente/MGMV.</span>
+                          <div className="flex gap-1.5">
+                            <Button size="sm" variant="outline" onClick={() => downloadModel("csv")}>CSV</Button>
+                            <Button size="sm" variant="outline" onClick={() => downloadModel("xlsx")}>Excel</Button>
+                          </div>
+                        </div>
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </Card>
+              </div>
+              <div className="rounded-xl border border-dashed border-border/70 bg-muted/30 p-4 text-xs text-muted-foreground">
+                <p className="font-medium text-foreground">Como funciona</p>
+                <ol className="mt-2 list-decimal space-y-1 pl-4">
+                  <li>Envie seu arquivo (lista, HTML/Notion, CSV, Excel ou ZIP).</li>
+                  <li>Revise a análise na etapa <span className="font-medium text-foreground">Preview</span> logo abaixo.</li>
+                  <li>Se preferir colar texto solto, use o <span className="font-medium text-foreground">Importador assistido com IA</span>.</li>
+                </ol>
+              </div>
             </div>
-            <TextDropzone value={text} onChange={setText} onFile={handleFile} compact />
-            <p className="mt-1.5 text-[11px] text-muted-foreground">
-              Cole a lista ou arraste um .txt. A IA corrige erros comuns.
-            </p>
-          </Card>
-        </div>
-      </div>
+          </AccordionContent>
+        </AccordionItem>
 
-      {notion && (
-        <NotionPreview
-          result={notion}
-          findClientByPhone={findClientByPhone}
-          onConfirm={confirmNotionImport}
-          onClear={() => { setNotion(null); setHtmlText(""); }}
-        />
-      )}
+        {/* Parte 2 — Preview da importação */}
+        <AccordionItem
+          value="import-preview"
+          className="overflow-hidden rounded-2xl border border-border bg-card shadow-xs"
+        >
+          <AccordionTrigger className="px-4 py-3 text-left text-sm font-semibold hover:no-underline">
+            <span className="flex items-center gap-2">
+              <span className="grid size-6 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">2</span>
+              Preview da importação
+              {hasPreview && (
+                <span className="ml-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                  pronto para revisar
+                </span>
+              )}
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="px-4 pb-6">
+            <div id="import-preview-anchor" />
+            {!hasPreview && (
+              <div className="rounded-xl border border-dashed border-border/70 bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
+                Nenhum preview no momento. Envie um arquivo na etapa 1 ou cole uma lista na etapa 3 para começar.
+              </div>
+            )}
 
-      {zipData && (
-        <ZipPreview
-          data={zipData}
-          onClear={() => setZipData(null)}
-          onConfirm={confirmZipImport}
-          onToggleEntry={setEntrySelected}
-          onToggleProduct={setProductSelected}
-          onToggleAll={setAllEntriesSelected}
-          onToggleFolder={setFolderSelected}
-          onCorrectionAction={setCorrectionAction}
-          onMgmvAction={setMgmvAction}
-        />
-      )}
+            {rows && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-base font-semibold">Preview da importação</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Revise os registros analisados antes de confirmar. Você pode ajustar a origem na etapa 1 se algo estiver incorreto.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-6">
+                  <SlimMetric label="Válidos" value={summary.ok} tone="success" />
+                  <SlimMetric label="Com erro" value={summary.err} tone="danger" />
+                  <SlimMetric label="Comum" value={summary.common} />
+                  <SlimMetric label="MGMV" value={summary.mgmv} tone="primary" />
+                  <SlimMetric label="+ ao cliente" value={summary.addProduct} />
+                  <SlimMetric label="Duplicados" value={summary.duplicate} tone="danger" />
+                </div>
+                <div className="sticky top-0 z-10 flex flex-col-reverse gap-2 border-y border-border bg-background/95 py-3 backdrop-blur-sm sm:flex-row sm:justify-end">
+                  <Button variant="outline" onClick={() => setRows(null)} disabled={confirming} className="w-full sm:w-auto">
+                    Cancelar
+                  </Button>
+                  <Button onClick={confirmImport} disabled={summary.ok === 0 || confirming} className="w-full sm:w-auto">
+                    {confirming ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin" />
+                        Importando...
+                      </>
+                    ) : (
+                      <>Confirmar Importação ({summary.ok})</>
+                    )}
+                  </Button>
+                </div>
+                <PreviewVirtualTable rows={rows} />
+                <div aria-live="polite" aria-atomic="true" className="sr-only">
+                  {confirming
+                    ? "Importando registros, aguarde..."
+                    : `Pronto para importar. ${summary.ok} ${summary.ok === 1 ? "registro válido" : "registros válidos"}${summary.err ? `, ${summary.err} com erro` : ""}.`}
+                </div>
+              </div>
+            )}
+
+            {notion && (
+              <div className="mt-4">
+                <NotionPreview
+                  result={notion}
+                  findClientByPhone={findClientByPhone}
+                  onConfirm={confirmNotionImport}
+                  onClear={() => { setNotion(null); setHtmlText(""); }}
+                />
+              </div>
+            )}
+
+            {zipData && (
+              <div className="mt-4">
+                <ZipPreview
+                  data={zipData}
+                  onClear={() => setZipData(null)}
+                  onConfirm={confirmZipImport}
+                  onToggleEntry={setEntrySelected}
+                  onToggleProduct={setProductSelected}
+                  onToggleAll={setAllEntriesSelected}
+                  onToggleFolder={setFolderSelected}
+                  onCorrectionAction={setCorrectionAction}
+                  onMgmvAction={setMgmvAction}
+                />
+              </div>
+            )}
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Parte 3 — Importador assistido com IA */}
+        <AccordionItem
+          value="import-ai"
+          className="overflow-hidden rounded-2xl border border-border bg-card shadow-xs"
+        >
+          <AccordionTrigger className="px-4 py-3 text-left text-sm font-semibold hover:no-underline">
+            <span className="flex items-center gap-2">
+              <span className="grid size-6 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">3</span>
+              Importador assistido com IA
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="px-4 pb-4">
+            <Card>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold">Importar clientes por lista</h3>
+                <Button size="sm" onClick={validateText} disabled={aiLoading}>
+                  <Brain className="size-4" />
+                  {aiLoading ? "Analisando..." : "Validar com IA"}
+                </Button>
+              </div>
+              <TextDropzone value={text} onChange={setText} onFile={handleFile} compact />
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                Cole a lista ou arraste um .txt. A IA corrige erros comuns, identifica clientes MGMV e monta o preview na etapa 2.
+              </p>
+            </Card>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
       <ImportProgressModal
         state={importProgress}
@@ -2388,53 +2512,6 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!rows} onOpenChange={(o) => { if (!o && !confirming) setRows(null); }}>
-  <DialogContent className="flex flex-col p-0 max-h-[95vh] h-[95vh] w-[95vw] sm:max-w-5xl overflow-hidden">
-          <div className="flex-1 overflow-y-auto">
-          <DialogHeader className="px-6 pt-6 pr-0 sm:pr-0">
-            <DialogTitle>Preview da importação</DialogTitle>
-            <DialogDescription>
-              Revise os registros analisados antes de confirmar. Você pode fechar e ajustar a origem se algo estiver incorreto.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-3 grid grid-cols-2 gap-2 px-6 sm:grid-cols-3 md:grid-cols-6">
-            <SlimMetric label="Válidos" value={summary.ok} tone="success" />
-            <SlimMetric label="Com erro" value={summary.err} tone="danger" />
-            <SlimMetric label="Comum" value={summary.common} />
-            <SlimMetric label="MGMV" value={summary.mgmv} tone="primary" />
-            <SlimMetric label="+ ao cliente" value={summary.addProduct} />
-            <SlimMetric label="Duplicados" value={summary.duplicate} tone="danger" />
-          </div>
-          <div className="mt-3 flex flex-col px-6 pb-[160px]">
-            <div className="sticky top-0 z-10 mb-3 flex flex-col-reverse gap-2 border-y border-border bg-background/95 px-2 py-3 backdrop-blur-sm sm:flex-row sm:justify-end sm:gap-2">
-              <Button variant="outline" onClick={() => setRows(null)} disabled={confirming} className="w-full sm:w-auto">
-                Cancelar
-              </Button>
-              <Button onClick={confirmImport} disabled={summary.ok === 0 || confirming} className="w-full sm:w-auto">
-                {confirming ? (
-                  <>
-                    <Loader2 className="size-4 animate-spin" />
-                    Importando...
-                  </>
-                ) : (
-                  <>Confirmar Importação ({summary.ok})</>
-                )}
-              </Button>
-            </div>
-            <PreviewVirtualTable rows={rows ?? []} />
-          </div>
-          <div
-            aria-live="polite"
-            aria-atomic="true"
-            className="sr-only"
-          >
-            {confirming
-              ? "Importando registros, aguarde..."
-              : `Pronto para importar. ${summary.ok} ${summary.ok === 1 ? "registro válido" : "registros válidos"}${summary.err ? `, ${summary.err} com erro` : ""}.`}
-          </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </section>
   );
 }

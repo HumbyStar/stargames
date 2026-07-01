@@ -36,7 +36,12 @@ export const useUiStore = create<UiState>((set) => ({
   conciergeOpen: false,
   financeOpen: false,
   activeTutorialId: null,
-  openImport: () => set({ importOpen: true }),
+  openImport: () => {
+    set({ importOpen: false });
+    if (typeof document === "undefined") return;
+    const el = document.getElementById("import");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  },
   closeImport: () => set({ importOpen: false }),
   openSettings: () => set({ settingsOpen: true }),
   closeSettings: () => set({ settingsOpen: false }),

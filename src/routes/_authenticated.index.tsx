@@ -11,6 +11,7 @@ import { ClientesSection } from "@/sections/clientes-section";
 import { CollectionSection } from "@/sections/collection-section";
 import { MGMVSection } from "@/sections/mgmv-section";
 import { EquipeSection } from "@/sections/equipe-section";
+import { ImportSection } from "@/sections/import-section";
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
@@ -48,6 +49,7 @@ function OnePage() {
       <div id="collection">
         <CollectionSection onScrollTo={onScrollTo} />
       </div>
+      <ImportSection onScrollTo={onScrollTo} />
     </AppLayout>
   );
 }
