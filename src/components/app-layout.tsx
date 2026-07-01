@@ -56,6 +56,7 @@ const navItems: ReadonlyArray<{
   { id: "equipe", label: "Equipe", icon: KanbanSquare },
   { id: "mgmv", label: "MGMV", icon: Sparkles },
   { id: "collection", label: "Collection", icon: Wallet },
+  { id: "import", label: "Importar", icon: Upload },
 ];
 
 function scrollToSection(id: string) {
