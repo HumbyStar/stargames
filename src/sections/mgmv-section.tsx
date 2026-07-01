@@ -496,7 +496,16 @@ export function MGMVSection({
                         {r.total}× {formatBRL(r.agreement.installments[0]?.value ?? 0)}
                       </td>
                       <td className="px-3 py-2">
-                        {r.paidCount}/{r.total}
+                        <div className="flex flex-col leading-tight">
+                          <span>
+                            {r.paidCount}/{r.total}
+                          </span>
+                          {r.partialPaidAmount > 0 && (
+                            <span className="text-[10px] text-warning">
+                              + {formatBRL(r.partialPaidAmount)} parcial
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-2 font-semibold">
                         {formatBRL(r.remainingValue)}
