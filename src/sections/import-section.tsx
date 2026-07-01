@@ -2443,6 +2443,14 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                   </Button>
                 </div>
                 <PreviewVirtualTable rows={rows} />
+                {confirming && (
+                  <div className="rounded-lg border bg-muted/30 p-3">
+                    <ImportConveyor running state="processing" height="h-20" />
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Sincronizando com o banco…
+                    </p>
+                  </div>
+                )}
                 <div aria-live="polite" aria-atomic="true" className="sr-only">
                   {confirming
                     ? "Importando registros, aguarde..."
