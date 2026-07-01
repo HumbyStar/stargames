@@ -33,6 +33,7 @@ import {
   type FinancialStatus,
   type MGMVAgreement,
   type MGMVInstallment,
+  type Product,
   type Situation,
 } from "@/lib/store";
 import { toast } from "sonner";
@@ -80,6 +81,14 @@ interface ParsedRow {
   clientFound: boolean;
   result: "Pronto" | "Erro";
   errors: string[];
+  /** Onde este registro cai no sistema após importação. */
+  clientCategory: "mgmv" | "common";
+  /** O que a importação vai fazer com o cliente. */
+  clientAction: "create" | "update_existing" | "reuse_existing";
+  /** O que a importação vai fazer com o produto. */
+  productAction: "new_product_new_client" | "add_to_existing_client" | "duplicate_product";
+  /** Nome salvo no banco (quando cliente já existe). */
+  existingClientName?: string;
 }
 
 const VALID_STATUS = ["Pago", "Reserva", "Pendente", "MGMV"] as const;
@@ -888,7 +897,12 @@ const toISO = (v: string | undefined | null) => {
   return brDateToISO(v);
 };
 
-function parseTextList(input: string): Omit<ParsedRow, "clientFound" | "result" | "errors">[] {
+type RawParsedRow = Omit<
+  ParsedRow,
+  "clientFound" | "result" | "errors" | "clientCategory" | "clientAction" | "productAction" | "existingClientName"
+>;
+
+function parseTextList(input: string): RawParsedRow[] {
   const lines = input.split("\n").map((l) => l.trim()).filter(Boolean);
   if (lines.length === 0) return [];
   const dateMatch = lines[0].match(/(\d{2}\/\d{2}\/\d{4})/);
@@ -946,7 +960,7 @@ function parseHTMLList(html: string) {
   return parseTextList(text);
 }
 
-function parseTabular(rows: Record<string, unknown>[]): Omit<ParsedRow, "clientFound" | "result" | "errors">[] {
+function parseTabular(rows: Record<string, unknown>[]): RawParsedRow[] {
   return rows.map((r, idx) => {
     const get = (k: string) => {
       const key = Object.keys(r).find((kk) => kk.toLowerCase().trim() === k);
@@ -973,8 +987,9 @@ function parseTabular(rows: Record<string, unknown>[]): Omit<ParsedRow, "clientF
 }
 
 function validateRows(
-  raw: Omit<ParsedRow, "clientFound" | "result" | "errors">[],
-  findClientByPhone: (phone: string) => { id: string } | undefined,
+  raw: RawParsedRow[],
+  findClientByPhone: (phone: string) => Client | undefined,
+  products: Product[],
 ): ParsedRow[] {
   return raw.map((r) => {
     const errors: string[] = [];
@@ -1009,6 +1024,36 @@ function validateRows(
             ? "Valor pago quita o total, portanto o status correto é Pago."
             : "Existe valor pago de entrada, portanto o status correto é Reserva.";
     }
+    // Classificação idêntica à das seções Clientes / MGMV / Cobrança:
+    //  - MGMV: status financeiro MGMV OU cliente já classificado como mgmv.
+    //  - Cliente novo vs existente: match por telefone.
+    //  - Produto já existente do mesmo cliente: match por nome + plataforma.
+    const isMgmv =
+      correctedStatus === "MGMV" || found?.clientType === "mgmv" || !!found?.mgmv;
+    const clientCategory: "mgmv" | "common" = isMgmv ? "mgmv" : "common";
+    let clientAction: ParsedRow["clientAction"] = "create";
+    if (found) {
+      const sameName =
+        found.name.trim().toLowerCase() === r.name.trim().toLowerCase();
+      clientAction = sameName ? "reuse_existing" : "update_existing";
+    }
+    const normalizedProduct = r.product.trim().toLowerCase();
+    const normalizedPlatform = r.platform.trim().toLowerCase();
+    const duplicateProduct =
+      !!found &&
+      normalizedProduct.length > 0 &&
+      products.some(
+        (p) =>
+          p.clientId === found.id &&
+          p.name.trim().toLowerCase() === normalizedProduct &&
+          p.platform.trim().toLowerCase() === normalizedPlatform,
+      );
+    let productAction: ParsedRow["productAction"] = "new_product_new_client";
+    if (duplicateProduct) productAction = "duplicate_product";
+    else if (found) productAction = "add_to_existing_client";
+    if (duplicateProduct) {
+      errors.push(`Produto "${r.product}" já existe para este cliente.`);
+    }
     return {
       ...r,
       phone: phoneDigits,
@@ -1016,6 +1061,10 @@ function validateRows(
       originalFinancialStatus: originalStatus,
       statusWarning,
       clientFound: !!found,
+      clientCategory,
+      clientAction,
+      productAction,
+      existingClientName: found?.name,
       result: errors.length === 0 ? "Pronto" : "Erro",
       errors,
     };
@@ -1829,7 +1878,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         header: true,
         skipEmptyLines: true,
         complete: (res) => {
-          const parsed = validateRows(parseTabular(res.data as Record<string, unknown>[]), findClientByPhone);
+          const parsed = validateRows(parseTabular(res.data as Record<string, unknown>[]), findClientByPhone, products);
           setRows(parsed);
           toast.success(`${parsed.length} linha(s) processadas`);
         },
@@ -1840,7 +1889,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       const wb = XLSX.read(buf, { type: "array" });
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
-      const parsed = validateRows(parseTabular(json), findClientByPhone);
+      const parsed = validateRows(parseTabular(json), findClientByPhone, products);
       setRows(parsed);
       toast.success(`${parsed.length} linha(s) processadas`);
       setTab("excel");
@@ -1861,7 +1910,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       setText(txt);
       setTab("text");
       const raw = /<[a-z][\s\S]*>/i.test(txt) ? parseHTMLList(txt) : parseTextList(txt);
-      const parsed = validateRows(raw, findClientByPhone);
+      const parsed = validateRows(raw, findClientByPhone, products);
       setRows(parsed);
       toast.success(`${parsed.length} linha(s) processadas`);
     } else {
@@ -1885,7 +1934,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     // HTML continua com parser dedicado; texto puro vai direto para a IA.
     if (/<[a-z][\s\S]*>/i.test(text)) {
       const raw = parseHTMLList(text);
-      const parsed = validateRows(raw, findClientByPhone);
+      const parsed = validateRows(raw, findClientByPhone, products);
       setRows(parsed);
       toast.success(`${parsed.length} linha(s) processadas`);
       return;
@@ -1917,7 +1966,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           .filter(Boolean)
           .join(" • ") || undefined,
       }));
-      const parsed = validateRows(raw, findClientByPhone);
+      const parsed = validateRows(raw, findClientByPhone, products);
       setRows(parsed);
       const fixed = aiRows.filter((r) => r.fixes.length > 0).length;
       toast.success(
@@ -1933,13 +1982,17 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   };
 
   const summary = useMemo(() => {
-    if (!rows) return { ok: 0, err: 0, newC: 0, foundC: 0, ready: 0 };
+    if (!rows) return { ok: 0, err: 0, newC: 0, foundC: 0, ready: 0, mgmv: 0, common: 0, addProduct: 0, duplicate: 0 };
     return {
       ok: rows.filter((r) => r.result === "Pronto").length,
       err: rows.filter((r) => r.result === "Erro").length,
       newC: rows.filter((r) => !r.clientFound && r.result === "Pronto").length,
       foundC: rows.filter((r) => r.clientFound).length,
       ready: rows.filter((r) => r.result === "Pronto").length,
+      mgmv: rows.filter((r) => r.clientCategory === "mgmv").length,
+      common: rows.filter((r) => r.clientCategory === "common").length,
+      addProduct: rows.filter((r) => r.productAction === "add_to_existing_client").length,
+      duplicate: rows.filter((r) => r.productAction === "duplicate_product").length,
     };
   }, [rows]);
 
@@ -2323,12 +2376,13 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               Revise os registros analisados antes de confirmar. Você pode fechar e ajustar a origem se algo estiver incorreto.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-2 px-6 sm:grid-cols-3 md:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2 px-6 sm:grid-cols-3 md:grid-cols-6">
             <SlimMetric label="Válidos" value={summary.ok} tone="success" />
             <SlimMetric label="Com erro" value={summary.err} tone="danger" />
-            <SlimMetric label="Clientes encontr." value={summary.foundC} />
-            <SlimMetric label="Clientes novos" value={summary.newC} />
-            <SlimMetric label="Prontos" value={summary.ready} tone="primary" />
+            <SlimMetric label="Comum" value={summary.common} />
+            <SlimMetric label="MGMV" value={summary.mgmv} tone="primary" />
+            <SlimMetric label="+ ao cliente" value={summary.addProduct} />
+            <SlimMetric label="Duplicados" value={summary.duplicate} tone="danger" />
           </div>
           <div className="flex flex-1 min-h-0 flex-col px-6 pb-2">
             <PreviewVirtualTable rows={rows ?? []} />
@@ -2391,11 +2445,22 @@ function SlimMetric({
   );
 }
 
-type PreviewFilter = "all" | "ready" | "error" | "pago" | "reserva" | "pendente";
+type PreviewFilter =
+  | "all"
+  | "ready"
+  | "error"
+  | "pago"
+  | "reserva"
+  | "pendente"
+  | "mgmv"
+  | "common"
+  | "new_client"
+  | "add_product"
+  | "duplicate";
 
 function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
   const parentRef = useRef<HTMLDivElement | null>(null);
-  const ROW_HEIGHT = 40;
+  const ROW_HEIGHT = 56;
   const [query, setQuery] = usePersistedState<string>("import.preview.query", "");
   const [filter, setFilter] = usePersistedState<PreviewFilter>("import.preview.filter", "all");
 
@@ -2410,6 +2475,11 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
       if (filter === "pago" && r.financialStatus !== "Pago") return false;
       if (filter === "reserva" && r.financialStatus !== "Reserva") return false;
       if (filter === "pendente" && r.financialStatus !== "Pendente") return false;
+      if (filter === "mgmv" && r.clientCategory !== "mgmv") return false;
+      if (filter === "common" && r.clientCategory !== "common") return false;
+      if (filter === "new_client" && r.clientAction !== "create") return false;
+      if (filter === "add_product" && r.productAction !== "add_to_existing_client") return false;
+      if (filter === "duplicate" && r.productAction !== "duplicate_product") return false;
       if (!q) return true;
       return (
         r.name.toLowerCase().includes(q) ||
@@ -2490,6 +2560,11 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
     { id: "pago", label: "Pago" },
     { id: "reserva", label: "Reserva" },
     { id: "pendente", label: "Pendente" },
+    { id: "mgmv", label: "MGMV" },
+    { id: "common", label: "Comum" },
+    { id: "new_client", label: "Novo cliente" },
+    { id: "add_product", label: "+ ao cliente" },
+    { id: "duplicate", label: "Duplicado" },
   ];
 
   return (
@@ -2635,8 +2710,48 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
                         {r.financialStatus || "—"}
                       </Tag>
                     </div>
-                    <div>
+                    <div className="flex flex-col gap-0.5 leading-tight">
                       <Tag variant={r.result === "Pronto" ? "success" : "danger"}>{r.result}</Tag>
+                      <div className="flex flex-wrap items-center gap-1 text-[9px] uppercase tracking-wide text-muted-foreground">
+                        <span
+                          className={cn(
+                            "rounded px-1 py-px",
+                            r.clientCategory === "mgmv"
+                              ? "bg-primary/15 text-primary"
+                              : "bg-muted",
+                          )}
+                          title={
+                            r.clientCategory === "mgmv"
+                              ? "Vai para a seção MGMV"
+                              : "Cliente comum (Cobrança/Clientes)"
+                          }
+                        >
+                          {r.clientCategory === "mgmv" ? "MGMV" : "Comum"}
+                        </span>
+                        <span
+                          className={cn(
+                            "rounded px-1 py-px",
+                            r.productAction === "duplicate_product"
+                              ? "bg-destructive/15 text-destructive"
+                              : r.productAction === "add_to_existing_client"
+                              ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                              : "bg-[color:var(--success)]/15 text-[color:var(--success)]",
+                          )}
+                          title={
+                            r.productAction === "duplicate_product"
+                              ? "Produto já existe para este cliente"
+                              : r.productAction === "add_to_existing_client"
+                              ? `Adicionar produto ao cliente existente${r.existingClientName ? ` (${r.existingClientName})` : ""}`
+                              : "Novo cliente + produto"
+                          }
+                        >
+                          {r.productAction === "duplicate_product"
+                            ? "Duplicado"
+                            : r.productAction === "add_to_existing_client"
+                            ? "+Produto"
+                            : "Novo"}
+                        </span>
+                      </div>
                     </div>
                     <div className={cn("truncate", avisoTone)} title={aviso}>
                       {aviso || "—"}
