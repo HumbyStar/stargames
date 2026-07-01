@@ -2405,7 +2405,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             <SlimMetric label="+ ao cliente" value={summary.addProduct} />
             <SlimMetric label="Duplicados" value={summary.duplicate} tone="danger" />
           </div>
-          <div className="mt-3 flex flex-col px-6 pb-4">
+          <div className="mt-3 flex flex-col px-6 pb-[50px]">
             <PreviewVirtualTable rows={rows ?? []} />
           </div>
           <div
