@@ -64,6 +64,12 @@ export interface MgmvAiReviewSuggestion {
   nextInstallmentDiscount?: number | null;
   /** Número da parcela que recebe o desconto (normalmente paidInstallments + 1). */
   discountAppliedToInstallment?: number | null;
+  /**
+   * Datas em que cada parcela paga foi efetivamente quitada, na mesma ordem
+   * em que aparecem no texto (parcela 1, parcela 2, ...). Aceita YYYY-MM-DD.
+   * Vazio quando o texto não trouxer datas.
+   */
+  paidDates?: string[];
 }
 
 const SYSTEM_PROMPT = `Você é um extrator de dados financeiros de acordos MGMV.
@@ -98,6 +104,7 @@ Extraia:
 - partialPaidInstallment (1..N|null) — número da parcela parcial
 - nextInstallmentDiscount (number|null) — quando o cliente pagou MAIS que o valor da parcela (ex.: "Pago 58 reais" numa parcela de 54), conte a parcela como PAGA integralmente e registre o excedente (4) como desconto para a próxima parcela.
 - discountAppliedToInstallment (1..N|null) — número da parcela que receberá o desconto (geralmente paidInstallments + 1).
+- paidDates (array de datas YYYY-MM-DD) — DATA em que cada parcela paga foi quitada, NA ORDEM (1ª data = parcela 1, 2ª = parcela 2 ...). Se o texto trouxer datas em português por extenso ("6 de Abril", "12 Maio", "dia 30 de junho de 2026"), converta para YYYY-MM-DD usando o ano de referência do texto (ou o ano corrente quando não houver). Se uma parcela paga não tiver data, coloque string vazia "" na respectiva posição. Se nenhuma data existir, retorne array vazio.
 
 Regra de pagamento com valor diferente do da parcela:
 - Se o texto disser "Pago X reais" (ou similar), trate como uma parcela PAGA integralmente.
@@ -176,6 +183,9 @@ function normalize(raw: unknown): MgmvAiReviewSuggestion {
     partialPaidInstallment: coerceNumberOrNull(r.partialPaidInstallment),
     nextInstallmentDiscount: coerceNumberOrNull(r.nextInstallmentDiscount),
     discountAppliedToInstallment: coerceNumberOrNull(r.discountAppliedToInstallment),
+    paidDates: Array.isArray(r.paidDates)
+      ? (r.paidDates as unknown[]).map((x) => (typeof x === "string" ? x : ""))
+      : [],
   };
 }
 
