@@ -1024,12 +1024,15 @@ function validateRows(
             ? "Valor pago quita o total, portanto o status correto é Pago."
             : "Existe valor pago de entrada, portanto o status correto é Reserva.";
     }
-    // Classificação idêntica à das seções Clientes / MGMV / Cobrança:
-    //  - MGMV: status financeiro MGMV OU cliente já classificado como mgmv.
-    //  - Cliente novo vs existente: match por telefone.
-    //  - Produto já existente do mesmo cliente: match por nome + plataforma.
-    const isMgmv =
-      correctedStatus === "MGMV" || found?.clientType === "mgmv" || !!found?.mgmv;
+    // Mesma regra usada em Clientes / MGMV / Cobrança:
+    //   clientType === "mgmv" OU acordo ativo com parcelas.
+    // No importador, também consideramos MGMV se a própria linha vier com
+    // status financeiro MGMV (a confirmação promove o cliente).
+    const clientIsMgmv =
+      !!found &&
+      (found.clientType === "mgmv" ||
+        (!!found.mgmv && found.mgmv.installments.length > 0));
+    const isMgmv = correctedStatus === "MGMV" || clientIsMgmv;
     const clientCategory: "mgmv" | "common" = isMgmv ? "mgmv" : "common";
     let clientAction: ParsedRow["clientAction"] = "create";
     if (found) {
