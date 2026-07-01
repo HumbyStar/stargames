@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -36,6 +36,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ImportCard, ImportCardsGrid } from "@/components/import-cards";
+import { ImportConveyor } from "@/components/import-conveyor";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -89,9 +91,13 @@ function statusToSituation(s: ListImportRow["financialStatus"]): Situation {
 export function ListImportModal({
   open,
   onOpenChange,
+  initialText,
+  autoAnalyze,
 }: {
   open: boolean;
   onOpenChange: (next: boolean) => void;
+  initialText?: string;
+  autoAnalyze?: boolean;
 }) {
   const [rawText, setRawText] = useState("");
   const [preview, setPreview] = useState<ListImportPreview | null>(null);
@@ -100,6 +106,12 @@ export function ListImportModal({
   const [editing, setEditing] = useState<ListImportRow | null>(null);
   const [aiBusyId, setAiBusyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [progress, setProgress] = useState<{
+    stage: "processing" | "done" | "cancelled";
+    label: string;
+    current: number;
+    total: number;
+  } | null>(null);
 
   const reviewFn = useServerFn(reviewListImportLine);
   const addClient = useStore((s) => s.addClient);
@@ -114,6 +126,7 @@ export function ListImportModal({
     setFilterGroup(null);
     setEditing(null);
     setAiBusyId(null);
+    setProgress(null);
     onOpenChange(false);
   }
 
@@ -132,6 +145,26 @@ export function ListImportModal({
     setFilter("all");
     setFilterGroup(null);
   }
+
+  // Pré-carrega texto vindo da sessão e analisa automaticamente.
+  useEffect(() => {
+    if (!open) return;
+    if (initialText && initialText !== rawText) {
+      setRawText(initialText);
+      if (autoAnalyze) {
+        const out = parseListText(initialText);
+        setPreview(out);
+        setFilter("all");
+        setFilterGroup(null);
+        if (out.rows.length === 0) {
+          toast.warning("Nenhuma linha válida detectada — revise o texto.");
+        } else {
+          toast.success(`${out.rows.length} linha(s) prontas para revisão.`);
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialText, autoAnalyze]);
 
   const filteredRows = useMemo(() => {
     if (!preview) return [] as ListImportRow[];
@@ -210,11 +243,24 @@ export function ListImportModal({
       return;
     }
     setSaving(true);
+    setProgress({
+      stage: "processing",
+      label: "Preparando registros…",
+      current: 0,
+      total: rowsToSave.length,
+    });
     try {
       let clientsCreated = 0;
       let productsCreated = 0;
       const cache = new Map<string, string>();
-      for (const r of rowsToSave) {
+      for (let i = 0; i < rowsToSave.length; i++) {
+        const r = rowsToSave[i];
+        setProgress({
+          stage: "processing",
+          label: `Salvando ${r.clientName || "cliente"} — ${r.productName || "produto"}…`,
+          current: i,
+          total: rowsToSave.length,
+        });
         if (!r.clientName || !r.phone) continue;
         let clientId = cache.get(r.phone);
         if (!clientId) {
@@ -248,6 +294,12 @@ export function ListImportModal({
         });
         productsCreated++;
       }
+      setProgress({
+        stage: "processing",
+        label: "Registrando histórico…",
+        current: rowsToSave.length,
+        total: rowsToSave.length,
+      });
       addImportHistory({
         source: "Texto",
         file: `Lista colada (${preview?.groups.length ?? 0} grupos)`,
@@ -256,9 +308,17 @@ export function ListImportModal({
         errors: preview?.totals.errorRows ?? 0,
         status: (preview?.totals.errorRows ?? 0) > 0 ? "Com avisos" : "Concluído",
       });
+      setProgress({
+        stage: "done",
+        label: `${clientsCreated} cliente(s) e ${productsCreated} produto(s) salvos.`,
+        current: rowsToSave.length,
+        total: rowsToSave.length,
+      });
       toast.success(`${clientsCreated} cliente(s) e ${productsCreated} produto(s) salvos.`);
-      close();
+      // fecha após breve exibição de conclusão
+      setTimeout(() => close(), 1200);
     } catch (e) {
+      setProgress({ stage: "cancelled", label: "Falha ao salvar.", current: 0, total: rowsToSave.length });
       toast.error(e instanceof Error ? e.message : "Falha ao salvar.");
     } finally {
       setSaving(false);
@@ -284,6 +344,15 @@ export function ListImportModal({
       if (!ok) return;
     }
     void persist(preview.rows.filter((r) => !r.ignored));
+  }
+
+  /** Confirma exatamente as linhas visíveis no preview (respeitando filtros). */
+  function confirmVisible() {
+    if (!filteredRows.length) {
+      toast.error("Nenhuma linha visível para importar.");
+      return;
+    }
+    void persist(filteredRows.filter((r) => r.reviewStatus !== "error"));
   }
 
   return (
@@ -426,6 +495,17 @@ export function ListImportModal({
               />
             </ImportCardsGrid>
 
+            {/* Barra de confirmação sincronizada com o que está visível */}
+            <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 rounded-md border bg-background/95 px-3 py-2 backdrop-blur">
+              <div className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">{filteredRows.length}</span> registro(s) visíveis serão importados ao confirmar.
+              </div>
+              <Button size="sm" onClick={confirmVisible} disabled={saving || !filteredRows.length}>
+                {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-1 h-4 w-4" />}
+                Confirmar importação ({filteredRows.length})
+              </Button>
+            </div>
+
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-muted-foreground">Filtros ativos:</span>
               <Badge variant="secondary">{labelForFilter(filter)}</Badge>
@@ -566,6 +646,23 @@ export function ListImportModal({
                 Algumas linhas precisam de revisão antes de salvar.
               </p>
             )}
+          </div>
+        )}
+
+        {progress && (
+          <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+            <ImportConveyor
+              running={progress.stage === "processing"}
+              state={progress.stage}
+              height="h-24"
+            />
+            <div className="flex items-center justify-between text-xs">
+              <span className="truncate text-muted-foreground">{progress.label}</span>
+              <span className="font-mono">
+                {progress.current}/{progress.total}
+              </span>
+            </div>
+            <Progress value={progress.total === 0 ? 0 : Math.round((progress.current / progress.total) * 100)} />
           </div>
         )}
 

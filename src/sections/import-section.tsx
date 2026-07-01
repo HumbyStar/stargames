@@ -41,6 +41,7 @@ import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { ImportProgressModal, type ImportProgressState } from "@/components/import-progress-modal";
 import { ImportCard, ImportCardsGrid } from "@/components/import-cards";
+import { ListImportModal } from "@/components/list-import-modal";
 import {
   Users,
   ShieldCheck,
@@ -1925,6 +1926,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   };
 
   const [aiLoading, setAiLoading] = useState(false);
+  // Modal da Importação Assistida com IA (recebe o texto colado e roda o fluxo dedicado).
+  const [aiListModal, setAiListModal] = useState<{ open: boolean; text: string }>({ open: false, text: "" });
   // Token incremental para descartar respostas obsoletas / fluxos cancelados.
   // Não dá para abortar a chamada do server function por dentro, mas
   // ignorar o resultado garante que estado e toasts não escapem.
@@ -2340,17 +2343,34 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                 />
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-[11px] text-muted-foreground">
-                    Use os botões acima para colar/copiar sem teclado. Depois clique em validar.
+                    Use os botões acima para colar/copiar sem teclado. Ao validar, abrimos a Importação Assistida com IA em um modal dedicado.
                   </span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={validateText}
-                    disabled={aiLoading || !text.trim()}
-                  >
-                    <Brain className="size-4" />
-                    {aiLoading ? "Analisando..." : "Validar com IA"}
-                  </Button>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={validateText}
+                      disabled={aiLoading || !text.trim()}
+                      title="Analisa e mostra o preview aqui na sessão"
+                    >
+                      <Brain className="size-4" />
+                      {aiLoading ? "Analisando..." : "Validar aqui"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => {
+                        if (!text.trim()) { toast.error("Cole os dados antes de abrir o modal."); return; }
+                        setAiListModal({ open: true, text });
+                      }}
+                      disabled={!text.trim()}
+                      title="Abrir Importação Assistida com IA com o texto colado"
+                    >
+                      <Brain className="size-4" />
+                      Importação Assistida com IA
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2470,6 +2490,14 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           setImportProgress(null);
           void handleZipFile(file);
         }}
+      />
+
+      {/* Modal — Importação Assistida com IA (esteira + preview + confirmar) */}
+      <ListImportModal
+        open={aiListModal.open}
+        onOpenChange={(o) => setAiListModal((prev) => ({ ...prev, open: o }))}
+        initialText={aiListModal.text}
+        autoAnalyze
       />
 
       {/* Modal de confirmação de saída — só aparece se o usuário tentar
