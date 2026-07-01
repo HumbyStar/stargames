@@ -41,6 +41,7 @@ import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { ImportProgressModal, type ImportProgressState } from "@/components/import-progress-modal";
 import { ImportCard, ImportCardsGrid } from "@/components/import-cards";
+import { ListImportModal } from "@/components/list-import-modal";
 import {
   Users,
   ShieldCheck,
@@ -1925,6 +1926,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   };
 
   const [aiLoading, setAiLoading] = useState(false);
+  // Modal da Importação Assistida com IA (recebe o texto colado e roda o fluxo dedicado).
+  const [aiListModal, setAiListModal] = useState<{ open: boolean; text: string }>({ open: false, text: "" });
   // Token incremental para descartar respostas obsoletas / fluxos cancelados.
   // Não dá para abortar a chamada do server function por dentro, mas
   // ignorar o resultado garante que estado e toasts não escapem.
