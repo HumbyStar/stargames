@@ -897,7 +897,12 @@ const toISO = (v: string | undefined | null) => {
   return brDateToISO(v);
 };
 
-function parseTextList(input: string): Omit<ParsedRow, "clientFound" | "result" | "errors">[] {
+type RawParsedRow = Omit<
+  ParsedRow,
+  "clientFound" | "result" | "errors" | "clientCategory" | "clientAction" | "productAction" | "existingClientName"
+>;
+
+function parseTextList(input: string): RawParsedRow[] {
   const lines = input.split("\n").map((l) => l.trim()).filter(Boolean);
   if (lines.length === 0) return [];
   const dateMatch = lines[0].match(/(\d{2}\/\d{2}\/\d{4})/);
@@ -955,7 +960,7 @@ function parseHTMLList(html: string) {
   return parseTextList(text);
 }
 
-function parseTabular(rows: Record<string, unknown>[]): Omit<ParsedRow, "clientFound" | "result" | "errors">[] {
+function parseTabular(rows: Record<string, unknown>[]): RawParsedRow[] {
   return rows.map((r, idx) => {
     const get = (k: string) => {
       const key = Object.keys(r).find((kk) => kk.toLowerCase().trim() === k);
@@ -982,8 +987,9 @@ function parseTabular(rows: Record<string, unknown>[]): Omit<ParsedRow, "clientF
 }
 
 function validateRows(
-  raw: Omit<ParsedRow, "clientFound" | "result" | "errors">[],
-  findClientByPhone: (phone: string) => { id: string } | undefined,
+  raw: RawParsedRow[],
+  findClientByPhone: (phone: string) => Client | undefined,
+  products: Product[],
 ): ParsedRow[] {
   return raw.map((r) => {
     const errors: string[] = [];
@@ -1018,6 +1024,36 @@ function validateRows(
             ? "Valor pago quita o total, portanto o status correto é Pago."
             : "Existe valor pago de entrada, portanto o status correto é Reserva.";
     }
+    // Classificação idêntica à das seções Clientes / MGMV / Cobrança:
+    //  - MGMV: status financeiro MGMV OU cliente já classificado como mgmv.
+    //  - Cliente novo vs existente: match por telefone.
+    //  - Produto já existente do mesmo cliente: match por nome + plataforma.
+    const isMgmv =
+      correctedStatus === "MGMV" || found?.clientType === "mgmv" || !!found?.mgmv;
+    const clientCategory: "mgmv" | "common" = isMgmv ? "mgmv" : "common";
+    let clientAction: ParsedRow["clientAction"] = "create";
+    if (found) {
+      const sameName =
+        found.name.trim().toLowerCase() === r.name.trim().toLowerCase();
+      clientAction = sameName ? "reuse_existing" : "update_existing";
+    }
+    const normalizedProduct = r.product.trim().toLowerCase();
+    const normalizedPlatform = r.platform.trim().toLowerCase();
+    const duplicateProduct =
+      !!found &&
+      normalizedProduct.length > 0 &&
+      products.some(
+        (p) =>
+          p.clientId === found.id &&
+          p.name.trim().toLowerCase() === normalizedProduct &&
+          p.platform.trim().toLowerCase() === normalizedPlatform,
+      );
+    let productAction: ParsedRow["productAction"] = "new_product_new_client";
+    if (duplicateProduct) productAction = "duplicate_product";
+    else if (found) productAction = "add_to_existing_client";
+    if (duplicateProduct) {
+      errors.push(`Produto "${r.product}" já existe para este cliente.`);
+    }
     return {
       ...r,
       phone: phoneDigits,
@@ -1025,6 +1061,10 @@ function validateRows(
       originalFinancialStatus: originalStatus,
       statusWarning,
       clientFound: !!found,
+      clientCategory,
+      clientAction,
+      productAction,
+      existingClientName: found?.name,
       result: errors.length === 0 ? "Pronto" : "Erro",
       errors,
     };
