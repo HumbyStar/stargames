@@ -2651,7 +2651,7 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
           ))}
         </div>
       </div>
-      <div className="flex max-h-[60vh] min-h-[280px] flex-col overflow-hidden rounded-md border border-border">
+      <div className="flex h-[calc(95vh-340px)] min-h-[300px] flex-col overflow-hidden rounded-md border border-border">
         <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
           <div className="flex min-w-[1020px] flex-1 min-h-0 flex-col">
             <div
