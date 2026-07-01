@@ -2445,7 +2445,18 @@ function SlimMetric({
   );
 }
 
-type PreviewFilter = "all" | "ready" | "error" | "pago" | "reserva" | "pendente";
+type PreviewFilter =
+  | "all"
+  | "ready"
+  | "error"
+  | "pago"
+  | "reserva"
+  | "pendente"
+  | "mgmv"
+  | "common"
+  | "new_client"
+  | "add_product"
+  | "duplicate";
 
 function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
   const parentRef = useRef<HTMLDivElement | null>(null);
@@ -2464,6 +2475,11 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
       if (filter === "pago" && r.financialStatus !== "Pago") return false;
       if (filter === "reserva" && r.financialStatus !== "Reserva") return false;
       if (filter === "pendente" && r.financialStatus !== "Pendente") return false;
+      if (filter === "mgmv" && r.clientCategory !== "mgmv") return false;
+      if (filter === "common" && r.clientCategory !== "common") return false;
+      if (filter === "new_client" && r.clientAction !== "create") return false;
+      if (filter === "add_product" && r.productAction !== "add_to_existing_client") return false;
+      if (filter === "duplicate" && r.productAction !== "duplicate_product") return false;
       if (!q) return true;
       return (
         r.name.toLowerCase().includes(q) ||
@@ -2544,6 +2560,11 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
     { id: "pago", label: "Pago" },
     { id: "reserva", label: "Reserva" },
     { id: "pendente", label: "Pendente" },
+    { id: "mgmv", label: "MGMV" },
+    { id: "common", label: "Comum" },
+    { id: "new_client", label: "Novo cliente" },
+    { id: "add_product", label: "+ ao cliente" },
+    { id: "duplicate", label: "Duplicado" },
   ];
 
   return (
