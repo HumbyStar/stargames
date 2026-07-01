@@ -81,6 +81,14 @@ interface ParsedRow {
   clientFound: boolean;
   result: "Pronto" | "Erro";
   errors: string[];
+  /** Onde este registro cai no sistema após importação. */
+  clientCategory: "mgmv" | "common";
+  /** O que a importação vai fazer com o cliente. */
+  clientAction: "create" | "update_existing" | "reuse_existing";
+  /** O que a importação vai fazer com o produto. */
+  productAction: "new_product_new_client" | "add_to_existing_client" | "duplicate_product";
+  /** Nome salvo no banco (quando cliente já existe). */
+  existingClientName?: string;
 }
 
 const VALID_STATUS = ["Pago", "Reserva", "Pendente", "MGMV"] as const;
