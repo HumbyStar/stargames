@@ -412,7 +412,7 @@
   height: 100vh;
   overflow-y: auto;
   overflow-x: hidden;
-  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
   /* Scrollbar visível para permitir navegar entre seções arrastando. */
   scrollbar-width: thin;
   scrollbar-color: color-mix(in oklch, var(--color-primary) 70%, transparent) transparent;
@@ -436,15 +436,16 @@
 
 /* One-page sections */
 .one-page-section {
-  min-height: 100vh;
+  min-height: auto;
   padding: 84px 24px 24px;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-  scroll-margin-top: 0;
+  scroll-margin-top: 84px;
   border-top: 1px solid color-mix(in oklch, var(--color-border) 60%, transparent);
+  /* Deixa o navegador pular pintura/layout de sections fora da viewport. */
+  content-visibility: auto;
+  contain-intrinsic-size: 100vh;
 }
 @media (min-width: 768px) {
-  .one-page-section { padding: 90px 40px 32px; }
+  .one-page-section { padding: 90px 40px 32px; scroll-margin-top: 90px; }
 }
 .one-page-section:first-of-type {
   border-top: none;
@@ -456,7 +457,7 @@
   min-height: 0;
   padding: 0;
   border-top: none;
-  scroll-snap-align: none;
+  content-visibility: visible;
 }
 
 /* Tabela dentro de uma seção one-page:
