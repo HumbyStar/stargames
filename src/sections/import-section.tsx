@@ -2423,6 +2423,16 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             </div>
             <PreviewVirtualTable rows={rows ?? []} />
           </div>
+          <div
+            aria-live="polite"
+            aria-atomic="true"
+            className="sr-only"
+          >
+            {confirming
+              ? "Importando registros, aguarde..."
+              : `Pronto para importar. ${summary.ok} ${summary.ok === 1 ? "registro válido" : "registros válidos"}${summary.err ? `, ${summary.err} com erro` : ""}.`}
+          </div>
+          </div>
         </DialogContent>
       </Dialog>
     </section>
