@@ -915,18 +915,18 @@ function _FloatingNavbarImpl() {
         container.scrollTo({ top: savedY, behavior: "auto" });
       });
     }
-    let raf = 0;
-    const onScroll = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        sessionStorage.setItem(KEY, String(container.scrollTop));
-      });
+    // Persistimos o scroll apenas em eventos discretos (troca de aba,
+    // saída da página) em vez de a cada frame de rolagem.
+    const persist = () => sessionStorage.setItem(KEY, String(container.scrollTop));
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") persist();
     };
-    container.addEventListener("scroll", onScroll, { passive: true });
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", persist);
     return () => {
-      container.removeEventListener("scroll", onScroll);
-      if (raf) cancelAnimationFrame(raf);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", persist);
+      persist();
     };
   }, []);
 
