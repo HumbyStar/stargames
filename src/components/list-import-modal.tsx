@@ -106,12 +106,22 @@ export function ListImportModal({
   const [aiBusyId, setAiBusyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [progressState, setProgressState] = useState<ImportProgressState | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<{
+    rows: ListImportRow[];
+    suspects: Array<{
+      row: ListImportRow;
+      kind: "recent-existing" | "duplicate-in-batch";
+      when: string;
+      note: string;
+    }>;
+  } | null>(null);
 
   const reviewFn = useServerFn(reviewListImportLine);
   const addClient = useStore((s) => s.addClient);
   const addProduct = useStore((s) => s.addProduct);
   const findClientByPhone = useStore((s) => s.findClientByPhone);
   const addImportHistory = useStore((s) => s.addImportHistory);
+  const products = useStore((s) => s.products);
 
   function close() {
     setRawText("");
@@ -121,6 +131,7 @@ export function ListImportModal({
     setEditing(null);
     setAiBusyId(null);
     setProgressState(null);
+    setDuplicateWarning(null);
     onOpenChange(false);
   }
 
@@ -231,7 +242,89 @@ export function ListImportModal({
     }
   }
 
+  // Janela para considerar "acabou de importar o mesmo produto".
+  const DUPLICATE_WINDOW_MINUTES = 15;
+
+  function normalizeKey(s: string) {
+    return String(s || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  /**
+   * Wrapper: detecta duplicidade recente (mesmo cliente + mesmo produto já
+   * salvo nos últimos N minutos) e duplicidade dentro do próprio lote antes
+   * de gravar. Se houver, abre confirmação; caso contrário grava direto.
+   */
   async function persist(rowsToSave: ListImportRow[]) {
+    if (!rowsToSave.length) {
+      toast.error("Nenhum registro para salvar.");
+      return;
+    }
+    const now = Date.now();
+    const windowMs = DUPLICATE_WINDOW_MINUTES * 60 * 1000;
+    const suspects: NonNullable<typeof duplicateWarning>["suspects"] = [];
+    const seenInBatch = new Map<string, ListImportRow>();
+
+    for (const r of rowsToSave) {
+      if (!r.phone || !r.productName) continue;
+      const productKey = `${normalizeKey(r.productName)}|${normalizeKey(r.platformOrCategory)}`;
+      const batchKey = `${r.phone}|${productKey}`;
+
+      // 1) duplicidade dentro do próprio lote (mesma pessoa + mesmo produto)
+      const prev = seenInBatch.get(batchKey);
+      if (prev) {
+        suspects.push({
+          row: r,
+          kind: "duplicate-in-batch",
+          when: `Linha ${prev.lineNumber}`,
+          note: `Este produto aparece mais de uma vez para ${r.clientName || r.phone} no lote atual.`,
+        });
+      } else {
+        seenInBatch.set(batchKey, r);
+      }
+
+      // 2) mesmo produto já salvo há poucos minutos para o mesmo cliente
+      const existingClient = findClientByPhone(r.phone);
+      if (existingClient) {
+        const recent = products.find((p) => {
+          if (p.clientId !== existingClient.id) return false;
+          if (normalizeKey(p.name) !== normalizeKey(r.productName)) return false;
+          const t = new Date(p.registerDate).getTime();
+          if (!Number.isFinite(t)) return false;
+          return now - t <= windowMs;
+        });
+        if (recent) {
+          const minutesAgo = Math.max(
+            0,
+            Math.round((now - new Date(recent.registerDate).getTime()) / 60000),
+          );
+          suspects.push({
+            row: r,
+            kind: "recent-existing",
+            when:
+              minutesAgo === 0
+                ? "agora há pouco"
+                : `há ${minutesAgo} min`,
+            note: `${r.clientName || existingClient.name} já recebeu "${r.productName}" ${
+              minutesAgo === 0 ? "agora há pouco" : `há ${minutesAgo} min`
+            } — pode ser importação duplicada.`,
+          });
+        }
+      }
+    }
+
+    if (suspects.length > 0) {
+      setDuplicateWarning({ rows: rowsToSave, suspects });
+      return;
+    }
+    await runPersist(rowsToSave);
+  }
+
+  async function runPersist(rowsToSave: ListImportRow[]) {
     if (!rowsToSave.length) {
       toast.error("Nenhum registro para salvar.");
       return;
