@@ -2015,6 +2015,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       let createdClients = 0;
       let promotedMgmv = 0;
       let addedToExisting = 0;
+      const affectedClientIds = new Set<string>();
+      const productsBefore = useStore.getState().products.length;
       ready.forEach((r) => {
       let client = findClientByPhone(r.phone);
       if (!client) {
@@ -2036,6 +2038,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           promotedMgmv++;
         }
       }
+      affectedClientIds.add(client.id);
       const total = r.totalValue ?? 0;
       const regISO = r.registerDate ?? new Date().toISOString();
       const dueISO =
@@ -2074,9 +2077,15 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       });
       const savedHistory = useStore.getState().importHistory[0];
       if (savedHistory) {
+      // Sincroniza APENAS os registros afetados por esta confirmação —
+      // evita reenviar toda a base (que estava causando dezenas de POSTs
+      // sequenciais e travando a UI por vários segundos).
+      const state = useStore.getState();
+      const affectedClients = state.clients.filter((c) => affectedClientIds.has(c.id));
+      const affectedProducts = state.products.slice(productsBefore);
       await persistConfirmedImport({
-        clients: useStore.getState().clients,
-        products: useStore.getState().products,
+        clients: affectedClients,
+        products: affectedProducts,
         history: savedHistory,
       });
       }
