@@ -228,6 +228,7 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
     due_date: string | null;
     paid_at: string | null;
     status: string;
+    paid_amount?: number | string | null;
   }>) {
     const list = installmentsByAgreement.get(row.agreement_id) ?? [];
     list.push({
@@ -237,6 +238,10 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
       dueDate: row.due_date ?? new Date().toISOString(),
       paid: row.status === "Paga" || !!row.paid_at,
       paidAt: row.paid_at ?? undefined,
+      paidAmount:
+        row.paid_amount == null
+          ? undefined
+          : Number(row.paid_amount) || 0,
     });
     installmentsByAgreement.set(row.agreement_id, list);
   }
