@@ -30,6 +30,7 @@ import {
 } from "./db-sync";
 import type { ImportDiagnostics } from "./db-sync";
 export type { ImportDiagnostics } from "./db-sync";
+import { recalcPendingDueDates } from "./mgmv-schedule";
 
 export type FinancialStatus = "Pago" | "Reserva" | "Pendente" | "MGMV";
 export type Situation =
