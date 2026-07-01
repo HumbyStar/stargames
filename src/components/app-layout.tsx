@@ -840,7 +840,7 @@ function _FloatingNavbarImpl() {
         {
           root: container,
           rootMargin: "-45% 0px -45% 0px",
-          threshold: [0, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1],
+          threshold: [0, 1],
         },
       );
       observeAll();
@@ -856,7 +856,11 @@ function _FloatingNavbarImpl() {
         observeAll();
       });
     });
-    mo.observe(container, { childList: true, subtree: true });
+    // Só nos importam mudanças diretas na lista de seções (wrappers de
+    // seção são filhos diretos do container). subtree:false evita
+    // recalcular a cada mutação interna de qualquer section (listas,
+    // formulários, digitação em MGMV, etc.).
+    mo.observe(container, { childList: true, subtree: false });
 
     // Resize / orientationchange: recalcula limites do observer (o
     // rootMargin é em % da altura da viewport, então mudou de tamanho).
