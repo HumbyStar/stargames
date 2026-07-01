@@ -272,11 +272,30 @@ function NotificationsDropdown({
   onClose: () => void;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
     const onDocClick = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) onClose();
+      const target = e.target as Node | null;
+      if (wrapRef.current?.contains(target)) return;
+      // Cliques na barra de rolagem nativa disparam mousedown com target
+      // no <html>/<body> — nesse caso, checar as coordenadas contra o
+      // retângulo do painel para não fechar ao arrastar a scrollbar.
+      const panel = panelRef.current;
+      if (panel) {
+        const r = panel.getBoundingClientRect();
+        // Inclui a área da scrollbar (até ~16px à direita do conteúdo).
+        if (
+          e.clientX >= r.left &&
+          e.clientX <= r.right + 16 &&
+          e.clientY >= r.top &&
+          e.clientY <= r.bottom
+        ) {
+          return;
+        }
+      }
+      onClose();
     };
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -294,12 +313,14 @@ function NotificationsDropdown({
       {children}
       {open && (
         <div
+          ref={panelRef}
           className={cn(
             "absolute top-[calc(100%+8px)] z-50 max-h-[min(70vh,420px)] w-[380px] max-w-[calc(100vw-32px)] overflow-auto rounded-2xl border border-border bg-popover/95 p-3 shadow-xl backdrop-blur",
             align === "end" && "right-0",
             align === "start" && "left-0",
             align === "center" && "left-1/2 -translate-x-1/2",
           )}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           <NotificationsPanel onOpenClient={onClose} />
         </div>
