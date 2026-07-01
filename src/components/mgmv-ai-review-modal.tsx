@@ -55,9 +55,10 @@ function validateMath(s: MgmvAiReviewSuggestion): MathCheck {
       msgs.push(`Parcelas × valor (${formatBRL(N * V)}) ≠ total (${formatBRL(T)}).`);
   }
   if (P != null && V != null && PV != null) {
-    if (Math.abs(P * V - PV) > eps)
+    const partial = s.partialPaidAmount ?? 0;
+    if (Math.abs(P * V + partial - PV) > eps)
       msgs.push(
-        `Parcelas pagas × valor (${formatBRL(P * V)}) ≠ valor pago (${formatBRL(PV)}).`,
+        `Parcelas pagas × valor + parcial (${formatBRL(P * V + partial)}) ≠ valor pago (${formatBRL(PV)}).`,
       );
   }
   if (T != null && PV != null && R != null) {
