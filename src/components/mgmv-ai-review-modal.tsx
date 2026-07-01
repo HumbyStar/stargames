@@ -118,6 +118,17 @@ function SuggestionSummary({ s }: { s: MgmvAiReviewSuggestion }) {
       <dd className="font-medium">{fmt(s.remainingValue)}</dd>
       <dt className="text-muted-foreground">Pendentes</dt>
       <dd className="font-medium">{s.pendingInstallments ?? "—"}</dd>
+      {s.partialPaidAmount != null && s.partialPaidAmount > 0 && (
+        <>
+          <dt className="text-muted-foreground">Pagamento parcial</dt>
+          <dd className="font-medium">
+            {fmt(s.partialPaidAmount)}
+            {s.partialPaidInstallment
+              ? ` na parcela ${s.partialPaidInstallment}`
+              : ""}
+          </dd>
+        </>
+      )}
       <dt className="text-muted-foreground">Status sugerido</dt>
       <dd className="font-medium">{s.statusSuggestion ?? "—"}</dd>
       <dt className="text-muted-foreground">Confiança</dt>
