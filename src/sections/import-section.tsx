@@ -2207,7 +2207,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     <section id="import" className="one-page-section">
       <PageHeader
         title="Importação"
-        description="Importe clientes e produtos em três etapas: massa, preview e assistência da IA."
+        description="Importe clientes e produtos em duas etapas: massa e preview. A validação assistida com IA já está integrada."
       />
 
       <Accordion
@@ -2377,7 +2377,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             <div id="import-preview-anchor" />
             {!hasPreview && (
               <div className="rounded-xl border border-dashed border-border/70 bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
-                Nenhum preview no momento. Envie um arquivo na etapa 1 ou cole uma lista na etapa 3 para começar.
+                Nenhum preview no momento. Envie um arquivo ou cole uma lista na etapa 1 para começar.
               </div>
             )}
 
@@ -2447,34 +2447,6 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                 />
               </div>
             )}
-          </AccordionContent>
-        </AccordionItem>
-
-        {/* Parte 3 — Importador assistido com IA */}
-        <AccordionItem
-          value="import-ai"
-          className="overflow-hidden rounded-2xl border border-border bg-card shadow-xs"
-        >
-          <AccordionTrigger className="px-4 py-3 text-left text-sm font-semibold hover:no-underline">
-            <span className="flex items-center gap-2">
-              <span className="grid size-6 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">3</span>
-              Importador assistido com IA
-            </span>
-          </AccordionTrigger>
-          <AccordionContent className="px-4 pb-4">
-            <Card>
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold">Importar clientes por lista</h3>
-                <Button size="sm" onClick={validateText} disabled={aiLoading}>
-                  <Brain className="size-4" />
-                  {aiLoading ? "Analisando..." : "Validar com IA"}
-                </Button>
-              </div>
-              <TextDropzone value={text} onChange={setText} onFile={handleFile} compact />
-              <p className="mt-1.5 text-[11px] text-muted-foreground">
-                Cole a lista ou arraste um .txt. A IA corrige erros comuns, identifica clientes MGMV e monta o preview na etapa 2.
-              </p>
-            </Card>
           </AccordionContent>
         </AccordionItem>
       </Accordion>
