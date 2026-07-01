@@ -1878,7 +1878,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         header: true,
         skipEmptyLines: true,
         complete: (res) => {
-          const parsed = validateRows(parseTabular(res.data as Record<string, unknown>[]), findClientByPhone);
+          const parsed = validateRows(parseTabular(res.data as Record<string, unknown>[]), findClientByPhone, products);
           setRows(parsed);
           toast.success(`${parsed.length} linha(s) processadas`);
         },
@@ -1889,7 +1889,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       const wb = XLSX.read(buf, { type: "array" });
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
-      const parsed = validateRows(parseTabular(json), findClientByPhone);
+      const parsed = validateRows(parseTabular(json), findClientByPhone, products);
       setRows(parsed);
       toast.success(`${parsed.length} linha(s) processadas`);
       setTab("excel");
@@ -1910,7 +1910,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       setText(txt);
       setTab("text");
       const raw = /<[a-z][\s\S]*>/i.test(txt) ? parseHTMLList(txt) : parseTextList(txt);
-      const parsed = validateRows(raw, findClientByPhone);
+      const parsed = validateRows(raw, findClientByPhone, products);
       setRows(parsed);
       toast.success(`${parsed.length} linha(s) processadas`);
     } else {
@@ -1934,7 +1934,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     // HTML continua com parser dedicado; texto puro vai direto para a IA.
     if (/<[a-z][\s\S]*>/i.test(text)) {
       const raw = parseHTMLList(text);
-      const parsed = validateRows(raw, findClientByPhone);
+      const parsed = validateRows(raw, findClientByPhone, products);
       setRows(parsed);
       toast.success(`${parsed.length} linha(s) processadas`);
       return;
@@ -1966,7 +1966,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           .filter(Boolean)
           .join(" • ") || undefined,
       }));
-      const parsed = validateRows(raw, findClientByPhone);
+      const parsed = validateRows(raw, findClientByPhone, products);
       setRows(parsed);
       const fixed = aiRows.filter((r) => r.fixes.length > 0).length;
       toast.success(
