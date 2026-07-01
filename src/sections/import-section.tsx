@@ -2492,6 +2492,14 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         }}
       />
 
+      {/* Modal — Importação Assistida com IA (esteira + preview + confirmar) */}
+      <ListImportModal
+        open={aiListModal.open}
+        onOpenChange={(o) => setAiListModal((prev) => ({ ...prev, open: o }))}
+        initialText={aiListModal.text}
+        autoAnalyze
+      />
+
       {/* Modal de confirmação de saída — só aparece se o usuário tentar
           navegar para outra rota enquanto a importação está rodando. */}
       <Dialog
