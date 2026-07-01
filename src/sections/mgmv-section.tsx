@@ -190,27 +190,22 @@ function notesLookSuspect(notes: string, agreement: MGMVAgreement): boolean {
   // 5) Anotação livre com "→"/"->" mencionando parcela ou valor.
   if (/(→|->)[^\n]{0,80}(parcela|reais|r\$)/i.test(raw)) return true;
 
-  // 6) Valores em reais que não batem com o acordo detectado.
+  // 6) Valores monetários explícitos (R$ ou "reais") que não batem com
+  //    totalDebt nem com value da parcela — indica anotação além do template.
   const value = agreement.installments[0]?.value ?? 0;
   const total = agreement.totalDebt ?? 0;
   const moneyMatches = Array.from(
-    raw.matchAll(/R?\$?\s*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?|\d+)\s*(?:reais)?/gi),
+    raw.matchAll(
+      /(?:R\$\s*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?|\d+(?:[.,]\d{1,2})?)|(\d+(?:[.,]\d{1,2})?)\s*reais)/gi,
+    ),
   );
   const parsed = moneyMatches
-    .map((m) => Number(m[1].replace(/\./g, "").replace(",", ".")))
-    .filter((n) => Number.isFinite(n) && n >= 10 && n <= 100000);
+    .map((m) => Number((m[1] ?? m[2] ?? "").replace(/\./g, "").replace(",", ".")))
+    .filter((n) => Number.isFinite(n) && n > 0);
   const eps = 0.5;
-  const known = new Set<number>();
-  known.add(Math.round(total));
-  known.add(Math.round(value));
-  known.add(count); // "3x" também aparece como número
   const foreign = parsed.filter(
-    (n) =>
-      Math.abs(n - total) > eps &&
-      Math.abs(n - value) > eps &&
-      !known.has(Math.round(n)),
+    (n) => Math.abs(n - total) > eps && Math.abs(n - value) > eps,
   );
-  // Se há pelo menos 1 valor estranho ao acordo, marca suspeito.
   if (foreign.length > 0) return true;
 
   return false;
