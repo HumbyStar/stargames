@@ -56,9 +56,10 @@ function validateMath(s: MgmvAiReviewSuggestion): MathCheck {
   }
   if (P != null && V != null && PV != null) {
     const partial = s.partialPaidAmount ?? 0;
-    if (Math.abs(P * V + partial - PV) > eps)
+    const discount = s.nextInstallmentDiscount ?? 0;
+    if (Math.abs(P * V + partial + discount - PV) > eps)
       msgs.push(
-        `Parcelas pagas × valor + parcial (${formatBRL(P * V + partial)}) ≠ valor pago (${formatBRL(PV)}).`,
+        `Parcelas pagas × valor + parcial + desconto (${formatBRL(P * V + partial + discount)}) ≠ valor pago (${formatBRL(PV)}).`,
       );
   }
   if (T != null && PV != null && R != null) {
@@ -125,6 +126,17 @@ function SuggestionSummary({ s }: { s: MgmvAiReviewSuggestion }) {
             {fmt(s.partialPaidAmount)}
             {s.partialPaidInstallment
               ? ` na parcela ${s.partialPaidInstallment}`
+              : ""}
+          </dd>
+        </>
+      )}
+      {s.nextInstallmentDiscount != null && s.nextInstallmentDiscount > 0 && (
+        <>
+          <dt className="text-muted-foreground">Desconto próxima parcela</dt>
+          <dd className="font-medium">
+            {fmt(s.nextInstallmentDiscount)}
+            {s.discountAppliedToInstallment
+              ? ` na parcela ${s.discountAppliedToInstallment}`
               : ""}
           </dd>
         </>
