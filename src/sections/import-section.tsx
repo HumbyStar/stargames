@@ -2391,7 +2391,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       <Dialog open={!!rows} onOpenChange={(o) => { if (!o && !confirming) setRows(null); }}>
   <DialogContent className="flex flex-col p-0 max-h-[95vh] h-[95vh] w-[95vw] sm:max-w-5xl overflow-hidden">
           <div className="flex-1 overflow-y-auto">
-          <DialogHeader className="px-6 pt-6">
+          <DialogHeader className="px-6 pt-6 pr-0 sm:pr-0">
             <DialogTitle>Preview da importação</DialogTitle>
             <DialogDescription>
               Revise os registros analisados antes de confirmar. Você pode fechar e ajustar a origem se algo estiver incorreto.
@@ -2405,7 +2405,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             <SlimMetric label="+ ao cliente" value={summary.addProduct} />
             <SlimMetric label="Duplicados" value={summary.duplicate} tone="danger" />
           </div>
-          <div className="mt-3 flex flex-col px-6 pb-[50px]">
+          <div className="mt-3 flex flex-col px-6 pb-[160px]">
             <div className="sticky top-0 z-10 mb-3 flex flex-col-reverse gap-2 border-y border-border bg-background/95 px-2 py-3 backdrop-blur-sm sm:flex-row sm:justify-end sm:gap-2">
               <Button variant="outline" onClick={() => setRows(null)} disabled={confirming} className="w-full sm:w-auto">
                 Cancelar
@@ -2651,7 +2651,7 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
           ))}
         </div>
       </div>
-      <div className="flex h-[calc(95vh-340px)] min-h-[300px] flex-col overflow-hidden rounded-md border border-border">
+      <div className="flex h-[calc(95vh-200px)] min-h-[380px] flex-col overflow-hidden rounded-md border border-border">
         <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
           <div className="flex min-w-[1020px] flex-1 min-h-0 flex-col">
             <div
