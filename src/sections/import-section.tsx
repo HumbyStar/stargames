@@ -2369,14 +2369,15 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       </Dialog>
 
       <Dialog open={!!rows} onOpenChange={(o) => { if (!o && !confirming) setRows(null); }}>
-  <DialogContent className="overflow-hidden flex flex-col p-0 max-h-[90vh] w-[95vw] sm:max-w-5xl">
+  <DialogContent className="flex flex-col p-0 max-h-[90vh] w-[95vw] sm:max-w-5xl overflow-hidden">
+          <div className="flex-1 overflow-y-auto">
           <DialogHeader className="px-6 pt-6">
             <DialogTitle>Preview da importação</DialogTitle>
             <DialogDescription>
               Revise os registros analisados antes de confirmar. Você pode fechar e ajustar a origem se algo estiver incorreto.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-2 px-6 sm:grid-cols-3 md:grid-cols-6">
+          <div className="mt-3 grid grid-cols-2 gap-2 px-6 sm:grid-cols-3 md:grid-cols-6">
             <SlimMetric label="Válidos" value={summary.ok} tone="success" />
             <SlimMetric label="Com erro" value={summary.err} tone="danger" />
             <SlimMetric label="Comum" value={summary.common} />
@@ -2384,7 +2385,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             <SlimMetric label="+ ao cliente" value={summary.addProduct} />
             <SlimMetric label="Duplicados" value={summary.duplicate} tone="danger" />
           </div>
-          <div className="flex flex-1 min-h-0 flex-col px-6 pb-2">
+          <div className="mt-3 flex flex-col px-6 pb-4">
             <PreviewVirtualTable rows={rows ?? []} />
           </div>
           <div
@@ -2395,6 +2396,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             {confirming
               ? "Importando registros, aguarde..."
               : `Pronto para importar. ${summary.ok} ${summary.ok === 1 ? "registro válido" : "registros válidos"}${summary.err ? `, ${summary.err} com erro` : ""}.`}
+          </div>
           </div>
           <DialogFooter className="shrink-0 flex-col gap-2 border-t border-border bg-background px-6 py-4 sm:flex-row sm:justify-center">
             <Button variant="outline" onClick={() => setRows(null)} disabled={confirming}>
@@ -2460,7 +2462,7 @@ type PreviewFilter =
 
 function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
   const parentRef = useRef<HTMLDivElement | null>(null);
-  const ROW_HEIGHT = 56;
+  const ROW_HEIGHT = 52;
   const [query, setQuery] = usePersistedState<string>("import.preview.query", "");
   const [filter, setFilter] = usePersistedState<PreviewFilter>("import.preview.filter", "all");
 
@@ -2551,7 +2553,7 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
 
   // Compact column layout that fits within the modal width without horizontal scroll.
   const gridCols =
-    "grid-cols-[40px_minmax(110px,1.3fr)_110px_minmax(120px,1.4fr)_minmax(80px,0.9fr)_85px_82px_82px_minmax(120px,1.2fr)]";
+    "grid-cols-[40px_minmax(110px,1.3fr)_110px_minmax(120px,1.4fr)_minmax(80px,0.9fr)_78px_78px_78px_82px_92px_minmax(120px,1.2fr)]";
 
   const filterChips: { id: PreviewFilter; label: string }[] = [
     { id: "all", label: "Todos" },
@@ -2629,9 +2631,9 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
           ))}
         </div>
       </div>
-      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
-        <div className="flex h-full min-h-0 flex-col overflow-x-auto">
-          <div className="flex min-w-[860px] flex-1 min-h-0 flex-col">
+      <div className="flex max-h-[60vh] min-h-[280px] flex-col overflow-hidden rounded-md border border-border">
+        <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
+          <div className="flex min-w-[1020px] flex-1 min-h-0 flex-col">
             <div
               className={cn(
                 "grid shrink-0 items-center gap-0 border-b border-border bg-muted/60 px-2 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground backdrop-blur",
@@ -2643,7 +2645,9 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
               <div className="font-medium">Telefone</div>
               <div className="font-medium">Produto</div>
               <div className="font-medium">Plataforma</div>
-              <div className="font-medium">Valor</div>
+              <div className="font-medium">Total</div>
+              <div className="font-medium">Pago</div>
+              <div className="font-medium">Restante</div>
               <div className="font-medium">Status</div>
               <div className="font-medium">Result.</div>
               <div className="font-medium">Aviso / Erro</div>
@@ -2686,16 +2690,16 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
                     <div className="truncate text-muted-foreground tabular-nums" title={r.phone}>{r.phone || "—"}</div>
                     <div className="truncate" title={r.product}>{r.product || "—"}</div>
                     <div className="truncate text-muted-foreground" title={r.platform}>{r.platform || "—"}</div>
-                    <div className="tabular-nums leading-tight">
-                      <div>{Number.isFinite(r.totalValue ?? NaN) ? formatBRL(r.totalValue!) : "—"}</div>
-                      {r.financialStatus === "Reserva" &&
-                        Number.isFinite(r.totalValue ?? NaN) &&
-                        Number.isFinite(r.paidValue ?? NaN) && (
-                          <div className="text-[10px] text-muted-foreground">
-                            pago {formatBRL(r.paidValue!)} · resta{" "}
-                            {formatBRL(Math.max(0, (r.totalValue ?? 0) - (r.paidValue ?? 0)))}
-                          </div>
-                        )}
+                    <div className="tabular-nums">
+                      {Number.isFinite(r.totalValue ?? NaN) ? formatBRL(r.totalValue!) : "—"}
+                    </div>
+                    <div className="tabular-nums text-muted-foreground">
+                      {Number.isFinite(r.paidValue ?? NaN) ? formatBRL(r.paidValue!) : "—"}
+                    </div>
+                    <div className="tabular-nums">
+                      {Number.isFinite(r.totalValue ?? NaN) && Number.isFinite(r.paidValue ?? NaN)
+                        ? formatBRL(Math.max(0, (r.totalValue ?? 0) - (r.paidValue ?? 0)))
+                        : "—"}
                     </div>
                     <div>
                       <Tag
