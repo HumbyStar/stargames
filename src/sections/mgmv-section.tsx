@@ -603,6 +603,11 @@ export function MGMVSection({
                                         ) : (
                                           <Tag variant="neutral">Pendente</Tag>
                                         )}
+                                        {!i.paid && (i.paidAmount ?? 0) > 0 && (
+                                          <span className="ml-1 text-[10px] text-warning">
+                                            (parcial {formatBRL(i.paidAmount!)})
+                                          </span>
+                                        )}
                                       </span>
                                       {!i.paid && (
                                         <Button
