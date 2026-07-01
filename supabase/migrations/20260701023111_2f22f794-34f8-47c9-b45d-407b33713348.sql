@@ -1,0 +1,1 @@
+ALTER TABLE public.mgmv_installments ADD COLUMN IF NOT EXISTS paid_amount NUMERIC;
