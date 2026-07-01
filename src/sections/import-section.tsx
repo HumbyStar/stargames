@@ -2376,12 +2376,13 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               Revise os registros analisados antes de confirmar. Você pode fechar e ajustar a origem se algo estiver incorreto.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-2 px-6 sm:grid-cols-3 md:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2 px-6 sm:grid-cols-3 md:grid-cols-6">
             <SlimMetric label="Válidos" value={summary.ok} tone="success" />
             <SlimMetric label="Com erro" value={summary.err} tone="danger" />
-            <SlimMetric label="Clientes encontr." value={summary.foundC} />
-            <SlimMetric label="Clientes novos" value={summary.newC} />
-            <SlimMetric label="Prontos" value={summary.ready} tone="primary" />
+            <SlimMetric label="Comum" value={summary.common} />
+            <SlimMetric label="MGMV" value={summary.mgmv} tone="primary" />
+            <SlimMetric label="+ ao cliente" value={summary.addProduct} />
+            <SlimMetric label="Duplicados" value={summary.duplicate} tone="danger" />
           </div>
           <div className="flex flex-1 min-h-0 flex-col px-6 pb-2">
             <PreviewVirtualTable rows={rows ?? []} />
