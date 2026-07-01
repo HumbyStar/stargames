@@ -60,6 +60,10 @@ export interface MgmvAiReviewSuggestion {
   partialPaidAmount?: number | null;
   /** Número (1..N) da parcela com pagamento parcial. */
   partialPaidInstallment?: number | null;
+  /** Valor excedente pago além do valor da parcela — vira desconto na próxima. */
+  nextInstallmentDiscount?: number | null;
+  /** Número da parcela que recebe o desconto (normalmente paidInstallments + 1). */
+  discountAppliedToInstallment?: number | null;
 }
 
 const SYSTEM_PROMPT = `Você é um extrator de dados financeiros de acordos MGMV.
@@ -92,10 +96,18 @@ Extraia:
 - warnings (array de strings)
 - partialPaidAmount (number|null) — valor pago em UMA parcela ainda pendente, quando menor que installmentValue
 - partialPaidInstallment (1..N|null) — número da parcela parcial
+- nextInstallmentDiscount (number|null) — quando o cliente pagou MAIS que o valor da parcela (ex.: "Pago 58 reais" numa parcela de 54), conte a parcela como PAGA integralmente e registre o excedente (4) como desconto para a próxima parcela.
+- discountAppliedToInstallment (1..N|null) — número da parcela que receberá o desconto (geralmente paidInstallments + 1).
+
+Regra de pagamento com valor diferente do da parcela:
+- Se o texto disser "Pago X reais" (ou similar), trate como uma parcela PAGA integralmente.
+  - Se X > installmentValue: paidInstallments incrementa em 1, e (X − installmentValue) vai em nextInstallmentDiscount para a próxima parcela. NÃO use partialPaidAmount neste caso.
+  - Se X < installmentValue: aí sim use partialPaidAmount/partialPaidInstallment (a parcela fica em aberto).
+  - Se X == installmentValue: apenas incrementa paidInstallments.
 
 Valide internamente:
 totalAgreementValue = installmentsCount × installmentValue
-paidValue = paidInstallments × installmentValue + (partialPaidAmount || 0)
+paidValue = paidInstallments × installmentValue + (partialPaidAmount || 0) + (nextInstallmentDiscount || 0)
 remainingValue = totalAgreementValue - paidValue
 
 Se as contas não fecharem, mantenha os valores conforme o texto e adicione um warning explicando a divergência.
@@ -162,6 +174,8 @@ function normalize(raw: unknown): MgmvAiReviewSuggestion {
     warnings,
     partialPaidAmount: coerceNumberOrNull(r.partialPaidAmount),
     partialPaidInstallment: coerceNumberOrNull(r.partialPaidInstallment),
+    nextInstallmentDiscount: coerceNumberOrNull(r.nextInstallmentDiscount),
+    discountAppliedToInstallment: coerceNumberOrNull(r.discountAppliedToInstallment),
   };
 }
 
