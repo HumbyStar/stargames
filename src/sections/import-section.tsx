@@ -2369,14 +2369,15 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       </Dialog>
 
       <Dialog open={!!rows} onOpenChange={(o) => { if (!o && !confirming) setRows(null); }}>
-  <DialogContent className="overflow-hidden flex flex-col p-0 max-h-[90vh] w-[95vw] sm:max-w-5xl">
+  <DialogContent className="flex flex-col p-0 max-h-[90vh] w-[95vw] sm:max-w-5xl overflow-hidden">
+          <div className="flex-1 overflow-y-auto">
           <DialogHeader className="px-6 pt-6">
             <DialogTitle>Preview da importação</DialogTitle>
             <DialogDescription>
               Revise os registros analisados antes de confirmar. Você pode fechar e ajustar a origem se algo estiver incorreto.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-2 px-6 sm:grid-cols-3 md:grid-cols-6">
+          <div className="mt-3 grid grid-cols-2 gap-2 px-6 sm:grid-cols-3 md:grid-cols-6">
             <SlimMetric label="Válidos" value={summary.ok} tone="success" />
             <SlimMetric label="Com erro" value={summary.err} tone="danger" />
             <SlimMetric label="Comum" value={summary.common} />
@@ -2384,7 +2385,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             <SlimMetric label="+ ao cliente" value={summary.addProduct} />
             <SlimMetric label="Duplicados" value={summary.duplicate} tone="danger" />
           </div>
-          <div className="flex flex-1 min-h-0 flex-col px-6 pb-2">
+          <div className="mt-3 flex flex-col px-6 pb-4">
             <PreviewVirtualTable rows={rows ?? []} />
           </div>
           <div
@@ -2395,6 +2396,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             {confirming
               ? "Importando registros, aguarde..."
               : `Pronto para importar. ${summary.ok} ${summary.ok === 1 ? "registro válido" : "registros válidos"}${summary.err ? `, ${summary.err} com erro` : ""}.`}
+          </div>
           </div>
           <DialogFooter className="shrink-0 flex-col gap-2 border-t border-border bg-background px-6 py-4 sm:flex-row sm:justify-center">
             <Button variant="outline" onClick={() => setRows(null)} disabled={confirming}>
