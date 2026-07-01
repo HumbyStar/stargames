@@ -42,6 +42,7 @@ import * as XLSX from "xlsx";
 import { ImportProgressModal, type ImportProgressState } from "@/components/import-progress-modal";
 import { ImportCard, ImportCardsGrid } from "@/components/import-cards";
 import { ListImportModal } from "@/components/list-import-modal";
+import { ImportConveyor } from "@/components/import-conveyor";
 import {
   Users,
   ShieldCheck,
