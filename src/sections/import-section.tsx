@@ -2460,7 +2460,7 @@ type PreviewFilter =
 
 function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
   const parentRef = useRef<HTMLDivElement | null>(null);
-  const ROW_HEIGHT = 40;
+  const ROW_HEIGHT = 56;
   const [query, setQuery] = usePersistedState<string>("import.preview.query", "");
   const [filter, setFilter] = usePersistedState<PreviewFilter>("import.preview.filter", "all");
 
