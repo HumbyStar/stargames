@@ -43,6 +43,8 @@ interface MgmvRow {
   paidValue: number;
   remainingValue: number;
   nextDue: string | null;
+  /** Soma de pagamentos parciais em parcelas ainda pendentes. */
+  partialPaidAmount: number;
   /** Status financeiro do acordo (separado do status de revisão). */
   status: "Ativo" | "Em atraso" | "Quitado";
   /** Status de revisão (independente do financeiro). */
@@ -67,8 +69,17 @@ function buildRow(client: Client, agreement: MGMVAgreement): MgmvRow {
   const pendingCount = total - paidCount;
   const paidValue = agreement.installments
     .filter((i) => i.paid)
-    .reduce((s, i) => s + (i.value || 0), 0);
-  const remainingValue = Math.max(0, (agreement.totalDebt || 0) - paidValue);
+    .reduce((s, i) => s + (i.paidAmount ?? i.value ?? 0), 0);
+  const partialPaidAmount = agreement.installments
+    .filter((i) => !i.paid)
+    .reduce(
+      (s, i) => s + Math.max(0, Math.min(i.value, i.paidAmount ?? 0)),
+      0,
+    );
+  const remainingValue = Math.max(
+    0,
+    (agreement.totalDebt || 0) - paidValue - partialPaidAmount,
+  );
   const next = agreement.installments
     .filter((i) => !i.paid)
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
@@ -108,6 +119,7 @@ function buildRow(client: Client, agreement: MGMVAgreement): MgmvRow {
     paidValue,
     remainingValue,
     nextDue,
+    partialPaidAmount,
     status,
     reviewStatus,
     hasMismatch,
