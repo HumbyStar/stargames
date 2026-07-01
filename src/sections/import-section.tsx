@@ -55,6 +55,9 @@ import {
   ChevronDown,
   Search,
   Loader2,
+  ClipboardPaste,
+  ClipboardCopy,
+  Eraser,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { analyzeListWithAI } from "@/lib/list-ai-analyze.functions";
