@@ -106,12 +106,22 @@ export function ListImportModal({
   const [aiBusyId, setAiBusyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [progressState, setProgressState] = useState<ImportProgressState | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<{
+    rows: ListImportRow[];
+    suspects: Array<{
+      row: ListImportRow;
+      kind: "recent-existing" | "duplicate-in-batch";
+      when: string;
+      note: string;
+    }>;
+  } | null>(null);
 
   const reviewFn = useServerFn(reviewListImportLine);
   const addClient = useStore((s) => s.addClient);
   const addProduct = useStore((s) => s.addProduct);
   const findClientByPhone = useStore((s) => s.findClientByPhone);
   const addImportHistory = useStore((s) => s.addImportHistory);
+  const products = useStore((s) => s.products);
 
   function close() {
     setRawText("");
@@ -121,6 +131,7 @@ export function ListImportModal({
     setEditing(null);
     setAiBusyId(null);
     setProgressState(null);
+    setDuplicateWarning(null);
     onOpenChange(false);
   }
 
@@ -231,7 +242,89 @@ export function ListImportModal({
     }
   }
 
+  // Janela para considerar "acabou de importar o mesmo produto".
+  const DUPLICATE_WINDOW_MINUTES = 15;
+
+  function normalizeKey(s: string) {
+    return String(s || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  /**
+   * Wrapper: detecta duplicidade recente (mesmo cliente + mesmo produto já
+   * salvo nos últimos N minutos) e duplicidade dentro do próprio lote antes
+   * de gravar. Se houver, abre confirmação; caso contrário grava direto.
+   */
   async function persist(rowsToSave: ListImportRow[]) {
+    if (!rowsToSave.length) {
+      toast.error("Nenhum registro para salvar.");
+      return;
+    }
+    const now = Date.now();
+    const windowMs = DUPLICATE_WINDOW_MINUTES * 60 * 1000;
+    const suspects: NonNullable<typeof duplicateWarning>["suspects"] = [];
+    const seenInBatch = new Map<string, ListImportRow>();
+
+    for (const r of rowsToSave) {
+      if (!r.phone || !r.productName) continue;
+      const productKey = `${normalizeKey(r.productName)}|${normalizeKey(r.platformOrCategory)}`;
+      const batchKey = `${r.phone}|${productKey}`;
+
+      // 1) duplicidade dentro do próprio lote (mesma pessoa + mesmo produto)
+      const prev = seenInBatch.get(batchKey);
+      if (prev) {
+        suspects.push({
+          row: r,
+          kind: "duplicate-in-batch",
+          when: `Linha ${prev.lineNumber}`,
+          note: `Este produto aparece mais de uma vez para ${r.clientName || r.phone} no lote atual.`,
+        });
+      } else {
+        seenInBatch.set(batchKey, r);
+      }
+
+      // 2) mesmo produto já salvo há poucos minutos para o mesmo cliente
+      const existingClient = findClientByPhone(r.phone);
+      if (existingClient) {
+        const recent = products.find((p) => {
+          if (p.clientId !== existingClient.id) return false;
+          if (normalizeKey(p.name) !== normalizeKey(r.productName)) return false;
+          const t = new Date(p.registerDate).getTime();
+          if (!Number.isFinite(t)) return false;
+          return now - t <= windowMs;
+        });
+        if (recent) {
+          const minutesAgo = Math.max(
+            0,
+            Math.round((now - new Date(recent.registerDate).getTime()) / 60000),
+          );
+          suspects.push({
+            row: r,
+            kind: "recent-existing",
+            when:
+              minutesAgo === 0
+                ? "agora há pouco"
+                : `há ${minutesAgo} min`,
+            note: `${r.clientName || existingClient.name} já recebeu "${r.productName}" ${
+              minutesAgo === 0 ? "agora há pouco" : `há ${minutesAgo} min`
+            } — pode ser importação duplicada.`,
+          });
+        }
+      }
+    }
+
+    if (suspects.length > 0) {
+      setDuplicateWarning({ rows: rowsToSave, suspects });
+      return;
+    }
+    await runPersist(rowsToSave);
+  }
+
+  async function runPersist(rowsToSave: ListImportRow[]) {
     if (!rowsToSave.length) {
       toast.error("Nenhum registro para salvar.");
       return;
@@ -753,6 +846,90 @@ export function ListImportModal({
           close();
         }}
       />
+
+      {/* Aviso da IA: mesmo produto para o mesmo cliente em poucos minutos */}
+      <Dialog
+        open={!!duplicateWarning}
+        onOpenChange={(o) => { if (!o) setDuplicateWarning(null); }}
+      >
+        <DialogContent className="border-amber-500/50 bg-gradient-to-b from-amber-500/10 via-background to-background sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+              <Sparkles className="h-5 w-5" /> Possível importação duplicada
+            </DialogTitle>
+            <DialogDescription>
+              A IA detectou {duplicateWarning?.suspects.length ?? 0} produto(s) que{" "}
+              <span className="font-medium text-foreground">já foram adicionados</span> ao mesmo cliente nos últimos {DUPLICATE_WINDOW_MINUTES} minutos ou aparecem{" "}
+              <span className="font-medium text-foreground">mais de uma vez</span> neste lote. Confirme antes de gravar para evitar duplicidade.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-64 overflow-y-auto rounded-md border bg-background/70">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-muted/60 text-left">
+                <tr>
+                  <th className="p-2">Cliente</th>
+                  <th className="p-2">Produto</th>
+                  <th className="p-2">Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {duplicateWarning?.suspects.slice(0, 50).map((s, i) => (
+                  <tr key={i} className="border-t">
+                    <td className="p-2 align-top">{s.row.clientName || s.row.phone || "—"}</td>
+                    <td className="p-2 align-top">
+                      {s.row.productName || "—"}
+                      {s.row.platformOrCategory ? (
+                        <span className="text-muted-foreground"> · {s.row.platformOrCategory}</span>
+                      ) : null}
+                    </td>
+                    <td className="p-2 align-top text-amber-700 dark:text-amber-300">
+                      {s.kind === "recent-existing"
+                        ? `Já importado ${s.when}`
+                        : `Repetido no lote (${s.when})`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDuplicateWarning(null)}>
+              Cancelar e revisar
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!duplicateWarning) return;
+                const suspectRowIds = new Set(
+                  duplicateWarning.suspects.map((s) => s.row.id),
+                );
+                const filtered = duplicateWarning.rows.filter(
+                  (r) => !suspectRowIds.has(r.id),
+                );
+                setDuplicateWarning(null);
+                if (filtered.length === 0) {
+                  toast.error("Nada restou para importar após remover os duplicados.");
+                  return;
+                }
+                void runPersist(filtered);
+              }}
+            >
+              Pular os duplicados
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={() => {
+                if (!duplicateWarning) return;
+                const rows = duplicateWarning.rows;
+                setDuplicateWarning(null);
+                void runPersist(rows);
+              }}
+            >
+              Importar mesmo assim
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
