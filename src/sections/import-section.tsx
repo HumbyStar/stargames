@@ -2710,8 +2710,48 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
                         {r.financialStatus || "—"}
                       </Tag>
                     </div>
-                    <div>
+                    <div className="flex flex-col gap-0.5 leading-tight">
                       <Tag variant={r.result === "Pronto" ? "success" : "danger"}>{r.result}</Tag>
+                      <div className="flex flex-wrap items-center gap-1 text-[9px] uppercase tracking-wide text-muted-foreground">
+                        <span
+                          className={cn(
+                            "rounded px-1 py-px",
+                            r.clientCategory === "mgmv"
+                              ? "bg-primary/15 text-primary"
+                              : "bg-muted",
+                          )}
+                          title={
+                            r.clientCategory === "mgmv"
+                              ? "Vai para a seção MGMV"
+                              : "Cliente comum (Cobrança/Clientes)"
+                          }
+                        >
+                          {r.clientCategory === "mgmv" ? "MGMV" : "Comum"}
+                        </span>
+                        <span
+                          className={cn(
+                            "rounded px-1 py-px",
+                            r.productAction === "duplicate_product"
+                              ? "bg-destructive/15 text-destructive"
+                              : r.productAction === "add_to_existing_client"
+                              ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                              : "bg-[color:var(--success)]/15 text-[color:var(--success)]",
+                          )}
+                          title={
+                            r.productAction === "duplicate_product"
+                              ? "Produto já existe para este cliente"
+                              : r.productAction === "add_to_existing_client"
+                              ? `Adicionar produto ao cliente existente${r.existingClientName ? ` (${r.existingClientName})` : ""}`
+                              : "Novo cliente + produto"
+                          }
+                        >
+                          {r.productAction === "duplicate_product"
+                            ? "Duplicado"
+                            : r.productAction === "add_to_existing_client"
+                            ? "+Produto"
+                            : "Novo"}
+                        </span>
+                      </div>
                     </div>
                     <div className={cn("truncate", avisoTone)} title={aviso}>
                       {aviso || "—"}
