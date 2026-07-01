@@ -33,6 +33,7 @@ import {
   type FinancialStatus,
   type MGMVAgreement,
   type MGMVInstallment,
+  type Product,
   type Situation,
 } from "@/lib/store";
 import { toast } from "sonner";
