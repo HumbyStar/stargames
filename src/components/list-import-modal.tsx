@@ -846,6 +846,90 @@ export function ListImportModal({
           close();
         }}
       />
+
+      {/* Aviso da IA: mesmo produto para o mesmo cliente em poucos minutos */}
+      <Dialog
+        open={!!duplicateWarning}
+        onOpenChange={(o) => { if (!o) setDuplicateWarning(null); }}
+      >
+        <DialogContent className="border-amber-500/50 bg-gradient-to-b from-amber-500/10 via-background to-background sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+              <Sparkles className="h-5 w-5" /> Possível importação duplicada
+            </DialogTitle>
+            <DialogDescription>
+              A IA detectou {duplicateWarning?.suspects.length ?? 0} produto(s) que{" "}
+              <span className="font-medium text-foreground">já foram adicionados</span> ao mesmo cliente nos últimos {DUPLICATE_WINDOW_MINUTES} minutos ou aparecem{" "}
+              <span className="font-medium text-foreground">mais de uma vez</span> neste lote. Confirme antes de gravar para evitar duplicidade.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-64 overflow-y-auto rounded-md border bg-background/70">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-muted/60 text-left">
+                <tr>
+                  <th className="p-2">Cliente</th>
+                  <th className="p-2">Produto</th>
+                  <th className="p-2">Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {duplicateWarning?.suspects.slice(0, 50).map((s, i) => (
+                  <tr key={i} className="border-t">
+                    <td className="p-2 align-top">{s.row.clientName || s.row.phone || "—"}</td>
+                    <td className="p-2 align-top">
+                      {s.row.productName || "—"}
+                      {s.row.platformOrCategory ? (
+                        <span className="text-muted-foreground"> · {s.row.platformOrCategory}</span>
+                      ) : null}
+                    </td>
+                    <td className="p-2 align-top text-amber-700 dark:text-amber-300">
+                      {s.kind === "recent-existing"
+                        ? `Já importado ${s.when}`
+                        : `Repetido no lote (${s.when})`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDuplicateWarning(null)}>
+              Cancelar e revisar
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!duplicateWarning) return;
+                const suspectRowIds = new Set(
+                  duplicateWarning.suspects.map((s) => s.row.id),
+                );
+                const filtered = duplicateWarning.rows.filter(
+                  (r) => !suspectRowIds.has(r.id),
+                );
+                setDuplicateWarning(null);
+                if (filtered.length === 0) {
+                  toast.error("Nada restou para importar após remover os duplicados.");
+                  return;
+                }
+                void runPersist(filtered);
+              }}
+            >
+              Pular os duplicados
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={() => {
+                if (!duplicateWarning) return;
+                const rows = duplicateWarning.rows;
+                setDuplicateWarning(null);
+                void runPersist(rows);
+              }}
+            >
+              Importar mesmo assim
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
