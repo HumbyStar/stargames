@@ -1195,8 +1195,6 @@ export function AppLayout({ children }: { children?: ReactNode }) {
 }
 
 function GlobalModals() {
-  const importOpen = useUiStore((s) => s.importOpen);
-  const closeImport = useUiStore((s) => s.closeImport);
   const settingsOpen = useUiStore((s) => s.settingsOpen);
   const closeSettings = useUiStore((s) => s.closeSettings);
   const helpOpen = useUiStore((s) => s.helpOpen);
@@ -1206,7 +1204,6 @@ function GlobalModals() {
 
   // onScrollTo dentro dos modais: fecha o modal e rola até a seção alvo.
   const handleScrollTo = (id: string) => {
-    closeImport();
     closeSettings();
     setTimeout(() => {
       const el = document.getElementById(id);
@@ -1216,16 +1213,6 @@ function GlobalModals() {
 
   return (
     <>
-      <Dialog open={importOpen} onOpenChange={(o) => (o ? null : closeImport())}>
- <DialogContent data-tour="import-modal">
-          <DialogHeader className="sr-only">
-            <DialogTitle>Importação</DialogTitle>
-            <DialogDescription>Importe clientes e produtos em massa.</DialogDescription>
-          </DialogHeader>
-          <ImportSection onScrollTo={handleScrollTo} />
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={settingsOpen} onOpenChange={(o) => (o ? null : closeSettings())}>
  <DialogContent data-tour="settings-modal">
           <DialogHeader className="sr-only">
