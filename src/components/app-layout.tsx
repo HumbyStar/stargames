@@ -994,7 +994,7 @@ function _FloatingNavbarImpl() {
         </div>
 
         <div className="ml-auto flex items-center gap-1.5 md:gap-2 md:pl-2">
-          {visibleIds.map((iconId) => {
+          {visibleIds.filter((id) => id !== "import").map((iconId) => {
             const meta = getIconMeta(iconId);
             if (!meta) return null;
             return (
@@ -1017,14 +1017,6 @@ function _FloatingNavbarImpl() {
             );
           })}
           {/* Mobile-only quick actions */}
-          <button
-            type="button"
-            onClick={openImport}
-            aria-label="Importar"
-            className="md:hidden grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-primary/10 hover:text-primary active:scale-90"
-          >
-            <Upload className="size-5" />
-          </button>
           <NotificationsDropdown
             open={notificationsOpen}
             onClose={closeNotifications}
