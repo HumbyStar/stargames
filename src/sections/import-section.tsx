@@ -2389,7 +2389,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       </Dialog>
 
       <Dialog open={!!rows} onOpenChange={(o) => { if (!o && !confirming) setRows(null); }}>
-  <DialogContent className="flex flex-col p-0 max-h-[90vh] w-[95vw] sm:max-w-5xl overflow-hidden">
+  <DialogContent className="flex flex-col p-0 max-h-[95vh] h-[95vh] w-[95vw] sm:max-w-5xl overflow-hidden">
           <div className="flex-1 overflow-y-auto">
           <DialogHeader className="px-6 pt-6">
             <DialogTitle>Preview da importação</DialogTitle>
