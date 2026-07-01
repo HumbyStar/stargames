@@ -486,19 +486,73 @@ export function extractMGMVAgreementFromNotes(notes: string): MGMVAgreement | nu
   // ---- Detecta parcelas pagas + datas individuais ----
   // paidByNumber[N] = ISO date | undefined (paga sem data)
   const paidByNumber = new Map<number, string | undefined>();
+  // paidAmountByNumber[N] = valor parcial pago (quando explicitado entre
+  // parênteses e MENOR que o valor da parcela). Ex.: "1/4 Parcela paga (50 reais)"
+  // com parcela de R$150 → registra 50 como pagamento parcial da parcela 1.
+  const paidAmountByNumber = new Map<number, number>();
+  // Sinais de conflito que forçam reviewStatus = "review_required".
+  const conflictSignals: string[] = [];
   const refYear = inferReferenceYear(notes, firstPaymentMatch?.[1]);
 
   // 1) Linhas com número explícito: "→ 2 Parcela ... paga dia 29 de Maio"
-  //    ou "2ª parcela paga dia 29/05/2026"
+  //    ou "2ª parcela paga dia 29/05/2026". Rejeita dígito precedido por
+  //    "/" ou "," (para não casar o "4" de "1/4 Parcela paga" como
+  //    parcela nº 4 — cenário real observado em produção).
   const perLineNum =
-    /(\d+)\s*[ªº]?\s*Parcela[^\n]*?\b(?:paga|pago|quitada|quitado)\b[^\n]*/gi;
+    /(?<![\d/,])(\d+)\s*[ªº]?\s*Parcela[^\n]*?\b(?:paga|pago|quitada|quitado)\b[^\n]*/gi;
   for (const m of notes.matchAll(perLineNum)) {
     const n = Number(m[1]);
-    if (Number.isFinite(n) && n > 0) {
+    if (Number.isFinite(n) && n > 0 && n <= count) {
       const date = extractPaymentDate(m[0], refYear);
       if (!paidByNumber.has(n) || (date && !paidByNumber.get(n))) {
         paidByNumber.set(n, date);
       }
+      // Detecta pagamento parcial: "(50 reais)" ou "(R$ 50)" com valor
+      // menor que o valor da parcela.
+      const partialMatch = m[0].match(
+        /\((?:R\$\s*)?([\d.,]+)\s*(?:reais|rs)?\)/i,
+      );
+      if (partialMatch) {
+        const amount = normalizeMoney(partialMatch[1]);
+        if (amount > 0 && amount < value) {
+          paidAmountByNumber.set(n, amount);
+          conflictSignals.push(
+            `Parcela ${n} paga parcialmente (R$ ${amount} de R$ ${value})`,
+          );
+        }
+      }
+    }
+  }
+
+  // 1b) Padrão "X/Y Parcela paga" — X = parcela paga; Y = total previsto
+  //     pela nota. Se Y != count captura o Y como conflito de contagem.
+  const fracRe =
+    /(\d+)\s*\/\s*(\d+)\s*[ªº]?\s*Parcela[^\n]*?\b(?:paga|pago|quitada|quitado)\b[^\n]*/gi;
+  for (const m of notes.matchAll(fracRe)) {
+    const x = Number(m[1]);
+    const y = Number(m[2]);
+    if (Number.isFinite(x) && x > 0 && x <= count) {
+      const date = extractPaymentDate(m[0], refYear);
+      if (!paidByNumber.has(x) || (date && !paidByNumber.get(x))) {
+        paidByNumber.set(x, date);
+      }
+      const partialMatch = m[0].match(
+        /\((?:R\$\s*)?([\d.,]+)\s*(?:reais|rs)?\)/i,
+      );
+      if (partialMatch) {
+        const amount = normalizeMoney(partialMatch[1]);
+        if (amount > 0 && amount < value) {
+          paidAmountByNumber.set(x, amount);
+          conflictSignals.push(
+            `Parcela ${x} paga parcialmente (R$ ${amount} de R$ ${value})`,
+          );
+        }
+      }
+    }
+    if (Number.isFinite(y) && y > 0 && y !== count) {
+      conflictSignals.push(
+        `Nota diz "${x}/${y}" mas parser identificou ${count} parcelas`,
+      );
     }
   }
 
@@ -524,11 +578,18 @@ export function extractMGMVAgreementFromNotes(notes: string): MGMVAgreement | nu
   }
 
   // 3) Bulk: "2 parcelas pagas", "Pagou 3 parcelas", "quitou 1 parcela".
+  //    Só aceita a forma "N parcelas pagas" no plural OU quando N não
+  //    está precedido por "/" ou "," (evita "1/4 Parcela paga" virar
+  //    bulk=4). Também exige "parcelas" no plural para números > 1.
   let bulkPaidCount = 0;
   if (/pago\s+primeira\s+parcela/i.test(notes)) bulkPaidCount = Math.max(bulkPaidCount, 1);
-  const pagasMatch = notes.match(/(\d+)\s*parcelas?\s*pagas?/i);
+  const pagasMatch = notes.match(
+    /(?<![\d/,])(\d+)\s*parcelas\s*pagas/i,
+  );
   if (pagasMatch) bulkPaidCount = Math.max(bulkPaidCount, Number(pagasMatch[1]));
-  const pagouMatch = notes.match(/(?:pagou|quitou)\s+(\d+)\s*parcelas?/i);
+  const pagouMatch = notes.match(
+    /(?:pagou|quitou)\s+(\d+)\s*parcelas?/i,
+  );
   if (pagouMatch) bulkPaidCount = Math.max(bulkPaidCount, Number(pagouMatch[1]));
   bulkPaidCount = Math.min(bulkPaidCount, count);
   if (paidByNumber.size === 0 && bulkPaidCount > 0) {
@@ -564,9 +625,16 @@ export function extractMGMVAgreementFromNotes(notes: string): MGMVAgreement | nu
   const installments: MGMVInstallment[] = [];
   for (let i = 1; i <= count; i++) {
     const paidIso = paidByNumber.get(i);
-    const paid = paidByNumber.has(i);
+    const partialAmount = paidAmountByNumber.get(i);
+    const isPartial = partialAmount !== undefined;
+    // Pagamento parcial NÃO conta como parcela quitada.
+    const paid = paidByNumber.has(i) && !isPartial;
     let dueIso: string;
     if (paid && paidIso) {
+      dueIso = paidIso;
+    } else if (isPartial && paidIso) {
+      // Parcela com pagamento parcial permanece pendente, mas o vencimento
+      // exibido segue a data do pagamento parcial (dá contexto ao usuário).
       dueIso = paidIso;
     } else if (lastPaidDate && i > lastPaidNumber) {
       const offset = i - lastPaidNumber;
@@ -583,6 +651,7 @@ export function extractMGMVAgreementFromNotes(notes: string): MGMVAgreement | nu
       value,
       paid,
       paidAt: paid ? paidIso : undefined,
+      paidAmount: isPartial ? partialAmount : paid ? value : undefined,
     });
   }
 
@@ -590,6 +659,7 @@ export function extractMGMVAgreementFromNotes(notes: string): MGMVAgreement | nu
     startDate: new Date().toISOString(),
     totalDebt,
     installments,
+    reviewStatus: conflictSignals.length > 0 ? "review_required" : undefined,
   };
 }
 

@@ -56,6 +56,10 @@ export interface MgmvAiReviewSuggestion {
   needsReview: boolean;
   extractedEvidence: string[];
   warnings: string[];
+  /** Valor pago parcialmente em UMA parcela específica ainda não quitada. */
+  partialPaidAmount?: number | null;
+  /** Número (1..N) da parcela com pagamento parcial. */
+  partialPaidInstallment?: number | null;
 }
 
 const SYSTEM_PROMPT = `Você é um extrator de dados financeiros de acordos MGMV.
@@ -86,10 +90,12 @@ Extraia:
 - needsReview (boolean)
 - extractedEvidence (array de trechos literais do texto)
 - warnings (array de strings)
+- partialPaidAmount (number|null) — valor pago em UMA parcela ainda pendente, quando menor que installmentValue
+- partialPaidInstallment (1..N|null) — número da parcela parcial
 
 Valide internamente:
 totalAgreementValue = installmentsCount × installmentValue
-paidValue = paidInstallments × installmentValue
+paidValue = paidInstallments × installmentValue + (partialPaidAmount || 0)
 remainingValue = totalAgreementValue - paidValue
 
 Se as contas não fecharem, mantenha os valores conforme o texto e adicione um warning explicando a divergência.
@@ -154,6 +160,8 @@ function normalize(raw: unknown): MgmvAiReviewSuggestion {
     needsReview: Boolean(r.needsReview),
     extractedEvidence: evidence,
     warnings,
+    partialPaidAmount: coerceNumberOrNull(r.partialPaidAmount),
+    partialPaidInstallment: coerceNumberOrNull(r.partialPaidInstallment),
   };
 }
 

@@ -27,6 +27,13 @@ export function applySuggestionToAgreement(
     const number = i + 1;
     const prior = existing.find((x) => x.number === number);
     const paid = number <= P;
+    // Se a IA identificou pagamento parcial nesta parcela, aplica.
+    const isPartial =
+      !paid &&
+      s.partialPaidInstallment === number &&
+      typeof s.partialPaidAmount === "number" &&
+      s.partialPaidAmount > 0 &&
+      s.partialPaidAmount < V;
     return {
       number,
       total: N,
@@ -34,6 +41,11 @@ export function applySuggestionToAgreement(
       value: V,
       paid,
       paidAt: paid ? prior?.paidAt ?? nowIso : undefined,
+      paidAmount: paid
+        ? V
+        : isPartial
+          ? (s.partialPaidAmount as number)
+          : prior?.paidAmount,
     };
   });
 
@@ -69,6 +81,14 @@ export function isMgmvAgreementSuspect(
       /parcela\s+paga/i.test(lower);
     const paidCount = agreement.installments.filter((i) => i.paid).length;
     if (mentionsPaid && paidCount === 0) return true;
+    // Sinais fortes de pagamento parcial / contagem conflitante nas notas.
+    if (/parcial|entrada|sinal/i.test(lower)) return true;
+    // "X/Y Parcela" com Y != N: conta declarada difere do parser.
+    const frac = rawNotes.match(/(\d+)\s*\/\s*(\d+)\s*parcela/i);
+    if (frac) {
+      const y = Number(frac[2]);
+      if (Number.isFinite(y) && y !== N) return true;
+    }
   }
   return false;
 }

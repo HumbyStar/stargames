@@ -228,6 +228,7 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
     due_date: string | null;
     paid_at: string | null;
     status: string;
+    paid_amount?: number | string | null;
   }>) {
     const list = installmentsByAgreement.get(row.agreement_id) ?? [];
     list.push({
@@ -237,6 +238,10 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
       dueDate: row.due_date ?? new Date().toISOString(),
       paid: row.status === "Paga" || !!row.paid_at,
       paidAt: row.paid_at ?? undefined,
+      paidAmount:
+        row.paid_amount == null
+          ? undefined
+          : Number(row.paid_amount) || 0,
     });
     installmentsByAgreement.set(row.agreement_id, list);
   }
@@ -654,6 +659,12 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
       due_date: i.dueDate,
       paid_at: i.paid ? (i.paidAt ?? new Date().toISOString()) : null,
       status: i.paid ? "Paga" : "Pendente",
+      paid_amount:
+        i.paidAmount != null
+          ? i.paidAmount
+          : i.paid
+            ? i.value
+            : 0,
     }));
     const CHUNK = 200;
     for (let i = 0; i < rows.length; i += CHUNK) {

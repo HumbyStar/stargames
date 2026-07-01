@@ -1,72 +1,49 @@
-## Diagnóstico da lentidão
+## Diagnóstico do erro exibido
 
-Mapeei a árvore principal (`/` → `OnePage`) e os pontos críticos de performance. A lentidão tem 4 causas combinadas:
+A observação do cliente é ambígua e o parser por regra em `extractMGMVAgreementFromNotes` (src/sections/import-section.tsx) fez três leituras erradas:
 
-### 1. A home renderiza TODAS as sessões grandes ao mesmo tempo
-`src/routes/_authenticated.index.tsx` monta simultaneamente `DashboardSection`, `ClientesSection` (1.378 linhas), `EquipeSection` (764), `MGMVSection` (719) e `CollectionSection` (979) — todas com tabelas, filtros e cálculos. Cada navegação por âncora (`#clientes`, `#mgmv`, etc.) só rola a página; o React continua mantendo tudo montado e re-renderizando.
+1. **Reconheceu `3x de 200` como acordo** (regex `dividido em`), quando a linha seguinte (`1/4 Parcela paga (50 reais)`) mostra que o acordo real é 4x de R$150.
+2. **`(\d+)\s*[ºª]?\s*Parcela`** capturou o "4" de "1/4 Parcela paga" como se fosse "parcela número 4 paga".
+3. **`(\d+)\s*parcelas?\s*pagas?`** casou com "4 Parcela paga" e definiu bulkPaidCount=4, clampado para 3. Como só a parcela "4" estava no mapa e 4 > 3, o algoritmo preencheu 1 e 2 sequencialmente → resultado visível: **2/3 pagas, saldo R$200**.
+4. **Não existe suporte a pagamento parcial** no tipo `MGMVInstallment` (só `paid: boolean`), então "R$50 dos R$150" não pode ser representado sem mudança no modelo.
 
-### 2. `useStore()` sem seletor causa re-render em cascata
-Locais que assinam o store inteiro (qualquer mudança de qualquer campo dispara render completo das sessões pesadas):
-- `_authenticated.index.tsx:48` → `const { clients, products } = useStore();`
-- `clientes-section.tsx:89` → desestruturação ampla
-- `collection-section.tsx:80`
-- `mgmv-section.tsx:130`
-- `import-section.tsx:983`
-- `dashboard-drilldown-modal.tsx:327`
-- `concierge-modal.tsx`, `finance-dashboard.tsx`
+Verdade confirmada pelo usuário: **4× R$150, 1 parcela com pagamento parcial de R$50 em 19/Jun** (saldo R$550).
 
-Zustand sem seletor compara por igualdade referencial do estado inteiro — qualquer `set(...)` re-renderiza tudo. Combinado com (1), uma única edição (pagamento, abrir cliente, mudar filtro persistido) re-renderiza ~7.000 linhas de JSX.
+## O que vou implementar
 
-### 3. Filtros pesados sem memoização estável
-`clientes-section` reconstrói `rows` (lista, soma, status por cliente) a cada render. Como dependências instáveis vêm de `useStore()` sem selector, `useMemo` não ajuda (o array `clients/products` é nova referência a cada `set`). O mesmo padrão aparece em `collection-section` e `mgmv-section`.
+### 1. Blindar o parser de regra contra falsos positivos (src/sections/import-section.tsx)
+- Trocar `(\d+)\s*[ºª]?\s*Parcela` por regex que exige separador de palavra e recusa dígito precedido por `/` ou `,` (evita casar "1/**4** Parcela").
+- Trocar `(\d+)\s*parcelas?\s*pagas?` por versão que exige a palavra "parcelas" no plural OU número seguido de espaço + "parcela" no singular só quando não há barra imediatamente antes ("1/4 Parcela paga" deixa de virar bulk=4).
+- Se o parser detectar padrões conflitantes (menção a "X/Y" com Y ≠ count, ou valor entre parênteses menor que `value` da parcela), marcar `reviewStatus: "review_required"` no acordo retornado.
 
-### 4. Persistência síncrona em cada mutação
-Cada `addProduct`, `updateProduct`, `registerPayment` chama `dbUpsertProduct` dentro do `set` (linhas 513–651 em `store.ts`). São N chamadas sequenciais ao backend durante operações em lote (importação, pagamentos múltiplos), o que trava a UI thread porque o `set` é processado de forma contígua.
+### 2. Suportar parcela parcialmente paga (src/lib/store.ts)
+Estender `MGMVInstallment`:
+```ts
+paidAmount?: number; // quanto já entrou nesta parcela (default = value quando paid=true)
+```
+Regras derivadas:
+- `paid = true` quando `paidAmount >= value`.
+- Saldo = `totalDebt - Σ paidAmount`.
+- Parcelas pagas exibidas = `Σ paidAmount / value` arredondado para baixo, com sufixo "+ parcial" quando houver resto.
 
-## Mudanças propostas
+### 3. Propagar em Card MGMV (src/sections/mgmv-section.tsx e onde `installmentsPaid` é calculado em store.ts)
+- Exibir "1/4 (+ R$50 parcial)" quando houver parcialidade.
+- "Saldo restante" e "Próximo vencimento" recalculados a partir da soma real, não do count binário.
 
-### A. Code-splitting da home — ganho principal
-- `src/routes/_authenticated.index.tsx`: converter `ClientesSection`, `EquipeSection`, `MGMVSection`, `CollectionSection` em `lazy()` envoltos em `<Suspense fallback={<SectionSkeleton />}>`.
-- Carregar cada sessão apenas quando entra no viewport (`IntersectionObserver` em um wrapper `<LazySection id="clientes">`). Resultado: a primeira pintura mostra só Dashboard; as outras sessões só montam ao rolar/navegar até elas.
-- Arquivos novos: `src/components/lazy-section.tsx`.
+### 4. IA de revisão já cobre esse cenário
+`mgmv-ai-review.functions.ts` recebe as observações originais. Vou:
+- Estender `MgmvAiReviewSuggestion` com `partialPaidAmount?: number | null` e `partialPaidInstallment?: number | null`.
+- Ajustar `applySuggestionToAgreement` (src/lib/mgmv-ai-apply.ts) para gravar `paidAmount` na parcela parcial.
+- Ajustar `isMgmvAgreementSuspect` para marcar como suspeito quando as notas mencionam "parcial", "R$ X reais" entre parênteses depois de "paga", ou "X/Y" com Y ≠ count → força botão "Consultar IA" a aparecer piscando no card.
 
-### B. Trocar `useStore()` por seletores granulares
-Refatorar os 7 pontos listados acima para selecionar apenas o que cada componente usa, com `useShallow` quando precisar de várias propriedades:
-- `import { useShallow } from "zustand/react/shallow"`
-- Ex.: `const { clients, products } = useStore(useShallow((s) => ({ clients: s.clients, products: s.products })))`
-- Ações (`addClient`, `updateProduct`, etc.) viram seletores individuais — funções têm referência estável, então não causam render.
+### 5. Corrigir o registro específico deste cliente
+Depois do parser corrigido, o próximo save recomputa. Para o registro já persistido, oferecer no card MGMV um botão "Reanalisar com IA" que reaplica o parser + sugestão da IA e mostra o modal de revisão (`MgmvAiReviewModal`) para o usuário confirmar 4×150 + parcial de 50.
 
-Sem isso, o code-split de (A) é parcialmente desperdiçado: abrir um modal ainda dispararia render das sessões montadas.
+## Fora do escopo
+- Não vou mexer no fluxo de importação/onepage.
+- Não altero schema do banco além de adicionar `paid_amount NUMERIC` opcional na tabela `mgmv_installments` (migration curta com GRANT já existente na tabela).
 
-### C. Memoização efetiva nas sessões pesadas
-Depois de (B), `useMemo` em `rows`/`filtered`/`totals` passa a funcionar (deps estáveis). Estabilizar:
-- `clientes-section.tsx` `rows` (linhas 144–214)
-- `collection-section.tsx` filtro `em_aberto` e listas derivadas
-- `mgmv-section.tsx` agregações por cliente
-- Indexar `products` por `clientId` uma única vez com `useMemo(() => groupBy(products, 'clientId'), [products])` para eliminar o `products.filter(p => p.clientId === c.id)` em O(N×M).
-
-### D. Debounce de persistência no store
-Em `src/lib/store.ts`, trocar as chamadas diretas `dbUpsertProduct(...)` dentro de `set(...)` por um agregador `queueProductUpsert(prod)` que coalesça por `id` e faz `dbUpsertProductsAsync(batch)` em `requestIdleCallback`/microtask. Mesmo padrão para `dbUpsertClient`. Mutações isoladas pela UI continuam com latência similar; operações em lote (importação, regravação de situações no `hydrate`) deixam de bloquear.
-
-### E. Quick wins adicionais
-- `src/components/app-layout.tsx` (1.086 linhas com vários `useEffect`): mover handlers de scroll/intersection para `passive: true` e garantir cleanup; revisar o `useEffect` na linha 1024 (`setTimeout` sem cleanup).
-- `tutorial-runner.tsx`: o loop `setTimeout(tryFind, 120)` por 20 tentativas (linhas 89–91) roda em paralelo com renders pesados. Adicionar guarda `cancelled` no cleanup.
-
-## Validação
-
-- `tsgo --noEmit` e `bunx vitest run` (54 testes existentes).
-- Smoke com Playwright headless: medir `performance.now()` entre o clique em "Ver Clientes" e a primeira pintura visível da tabela; alvo < 500 ms com ~1k clientes / ~3k produtos.
-- Verificar via React DevTools Profiler (manual) que abrir/fechar um modal não re-renderiza `ClientesSection` quando o foco está no Dashboard.
-
-## Ordem de execução (incremental, cada passo é mergeable)
-
-1. (B) Seletores granulares — refator mecânico, baixo risco.
-2. (A) Lazy sections + IntersectionObserver — maior ganho perceptível.
-3. (C) Memoização e índice por `clientId`.
-4. (D) Debounce de upsert.
-5. (E) Limpeza de efeitos.
-
-## Fora de escopo
-
-- Sem mudanças de schema, RLS, edge functions ou regras de negócio (MGMV, importador, IA).
-- Sem alteração visual; apenas estrutura de render e persistência.
+## Verificação
+- `tsgo --noEmit`
+- Rodar `src/sections/import-section.mgmv.test.ts` (ampliar com caso "600 dividido em 3x de 200 reais + 1/4 Parcela paga (50 reais)").
+- Playwright: abrir o cliente da imagem, conferir card mostrando **4× R$150 · 0/4 pagas + R$50 parcial · saldo R$550**.

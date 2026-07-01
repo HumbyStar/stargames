@@ -48,6 +48,13 @@ export interface MGMVInstallment {
   value: number;
   paid: boolean;
   paidAt?: string;
+  /**
+   * Valor efetivamente pago desta parcela. Quando ausente, assume-se
+   * `value` se `paid=true`, ou 0 se `paid=false`. Quando presente e menor
+   * que `value`, representa um pagamento parcial (parcela permanece
+   * pendente até a soma atingir `value`).
+   */
+  paidAmount?: number;
 }
 
 export interface MGMVAgreement {
@@ -986,6 +993,8 @@ export interface MGMVDisplay {
   overdueCount: number;
   active: boolean; // tem alguma parcela em aberto
   status: "Ativo" | "Quitado" | "Vencido";
+  /** Soma de pagamentos parciais em parcelas ainda pendentes. */
+  partialPaidAmount: number;
 }
 
 export function getMGMVDisplay(client: Client): MGMVDisplay | null {
@@ -996,7 +1005,14 @@ export function getMGMVDisplay(client: Client): MGMVDisplay | null {
   const overdue = unpaid.filter((i) => isOverdue(i.dueDate));
   const next = unpaid.slice().sort((a, b) => +new Date(a.dueDate) - +new Date(b.dueDate))[0] ?? null;
   const installmentValue = ins[0]?.value ?? 0;
-  const remainingBalance = unpaid.reduce((s, i) => s + i.value, 0);
+  const partialPaidAmount = unpaid.reduce(
+    (s, i) => s + Math.max(0, Math.min(i.value, i.paidAmount ?? 0)),
+    0,
+  );
+  const remainingBalance = Math.max(
+    0,
+    unpaid.reduce((s, i) => s + i.value, 0) - partialPaidAmount,
+  );
   const active = unpaid.length > 0;
   const status: MGMVDisplay["status"] = !active
     ? "Quitado"
@@ -1015,6 +1031,7 @@ export function getMGMVDisplay(client: Client): MGMVDisplay | null {
     overdueCount: overdue.length,
     active,
     status,
+    partialPaidAmount,
   };
 }
 

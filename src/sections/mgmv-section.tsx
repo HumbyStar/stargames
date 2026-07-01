@@ -43,6 +43,8 @@ interface MgmvRow {
   paidValue: number;
   remainingValue: number;
   nextDue: string | null;
+  /** Soma de pagamentos parciais em parcelas ainda pendentes. */
+  partialPaidAmount: number;
   /** Status financeiro do acordo (separado do status de revisão). */
   status: "Ativo" | "Em atraso" | "Quitado";
   /** Status de revisão (independente do financeiro). */
@@ -67,8 +69,17 @@ function buildRow(client: Client, agreement: MGMVAgreement): MgmvRow {
   const pendingCount = total - paidCount;
   const paidValue = agreement.installments
     .filter((i) => i.paid)
-    .reduce((s, i) => s + (i.value || 0), 0);
-  const remainingValue = Math.max(0, (agreement.totalDebt || 0) - paidValue);
+    .reduce((s, i) => s + (i.paidAmount ?? i.value ?? 0), 0);
+  const partialPaidAmount = agreement.installments
+    .filter((i) => !i.paid)
+    .reduce(
+      (s, i) => s + Math.max(0, Math.min(i.value, i.paidAmount ?? 0)),
+      0,
+    );
+  const remainingValue = Math.max(
+    0,
+    (agreement.totalDebt || 0) - paidValue - partialPaidAmount,
+  );
   const next = agreement.installments
     .filter((i) => !i.paid)
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
@@ -108,6 +119,7 @@ function buildRow(client: Client, agreement: MGMVAgreement): MgmvRow {
     paidValue,
     remainingValue,
     nextDue,
+    partialPaidAmount,
     status,
     reviewStatus,
     hasMismatch,
@@ -484,7 +496,16 @@ export function MGMVSection({
                         {r.total}× {formatBRL(r.agreement.installments[0]?.value ?? 0)}
                       </td>
                       <td className="px-3 py-2">
-                        {r.paidCount}/{r.total}
+                        <div className="flex flex-col leading-tight">
+                          <span>
+                            {r.paidCount}/{r.total}
+                          </span>
+                          {r.partialPaidAmount > 0 && (
+                            <span className="text-[10px] text-warning">
+                              + {formatBRL(r.partialPaidAmount)} parcial
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-2 font-semibold">
                         {formatBRL(r.remainingValue)}
@@ -581,6 +602,11 @@ export function MGMVSection({
                                           <Tag variant="danger">Vencida</Tag>
                                         ) : (
                                           <Tag variant="neutral">Pendente</Tag>
+                                        )}
+                                        {!i.paid && (i.paidAmount ?? 0) > 0 && (
+                                          <span className="ml-1 text-[10px] text-warning">
+                                            (parcial {formatBRL(i.paidAmount!)})
+                                          </span>
                                         )}
                                       </span>
                                       {!i.paid && (
