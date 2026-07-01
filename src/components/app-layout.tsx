@@ -61,7 +61,13 @@ const navItems: ReadonlyArray<{
 function scrollToSection(id: string) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.scrollIntoView({ behavior: "smooth", block: "start" });
+  const container = document.querySelector<HTMLElement>(".page-container");
+  if (!container) {
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  const top = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+  container.scrollTo({ top: Math.max(0, top - 12), behavior: "smooth" });
 }
 
 function SearchBox({
