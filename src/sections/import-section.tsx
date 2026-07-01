@@ -2007,11 +2007,28 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     const toastId = toast.loading(`Importando ${ready.length} registro(s)...`);
     try {
       let createdClients = 0;
+      let promotedMgmv = 0;
+      let addedToExisting = 0;
       ready.forEach((r) => {
       let client = findClientByPhone(r.phone);
       if (!client) {
-        client = addClient({ name: r.name, phone: r.phone });
+        // Novo cliente — já classifica como MGMV se a linha for MGMV, para
+        // aparecer imediatamente na seção MGMV (mesma regra de Clientes/Cobrança).
+        client = addClient({
+          name: r.name,
+          phone: r.phone,
+          ...(r.clientCategory === "mgmv" ? { clientType: "mgmv" as const } : {}),
+        });
         createdClients++;
+      } else {
+        addedToExisting++;
+        // Cliente existente: sincroniza clientType para MGMV quando necessário
+        // (mesma condição usada em Clientes/MGMV/Cobrança). Não sobrescreve
+        // um cliente MGMV para "common".
+        if (r.clientCategory === "mgmv" && client.clientType !== "mgmv") {
+          updateClient(client.id, { clientType: "mgmv" });
+          promotedMgmv++;
+        }
       }
       const total = r.totalValue ?? 0;
       const regISO = r.registerDate ?? new Date().toISOString();
@@ -2058,7 +2075,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       });
       }
       toast.success(
-        `${ready.length} registro(s) importados • ${createdClients} cliente(s) novos • ${rows.length - ready.length} erro(s) ignorados`,
+        `${ready.length} registro(s) importados • ${createdClients} cliente(s) novos • ${addedToExisting} produto(s) adicionados a clientes existentes${promotedMgmv ? ` • ${promotedMgmv} promovido(s) a MGMV` : ""} • ${rows.length - ready.length} erro(s) ignorados`,
         { id: toastId },
       );
       setRows(null);
