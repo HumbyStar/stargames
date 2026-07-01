@@ -2406,6 +2406,21 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             <SlimMetric label="Duplicados" value={summary.duplicate} tone="danger" />
           </div>
           <div className="mt-3 flex flex-col px-6 pb-[50px]">
+            <div className="sticky top-0 z-10 mb-3 flex flex-col-reverse gap-2 border-y border-border bg-background/95 px-2 py-3 backdrop-blur-sm sm:flex-row sm:justify-end sm:gap-2">
+              <Button variant="outline" onClick={() => setRows(null)} disabled={confirming} className="w-full sm:w-auto">
+                Cancelar
+              </Button>
+              <Button onClick={confirmImport} disabled={summary.ok === 0 || confirming} className="w-full sm:w-auto">
+                {confirming ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Importando...
+                  </>
+                ) : (
+                  <>Confirmar Importação ({summary.ok})</>
+                )}
+              </Button>
+            </div>
             <PreviewVirtualTable rows={rows ?? []} />
           </div>
           <div
@@ -2418,21 +2433,6 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
               : `Pronto para importar. ${summary.ok} ${summary.ok === 1 ? "registro válido" : "registros válidos"}${summary.err ? `, ${summary.err} com erro` : ""}.`}
           </div>
           </div>
-          <DialogFooter className="shrink-0 flex-col gap-2 border-t border-border bg-background px-6 py-4 sm:flex-row sm:justify-center">
-            <Button variant="outline" onClick={() => setRows(null)} disabled={confirming}>
-              Cancelar
-            </Button>
-            <Button onClick={confirmImport} disabled={summary.ok === 0 || confirming}>
-              {confirming ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Importando...
-                </>
-              ) : (
-                <>Confirmar Importação ({summary.ok})</>
-              )}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </section>
