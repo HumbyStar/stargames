@@ -659,6 +659,12 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
       due_date: i.dueDate,
       paid_at: i.paid ? (i.paidAt ?? new Date().toISOString()) : null,
       status: i.paid ? "Paga" : "Pendente",
+      paid_amount:
+        i.paidAmount != null
+          ? i.paidAmount
+          : i.paid
+            ? i.value
+            : 0,
     }));
     const CHUNK = 200;
     for (let i = 0; i < rows.length; i += CHUNK) {
