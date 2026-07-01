@@ -34,18 +34,28 @@ export function applySuggestionToAgreement(
       typeof s.partialPaidAmount === "number" &&
       s.partialPaidAmount > 0 &&
       s.partialPaidAmount < V;
+    // Desconto vindo de pagamento excedente da parcela anterior.
+    const discountTarget = s.discountAppliedToInstallment ?? P + 1;
+    const discountValue =
+      typeof s.nextInstallmentDiscount === "number" && s.nextInstallmentDiscount > 0
+        ? s.nextInstallmentDiscount
+        : 0;
+    const hasDiscount = !paid && number === discountTarget && discountValue > 0;
+    const effectiveValue = hasDiscount ? Math.max(0, V - discountValue) : V;
     return {
       number,
       total: N,
       dueDate: prior?.dueDate ?? fallbackDue,
-      value: V,
+      value: effectiveValue,
       paid,
       paidAt: paid ? prior?.paidAt ?? nowIso : undefined,
       paidAmount: paid
         ? V
         : isPartial
           ? (s.partialPaidAmount as number)
-          : prior?.paidAmount,
+          : hasDiscount
+            ? discountValue
+            : prior?.paidAmount,
     };
   });
 
