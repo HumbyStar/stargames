@@ -61,7 +61,13 @@ const navItems: ReadonlyArray<{
 function scrollToSection(id: string) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.scrollIntoView({ behavior: "smooth", block: "start" });
+  const container = document.querySelector<HTMLElement>(".page-container");
+  if (!container) {
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  const top = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+  container.scrollTo({ top: Math.max(0, top - 12), behavior: "smooth" });
 }
 
 function SearchBox({
@@ -834,7 +840,7 @@ function _FloatingNavbarImpl() {
         {
           root: container,
           rootMargin: "-45% 0px -45% 0px",
-          threshold: [0, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1],
+          threshold: [0, 1],
         },
       );
       observeAll();
@@ -850,7 +856,11 @@ function _FloatingNavbarImpl() {
         observeAll();
       });
     });
-    mo.observe(container, { childList: true, subtree: true });
+    // Só nos importam mudanças diretas na lista de seções (wrappers de
+    // seção são filhos diretos do container). subtree:false evita
+    // recalcular a cada mutação interna de qualquer section (listas,
+    // formulários, digitação em MGMV, etc.).
+    mo.observe(container, { childList: true, subtree: false });
 
     // Resize / orientationchange: recalcula limites do observer (o
     // rootMargin é em % da altura da viewport, então mudou de tamanho).
@@ -905,18 +915,18 @@ function _FloatingNavbarImpl() {
         container.scrollTo({ top: savedY, behavior: "auto" });
       });
     }
-    let raf = 0;
-    const onScroll = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        sessionStorage.setItem(KEY, String(container.scrollTop));
-      });
+    // Persistimos o scroll apenas em eventos discretos (troca de aba,
+    // saída da página) em vez de a cada frame de rolagem.
+    const persist = () => sessionStorage.setItem(KEY, String(container.scrollTop));
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") persist();
     };
-    container.addEventListener("scroll", onScroll, { passive: true });
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", persist);
     return () => {
-      container.removeEventListener("scroll", onScroll);
-      if (raf) cancelAnimationFrame(raf);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", persist);
+      persist();
     };
   }, []);
 

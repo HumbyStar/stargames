@@ -1,17 +1,32 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import { AppLayout } from "@/components/app-layout";
 import { Alert, Card, MetricCard, PageHeader, StackedBar } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { useStore, isOverdue, shouldAppearInCollection, formatBRL } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
 import { DashboardIntegrityCard } from "@/components/dashboard-integrity-card";
-import { DashboardDrilldownModal, type DashboardCardId } from "@/components/dashboard-drilldown-modal";
+import type { DashboardCardId } from "@/components/dashboard-drilldown-modal";
+import { LazySection } from "@/components/lazy-section";
 import { ClientesSection } from "@/sections/clientes-section";
-import { CollectionSection } from "@/sections/collection-section";
-import { MGMVSection } from "@/sections/mgmv-section";
-import { EquipeSection } from "@/sections/equipe-section";
-import { ImportSection } from "@/sections/import-section";
+
+const CollectionSection = lazy(() =>
+  import("@/sections/collection-section").then((m) => ({ default: m.CollectionSection })),
+);
+const MGMVSection = lazy(() =>
+  import("@/sections/mgmv-section").then((m) => ({ default: m.MGMVSection })),
+);
+const EquipeSection = lazy(() =>
+  import("@/sections/equipe-section").then((m) => ({ default: m.EquipeSection })),
+);
+const ImportSection = lazy(() =>
+  import("@/sections/import-section").then((m) => ({ default: m.ImportSection })),
+);
+const DashboardDrilldownModal = lazy(() =>
+  import("@/components/dashboard-drilldown-modal").then((m) => ({
+    default: m.DashboardDrilldownModal,
+  })),
+);
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
@@ -28,8 +43,14 @@ export const Route = createFileRoute("/_authenticated/")({
 function scrollToSection(id: string) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.scrollTo({ top: 0, behavior: "auto" });
-  el.scrollIntoView({ behavior: "smooth", block: "start" });
+  const container = document.querySelector<HTMLElement>(".page-container");
+  if (!container) {
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  const top =
+    el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+  container.scrollTo({ top: Math.max(0, top - 12), behavior: "smooth" });
 }
 
 function OnePage() {
@@ -40,16 +61,26 @@ function OnePage() {
       <div id="clientes">
         <ClientesSection onScrollTo={onScrollTo} />
       </div>
-      <div id="equipe">
-        <EquipeSection />
-      </div>
-      <div id="mgmv">
-        <MGMVSection onScrollTo={onScrollTo} />
-      </div>
-      <div id="collection">
-        <CollectionSection onScrollTo={onScrollTo} />
-      </div>
-      <ImportSection onScrollTo={onScrollTo} />
+      <LazySection id="equipe">
+        <Suspense fallback={null}>
+          <EquipeSection />
+        </Suspense>
+      </LazySection>
+      <LazySection id="mgmv">
+        <Suspense fallback={null}>
+          <MGMVSection onScrollTo={onScrollTo} />
+        </Suspense>
+      </LazySection>
+      <LazySection id="collection">
+        <Suspense fallback={null}>
+          <CollectionSection onScrollTo={onScrollTo} />
+        </Suspense>
+      </LazySection>
+      <LazySection id="import" minHeight="60vh">
+        <Suspense fallback={null}>
+          <ImportSection onScrollTo={onScrollTo} />
+        </Suspense>
+      </LazySection>
     </AppLayout>
   );
 }
@@ -246,11 +277,15 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
         <DashboardIntegrityCard />
       </div>
 
-      <DashboardDrilldownModal
-        cardId={activeCard}
-        onClose={() => setActiveCard(null)}
-        onScrollTo={onScrollTo}
-      />
+      {activeCard != null && (
+        <Suspense fallback={null}>
+          <DashboardDrilldownModal
+            cardId={activeCard}
+            onClose={() => setActiveCard(null)}
+            onScrollTo={onScrollTo}
+          />
+        </Suspense>
+      )}
     </section>
   );
 }
