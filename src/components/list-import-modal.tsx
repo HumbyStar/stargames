@@ -36,8 +36,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ImportCard, ImportCardsGrid } from "@/components/import-cards";
-import { ImportConveyor } from "@/components/import-conveyor";
-import { Progress } from "@/components/ui/progress";
+import { ImportProgressModal, type ImportProgressState } from "@/components/import-progress-modal";
 import {
   Select,
   SelectContent,
@@ -106,12 +105,7 @@ export function ListImportModal({
   const [editing, setEditing] = useState<ListImportRow | null>(null);
   const [aiBusyId, setAiBusyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [progress, setProgress] = useState<{
-    stage: "processing" | "done" | "cancelled";
-    label: string;
-    current: number;
-    total: number;
-  } | null>(null);
+  const [progressState, setProgressState] = useState<ImportProgressState | null>(null);
 
   const reviewFn = useServerFn(reviewListImportLine);
   const addClient = useStore((s) => s.addClient);
@@ -126,7 +120,7 @@ export function ListImportModal({
     setFilterGroup(null);
     setEditing(null);
     setAiBusyId(null);
-    setProgress(null);
+    setProgressState(null);
     onOpenChange(false);
   }
 
@@ -243,26 +237,62 @@ export function ListImportModal({
       return;
     }
     setSaving(true);
-    setProgress({
-      stage: "processing",
-      label: "Preparando registros…",
-      current: 0,
-      total: rowsToSave.length,
-    });
+    // Agrupar por "pasta" (grupo da lista) para reaproveitar a mesma esteira
+    // visual dos imports de ZIP/Notion.
+    const folders: string[] = Array.from(
+      new Set(rowsToSave.map((r) => r.sourceGroup || "Sem grupo")),
+    );
+    const startedAt = new Date().toISOString();
+    const baseState: ImportProgressState = {
+      fileHash: `list-${Date.now()}`,
+      zipName: `Lista colada (${preview?.groups.length ?? folders.length} grupos)`,
+      startedAt,
+      folders,
+      currentIdx: -1,
+      messages: [],
+      errors: [],
+      stats: {
+        createdClients: 0,
+        updatedClients: 0,
+        createdProducts: 0,
+        createdAgreements: 0,
+        replacedAgreements: 0,
+        ignoredDuplicates: 0,
+        errorEntries: 0,
+        skippedAfterCorrection: 0,
+      },
+      recordsTotal: rowsToSave.length,
+      recordsProcessed: 0,
+      currentBatchSize: rowsToSave.length,
+      currentBatchProcessed: 0,
+      done: false,
+    };
+    setProgressState(baseState);
     try {
       let clientsCreated = 0;
       let productsCreated = 0;
+      let errorEntries = 0;
       const cache = new Map<string, string>();
       for (let i = 0; i < rowsToSave.length; i++) {
         const r = rowsToSave[i];
-        setProgress({
-          stage: "processing",
-          label: `Salvando ${r.clientName || "cliente"} — ${r.productName || "produto"}…`,
-          current: i,
-          total: rowsToSave.length,
-        });
-        if (!r.clientName || !r.phone) continue;
+        const folderIdx = folders.indexOf(r.sourceGroup || "Sem grupo");
+        if (!r.clientName || !r.phone) {
+          errorEntries++;
+          setProgressState((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  currentIdx: folderIdx,
+                  recordsProcessed: i + 1,
+                  currentBatchProcessed: i + 1,
+                  stats: { ...prev.stats, errorEntries },
+                }
+              : prev,
+          );
+          continue;
+        }
         let clientId = cache.get(r.phone);
+        let wasNewClient = false;
         if (!clientId) {
           const existing = findClientByPhone(r.phone);
           if (existing) {
@@ -276,6 +306,7 @@ export function ListImportModal({
             });
             clientId = created.id;
             clientsCreated++;
+            wasNewClient = true;
           }
           cache.set(r.phone, clientId);
         }
@@ -293,13 +324,28 @@ export function ListImportModal({
           notes: `Importado por lista colada • Grupo: ${r.sourceGroup}`,
         });
         productsCreated++;
+        const snapshotClients = clientsCreated;
+        const snapshotProducts = productsCreated;
+        setProgressState((prev) =>
+          prev
+            ? {
+                ...prev,
+                currentIdx: folderIdx,
+                recordsProcessed: i + 1,
+                currentBatchProcessed: i + 1,
+                messages: wasNewClient
+                  ? [...prev.messages, `Novo cliente: ${r.clientName}`].slice(-30)
+                  : prev.messages,
+                stats: {
+                  ...prev.stats,
+                  createdClients: snapshotClients,
+                  createdProducts: snapshotProducts,
+                  errorEntries,
+                },
+              }
+            : prev,
+        );
       }
-      setProgress({
-        stage: "processing",
-        label: "Registrando histórico…",
-        current: rowsToSave.length,
-        total: rowsToSave.length,
-      });
       addImportHistory({
         source: "Texto",
         file: `Lista colada (${preview?.groups.length ?? 0} grupos)`,
@@ -308,17 +354,34 @@ export function ListImportModal({
         errors: preview?.totals.errorRows ?? 0,
         status: (preview?.totals.errorRows ?? 0) > 0 ? "Com avisos" : "Concluído",
       });
-      setProgress({
-        stage: "done",
-        label: `${clientsCreated} cliente(s) e ${productsCreated} produto(s) salvos.`,
-        current: rowsToSave.length,
-        total: rowsToSave.length,
-      });
+      setProgressState((prev) =>
+        prev
+          ? {
+              ...prev,
+              currentIdx: prev.folders.length,
+              recordsProcessed: rowsToSave.length,
+              currentBatchProcessed: rowsToSave.length,
+              done: true,
+              stats: {
+                ...prev.stats,
+                createdClients: clientsCreated,
+                createdProducts: productsCreated,
+                errorEntries,
+              },
+            }
+          : prev,
+      );
       toast.success(`${clientsCreated} cliente(s) e ${productsCreated} produto(s) salvos.`);
-      // fecha após breve exibição de conclusão
-      setTimeout(() => close(), 1200);
     } catch (e) {
-      setProgress({ stage: "cancelled", label: "Falha ao salvar.", current: 0, total: rowsToSave.length });
+      setProgressState((prev) =>
+        prev
+          ? {
+              ...prev,
+              errors: [...prev.errors, e instanceof Error ? e.message : String(e)],
+              done: true,
+            }
+          : prev,
+      );
       toast.error(e instanceof Error ? e.message : "Falha ao salvar.");
     } finally {
       setSaving(false);
@@ -649,23 +712,6 @@ export function ListImportModal({
           </div>
         )}
 
-        {progress && (
-          <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
-            <ImportConveyor
-              running={progress.stage === "processing"}
-              state={progress.stage}
-              height="h-24"
-            />
-            <div className="flex items-center justify-between text-xs">
-              <span className="truncate text-muted-foreground">{progress.label}</span>
-              <span className="font-mono">
-                {progress.current}/{progress.total}
-              </span>
-            </div>
-            <Progress value={progress.total === 0 ? 0 : Math.round((progress.current / progress.total) * 100)} />
-          </div>
-        )}
-
         <DialogFooter className="flex-wrap gap-2">
           <Button variant="outline" onClick={close} disabled={saving}>
             Cancelar
@@ -697,6 +743,16 @@ export function ListImportModal({
           />
         )}
       </DialogContent>
+
+      {/* Mesma esteira visual do fluxo de ZIP/Notion durante a persistência */}
+      <ImportProgressModal
+        state={progressState}
+        open={!!progressState}
+        onClose={() => {
+          setProgressState(null);
+          close();
+        }}
+      />
     </Dialog>
   );
 }
