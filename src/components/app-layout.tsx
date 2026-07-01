@@ -34,7 +34,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ImportSection } from "@/sections/import-section";
 import { ConfiguracoesSection } from "@/sections/configuracoes-section";
 import { NotificationsPanel } from "@/components/notifications-panel";
 import { useNotifications } from "@/lib/notifications";
@@ -1201,15 +1200,6 @@ function GlobalModals() {
   const closeHelp = useUiStore((s) => s.closeHelp);
   const financeOpen = useUiStore((s) => s.financeOpen);
   const closeFinance = useUiStore((s) => s.closeFinance);
-
-  // onScrollTo dentro dos modais: fecha o modal e rola até a seção alvo.
-  const handleScrollTo = (id: string) => {
-    closeSettings();
-    setTimeout(() => {
-      const el = document.getElementById(id);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 60);
-  };
 
   return (
     <>
