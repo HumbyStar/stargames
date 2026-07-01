@@ -629,6 +629,16 @@ export function MGMVSection({
                               Revisar com IA
                             </Button>
                           )}
+                          {chip === "revisado_ia" &&
+                            r.reviewStatus === "ai_reviewed" && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => setAiTarget(r.client.id)}
+                              >
+                                Revisar novamente
+                              </Button>
+                            )}
                           <Button
                             size="sm"
                             variant="ghost"
