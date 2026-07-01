@@ -2284,13 +2284,74 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                   </Collapsible>
                 </Card>
               </div>
-              <div className="rounded-xl border border-dashed border-border/70 bg-muted/30 p-4 text-xs text-muted-foreground">
-                <p className="font-medium text-foreground">Como funciona</p>
-                <ol className="mt-2 list-decimal space-y-1 pl-4">
-                  <li>Envie seu arquivo (lista, HTML/Notion, CSV, Excel ou ZIP).</li>
-                  <li>Revise a análise na etapa <span className="font-medium text-foreground">Preview</span> logo abaixo.</li>
-                  <li>Se preferir colar texto solto, use o <span className="font-medium text-foreground">Importador assistido com IA</span>.</li>
-                </ol>
+              <div className="flex flex-col gap-2 rounded-xl border border-dashed border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[11px] font-medium text-foreground">Importar por lista (colar texto)</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          const t = await navigator.clipboard.readText();
+                          if (!t) { toast.info("Área de transferência vazia."); return; }
+                          setText(t);
+                          toast.success("Texto colado da área de transferência.");
+                        } catch {
+                          toast.error("Não foi possível acessar a área de transferência.");
+                        }
+                      }}
+                    >
+                      <ClipboardPaste className="size-4" /> Colar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={!text.trim()}
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(text);
+                          toast.success("Lista copiada.");
+                        } catch {
+                          toast.error("Não foi possível copiar.");
+                        }
+                      }}
+                    >
+                      <ClipboardCopy className="size-4" /> Copiar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={!text.trim()}
+                      onClick={() => setText("")}
+                    >
+                      <Eraser className="size-4" /> Limpar
+                    </Button>
+                  </div>
+                </div>
+                <textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder={"Cole aqui a lista, ex.:\nNome - Telefone - Produto - Plataforma - Valor - Status"}
+                  className="min-h-[140px] w-full resize-y rounded-md border border-border bg-background p-2 font-mono text-[11px] text-foreground outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] text-muted-foreground">
+                    Use os botões acima para colar/copiar sem teclado. Depois clique em validar.
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={validateText}
+                    disabled={aiLoading || !text.trim()}
+                  >
+                    <Brain className="size-4" />
+                    {aiLoading ? "Analisando..." : "Validar com IA"}
+                  </Button>
+                </div>
               </div>
             </div>
           </AccordionContent>
