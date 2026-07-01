@@ -3789,9 +3789,9 @@ function ZipPreview({
               <AccordionContent>
                 <div className="p-5">
                   {isOpenFolder && (
-                  <div className="overflow-x-auto">
+                  <div className="max-h-[280px] overflow-auto rounded-md border border-border">
                 <table className="w-full text-sm">
-                  <thead>
+                  <thead className="sticky top-0 bg-card z-10">
                     <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                       <th className="py-2 pr-3 font-medium">Sel</th>
                       <th className="py-2 pr-3 font-medium">Arquivo</th>
