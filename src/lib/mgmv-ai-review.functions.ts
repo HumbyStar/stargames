@@ -106,6 +106,19 @@ Extraia:
 - discountAppliedToInstallment (1..N|null) — número da parcela que receberá o desconto (geralmente paidInstallments + 1).
 - paidDates (array de datas YYYY-MM-DD) — DATA em que cada parcela paga foi quitada, NA ORDEM (1ª data = parcela 1, 2ª = parcela 2 ...). Se o texto trouxer datas em português por extenso ("6 de Abril", "12 Maio", "dia 30 de junho de 2026"), converta para YYYY-MM-DD usando o ano de referência do texto (ou o ano corrente quando não houver). Se uma parcela paga não tiver data, coloque string vazia "" na respectiva posição. Se nenhuma data existir, retorne array vazio.
 
+Regras de ANO ao converter datas sem ano no texto:
+- Use o ANO CORRENTE informado no prompt do usuário.
+- Nunca invente anos passados (ex.: 2023, 2024) só porque o mês parece "antigo".
+- Se as datas estão em ordem cronológica dentro do texto, mantenha essa ordem mesmo cruzando ano (ex.: "Dez" seguido de "Jan" avança o ano).
+
+Regras para nextDueDate e statusSuggestion:
+- nextDueDate = data da PRÓXIMA parcela pendente, calculada como (data do último pagamento) + 1 mês. Se não houver pagamentos, use o firstDueDate.
+- statusSuggestion:
+  - "Quitado" quando paidInstallments == installmentsCount.
+  - "Em atraso" APENAS quando nextDueDate < data de hoje.
+  - "Ativo" quando nextDueDate >= data de hoje.
+  - Compare sempre contra a data de hoje informada no prompt do usuário.
+
 Regra de pagamento com valor diferente do da parcela:
 - Se o texto disser "Pago X reais" (ou similar), trate como uma parcela PAGA integralmente.
   - Se X > installmentValue: paidInstallments incrementa em 1, e (X − installmentValue) vai em nextInstallmentDiscount para a próxima parcela. NÃO use partialPaidAmount neste caso.
