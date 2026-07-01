@@ -1982,13 +1982,17 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   };
 
   const summary = useMemo(() => {
-    if (!rows) return { ok: 0, err: 0, newC: 0, foundC: 0, ready: 0 };
+    if (!rows) return { ok: 0, err: 0, newC: 0, foundC: 0, ready: 0, mgmv: 0, common: 0, addProduct: 0, duplicate: 0 };
     return {
       ok: rows.filter((r) => r.result === "Pronto").length,
       err: rows.filter((r) => r.result === "Erro").length,
       newC: rows.filter((r) => !r.clientFound && r.result === "Pronto").length,
       foundC: rows.filter((r) => r.clientFound).length,
       ready: rows.filter((r) => r.result === "Pronto").length,
+      mgmv: rows.filter((r) => r.clientCategory === "mgmv").length,
+      common: rows.filter((r) => r.clientCategory === "common").length,
+      addProduct: rows.filter((r) => r.productAction === "add_to_existing_client").length,
+      duplicate: rows.filter((r) => r.productAction === "duplicate_product").length,
     };
   }, [rows]);
 
