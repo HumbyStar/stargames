@@ -66,6 +66,7 @@ import { analyzeListWithAI } from "@/lib/list-ai-analyze.functions";
 import { useBlocker } from "@tanstack/react-router";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { Download, AlertCircle } from "lucide-react";
+import { normalizeSituation } from "@/lib/situation-normalizer";
 
 interface ParsedRow {
   line: number;
