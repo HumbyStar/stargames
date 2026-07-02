@@ -183,20 +183,12 @@ const normalizeStatusBR = (s: string): FinancialStatus => {
 const normalizeSituationBR = (
   s: string,
 ): { situation: Situation; unrecognized: boolean } => {
-  const raw = String(s ?? "").trim();
-  if (!raw) return { situation: "Em Aberto", unrecognized: false };
-  const v = raw
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-  if (/(enviad|entreg|retir)/.test(v)) return { situation: "Enviado", unrecognized: false };
-  if (/remov/.test(v)) return { situation: "Removido", unrecognized: false };
-  if (/(desist|cancel)/.test(v)) return { situation: "Desistiu", unrecognized: false };
-  if (/abandon/.test(v)) return { situation: "Abandonou", unrecognized: false };
-  if (/(mgmv|acordo|parcelad)/.test(v)) return { situation: "Resolvido", unrecognized: false };
-  if (/(resolv|quitad|ok|finalizad|concluid)/.test(v))
-    return { situation: "Resolvido", unrecognized: false };
-  return { situation: "Resolvido", unrecognized: true };
+  // Delegado ao normalizador canônico compartilhado por toda a importação
+  // (ZIP/Notion, CSV, IA e lista colada). Buckets oficiais: Enviado, Retirado,
+  // Retirar, Removido, MGMV, Pago.
+  const r = normalizeSituation(s);
+  if (r.unknown) return { situation: "Resolvido", unrecognized: true };
+  return { situation: (r.situation ?? "Em Aberto") as Situation, unrecognized: false };
 };
 
 const normalizeDateBR = (s: string): string | null => {
