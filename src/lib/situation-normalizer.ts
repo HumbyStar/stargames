@@ -31,6 +31,8 @@ function baseNormalize(raw: string): string {
     .replace(/desistencia/g, "desistiu")
     .replace(/expirou item|item expirado/g, "expirado")
     .replace(/itens? removidos?/g, "removido")
+    .replace(/item removido/g, "removido")
+    .replace(/^remover\b/, "removido")
     .replace(/cliente retirou[^-,]*/g, "retirado")
     .replace(/de volta ao estoque/g, "removido")
     .replace(/saiu do grupo|cliente sumiu|sumiu|perdeu/g, "removido")
@@ -60,19 +62,19 @@ interface Rule {
 }
 
 const RULES: Rule[] = [
+  // Pago / LOTE PAGO (avaliar antes de mgmv para não colidir com "lote")
+  {
+    name: "pago",
+    test: (s) => /\blote pago\b/.test(s) || /^pago\b/.test(s),
+    situation: "Enviado",
+    financialStatusOverride: "Pago",
+  },
   // MGMV / LOTES → produto vira parte de acordo (situação em aberto + FS MGMV)
   {
     name: "mgmv",
     test: (s) => /\bmgmv\b/.test(s) || /\blote\s*\d+\b/.test(s) || /^lote\b/.test(s),
     situation: "Em Aberto",
     financialStatusOverride: "MGMV",
-  },
-  // Pago / LOTE PAGO
-  {
-    name: "pago",
-    test: (s) => /\blote pago\b/.test(s) || /^pago\b/.test(s),
-    situation: "Enviado",
-    financialStatusOverride: "Pago",
   },
   // Enviado (inclui variações, "enviado - ...", "entregue")
   {
