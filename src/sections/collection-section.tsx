@@ -100,7 +100,7 @@ export function CollectionSection({
   };
   const [savedFilters, setSavedFilters] = usePersistedState<SavedFilter[]>("collection.savedFilters", []);
   const [activeSavedId, setActiveSavedId] = usePersistedState<string>("collection.activeSavedId", "");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistedState<string>("collection.search", "");
   const [folderFilter, setFolderFilter] = usePersistedState<string>("collection.folder", "Todas");
   const [financialFilter, setFinancialFilter] = usePersistedState<string>("collection.financial", "Todos");
   const [situationFilter, setSituationFilter] = usePersistedState<string>("collection.situation", "Todas");

@@ -86,7 +86,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const setProductSituation = useStore((s) => s.setProductSituation);
   const payMGMVInstallment = useStore((s) => s.payMGMVInstallment);
 
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistedState<string>("clientes.search", "");
   const [chip, setChip] = usePersistedState<ChipFilter>("clientes.chip", "todos");
   const [financialFilter, setFinancialFilter] = usePersistedState<string>(
     "clientes.financial",

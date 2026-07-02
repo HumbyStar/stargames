@@ -230,7 +230,7 @@ export function MGMVSection({
   const setMGMVAgreement = useStore((s) => s.setMGMVAgreement);
   const applyAiReviewToAgreement = useStore((s) => s.applyAiReviewToAgreement);
   const [chip, setChip] = usePersistedState<MgmvChip>("mgmv.chip", "todos");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistedState<string>("mgmv.search", "");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [aiTarget, setAiTarget] = useState<string | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
