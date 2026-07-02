@@ -34,6 +34,7 @@ import {
   type Situation,
 } from "@/lib/store";
 import { toast } from "sonner";
+import { MgmvCreateModal } from "@/components/mgmv-create-modal";
 
 type ChipFilter =
   | "todos"
@@ -754,6 +755,7 @@ function ClientDrawer({
   onPayMGMVInstallment: (installmentNumber: number) => void;
 }) {
   const [notes, setNotes] = useState(client.notes ?? "");
+  const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
   const mgmv = getMGMVDisplay(client);
   const mgmvProducts = products.filter((p) => p.financialStatus === "MGMV");
   const individualProducts = products.filter((p) => p.financialStatus !== "MGMV");
@@ -788,6 +790,11 @@ function ClientDrawer({
         <Button size="sm" onClick={onAddProduct}>
           Adicionar Produto
         </Button>
+        {!client.mgmv && products.length > 0 && (
+          <Button size="sm" variant="secondary" onClick={() => setMgmvCreateOpen(true)}>
+            Criar acordo MGMV
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
@@ -810,6 +817,15 @@ function ClientDrawer({
           </Button>
         </div>
       </Card>
+
+      {mgmvCreateOpen && (
+        <MgmvCreateModal
+          open={mgmvCreateOpen}
+          onClose={() => setMgmvCreateOpen(false)}
+          client={client}
+          products={products}
+        />
+      )}
 
       {mgmv && (
         <Card title={`Acordo MGMV — ${mgmv.status}`}>
