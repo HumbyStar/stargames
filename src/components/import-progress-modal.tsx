@@ -20,7 +20,6 @@ import {
   PhoneCall,
   RefreshCcw,
   RotateCw,
-  Upload,
   ShieldCheck,
   Sparkles,
   Timer,

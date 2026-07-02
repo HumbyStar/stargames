@@ -11,7 +11,6 @@ import {
   History,
   KeyRound,
   LayoutGrid,
-  ListChecks,
   Navigation,
   Save,
   ShieldCheck,

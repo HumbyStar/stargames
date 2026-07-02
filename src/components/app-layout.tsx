@@ -3,7 +3,6 @@ import {
   Search,
   HelpCircle,
   Menu,
-  X,
   Sun,
   Moon,
   User,
@@ -633,7 +632,6 @@ function _FloatingNavbarImpl() {
   const [scrolled, setScrolled] = useState(false);
   const [navSize, setNavSize] = useState({ width: 0, height: 0 });
   const [navBottom, setNavBottom] = useState(0);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
   const navExitTimerRef = useRef<number | null>(null);
