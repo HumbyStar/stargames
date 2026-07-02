@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { reportDashboardPerf } from "@/components/dashboard-perf-badge";
 import {
   Dialog,
   DialogContent,
@@ -330,11 +331,23 @@ export function DashboardDrilldownModal({
   const setProductSituation = useStore((s) => s.setProductSituation);
   const payMGMVInstallment = useStore((s) => s.payMGMVInstallment);
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
+  const isSearching = deferredSearch !== search;
 
   const config = cardId ? CARDS[cardId] : null;
-  const rows = useMemo(() => (config ? config.buildRows(clients, products) : []), [config, clients, products]);
+  // Rows são construídas somente quando o modal está aberto (o componente
+  // pai só monta o modal quando activeCard != null). Instrumentamos o custo
+  // para o badge de performance.
+  const rows = useMemo(() => {
+    if (!config) return [] as Row[];
+    const t0 = performance.now();
+    const r = config.buildRows(clients, products);
+    reportDashboardPerf({ type: "drilldown", ms: performance.now() - t0, rows: r.length });
+    return r;
+  }, [config, clients, products]);
+
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     if (!q) return rows;
     const qDigits = q.replace(/\D/g, "");
     return rows.filter((r) => {
@@ -342,9 +355,19 @@ export function DashboardDrilldownModal({
       const phone = (r.client.phone || "").replace(/\D/g, "");
       return hay.includes(q) || (qDigits && phone.includes(qDigits));
     });
-  }, [rows, search]);
+  }, [rows, deferredSearch]);
 
   const total = useMemo(() => filtered.reduce((s, r) => s + r.value, 0), [filtered]);
+
+  // Skeleton curto (100ms) somente na primeira renderização quando ainda
+  // não temos rows prontas — evita "flash" de tabela vazia em datasets grandes.
+  const [showSkeleton, setShowSkeleton] = useState(true);
+  useEffect(() => {
+    setShowSkeleton(true);
+    const id = setTimeout(() => setShowSkeleton(false), 0);
+    return () => clearTimeout(id);
+  }, [cardId]);
+  const stale = isSearching;
 
   if (!config || !cardId) return null;
 
@@ -424,15 +447,31 @@ export function DashboardDrilldownModal({
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar cliente, telefone ou produto..."
             className="h-9 w-full max-w-xs"
+            aria-busy={stale || undefined}
           />
         </div>
 
-        {filtered.length === 0 ? (
+        {showSkeleton && rows.length === 0 ? (
+          <div
+            role="status"
+            aria-live="polite"
+            aria-label="Carregando lista"
+            className="space-y-2 py-4"
+            data-testid="drilldown-skeleton"
+          >
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="h-8 flex-1 animate-pulse rounded bg-muted/60" />
+                <div className="h-8 w-24 animate-pulse rounded bg-muted/40" />
+              </div>
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
             Nenhum registro encontrado para este indicador.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" aria-busy={stale || undefined}>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
