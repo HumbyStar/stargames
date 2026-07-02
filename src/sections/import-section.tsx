@@ -3155,50 +3155,6 @@ function _UploadAreaImpl({ accept, onFile, hint, tall }: { accept: string; onFil
 }
 
 function TextDropzone({
-  value,
-  onChange,
-  onFile,
-  compact,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onFile: (f: File) => void;
-  compact?: boolean;
-}) {
-  const [drag, setDrag] = useState(false);
-  return (
-    <div
-      onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
-      onDragLeave={() => setDrag(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDrag(false);
-        const f = e.dataTransfer.files[0];
-        if (f) onFile(f);
-      }}
-      className={
-        "relative rounded-md border-2 border-dashed transition " +
-        (drag ? "border-primary bg-primary/5" : "border-input bg-background")
-      }
-    >
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="Cole sua lista ou HTML aqui, ou arraste um arquivo..."
-        className={
-          "w-full resize-y rounded-md bg-transparent p-3 font-mono text-sm outline-none " +
-          (compact ? "min-h-[140px]" : "min-h-64")
-        }
-      />
-      {drag && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-md bg-primary/10 text-sm font-medium text-primary">
-          Solte para importar
-        </div>
-      )}
-    </div>
-  );
-}
-
 function NotionPreview({
   result,
   findClientByPhone,
