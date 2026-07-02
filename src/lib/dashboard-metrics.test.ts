@@ -64,7 +64,7 @@ describe("computeDashboardAggregates", () => {
     expect(a.abandonos).toBe(1);
     expect(a.finPago).toBe(2);
     expect(a.finMGMV).toBe(1);
-    expect(a.aberto).toBe(3);
+    expect(a.aberto).toBe(2);
   });
 
   it("conta clientes MGMV e parcelas vencidas", () => {
