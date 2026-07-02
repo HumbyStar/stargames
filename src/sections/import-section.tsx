@@ -2704,7 +2704,15 @@ type PreviewFilter =
   | "common"
   | "new_client"
   | "add_product"
-  | "duplicate";
+  | "duplicate"
+  | "sit_open"
+  | "sit_enviado"
+  | "sit_retirado"
+  | "sit_retirar"
+  | "sit_removido"
+  | "sit_desistiu"
+  | "sit_abandonou"
+  | "sit_resolvido";
 
 function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
   const parentRef = useRef<HTMLDivElement | null>(null);
@@ -2728,6 +2736,14 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
       if (filter === "new_client" && r.clientAction !== "create") return false;
       if (filter === "add_product" && r.productAction !== "add_to_existing_client") return false;
       if (filter === "duplicate" && r.productAction !== "duplicate_product") return false;
+      if (filter === "sit_open" && r.situation !== "Em Aberto") return false;
+      if (filter === "sit_enviado" && r.situation !== "Enviado") return false;
+      if (filter === "sit_retirado" && r.situation !== "Retirado") return false;
+      if (filter === "sit_retirar" && r.situation !== "Retirar") return false;
+      if (filter === "sit_removido" && r.situation !== "Removido") return false;
+      if (filter === "sit_desistiu" && r.situation !== "Desistiu") return false;
+      if (filter === "sit_abandonou" && r.situation !== "Abandonou") return false;
+      if (filter === "sit_resolvido" && r.situation !== "Resolvido") return false;
       if (!q) return true;
       return (
         r.name.toLowerCase().includes(q) ||
@@ -2813,6 +2829,35 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
     { id: "new_client", label: "Novo cliente" },
     { id: "add_product", label: "+ ao cliente" },
     { id: "duplicate", label: "Duplicado" },
+  ];
+
+  // Contagem por Situação — buckets oficiais do situation-normalizer.
+  const situationCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      "Em Aberto": 0,
+      Enviado: 0,
+      Retirado: 0,
+      Retirar: 0,
+      Removido: 0,
+      Desistiu: 0,
+      Abandonou: 0,
+      Resolvido: 0,
+    };
+    for (const r of rows) {
+      if (r.situation in counts) counts[r.situation]++;
+    }
+    return counts;
+  }, [rows]);
+
+  const situationChips: { id: PreviewFilter; label: string; key: string }[] = [
+    { id: "sit_open", label: "Em Aberto", key: "Em Aberto" },
+    { id: "sit_enviado", label: "Enviado", key: "Enviado" },
+    { id: "sit_retirado", label: "Retirado", key: "Retirado" },
+    { id: "sit_retirar", label: "Retirar", key: "Retirar" },
+    { id: "sit_removido", label: "Removido", key: "Removido" },
+    { id: "sit_desistiu", label: "Desistiu", key: "Desistiu" },
+    { id: "sit_abandonou", label: "Abandonou", key: "Abandonou" },
+    { id: "sit_resolvido", label: "Resolvido", key: "Resolvido" },
   ];
 
   return (
