@@ -2922,6 +2922,30 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
           ))}
         </div>
       </div>
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Situação:
+        </span>
+        {situationChips.map((c) => {
+          const count = situationCounts[c.key] ?? 0;
+          return (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setFilter(filter === c.id ? "all" : c.id)}
+              disabled={count === 0}
+              className={cn(
+                "rounded-full border px-2.5 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                filter === c.id
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:bg-muted",
+              )}
+            >
+              {c.label} <span className="tabular-nums opacity-70">({count})</span>
+            </button>
+          );
+        })}
+      </div>
       <div className="flex h-[calc(95vh-200px)] min-h-[380px] flex-col overflow-hidden rounded-md border border-border">
         <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
           <div className="flex min-w-[1020px] flex-1 min-h-0 flex-col">
