@@ -846,7 +846,32 @@ function PartialPaymentPopover({
   const [open, setOpen] = useState(false);
   const [raw, setRaw] = useState("");
   const parsed = Number(raw.replace(",", "."));
-  const valid = Number.isFinite(parsed) && parsed > 0;
+  const isNumber = raw.trim().length > 0 && Number.isFinite(parsed);
+  const isNegative = isNumber && parsed < 0;
+  const isZero = isNumber && parsed === 0;
+  const valid = isNumber && parsed > 0;
+
+  // Prévia do efeito do pagamento — para dar feedback antes do usuário confirmar.
+  const preview = (() => {
+    if (!valid) return null;
+    if (parsed >= installmentValue) {
+      const surplus = parsed - installmentValue;
+      return {
+        kind: "full" as const,
+        message:
+          surplus > 0
+            ? `Parcela marcada como paga · excedente ${formatBRL(surplus)} abatido da próxima parcela.`
+            : "Parcela marcada como paga integralmente.",
+      };
+    }
+    const newPartial = currentPartial + parsed;
+    const remaining = Math.max(0, installmentValue - newPartial);
+    return {
+      kind: "partial" as const,
+      message: `Pagamento parcial acumulado: ${formatBRL(newPartial)} · restam ${formatBRL(remaining)} para quitar.`,
+    };
+  })();
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -871,14 +896,39 @@ function PartialPaymentPopover({
             onChange={(e) => setRaw(e.target.value)}
             placeholder="0,00"
             inputMode="decimal"
-            className="h-8 text-sm"
+            className={cn(
+              "h-8 text-sm",
+              (isNegative || isZero) && "border-destructive focus-visible:ring-destructive",
+            )}
+            aria-invalid={isNegative || isZero}
           />
         </label>
-        <p className="leading-snug text-muted-foreground">
-          Se maior ou igual a {formatBRL(installmentValue)}, a parcela é marcada
-          como paga e o excedente vira desconto na próxima. Caso contrário,
-          registra pagamento parcial.
-        </p>
+        {isNegative ? (
+          <p className="rounded-md bg-destructive/10 px-2 py-1 leading-snug text-destructive">
+            Valor não pode ser negativo.
+          </p>
+        ) : isZero ? (
+          <p className="rounded-md bg-destructive/10 px-2 py-1 leading-snug text-destructive">
+            Informe um valor maior que zero.
+          </p>
+        ) : preview ? (
+          <p
+            className={cn(
+              "rounded-md px-2 py-1 leading-snug",
+              preview.kind === "full"
+                ? "bg-[color:var(--success)]/10 text-[color:var(--success)]"
+                : "bg-warning/10 text-warning",
+            )}
+          >
+            {preview.message}
+          </p>
+        ) : (
+          <p className="leading-snug text-muted-foreground">
+            Se maior ou igual a {formatBRL(installmentValue)}, a parcela é marcada
+            como paga e o excedente vira desconto na próxima. Caso contrário,
+            registra pagamento parcial.
+          </p>
+        )}
         <div className="flex justify-end gap-2 pt-1">
           <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
             Cancelar
@@ -888,9 +938,13 @@ function PartialPaymentPopover({
             disabled={!valid}
             onClick={() => {
               onSubmit(parsed);
+              const summary =
+                preview?.kind === "full"
+                  ? "Parcela quitada."
+                  : preview?.message ?? "Pagamento registrado.";
               setRaw("");
               setOpen(false);
-              toast.success("Pagamento registrado.");
+              toast.success(summary);
             }}
           >
             Confirmar
