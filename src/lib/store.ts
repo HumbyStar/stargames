@@ -625,6 +625,60 @@ export const useStore = create<State>()((set, get) => ({
           }
           return { clients };
         }),
+      registerMGMVPartialPayment: (clientId, installmentNumber, amount) =>
+        set((s) => {
+          if (!(amount > 0)) return {} as Partial<State>;
+          const clients = s.clients.map((c) => {
+            if (c.id !== clientId || !c.mgmv) return c;
+            const target = c.mgmv.installments.find(
+              (i) => i.number === installmentNumber,
+            );
+            if (!target || target.paid) return c;
+            const nowIso = new Date().toISOString();
+            let installments = c.mgmv.installments.slice();
+            if (amount >= target.value) {
+              // Paga integralmente e aplica excedente como desconto na próxima
+              // parcela pendente (mesma regra usada pela revisão da IA).
+              const surplus = amount - target.value;
+              installments = installments.map((i) =>
+                i.number === installmentNumber
+                  ? { ...i, paid: true, paidAt: nowIso, paidAmount: target.value }
+                  : i,
+              );
+              if (surplus > 0) {
+                const nextPending = installments.find(
+                  (i) => !i.paid && i.number > installmentNumber,
+                );
+                if (nextPending) {
+                  installments = installments.map((i) =>
+                    i.number === nextPending.number
+                      ? { ...i, value: Math.max(0, i.value - surplus) }
+                      : i,
+                  );
+                }
+              }
+            } else {
+              // Pagamento parcial: acumula em paidAmount, parcela segue pendente.
+              const prevPaid = target.paidAmount ?? 0;
+              installments = installments.map((i) =>
+                i.number === installmentNumber
+                  ? { ...i, paidAmount: prevPaid + amount, paidAt: nowIso }
+                  : i,
+              );
+            }
+            const nextAgreement = recalcPendingDueDates({
+              ...c.mgmv,
+              installments,
+            });
+            return { ...c, mgmv: nextAgreement };
+          });
+          const updated = clients.find((c) => c.id === clientId);
+          if (updated) {
+            queueClientUpsert(updated);
+            dbSyncAgreementForClient(updated);
+          }
+          return { clients };
+        }),
       setMGMVAgreement: (clientId, agreement) =>
         set((s) => {
           const nextAgreement = agreement
