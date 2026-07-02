@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { claimSession, heartbeatSession, releaseSession } from "@/lib/session-guard.functions";
+import { claimSession, heartbeatSession } from "@/lib/session-guard.functions";
 
 export const SESSION_ID_KEY = "sg_active_session_id";
 
@@ -82,18 +82,10 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
     const id = window.setInterval(ping, 30_000);
     const onFocus = () => ping();
     window.addEventListener("focus", onFocus);
-    const onUnload = () => {
-      try {
-        const sessionId = localStorage.getItem(SESSION_ID_KEY);
-        if (sessionId) releaseSession({ data: { sessionId } }).catch(() => {});
-      } catch {}
-    };
-    window.addEventListener("beforeunload", onUnload);
     return () => {
       cancelled = true;
       window.clearInterval(id);
       window.removeEventListener("focus", onFocus);
-      window.removeEventListener("beforeunload", onUnload);
     };
   }, [navigate]);
 
