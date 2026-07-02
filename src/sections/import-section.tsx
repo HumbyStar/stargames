@@ -96,7 +96,6 @@ interface ParsedRow {
   existingClientName?: string;
 }
 
-const VALID_STATUS = ["Pago", "Reserva", "Pendente", "MGMV"] as const;
 const VALID_SITUATION = [
   "Em Aberto",
   "Enviado",

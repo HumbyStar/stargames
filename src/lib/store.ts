@@ -349,72 +349,6 @@ export function migrateStoreV3(persisted: unknown): unknown {
   return state;
 }
 
-const today = new Date();
-const daysAgo = (n: number) => new Date(today.getTime() - n * 86400000).toISOString();
-const daysAhead = (n: number) => new Date(today.getTime() + n * 86400000).toISOString();
-
-const seedClients: Client[] = [
-  {
-    id: "c1",
-    name: "João Silva",
-    phone: "11 99999-9999",
-    mgmv: {
-      startDate: daysAgo(20),
-      totalDebt: 1000,
-      installments: [
-        { number: 1, total: 5, dueDate: daysAgo(20), value: 200, paid: true, paidAt: daysAgo(20) },
-        { number: 2, total: 5, dueDate: daysAgo(5), value: 200, paid: false },
-        { number: 3, total: 5, dueDate: daysAhead(10), value: 200, paid: false },
-        { number: 4, total: 5, dueDate: daysAhead(40), value: 200, paid: false },
-        { number: 5, total: 5, dueDate: daysAhead(70), value: 200, paid: false },
-      ],
-    },
-  },
-  { id: "c2", name: "Maria Oliveira", phone: "21 98888-8888" },
-  { id: "c3", name: "Carlos Santos", phone: "41 97777-7777" },
-  { id: "c4", name: "Pedro Almeida", phone: "11 96666-6666" },
-  { id: "c5", name: "Ana Costa", phone: "31 95555-5555" },
-];
-
-const seedProducts: Product[] = [
-  {
-    id: "p1", clientId: "c1", name: "GTA V", platform: "PS5",
-    totalValue: 250, paidValue: 50, financialStatus: "Reserva",
-    situation: "Em Aberto", registerDate: daysAgo(30), dueDate: daysAgo(12),
-    notes: "Cliente pediu prazo adicional.",
-  },
-  {
-    id: "p2", clientId: "c1", name: "FIFA 24", platform: "PS5",
-    totalValue: 300, paidValue: 100, financialStatus: "Reserva",
-    situation: "Em Aberto", registerDate: daysAgo(25), dueDate: daysAgo(5),
-  },
-  {
-    id: "p3", clientId: "c1", name: "Controle DualSense", platform: "PS5",
-    totalValue: 400, paidValue: 0, financialStatus: "Pendente",
-    situation: "Em Aberto", registerDate: daysAgo(15), dueDate: daysAhead(3),
-  },
-  {
-    id: "p4", clientId: "c2", name: "Figure Goku", platform: "Colecionável",
-    totalValue: 180, paidValue: 80, financialStatus: "Reserva",
-    situation: "Em Aberto", registerDate: daysAgo(10), dueDate: daysAgo(2),
-  },
-  {
-    id: "p5", clientId: "c3", name: "PS2 Slim", platform: "PS2",
-    totalValue: 600, paidValue: 300, financialStatus: "Reserva",
-    situation: "Em Aberto", registerDate: daysAgo(8), dueDate: daysAgo(1),
-  },
-  {
-    id: "p6", clientId: "c4", name: "Spider-Man 2", platform: "PS5",
-    totalValue: 280, paidValue: 280, financialStatus: "Pago",
-    situation: "Enviado", registerDate: daysAgo(40), dueDate: daysAgo(35),
-  },
-  {
-    id: "p7", clientId: "c5", name: "Xbox Series S", platform: "Xbox",
-    totalValue: 2200, paidValue: 1000, financialStatus: "Reserva",
-    situation: "Em Aberto", registerDate: daysAgo(5), dueDate: daysAhead(15),
-  },
-];
-
 const defaultPreferences: SystemPreferences = {
   companyName: "Star Games",
   currency: "BRL",
@@ -438,29 +372,6 @@ const defaultSecurity: SecuritySettings = {
   blockMassDeleteWithoutPassword: true,
   enableAuditLog: false,
 };
-
-const seedImportHistory: ImportHistoryEntry[] = [
-  {
-    id: "h1",
-    date: daysAgo(0),
-    source: "HTML Notion",
-    file: "Bruno Kripel.html",
-    clientsCreated: 1,
-    productsAdded: 5,
-    errors: 0,
-    status: "Concluído",
-  },
-  {
-    id: "h2",
-    date: daysAgo(1),
-    source: "CSV",
-    file: "clientes_junho.csv",
-    clientsCreated: 12,
-    productsAdded: 38,
-    errors: 2,
-    status: "Com avisos",
-  },
-];
 
 let hydratePromise: Promise<void> | null = null;
 
