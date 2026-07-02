@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePersistedState } from "@/lib/use-persisted-state";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Lock, CheckCircle2 } from "lucide-react";
+import { Lock, CheckCircle2, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import {
   formatBRL,
@@ -63,7 +64,21 @@ export function MgmvCreateModal({
   // Draft vs. Confirmed state — once confirmed the form is locked to prevent
   // accidental edits to an agreement that has already been persisted.
   const [confirmed, setConfirmed] = useState(false);
-  const locked = confirmed;
+  const [submitting, setSubmitting] = useState(false);
+  const locked = confirmed || submitting;
+
+  // Rascunho persistido por cliente — permite retomar exatamente de onde o
+  // usuário parou ao reabrir o modal (mesmo em outra sessão).
+  type Draft = {
+    selected: string[];
+    totalRaw: string;
+    entryRaw: string;
+    installmentsCount: number;
+    dueDay: number;
+    updatedAt: string;
+  };
+  const draftKey = `mgmv.create.draft.${client.id}`;
+  const [draft, setDraft] = usePersistedState<Draft | null>(draftKey, null);
 
   // Produtos elegíveis: os que ainda têm saldo (Em Aberto e não pertencem a MGMV).
   const eligible = useMemo(
@@ -76,7 +91,8 @@ export function MgmvCreateModal({
 
   const [selected, setSelected] = useState<Set<string>>(() => {
     const init = new Set<string>();
-    if (preselectedProductId) init.add(preselectedProductId);
+    if (draft?.selected?.length) draft.selected.forEach((id) => init.add(id));
+    else if (preselectedProductId) init.add(preselectedProductId);
     else if (eligible.length === 1) init.add(eligible[0].id);
     return init;
   });
@@ -89,10 +105,29 @@ export function MgmvCreateModal({
     [eligible, selected],
   );
 
-  const [totalRaw, setTotalRaw] = useState<string>("");
-  const [entryRaw, setEntryRaw] = useState<string>("");
-  const [installmentsCount, setInstallmentsCount] = useState<number>(3);
-  const [dueDay, setDueDay] = useState<number>(new Date().getDate());
+  const [totalRaw, setTotalRaw] = useState<string>(draft?.totalRaw ?? "");
+  const [entryRaw, setEntryRaw] = useState<string>(draft?.entryRaw ?? "");
+  const [installmentsCount, setInstallmentsCount] = useState<number>(
+    draft?.installmentsCount ?? 3,
+  );
+  const [dueDay, setDueDay] = useState<number>(draft?.dueDay ?? new Date().getDate());
+  const draftRestored = useRef(!!draft);
+
+  // Auto-save debounced enquanto rascunho estiver ativo.
+  useEffect(() => {
+    if (!open || confirmed) return;
+    const t = setTimeout(() => {
+      setDraft({
+        selected: Array.from(selected),
+        totalRaw,
+        entryRaw,
+        installmentsCount,
+        dueDay,
+        updatedAt: new Date().toISOString(),
+      });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [open, confirmed, selected, totalRaw, entryRaw, installmentsCount, dueDay, setDraft]);
 
   const total = Number(totalRaw.replace(",", ".")) || suggestedTotal;
   const entry = Number(entryRaw.replace(",", ".")) || 0;
@@ -128,27 +163,45 @@ export function MgmvCreateModal({
     });
   };
 
-  const handleCreate = () => {
-    if (!canSubmit || locked) return;
-    const agreement: MGMVAgreement = {
+  const handleCreate = async () => {
+    if (!canSubmit || locked || submitting) return;
+    setSubmitting(true);
+    try {
+      const agreement: MGMVAgreement = {
       startDate: new Date().toISOString(),
       totalDebt: total,
       installments: schedule,
       reviewStatus: "manually_reviewed",
-    };
-    setMGMVAgreement(client.id, agreement);
-    // Marca os produtos escolhidos como MGMV para consolidação financeira.
-    for (const id of selected) {
-      updateProduct(id, { financialStatus: "MGMV" });
+      };
+      setMGMVAgreement(client.id, agreement);
+      for (const id of selected) {
+        updateProduct(id, { financialStatus: "MGMV" });
+      }
+      // Limpa o rascunho salvo — o acordo agora existe de fato.
+      setDraft(null);
+      toast.success(
+        `Acordo MGMV criado — ${installmentsCount}x de ${formatBRL(installmentValue)}.`,
+      );
+      setConfirmed(true);
+    } finally {
+      setSubmitting(false);
     }
-    toast.success(
-      `Acordo MGMV criado — ${installmentsCount}x de ${formatBRL(installmentValue)}.`,
-    );
-    setConfirmed(true);
+  };
+
+  const discardDraft = () => {
+    setDraft(null);
+    setSelected(new Set(preselectedProductId ? [preselectedProductId] : []));
+    setTotalRaw("");
+    setEntryRaw("");
+    setInstallmentsCount(3);
+    setDueDay(new Date().getDate());
+    draftRestored.current = false;
+    toast.info("Rascunho descartado.");
   };
 
   const handleClose = () => {
-    // Reset draft flags on close so the next open starts fresh.
+    // Reset apenas do estado de confirmação — o rascunho persiste no banco
+    // e será restaurado quando o modal for reaberto para o mesmo cliente.
     setConfirmed(false);
     onClose();
   };
@@ -174,6 +227,20 @@ export function MgmvCreateModal({
               ? "Acordo criado. Edições bloqueadas para evitar inconsistências — feche para voltar."
               : "Selecione os produtos e defina parcelas, entrada e vencimentos. Ajustes recalculam o cronograma automaticamente."}
           </DialogDescription>
+          {!confirmed && draftRestored.current && draft && (
+            <div className="mt-2 flex items-center justify-between rounded-md border border-warning/30 bg-warning/10 px-3 py-1.5 text-[11px] text-warning">
+              <span>
+                Rascunho restaurado ({new Date(draft.updatedAt).toLocaleString("pt-BR")}).
+              </span>
+              <button
+                type="button"
+                onClick={discardDraft}
+                className="inline-flex items-center gap-1 rounded-full border border-warning/40 px-2 py-0.5 hover:bg-warning/20"
+              >
+                <RotateCcw className="size-3" /> Descartar
+              </button>
+            </div>
+          )}
         </DialogHeader>
 
         <fieldset disabled={locked} className="space-y-4 disabled:opacity-70">
@@ -328,11 +395,17 @@ export function MgmvCreateModal({
             </>
           ) : (
             <>
-              <Button variant="outline" onClick={handleClose}>
+              <Button variant="outline" onClick={handleClose} disabled={submitting}>
                 Cancelar
               </Button>
-              <Button disabled={!canSubmit} onClick={handleCreate}>
-                Criar acordo MGMV
+              <Button disabled={!canSubmit || submitting} onClick={handleCreate}>
+                {submitting ? (
+                  <>
+                    <Loader2 className="mr-1 size-3.5 animate-spin" /> Criando…
+                  </>
+                ) : (
+                  "Criar acordo MGMV"
+                )}
               </Button>
             </>
           )}
