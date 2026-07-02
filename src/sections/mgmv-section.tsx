@@ -21,6 +21,12 @@ import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
 import { extractMGMVAgreementFromNotes } from "@/sections/import-section";
 import { toast } from "sonner";
 import { X } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
 
 type MgmvChip =
   | "todos"
@@ -220,6 +226,7 @@ export function MGMVSection({
   const products = useStore((s) => s.products);
   const openClient = useStore((s) => s.openClient);
   const payMGMVInstallment = useStore((s) => s.payMGMVInstallment);
+  const registerMGMVPartialPayment = useStore((s) => s.registerMGMVPartialPayment);
   const setMGMVAgreement = useStore((s) => s.setMGMVAgreement);
   const applyAiReviewToAgreement = useStore((s) => s.applyAiReviewToAgreement);
   const [chip, setChip] = usePersistedState<MgmvChip>("mgmv.chip", "todos");
@@ -705,15 +712,30 @@ export function MGMVSection({
                                         )}
                                       </span>
                                       {!i.paid && (
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          onClick={() =>
-                                            payMGMVInstallment(r.client.id, i.number)
-                                          }
-                                        >
-                                          Marcar paga
-                                        </Button>
+                                        <div className="flex items-center gap-1">
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() =>
+                                              payMGMVInstallment(r.client.id, i.number)
+                                            }
+                                          >
+                                            Marcar paga
+                                          </Button>
+                                          <PartialPaymentPopover
+                                            clientId={r.client.id}
+                                            installmentNumber={i.number}
+                                            installmentValue={i.value}
+                                            currentPartial={i.paidAmount ?? 0}
+                                            onSubmit={(amount) =>
+                                              registerMGMVPartialPayment(
+                                                r.client.id,
+                                                i.number,
+                                                amount,
+                                              )
+                                            }
+                                          />
+                                        </div>
                                       )}
                                     </div>
                                   );
