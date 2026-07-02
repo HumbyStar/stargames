@@ -192,6 +192,17 @@ interface State {
   updateProductNotes: (productId: string, notes: string) => void;
   updateClientNotes: (clientId: string, notes: string) => void;
   payMGMVInstallment: (clientId: string, installmentNumber: number) => void;
+  /**
+   * Registra um pagamento parcial em uma parcela MGMV.
+   * - amount >= installment.value → marca paga integralmente; excedente reduz
+   *   o valor da próxima parcela pendente (mesmo comportamento aplicado por IA).
+   * - 0 < amount < installment.value → grava paidAmount (parcela segue pendente).
+   */
+  registerMGMVPartialPayment: (
+    clientId: string,
+    installmentNumber: number,
+    amount: number,
+  ) => void;
   setMGMVAgreement: (clientId: string, agreement: MGMVAgreement | undefined) => void;
   applyAiReviewToAgreement: (
     clientId: string,
