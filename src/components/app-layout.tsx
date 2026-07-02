@@ -621,7 +621,8 @@ function RightNavIcon({
 
 function _FloatingNavbarImpl() {
   const [openMobile, setOpenMobile] = useState(false);
-  const [activeSection, setActiveSection] = useState<string>("dashboard");
+  const activeSection = useUiStore((s) => s.activeSection);
+  const setActiveSection = useUiStore((s) => s.setActiveSection);
   const [isDark, setIsDark] = useState(
     () => typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
   );
