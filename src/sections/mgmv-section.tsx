@@ -572,9 +572,8 @@ export function MGMVSection({
                         ? { label: "Revisado manualmente", variant: "success" as const }
                         : null;
                 return (
-                  <>
+                  <Fragment key={r.client.id}>
                     <tr
-                      key={r.client.id}
                       className="border-b transition-colors hover:bg-accent/50"
                     >
                       <td className="px-3 py-2 font-medium">{r.client.name}</td>
@@ -669,7 +668,7 @@ export function MGMVSection({
                       </td>
                     </tr>
                     {isOpen && (
-                      <tr key={`${r.client.id}-detail`} className="border-b bg-accent/20">
+                      <tr className="border-b bg-accent/20">
                         <td colSpan={9} className="px-4 py-4">
                           <div className="grid gap-4 md:grid-cols-2">
                             <div>
@@ -779,7 +778,7 @@ export function MGMVSection({
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>
