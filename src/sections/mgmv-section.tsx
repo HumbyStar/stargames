@@ -846,11 +846,24 @@ function PartialPaymentPopover({
 }) {
   const [open, setOpen] = useState(false);
   const [raw, setRaw] = useState("");
-  const parsed = Number(raw.replace(",", "."));
-  const isNumber = raw.trim().length > 0 && Number.isFinite(parsed);
-  const isNegative = isNumber && parsed < 0;
-  const isZero = isNumber && parsed === 0;
-  const valid = isNumber && parsed > 0;
+  const trimmed = raw.trim();
+  // Aceita apenas formato numérico BR/US: dígitos com uma vírgula ou ponto opcional.
+  const numericPattern = /^-?\d+([.,]\d+)?$/;
+  const isEmpty = trimmed.length === 0;
+  const looksNumeric = !isEmpty && numericPattern.test(trimmed);
+  const parsed = looksNumeric ? Number(trimmed.replace(",", ".")) : NaN;
+  const notNumber = !isEmpty && (!looksNumeric || !Number.isFinite(parsed));
+  const isNegative = looksNumeric && Number.isFinite(parsed) && parsed < 0;
+  const isZero = looksNumeric && Number.isFinite(parsed) && parsed === 0;
+  const valid = looksNumeric && Number.isFinite(parsed) && parsed > 0;
+  const hasError = notNumber || isNegative || isZero;
+  const errorMsg = notNumber
+    ? "Valor inválido — use apenas números (ex.: 50 ou 50,00)."
+    : isNegative
+    ? "Valor não pode ser negativo."
+    : isZero
+    ? "Informe um valor maior que zero."
+    : null;
 
   // Prévia do efeito do pagamento — para dar feedback antes do usuário confirmar.
   const preview = (() => {
@@ -899,21 +912,30 @@ function PartialPaymentPopover({
             inputMode="decimal"
             className={cn(
               "h-8 text-sm",
-              (isNegative || isZero) && "border-destructive focus-visible:ring-destructive",
+              hasError && "border-destructive focus-visible:ring-destructive",
             )}
-            aria-invalid={isNegative || isZero}
+            aria-invalid={hasError}
+            aria-describedby="partial-payment-hint"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && valid) {
+                e.preventDefault();
+                (e.currentTarget.form?.querySelector("[data-confirm]") as HTMLButtonElement | null)?.click();
+              }
+            }}
           />
         </label>
-        {isNegative ? (
-          <p className="rounded-md bg-destructive/10 px-2 py-1 leading-snug text-destructive">
-            Valor não pode ser negativo.
-          </p>
-        ) : isZero ? (
-          <p className="rounded-md bg-destructive/10 px-2 py-1 leading-snug text-destructive">
-            Informe um valor maior que zero.
+        {errorMsg ? (
+          <p
+            id="partial-payment-hint"
+            role="alert"
+            className="rounded-md bg-destructive/10 px-2 py-1 leading-snug text-destructive"
+          >
+            {errorMsg}
           </p>
         ) : preview ? (
           <p
+            id="partial-payment-hint"
+            aria-live="polite"
             className={cn(
               "rounded-md px-2 py-1 leading-snug",
               preview.kind === "full"
