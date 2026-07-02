@@ -1,68 +1,56 @@
-# Padronização do campo "Situação"
+# Plano — Correção de 3 bugs reportados
 
-Baseado no PDF `Padronizacao_Situacao_Notion_1.pdf` e na lista completa de variações, vou criar um normalizador único usado em toda a importação (ZIP/Notion, HTML, colada, IA) para converter qualquer texto bruto em um dos status oficiais do sistema.
+## BUG-001 — Registrar pagamento parcial em parcela MGMV
+**Arquivo:** `src/sections/mgmv-section.tsx`, `src/lib/store.ts`
 
-## Situações oficiais alvo
+Hoje só existe "Marcar paga". Falta um caminho manual para valor menor que a parcela.
 
-O sistema hoje tem `Situation = "Em Aberto" | "Enviado" | "Retirado" | "Removido" | "Desistiu" | "Abandonou" | "Resolvido"` e `FinancialStatus = "Pago" | "Reserva" | "Pendente" | "MGMV"`.
+- Adicionar botão **"Pagamento parcial"** ao lado de "Marcar paga" em cada parcela pendente.
+- Ao clicar, abrir um popover pequeno (Input R$ + Confirmar) que chama uma nova ação `registerPartialPayment(clientId, installmentNumber, amount, date?)` no store.
+- Regras da ação:
+  - Se `amount >= installment.value`: comporta como `payMGMVInstallment` (marca paga integralmente) e o excedente vira `nextInstallmentDiscount` reduzindo `value` da próxima parcela pendente (reutiliza a lógica já existente em `mgmv-ai-apply`).
+  - Se `0 < amount < installment.value`: grava `paidAmount = amount` na parcela (mantém `paid=false`), atualiza `paidAt` opcionalmente, e recalcula `remainingValue` do acordo (a soma parcial já é considerada em `mgmv-section` linhas 72-81).
+  - Chama `recalcPendingDueDates` para deslocar vencimentos das próximas parcelas 30 dias após o último pagamento efetivo (parcial conta como marco temporal).
+- Exibir na UI (célula da parcela) o texto `(parcial R$ X)` que já existe (linha 701-705) — apenas garantir que o cabeçalho do acordo mostre "Saldo restante" descontando o parcial.
+- Persistir via `updateMGMVInstallment` no Supabase (campo `paid_amount` já existe conforme contexto anterior).
 
-Adiciono **`"Retirar"`** ao enum `Situation` (item pendente de retirada). Mantenho o resto como está — o mapeamento consolida todas as variações em 5 buckets:
+## BUG-002 — Criar acordo MGMV a partir do cliente/reserva
+**Arquivos:** `src/sections/clientes-section.tsx` (ação por cliente), novo `src/components/mgmv-create-modal.tsx`, `src/lib/store.ts`.
 
-| Bucket oficial | Situation | FinancialStatus (quando aplicável) |
-|---|---|---|
-| Enviado | `Enviado` | preserva o financeiro atual |
-| Retirado | `Retirado` | preserva |
-| Retirar | `Retirar` (novo) | preserva |
-| Removido | `Removido` | preserva |
-| MGMV / LOTE | `Em Aberto` | força `MGMV` |
-| Pago / LOTE PAGO | `Enviado` | força `Pago` |
+Hoje só existe MGMV via importação. Adicionar criação manual.
 
-## Regras de normalização
+- **Ponto de entrada:** botão **"Criar acordo MGMV"** no cabeçalho do card de cliente expandido em `clientes-section` (visível quando o cliente NÃO tem `mgmv.active`). Também botão no rodapé de itens em Reserva que abre o mesmo modal já com o produto pré-selecionado.
+- **Modal `MgmvCreateModal`** com formulário:
+  - Lista de produtos do cliente (checkbox multi-select) — mostra Total/Pago/Restante por linha.
+  - Valor total do acordo (auto-calculado = soma dos restantes; editável).
+  - Entrada opcional (R$).
+  - Nº de parcelas (input numérico ≥ 2).
+  - Dia de vencimento (1-31) + data da 1ª parcela.
+  - Preview do cronograma gerado (parcela × valor × vencimento).
+- **Store — nova ação `createMGMVAgreement(clientId, config)`**:
+  - Marca `clientType = "mgmv"`.
+  - Gera `installments[]` com `paid=false`, `value = (total - entrada)/n`.
+  - Se houver entrada, cria uma parcela `#0` já paga OU aplica como `nextInstallmentDiscount` na 1ª — usar o padrão já existente em `mgmv-ai-apply` para consistência.
+  - Vincula os produtos escolhidos ao acordo (marca `includedInMgmv=true` — usar mesmo flag já usado na exibição "Incluído no MGMV").
+  - Persiste no Supabase via `upsertMGMV`/`persistConfirmedImport` existentes.
+- Toast de sucesso + rolagem para a seção MGMV com o cliente já expandido.
 
-Antes de bater no dicionário:
-- `trim` + colapsar espaços
-- `toLowerCase`
-- remover acentos (`normalize("NFD").replace(/\p{Diacritic}/gu, "")`)
-- remover markdown tachado `~~...~~`
-- descartar sufixos livres depois do primeiro token/marcador reconhecido (datas `dd/mm/aaaa`, nomes entre parênteses, observações após " - ", asteriscos, "NF gerada …", etc.)
-- normalizar erros comuns: `envaido|enviad0|enviadonf|enviadomateus|enviadonão` → `enviado`; `removdo|removid0` → `removido`; `desisitiu|desistencia|desitiu|deisitiu|desisistiu` → `desistiu`.
+## BUG-004 — Filtro por Situação no preview da importação
+**Arquivo:** `src/sections/import-section.tsx` (função `PreviewVirtualTable`, linhas ~2700-2850).
 
-Match por **prefixo** dos tokens já normalizados, para absorver naturalmente variações como "ENVIADO - M -", "ENVIADO 05/03/2025", "RETIRADO6 junho", "REMOVIDO desistência".
+Hoje há chips por status financeiro/categoria, mas não por **Situação** (Em Aberto / Enviado / Retirado / Retirar / Removido / Desistiu / Abandonou).
 
-Dicionário de raízes (após normalizar):
-- `enviado`, `entregue`, `enviou` → **Enviado**
-- `pago`, `lote pago` → **Enviado** + FS `Pago`
-- `retirado`, `cliente retirou`, `retirouna loja` → **Retirado**
-- `retirar` → **Retirar**
-- `removido`, `cancelado`, `devolvido`, `expirado`, `item expirado`, `itens removidos`, `item removido`, `desistiu`, `desistencia`, `desistiu do item`, `cliente desistiu`, `deu erro`, `nao funcionou`, `quer trocar`, `perdeu`, `sumiu`, `cliente sumiu`, `saiu do grupo`, `deixou de credito`, `valor devolvido`, `de volta ao estoque`, `taxa item nao pago`, `taxa paga`, `credito usado`, `preferiu ficar de credito`, `item repetido`, `reserva expirou` → **Removido**
-- `mgmv`, `lote 1`, `lote ` + número → **Em Aberto** + FS `MGMV`
-- entrada vazia / `-` → **Em Aberto** (mantém financialStatus atual)
+- Estender o tipo `PreviewFilter` com `sit_open | sit_enviado | sit_retirado | sit_retirar | sit_removido | sit_desistiu | sit_abandonou`.
+- Adicionar novo grupo de chips **"Situação:"** abaixo dos chips atuais (mesma estética), utilizando os buckets oficiais do `situation-normalizer`.
+- No `filteredRows`, comparar contra `r.situation`.
+- Contador ao lado de cada chip (ex.: `Enviado (12)`) para dar o benefício operacional citado no relatório.
+- Persistir a seleção no mesmo `usePersistedState("import.preview.filter", ...)` já existente.
 
-Qualquer valor que não bater retorna `{ situation: null, unknown: true, raw }` e é registrado num log (console + `sessionStorage.setItem("import.situation.unknown", …)`) para revisão futura, como pede o PDF.
-
-## Arquivos
-
-**Novos**
-- `src/lib/situation-normalizer.ts` — função pura `normalizeSituation(raw, currentFinancialStatus?)` retornando `{ situation, financialStatusOverride?, unknown, matchedRule }`, mais `SITUATION_ALIASES` exportado para testes.
-- `src/lib/situation-normalizer.test.ts` — cobre toda a lista de 90+ variações que o usuário mandou, garantindo bucket correto para cada uma.
-
-**Alterados**
-- `src/lib/store.ts` — adicionar `"Retirar"` ao union `Situation`. Ajustar `isResolvedSituation` (Retirar é ainda em aberto → não resolvida) e `getSituationStyle`/labels correspondentes.
-- `src/lib/list-import-parser.ts` — usar `normalizeSituation` quando a linha trouxer coluna de situação (ainda que hoje não seja obrigatória; só afeta linhas onde o parser identificar um token de situação além de PAGO/RESERVA/PENDENTE).
-- `src/lib/list-import-ai.functions.ts` e `src/lib/list-ai-analyze.functions.ts` — passar `situation` da IA pelo normalizador antes de gravar, em vez de aceitar o texto cru.
-- `src/lib/db-sync.ts` e/ou o pipeline de importação ZIP/Notion — chamar o normalizador para o campo Situação vindo do CSV/HTML do Notion antes de salvar em `products.situation`.
-- `src/sections/clientes-section.tsx`, `collection-section.tsx`, `mgmv-section.tsx`, `configuracoes-section.tsx` — se houver rótulos/filtros em UI, incluir "Retirar" como opção (só onde já existe seletor de situação).
-
-**Fora de escopo**
-- Backfill retroativo em produtos já salvos com strings livres. Fica opcional em segunda rodada (posso adicionar um botão "Padronizar situações antigas" na seção Configurações se quiser).
+## Notas técnicas
+- Nada muda em `import-cards.tsx`, `list-import-modal.tsx`, ou nos parsers — apenas UI de preview.
+- BUG-001 e BUG-002 reutilizam `recalcPendingDueDates` e `mgmv-ai-apply` para não duplicar regras de cronograma.
+- Todas as ações novas passam pelas mesmas funções `updateClient`/`upsertMGMV` já persistidas via server functions, mantendo RLS.
 
 ## Verificação
-
-- `bunx vitest run src/lib/situation-normalizer.test.ts src/lib/list-import-parser.test.ts`
-- `tsgo --noEmit`
-- Colar uma amostra da lista no importador em modo preview e conferir a coluna Situação já normalizada.
-
-## Perguntas de decisão (rápidas)
-
-1. Adicionar `"Retirar"` como situação nova está OK? (o PDF pede, mas o enum atual não tem.)
-2. Quer que eu já rode um **backfill** nos produtos existentes na primeira importação/carga (botão em Configurações), ou deixo só para dados novos?
+- `bunx vitest run src/lib/store.test.ts` (extender com casos de partial payment e create agreement).
+- Playwright: fluxo manual criar acordo, registrar parcial, filtrar Situação=Enviado no preview.
