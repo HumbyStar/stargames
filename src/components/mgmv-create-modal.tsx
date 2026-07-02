@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Lock, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   formatBRL,
@@ -58,6 +59,11 @@ export function MgmvCreateModal({
 }: Props) {
   const setMGMVAgreement = useStore((s) => s.setMGMVAgreement);
   const updateProduct = useStore((s) => s.updateProduct);
+
+  // Draft vs. Confirmed state — once confirmed the form is locked to prevent
+  // accidental edits to an agreement that has already been persisted.
+  const [confirmed, setConfirmed] = useState(false);
+  const locked = confirmed;
 
   // Produtos elegíveis: os que ainda têm saldo (Em Aberto e não pertencem a MGMV).
   const eligible = useMemo(
@@ -123,7 +129,7 @@ export function MgmvCreateModal({
   };
 
   const handleCreate = () => {
-    if (!canSubmit) return;
+    if (!canSubmit || locked) return;
     const agreement: MGMVAgreement = {
       startDate: new Date().toISOString(),
       totalDebt: total,
@@ -138,20 +144,39 @@ export function MgmvCreateModal({
     toast.success(
       `Acordo MGMV criado — ${installmentsCount}x de ${formatBRL(installmentValue)}.`,
     );
+    setConfirmed(true);
+  };
+
+  const handleClose = () => {
+    // Reset draft flags on close so the next open starts fresh.
+    setConfirmed(false);
     onClose();
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => (!v ? onClose() : null)}>
+    <Dialog open={open} onOpenChange={(v) => (!v ? handleClose() : null)}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Criar acordo MGMV — {client.name}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            Criar acordo MGMV — {client.name}
+            {confirmed ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--success)]/40 bg-[color:var(--success)]/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--success)]">
+                <CheckCircle2 className="size-3" /> Confirmado
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Rascunho
+              </span>
+            )}
+          </DialogTitle>
           <DialogDescription>
-            Selecione os produtos e defina parcelas, entrada e vencimentos.
+            {confirmed
+              ? "Acordo criado. Edições bloqueadas para evitar inconsistências — feche para voltar."
+              : "Selecione os produtos e defina parcelas, entrada e vencimentos. Ajustes recalculam o cronograma automaticamente."}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <fieldset disabled={locked} className="space-y-4 disabled:opacity-70">
           <div>
             <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
               Produtos elegíveis ({eligible.length})
@@ -172,6 +197,7 @@ export function MgmvCreateModal({
                       <Checkbox
                         checked={selected.has(p.id)}
                         onCheckedChange={() => toggle(p.id)}
+                        disabled={locked}
                       />
                       <span className="flex-1 truncate font-medium">{p.name}</span>
                       <span className="text-muted-foreground">{p.platform}</span>
@@ -197,6 +223,7 @@ export function MgmvCreateModal({
                 placeholder={formatBRL(suggestedTotal)}
                 inputMode="decimal"
                 className="h-9"
+                readOnly={locked}
               />
             </div>
             <div>
@@ -207,6 +234,7 @@ export function MgmvCreateModal({
                 placeholder="0,00"
                 inputMode="decimal"
                 className="h-9"
+                readOnly={locked}
               />
             </div>
             <div>
@@ -218,6 +246,7 @@ export function MgmvCreateModal({
                 value={installmentsCount}
                 onChange={(e) => setInstallmentsCount(Math.max(1, Number(e.target.value) || 1))}
                 className="h-9"
+                readOnly={locked}
               />
             </div>
             <div>
@@ -229,6 +258,7 @@ export function MgmvCreateModal({
                 value={dueDay}
                 onChange={(e) => setDueDay(Math.max(1, Math.min(31, Number(e.target.value) || 1)))}
                 className="h-9"
+                readOnly={locked}
               />
             </div>
           </div>
@@ -236,7 +266,7 @@ export function MgmvCreateModal({
           <div className="rounded-md border border-border bg-muted/30 p-3 text-xs">
             <div className="mb-2 flex items-center justify-between">
               <span className="font-semibold uppercase tracking-wide text-muted-foreground">
-                Cronograma
+                Cronograma (prévia)
               </span>
               <span className="tabular-nums text-muted-foreground">
                 Financiado: {formatBRL(financed)} · {installmentsCount}x{" "}
@@ -244,29 +274,68 @@ export function MgmvCreateModal({
               </span>
             </div>
             <div className="max-h-40 space-y-1 overflow-y-auto">
-              {schedule.map((i) => (
-                <div
-                  key={i.number}
-                  className="flex items-center justify-between rounded-md bg-card px-2 py-1"
-                >
-                  <span>
-                    #{i.number}/{i.total}
-                  </span>
-                  <span className="text-muted-foreground">{formatDateBR(i.dueDate)}</span>
-                  <span className="tabular-nums font-medium">{formatBRL(i.value)}</span>
-                </div>
-              ))}
+              {schedule.map((i) => {
+                const now = Date.now();
+                const due = new Date(i.dueDate).getTime();
+                const days = Math.round((due - now) / (1000 * 60 * 60 * 24));
+                const overdue = days < 0;
+                const soon = !overdue && days <= 7;
+                return (
+                  <div
+                    key={i.number}
+                    className={`flex items-center justify-between rounded-md px-2 py-1 ${
+                      overdue
+                        ? "bg-destructive/10 border border-destructive/30"
+                        : soon
+                        ? "bg-warning/10 border border-warning/30"
+                        : "bg-card"
+                    }`}
+                  >
+                    <span className="font-medium">
+                      #{i.number}/{i.total}
+                    </span>
+                    <span className="text-muted-foreground">{formatDateBR(i.dueDate)}</span>
+                    <span
+                      className={`text-[10px] uppercase tracking-wide ${
+                        overdue
+                          ? "text-destructive"
+                          : soon
+                          ? "text-warning"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {overdue
+                        ? `${Math.abs(days)}d em atraso`
+                        : days === 0
+                        ? "vence hoje"
+                        : `em ${days}d`}
+                    </span>
+                    <span className="tabular-nums font-medium">{formatBRL(i.value)}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
-        </div>
+        </fieldset>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button disabled={!canSubmit} onClick={handleCreate}>
-            Criar acordo MGMV
-          </Button>
+          {confirmed ? (
+            <>
+              <span className="mr-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <Lock className="size-3" /> Edição bloqueada
+              </span>
+              <Button onClick={handleClose}>Fechar</Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={handleClose}>
+                Cancelar
+              </Button>
+              <Button disabled={!canSubmit} onClick={handleCreate}>
+                Criar acordo MGMV
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
