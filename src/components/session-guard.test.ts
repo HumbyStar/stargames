@@ -1,14 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 
-const claimSpy = vi.fn(async () => ({ ok: true, sessionId: "x" }));
-const heartbeatSpy = vi.fn(async () => ({ valid: true }));
-const releaseSpy = vi.fn(async () => ({ ok: true }));
+type AnyArgs = unknown[];
+const claimSpy = vi.fn<(...args: AnyArgs) => Promise<{ ok: true; sessionId: string }>>(
+  async () => ({ ok: true, sessionId: "x" }),
+);
+const heartbeatSpy = vi.fn<(...args: AnyArgs) => Promise<{ valid: true }>>(
+  async () => ({ valid: true }),
+);
+const releaseSpy = vi.fn<(...args: AnyArgs) => Promise<{ ok: true }>>(
+  async () => ({ ok: true }),
+);
 
 vi.mock("@/lib/session-guard.functions", () => ({
-  claimSession: (...a: unknown[]) => claimSpy(...a),
-  heartbeatSession: (...a: unknown[]) => heartbeatSpy(...a),
-  releaseSession: (...a: unknown[]) => releaseSpy(...a),
+  claimSession: (...a: AnyArgs) => claimSpy(...a),
+  heartbeatSession: (...a: AnyArgs) => heartbeatSpy(...a),
+  releaseSession: (...a: AnyArgs) => releaseSpy(...a),
 }));
 
 const mem: Record<string, string> = {};
@@ -63,7 +70,25 @@ describe("session-guard unload", () => {
         path: "/dashboard",
       }),
     );
+    // Não deve incluir tokens ou dados sensíveis no payload.
+    const payload = info.mock.calls[0]?.[1] as Record<string, unknown>;
+    const serialized = JSON.stringify(payload);
+    expect(serialized).not.toMatch(/access_token|bearer|authorization/i);
     info.mockRestore();
+  });
+
+  it("não dispara RPC em visibilitychange (aba oculta)", () => {
+    handleSessionUnload("visibilitychange");
+    expect(claimSpy).not.toHaveBeenCalled();
+    expect(heartbeatSpy).not.toHaveBeenCalled();
+    expect(releaseSpy).not.toHaveBeenCalled();
+  });
+
+  it("não dispara RPC em freeze (Page Lifecycle)", () => {
+    handleSessionUnload("freeze");
+    expect(claimSpy).not.toHaveBeenCalled();
+    expect(heartbeatSpy).not.toHaveBeenCalled();
+    expect(releaseSpy).not.toHaveBeenCalled();
   });
 
   it("módulo session-guard não importa nem referencia releaseSession", () => {

@@ -12,7 +12,13 @@ export const SESSION_ID_KEY = "sg_active_session_id";
  * (o bearer token é anexado de forma assíncrona e o unload aborta o fetch,
  * fazendo `requireSupabaseAuth` responder 500). Apenas limpamos estado local.
  */
-export function handleSessionUnload(reason: "beforeunload" | "pagehide"): void {
+export type SessionUnloadReason =
+  | "beforeunload"
+  | "pagehide"
+  | "visibilitychange"
+  | "freeze";
+
+export function handleSessionUnload(reason: SessionUnloadReason): void {
   try {
     const sessionId =
       typeof localStorage !== "undefined" ? localStorage.getItem(SESSION_ID_KEY) : null;
@@ -106,14 +112,25 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
     window.addEventListener("focus", onFocus);
     const onBeforeUnload = () => handleSessionUnload("beforeunload");
     const onPageHide = () => handleSessionUnload("pagehide");
+    const onVisibility = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        handleSessionUnload("visibilitychange");
+      }
+    };
+    const onFreeze = () => handleSessionUnload("freeze");
     window.addEventListener("beforeunload", onBeforeUnload);
     window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibility);
+    // `freeze` só existe em navegadores com Page Lifecycle API; addEventListener ignora se não suportado.
+    document.addEventListener("freeze", onFreeze);
     return () => {
       cancelled = true;
       window.clearInterval(id);
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("beforeunload", onBeforeUnload);
       window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibility);
+      document.removeEventListener("freeze", onFreeze);
     };
   }, [navigate]);
 
