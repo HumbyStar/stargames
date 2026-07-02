@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
 import { supabase } from "@/integrations/supabase/client";
+import { HydrationSplash, useHydrationUserName } from "@/components/hydration-splash";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -1199,19 +1200,13 @@ function _FloatingNavbarImpl() {
 export function AppLayout({ children }: { children?: ReactNode }) {
   const hydrated = useStore((s) => s.hydrated);
   const hydrate = useStore((s) => s.hydrate);
+  const userName = useHydrationUserName();
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
 
   if (!hydrated) {
-    return (
-      <div className="grid min-h-screen place-items-center bg-background">
-        <div className="flex flex-col items-center gap-3 text-muted-foreground">
-          <div className="size-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <p className="text-sm">Carregando dados…</p>
-        </div>
-      </div>
-    );
+    return <HydrationSplash userName={userName} />;
   }
 
   return (
