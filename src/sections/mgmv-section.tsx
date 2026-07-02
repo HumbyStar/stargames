@@ -829,3 +829,74 @@ export function MGMVSection({
     </section>
   );
 }
+
+function PartialPaymentPopover({
+  clientId: _clientId,
+  installmentNumber,
+  installmentValue,
+  currentPartial,
+  onSubmit,
+}: {
+  clientId: string;
+  installmentNumber: number;
+  installmentValue: number;
+  currentPartial: number;
+  onSubmit: (amount: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [raw, setRaw] = useState("");
+  const parsed = Number(raw.replace(",", "."));
+  const valid = Number.isFinite(parsed) && parsed > 0;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="outline" className="h-7 text-[11px]">
+          Pagamento parcial
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64 space-y-2 p-3 text-xs">
+        <div className="font-semibold">
+          Parcela #{installmentNumber} — {formatBRL(installmentValue)}
+        </div>
+        {currentPartial > 0 && (
+          <div className="text-muted-foreground">
+            Já pago parcialmente: {formatBRL(currentPartial)}
+          </div>
+        )}
+        <label className="block">
+          <span className="mb-1 block text-muted-foreground">Valor recebido (R$)</span>
+          <Input
+            autoFocus
+            value={raw}
+            onChange={(e) => setRaw(e.target.value)}
+            placeholder="0,00"
+            inputMode="decimal"
+            className="h-8 text-sm"
+          />
+        </label>
+        <p className="leading-snug text-muted-foreground">
+          Se maior ou igual a {formatBRL(installmentValue)}, a parcela é marcada
+          como paga e o excedente vira desconto na próxima. Caso contrário,
+          registra pagamento parcial.
+        </p>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            size="sm"
+            disabled={!valid}
+            onClick={() => {
+              onSubmit(parsed);
+              setRaw("");
+              setOpen(false);
+              toast.success("Pagamento registrado.");
+            }}
+          >
+            Confirmar
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
