@@ -6,6 +6,28 @@ import { claimSession, heartbeatSession } from "@/lib/session-guard.functions";
 
 export const SESSION_ID_KEY = "sg_active_session_id";
 
+/**
+ * Handler de unload isolado, exportado apenas para testes de regressão.
+ * Regra dura: durante `beforeunload`/`pagehide` NUNCA disparamos server fns
+ * (o bearer token é anexado de forma assíncrona e o unload aborta o fetch,
+ * fazendo `requireSupabaseAuth` responder 500). Apenas limpamos estado local.
+ */
+export function handleSessionUnload(reason: "beforeunload" | "pagehide"): void {
+  try {
+    const sessionId =
+      typeof localStorage !== "undefined" ? localStorage.getItem(SESSION_ID_KEY) : null;
+    // Log estruturado para auditoria — nenhuma RPC é feita aqui de propósito.
+    console.info("[session-guard] unload", {
+      reason,
+      hasSessionId: Boolean(sessionId),
+      path: typeof location !== "undefined" ? location.pathname : null,
+      at: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.warn("[session-guard] unload logging failed", err);
+  }
+}
+
 function generateSessionId() {
   try {
     return crypto.randomUUID();
@@ -82,10 +104,16 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
     const id = window.setInterval(ping, 30_000);
     const onFocus = () => ping();
     window.addEventListener("focus", onFocus);
+    const onBeforeUnload = () => handleSessionUnload("beforeunload");
+    const onPageHide = () => handleSessionUnload("pagehide");
+    window.addEventListener("beforeunload", onBeforeUnload);
+    window.addEventListener("pagehide", onPageHide);
     return () => {
       cancelled = true;
       window.clearInterval(id);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("pagehide", onPageHide);
     };
   }, [navigate]);
 
