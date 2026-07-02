@@ -104,10 +104,16 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
     const id = window.setInterval(ping, 30_000);
     const onFocus = () => ping();
     window.addEventListener("focus", onFocus);
+    const onBeforeUnload = () => handleSessionUnload("beforeunload");
+    const onPageHide = () => handleSessionUnload("pagehide");
+    window.addEventListener("beforeunload", onBeforeUnload);
+    window.addEventListener("pagehide", onPageHide);
     return () => {
       cancelled = true;
       window.clearInterval(id);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("pagehide", onPageHide);
     };
   }, [navigate]);
 
