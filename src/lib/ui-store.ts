@@ -12,6 +12,8 @@ interface UiState {
   conciergeOpen: boolean;
   financeOpen: boolean;
   activeTutorialId: string | null;
+  activeSection: string;
+  setActiveSection: (id: string) => void;
   openImport: () => void;
   closeImport: () => void;
   openSettings: () => void;
@@ -36,6 +38,8 @@ export const useUiStore = create<UiState>((set) => ({
   conciergeOpen: false,
   financeOpen: false,
   activeTutorialId: null,
+  activeSection: "dashboard",
+  setActiveSection: (id) => set({ activeSection: id }),
   openImport: () => {
     set({ importOpen: false });
     if (typeof document === "undefined") return;
