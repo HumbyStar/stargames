@@ -16,7 +16,6 @@ import {
   Bell,
   ChevronRight,
   CreditCard,
-  ClipboardList,
   Lightbulb,
   Link2,
   Loader2,

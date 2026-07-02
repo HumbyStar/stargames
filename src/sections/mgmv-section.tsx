@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { usePersistedState } from "@/lib/use-persisted-state";
@@ -16,7 +16,6 @@ import {
   MinimizedListCard,
 } from "@/components/list-expansion";
 import { useListExpansion } from "@/lib/list-expansion";
-import type { MgmvAiReviewSuggestion } from "@/lib/mgmv-ai-review.functions";
 import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
 import { extractMGMVAgreementFromNotes } from "@/sections/import-section";
 import { toast } from "sonner";
@@ -573,9 +572,8 @@ export function MGMVSection({
                         ? { label: "Revisado manualmente", variant: "success" as const }
                         : null;
                 return (
-                  <>
+                  <Fragment key={r.client.id}>
                     <tr
-                      key={r.client.id}
                       className="border-b transition-colors hover:bg-accent/50"
                     >
                       <td className="px-3 py-2 font-medium">{r.client.name}</td>
@@ -670,7 +668,7 @@ export function MGMVSection({
                       </td>
                     </tr>
                     {isOpen && (
-                      <tr key={`${r.client.id}-detail`} className="border-b bg-accent/20">
+                      <tr className="border-b bg-accent/20">
                         <td colSpan={9} className="px-4 py-4">
                           <div className="grid gap-4 md:grid-cols-2">
                             <div>
@@ -780,7 +778,7 @@ export function MGMVSection({
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>

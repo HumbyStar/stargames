@@ -2,10 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
-// Janela em segundos durante a qual uma sessão é considerada "ativa".
-// O heartbeat do cliente roda a cada 30s, então 90s tolera 2 falhas seguidas.
-const ACTIVE_WINDOW_SECONDS = 90;
-
 export type ClaimResult =
   | { ok: true; sessionId: string }
   | { ok: false; reason: "no_internal_access" }
