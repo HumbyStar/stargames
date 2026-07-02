@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { reportDashboardPerf } from "@/components/dashboard-perf-badge";
 import {
   Dialog,
@@ -332,7 +332,7 @@ export function DashboardDrilldownModal({
   const payMGMVInstallment = useStore((s) => s.payMGMVInstallment);
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
-  const [isSearching, startSearchTransition] = useTransition();
+  const isSearching = deferredSearch !== search;
 
   const config = cardId ? CARDS[cardId] : null;
   // Rows são construídas somente quando o modal está aberto (o componente
@@ -367,7 +367,7 @@ export function DashboardDrilldownModal({
     const id = setTimeout(() => setShowSkeleton(false), 0);
     return () => clearTimeout(id);
   }, [cardId]);
-  const stale = isSearching || (showSkeleton && rows.length > 0 && deferredSearch !== search);
+  const stale = isSearching;
 
   if (!config || !cardId) return null;
 
@@ -444,10 +444,7 @@ export function DashboardDrilldownModal({
           </div>
           <Input
             value={search}
-            onChange={(e) => {
-              const v = e.target.value;
-              startSearchTransition(() => setSearch(v));
-            }}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar cliente, telefone ou produto..."
             className="h-9 w-full max-w-xs"
             aria-busy={stale || undefined}
