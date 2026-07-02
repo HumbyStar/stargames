@@ -2719,6 +2719,12 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
   const ROW_HEIGHT = 52;
   const [query, setQuery] = usePersistedState<string>("import.preview.query", "");
   const [filter, setFilter] = usePersistedState<PreviewFilter>("import.preview.filter", "all");
+  // Situação — seleção múltipla, persistida independente do filtro principal.
+  const [situations, setSituations] = usePersistedState<string[]>(
+    "import.preview.situations",
+    [],
+  );
+  const situationSet = useMemo(() => new Set(situations), [situations]);
 
   const errorCount = useMemo(() => rows.filter((r) => r.result === "Erro").length, [rows]);
   const readyCount = rows.length - errorCount;
@@ -2736,14 +2742,7 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
       if (filter === "new_client" && r.clientAction !== "create") return false;
       if (filter === "add_product" && r.productAction !== "add_to_existing_client") return false;
       if (filter === "duplicate" && r.productAction !== "duplicate_product") return false;
-      if (filter === "sit_open" && r.situation !== "Em Aberto") return false;
-      if (filter === "sit_enviado" && r.situation !== "Enviado") return false;
-      if (filter === "sit_retirado" && r.situation !== "Retirado") return false;
-      if (filter === "sit_retirar" && r.situation !== "Retirar") return false;
-      if (filter === "sit_removido" && r.situation !== "Removido") return false;
-      if (filter === "sit_desistiu" && r.situation !== "Desistiu") return false;
-      if (filter === "sit_abandonou" && r.situation !== "Abandonou") return false;
-      if (filter === "sit_resolvido" && r.situation !== "Resolvido") return false;
+      if (situationSet.size > 0 && !situationSet.has(r.situation)) return false;
       if (!q) return true;
       return (
         r.name.toLowerCase().includes(q) ||
@@ -2752,7 +2751,7 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
         r.platform.toLowerCase().includes(q)
       );
     });
-  }, [rows, query, filter]);
+  }, [rows, query, filter, situationSet]);
 
   const rowVirtualizer = useVirtualizer({
     count: filteredRows.length,
@@ -2764,6 +2763,7 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
   const scrollToFirstError = () => {
     setFilter("all");
     setQuery("");
+    setSituations([]);
     // Defer until filteredRows recomputes with all rows visible.
     requestAnimationFrame(() => {
       const idx = rows.findIndex((r) => r.result === "Erro");
@@ -2849,16 +2849,31 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
     return counts;
   }, [rows]);
 
-  const situationChips: { id: PreviewFilter; label: string; key: string }[] = [
-    { id: "sit_open", label: "Em Aberto", key: "Em Aberto" },
-    { id: "sit_enviado", label: "Enviado", key: "Enviado" },
-    { id: "sit_retirado", label: "Retirado", key: "Retirado" },
-    { id: "sit_retirar", label: "Retirar", key: "Retirar" },
-    { id: "sit_removido", label: "Removido", key: "Removido" },
-    { id: "sit_desistiu", label: "Desistiu", key: "Desistiu" },
-    { id: "sit_abandonou", label: "Abandonou", key: "Abandonou" },
-    { id: "sit_resolvido", label: "Resolvido", key: "Resolvido" },
+  const situationChips: { label: string; key: string }[] = [
+    { label: "Em Aberto", key: "Em Aberto" },
+    { label: "Enviado", key: "Enviado" },
+    { label: "Retirado", key: "Retirado" },
+    { label: "Retirar", key: "Retirar" },
+    { label: "Removido", key: "Removido" },
+    { label: "Desistiu", key: "Desistiu" },
+    { label: "Abandonou", key: "Abandonou" },
+    { label: "Resolvido", key: "Resolvido" },
   ];
+
+  const toggleSituation = (key: string) => {
+    setSituations((prev) =>
+      prev.includes(key) ? prev.filter((s) => s !== key) : [...prev, key],
+    );
+  };
+
+  const hasAnyFilterActive =
+    filter !== "all" || situations.length > 0 || query.trim().length > 0;
+
+  const clearAllFilters = () => {
+    setFilter("all");
+    setSituations([]);
+    setQuery("");
+  };
 
   return (
     <div className="flex h-full flex-col gap-2">
@@ -2924,27 +2939,41 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
       </div>
       <div className="flex flex-wrap items-center gap-1">
         <span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Situação:
+          Situação {situations.length > 0 && `(${situations.length})`}:
         </span>
         {situationChips.map((c) => {
           const count = situationCounts[c.key] ?? 0;
+          const active = situationSet.has(c.key);
           return (
             <button
-              key={c.id}
+              key={c.key}
               type="button"
-              onClick={() => setFilter(filter === c.id ? "all" : c.id)}
+              onClick={() => toggleSituation(c.key)}
               disabled={count === 0}
               className={cn(
                 "rounded-full border px-2.5 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40",
-                filter === c.id
+                active
                   ? "border-primary bg-primary/10 text-primary"
                   : "border-border text-muted-foreground hover:bg-muted",
               )}
+              aria-pressed={active}
             >
               {c.label} <span className="tabular-nums opacity-70">({count})</span>
             </button>
           );
         })}
+        <span className="ml-2 text-[11px] text-muted-foreground tabular-nums">
+          Mostrando <span className="font-semibold text-foreground">{filteredRows.length}</span> de {rows.length}
+        </span>
+        {hasAnyFilterActive && (
+          <button
+            type="button"
+            onClick={clearAllFilters}
+            className="ml-1 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted"
+          >
+            Limpar filtros
+          </button>
+        )}
       </div>
       <div className="flex h-[calc(95vh-200px)] min-h-[380px] flex-col overflow-hidden rounded-md border border-border">
         <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
