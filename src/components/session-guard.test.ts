@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const claimSpy = vi.fn(async () => ({ ok: true, sessionId: "x" }));
