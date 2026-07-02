@@ -1,5 +1,5 @@
-// @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import * as fs from "node:fs";
 
 const claimSpy = vi.fn(async () => ({ ok: true, sessionId: "x" }));
 const heartbeatSpy = vi.fn(async () => ({ valid: true }));
@@ -10,6 +10,21 @@ vi.mock("@/lib/session-guard.functions", () => ({
   heartbeatSession: (...a: unknown[]) => heartbeatSpy(...a),
   releaseSession: (...a: unknown[]) => releaseSpy(...a),
 }));
+
+const mem: Record<string, string> = {};
+(globalThis as any).localStorage = {
+  getItem: (k: string) => (k in mem ? mem[k] : null),
+  setItem: (k: string, v: string) => {
+    mem[k] = v;
+  },
+  removeItem: (k: string) => {
+    delete mem[k];
+  },
+  clear: () => {
+    for (const k of Object.keys(mem)) delete mem[k];
+  },
+};
+(globalThis as any).location = { pathname: "/dashboard" };
 
 import { handleSessionUnload, SESSION_ID_KEY } from "./session-guard";
 
@@ -45,16 +60,14 @@ describe("session-guard unload", () => {
       expect.objectContaining({
         reason: "beforeunload",
         hasSessionId: true,
-        path: expect.any(String),
+        path: "/dashboard",
       }),
     );
     info.mockRestore();
   });
 
-  it("módulo não importa releaseSession", async () => {
-    const src = await import("node:fs").then((fs) =>
-      fs.readFileSync("src/components/session-guard.tsx", "utf8"),
-    );
+  it("módulo session-guard não importa nem referencia releaseSession", () => {
+    const src = fs.readFileSync("src/components/session-guard.tsx", "utf8");
     expect(src).not.toMatch(/releaseSession/);
   });
 });
