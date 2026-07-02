@@ -3153,7 +3153,6 @@ function _UploadAreaImpl({ accept, onFile, hint, tall }: { accept: string; onFil
   );
 }
 
-function TextDropzone({
 function NotionPreview({
   result,
   findClientByPhone,
