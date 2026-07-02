@@ -23,6 +23,7 @@ import type { ComponentType, SVGProps } from "react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
+import { setUiValue } from "@/lib/db-sync";
 import { supabase } from "@/integrations/supabase/client";
 import { HydrationSplash, useHydrationUserName } from "@/components/hydration-splash";
 import { toast } from "sonner";
