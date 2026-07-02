@@ -958,6 +958,7 @@ function PartialPaymentPopover({
           </Button>
           <Button
             size="sm"
+            data-confirm
             disabled={!valid}
             onClick={() => {
               onSubmit(parsed);
