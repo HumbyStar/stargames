@@ -87,8 +87,32 @@ function SearchBox({
   const clients = useStore((s) => s.clients);
   const products = useStore((s) => s.products);
   const openClient = useStore((s) => s.openClient);
+  const activeSection = useUiStore((s) => s.activeSection);
   const listboxId = "global-search-listbox";
   const optionId = (idx: number) => `${listboxId}-opt-${idx}`;
+
+  // Mirror the query to the current section's persisted search key so the
+  // visible list (clientes / mgmv / collection) filters live from the very
+  // first keystroke.
+  const SECTION_SEARCH_KEYS: Record<string, string> = {
+    clientes: "clientes.search",
+    mgmv: "mgmv.search",
+    collection: "collection.search",
+  };
+  useEffect(() => {
+    const key = SECTION_SEARCH_KEYS[activeSection];
+    if (!key) return;
+    setUiValue(key, query);
+  }, [query, activeSection]);
+  // When the user starts typing while on the dashboard (or an unindexed
+  // section), scroll them to the section that matches the intent — clientes
+  // by default — so they immediately see the filtered list.
+  useEffect(() => {
+    if (!query.trim()) return;
+    if (SECTION_SEARCH_KEYS[activeSection]) return;
+    // Default to clientes for global typing.
+    setUiValue("clientes.search", query);
+  }, [query, activeSection]);
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
