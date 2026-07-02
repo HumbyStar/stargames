@@ -60,8 +60,19 @@ Retorne APENAS JSON no formato:
 
 Não invente dados. Se a linha for irreconhecível, ignore-a (não retorne nada para ela).`;
 
+import { normalizeSituation } from "./situation-normalizer";
+
 const STATUS_SET = new Set(["Pago", "Reserva", "Pendente", "MGMV"]);
-const SITUATION_SET = new Set(["Em Aberto", "Enviado", "Desistiu", "Abandonou"]);
+// Buckets oficiais alinhados ao normalizador (Padronização Situação Notion).
+const SITUATION_SET = new Set([
+  "Em Aberto",
+  "Enviado",
+  "Retirado",
+  "Retirar",
+  "Removido",
+  "Desistiu",
+  "Abandonou",
+]);
 
 function num(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
@@ -76,8 +87,19 @@ function normalizeRow(raw: unknown, idx: number): AIAnalyzedRow | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   const phone = str(r.phone).replace(/\D/g, "");
-  const status = STATUS_SET.has(str(r.financialStatus) as any) ? (str(r.financialStatus) as AIAnalyzedRow["financialStatus"]) : "Pendente";
-  const situation = SITUATION_SET.has(str(r.situation) as any) ? (str(r.situation) as AIAnalyzedRow["situation"]) : "Em Aberto";
+  let status = STATUS_SET.has(str(r.financialStatus) as any) ? (str(r.financialStatus) as AIAnalyzedRow["financialStatus"]) : "Pendente";
+  // Passa a situação vinda da IA pelo normalizador canônico — se ela devolver
+  // override financeiro (Pago/MGMV), respeita.
+  const normalized = normalizeSituation(str(r.situation));
+  let situation: AIAnalyzedRow["situation"];
+  if (!normalized.unknown && normalized.situation && SITUATION_SET.has(normalized.situation)) {
+    situation = normalized.situation as AIAnalyzedRow["situation"];
+  } else {
+    situation = "Em Aberto";
+  }
+  if (normalized.financialStatusOverride && STATUS_SET.has(normalized.financialStatusOverride)) {
+    status = normalized.financialStatusOverride as AIAnalyzedRow["financialStatus"];
+  }
   const name = str(r.name);
   const product = str(r.product);
   // Mínimo viável para considerar um cliente: nome OU telefone.
