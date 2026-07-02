@@ -15,7 +15,7 @@ export interface AIAnalyzedRow {
   totalValue: number | null;
   paidValue: number | null;
   financialStatus: "Pago" | "Reserva" | "Pendente" | "MGMV";
-  situation: "Em Aberto" | "Enviado" | "Desistiu" | "Abandonou";
+  situation: "Em Aberto" | "Enviado" | "Retirado" | "Retirar" | "Removido" | "Desistiu" | "Abandonou";
   notes?: string;
   fixes: string[];
   rawSnippet: string;
