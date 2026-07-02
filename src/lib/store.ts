@@ -37,6 +37,7 @@ export type Situation =
   | "Em Aberto"
   | "Enviado"
   | "Retirado"
+  | "Retirar"
   | "Removido"
   | "Desistiu"
   | "Abandonou"
