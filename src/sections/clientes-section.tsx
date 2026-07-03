@@ -90,6 +90,9 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const registerPayment = useStore((s) => s.registerPayment);
   const setProductSituation = useStore((s) => s.setProductSituation);
   const payMGMVInstallment = useStore((s) => s.payMGMVInstallment);
+  const registerMGMVPartialPayment = useStore(
+    (s) => s.registerMGMVPartialPayment,
+  );
 
   const [search, setSearch] = usePersistedState<string>("clientes.search", "");
   const [chip, setChip] = usePersistedState<ChipFilter>("clientes.chip", "todos");
