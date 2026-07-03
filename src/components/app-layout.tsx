@@ -78,7 +78,6 @@ function SearchBox({
   const clients = useStore((s) => s.clients);
   const products = useStore((s) => s.products);
   const openClient = useStore((s) => s.openClient);
-  const activeSection = useUiStore((s) => s.activeSection);
   const listboxId = "global-search-listbox";
   const optionId = (idx: number) => `${listboxId}-opt-${idx}`;
 
