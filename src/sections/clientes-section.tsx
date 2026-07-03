@@ -1056,9 +1056,25 @@ function ClientDrawer({
                       </td>
                       <td className="py-2 pr-3">
                         {!i.paid && (
-                          <Button size="sm" onClick={() => onPayMGMVInstallment(i.number)}>
-                            Marcar como paga
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              onClick={() => onPayMGMVInstallment(i.number)}
+                            >
+                              Marcar como paga
+                            </Button>
+                            <MgmvPartialPaymentPopover
+                              clientId={client.id}
+                              installmentNumber={i.number}
+                              installmentValue={i.value}
+                              currentPartial={i.paidAmount ?? 0}
+                              agreementRemaining={mgmvAgreementRemaining}
+                              pendingCount={mgmvPendingCount}
+                              onSubmit={(amount) =>
+                                onRegisterMGMVPartialPayment(i.number, amount)
+                              }
+                            />
+                          </div>
                         )}
                       </td>
                     </tr>
