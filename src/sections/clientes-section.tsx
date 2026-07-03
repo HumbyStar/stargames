@@ -1106,13 +1106,65 @@ function ClientDrawer({
                 const remaining = p.totalValue - p.paidValue;
                 const status = productCollectionStatus(p);
                 const isPaid = p.financialStatus === "Pago";
+                const editing = productEdit.isEditing(p.id);
+                const draft = productEdit.draftValues;
                 return (
                   <tr key={p.id} className="border-b border-border/60 last:border-0">
-                    <td className="py-2 pr-3 font-medium">{p.name}</td>
-                    <td className="py-2 pr-3 text-muted-foreground">{p.platform}</td>
-                    <td className="py-2 pr-3 tabular-nums">{formatBRL(p.totalValue)}</td>
+                    <td className="py-2 pr-3 font-medium">
+                      {editing ? (
+                        <input
+                          className="h-8 w-full min-w-[10rem] rounded-md border border-input bg-background px-2 text-sm"
+                          value={draft?.name ?? ""}
+                          onChange={(e) => productEdit.setField("name", e.target.value)}
+                          aria-label="Editar nome do produto"
+                        />
+                      ) : (
+                        p.name
+                      )}
+                    </td>
+                    <td className="py-2 pr-3 text-muted-foreground">
+                      {editing ? (
+                        <input
+                          className="h-8 w-full min-w-[6rem] rounded-md border border-input bg-background px-2 text-sm"
+                          value={draft?.platform ?? ""}
+                          onChange={(e) => productEdit.setField("platform", e.target.value)}
+                          aria-label="Editar plataforma"
+                        />
+                      ) : (
+                        p.platform
+                      )}
+                    </td>
+                    <td className="py-2 pr-3 tabular-nums">
+                      {editing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="h-8 w-24 rounded-md border border-input bg-background px-2 text-sm tabular-nums"
+                          value={draft?.totalValue ?? 0}
+                          onChange={(e) =>
+                            productEdit.setField("totalValue", Number(e.target.value))
+                          }
+                          aria-label="Editar valor total"
+                        />
+                      ) : (
+                        formatBRL(p.totalValue)
+                      )}
+                    </td>
                     <td className="py-2 pr-3 tabular-nums text-muted-foreground">
-                      {formatBRL(p.paidValue)}
+                      {editing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="h-8 w-24 rounded-md border border-input bg-background px-2 text-sm tabular-nums"
+                          value={draft?.paidValue ?? 0}
+                          onChange={(e) =>
+                            productEdit.setField("paidValue", Number(e.target.value))
+                          }
+                          aria-label="Editar valor pago"
+                        />
+                      ) : (
+                        formatBRL(p.paidValue)
+                      )}
                     </td>
                     <td className="py-2 pr-3 tabular-nums font-medium">{formatBRL(remaining)}</td>
                     <td className="py-2 pr-3">
@@ -1139,6 +1191,50 @@ function ClientDrawer({
                     </td>
                     <td className="py-2 pr-3">
                       <div className="flex flex-wrap gap-1">
+                        {editing ? (
+                          <RowEditActions
+                            onConfirm={() =>
+                              productEdit.confirm(
+                                (d) => {
+                                  updateProduct(p.id, {
+                                    name: d.name.trim(),
+                                    platform: d.platform.trim(),
+                                    totalValue: Math.max(0, d.totalValue),
+                                    paidValue: Math.max(0, d.paidValue),
+                                    financialStatus: d.financialStatus,
+                                  });
+                                  toast.success("Produto atualizado");
+                                },
+                                {
+                                  validate: (d) => {
+                                    if (!d.name.trim()) return "Nome é obrigatório.";
+                                    if (!Number.isFinite(d.totalValue) || d.totalValue < 0)
+                                      return "Valor total inválido.";
+                                    if (!Number.isFinite(d.paidValue) || d.paidValue < 0)
+                                      return "Valor pago inválido.";
+                                    if (d.paidValue > d.totalValue)
+                                      return "Valor pago não pode exceder o total.";
+                                    return null;
+                                  },
+                                },
+                              )
+                            }
+                            onClose={productEdit.close}
+                          />
+                        ) : (
+                          <RowEditPencil
+                            label="Editar produto"
+                            onStart={() =>
+                              productEdit.startEdit(p.id, {
+                                name: p.name,
+                                platform: p.platform,
+                                totalValue: p.totalValue,
+                                paidValue: p.paidValue,
+                                financialStatus: p.financialStatus,
+                              })
+                            }
+                          />
+                        )}
                         {!isPaid && (
                           <Button size="sm" onClick={() => onRegisterPayment(p.id, remaining)}>
                             Pagar
