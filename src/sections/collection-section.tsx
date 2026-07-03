@@ -213,12 +213,24 @@ export function CollectionSection({
               ? "Parcela MGMV vencida"
               : "Parcela MGMV";
         const situation = row.kind === "product" ? row.product.situation : "MGMV";
+        const dueIso =
+          row.kind === "product"
+            ? row.product.dueDate
+            : row.display.nextInstallment?.dueDate ?? "";
+        const openValue =
+          row.kind === "product"
+            ? Math.max(0, row.product.totalValue - row.product.paidValue)
+            : row.display.remaining;
         const hay = [
           rowClient?.name ?? "",
+          rowClient?.folder ?? "",
+          rowClient?.notes ?? "",
           productName,
           platform,
           statusLabel,
           situation,
+          dueIso ? formatDateBR(dueIso) : "",
+          formatBRL(openValue),
         ]
           .join(" ")
           .toLowerCase();
