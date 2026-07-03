@@ -1113,6 +1113,16 @@ function _FloatingNavbarImpl() {
             role="menuitem"
             onClick={() => {
               setOpenMobile(false);
+              openEquipe();
+            }}
+            className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent"
+          >
+            <Users className="size-4 opacity-70 shrink-0" /> Equipe
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpenMobile(false);
               openNotifications();
             }}
             className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent"
