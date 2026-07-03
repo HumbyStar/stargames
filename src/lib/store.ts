@@ -573,9 +573,10 @@ export const useStore = create<State>()((set, get) => ({
               // e o restante é redistribuído igualmente entre as parcelas
               // AINDA pendentes (mantendo quantidade, números e datas).
               // Só o campo `value` das parcelas pendentes é recalculado; as
-              // parcelas já pagas ficam intactas. A parcela alvo continua
-              // pendente, com `paidAmount` acumulando o total já quitado
-              // parcialmente para fins de auditoria/histórico.
+              // parcelas já pagas ficam intactas. O `paidAmount` das parcelas
+              // pendentes é zerado — o parcial foi absorvido no rateio e não
+              // deve ser contado de novo em `remainingValue`; o histórico
+              // detalhado do pagamento fica no `audit_log`.
               const prevPaid = target.paidAmount ?? 0;
               const totalDebt = c.mgmv.totalDebt || 0;
               // Total já quitado (parcelas fechadas + parciais anteriores + este pagamento agora).
@@ -611,11 +612,16 @@ export const useStore = create<State>()((set, get) => ({
                     return {
                       ...i,
                       value: nextValue,
-                      paidAmount: paidPartialTargetNew,
+                      // Parcial absorvido no rateio → zera paidAmount.
+                      // paidAt registra o momento do último pagamento parcial.
+                      paidAmount: 0,
                       paidAt: nowIso,
                     };
                   }
-                  return { ...i, value: nextValue };
+                  // Zera paidAmount de todas as demais pendentes também —
+                  // qualquer parcial anterior já foi absorvido em rateios
+                  // passados; manter aqui geraria dupla contagem.
+                  return { ...i, value: nextValue, paidAmount: 0 };
                 });
               } else {
                 installments = installments.map((i) =>
