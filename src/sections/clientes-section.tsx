@@ -735,9 +735,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               products={products.filter((p) => p.clientId === drawerClient.id)}
               onEdit={() => setClientModal({ open: true, client: drawerClient })}
               onAddProduct={() => setProductModal({ open: true, clientId: drawerClient.id })}
-              onEditProduct={(p) =>
-                setProductModal({ open: true, clientId: drawerClient.id, product: p })
-              }
               onSaveNotes={(notes) => {
                 updateClient(drawerClient.id, { notes });
                 toast.success("Observação salva");
@@ -839,7 +836,6 @@ function ClientDrawer({
   products,
   onEdit,
   onAddProduct,
-  onEditProduct,
   onSaveNotes,
   onRegisterPayment,
   onChangeSituation,
@@ -851,7 +847,6 @@ function ClientDrawer({
   products: Product[];
   onEdit: () => void;
   onAddProduct: () => void;
-  onEditProduct: (p: Product) => void;
   onSaveNotes: (notes: string) => void;
   onRegisterPayment: (productId: string, remaining: number) => void;
   onChangeSituation: (productId: string, s: Situation) => void;
@@ -1240,9 +1235,6 @@ function ClientDrawer({
                             Pagar
                           </Button>
                         )}
-                        <Button size="sm" variant="ghost" onClick={() => onEditProduct(p)}>
-                          Editar
-                        </Button>
                         {!isPaid && (
                           <Button size="sm" variant="outline" onClick={() => onMarkPaid(p)}>
                             Pago
