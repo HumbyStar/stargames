@@ -333,7 +333,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
             <Button onClick={() => setClientModal({ open: true, client: null })}>
               Adicionar Cliente
             </Button>
-            <Button variant="outline" onClick={() => onScrollTo("import")}>
+            <Button variant="outline" onClick={() => useUiStore.getState().openImport()}>
               Importar Clientes
             </Button>
             <Button variant="outline" onClick={exportBase}>
