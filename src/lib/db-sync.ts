@@ -487,6 +487,22 @@ export async function dbDeleteAllMGMVAsync(): Promise<void> {
   if (agreements.error) logErr("deleteAllMGMVAgreementsAsync", agreements.error);
 }
 
+/**
+ * Apaga todos os dados operacionais da Equipe: tarefas (com seus comentários
+ * e activity log) e batidas de ponto. NÃO remove `user_responsibilities` nem
+ * `user_roles` — esses são configurações de conta e permanecem entre resets.
+ */
+export async function dbDeleteAllTeamAsync(): Promise<void> {
+  const comments = await supabase.from("team_task_comments").delete().not("id", "is", null);
+  if (comments.error) logErr("deleteAllTeamTaskCommentsAsync", comments.error);
+  const activity = await supabase.from("team_task_activity").delete().not("id", "is", null);
+  if (activity.error) logErr("deleteAllTeamTaskActivityAsync", activity.error);
+  const tasks = await supabase.from("team_tasks").delete().not("id", "is", null);
+  if (tasks.error) logErr("deleteAllTeamTasksAsync", tasks.error);
+  const punches = await supabase.from("team_punch_entries").delete().not("id", "is", null);
+  if (punches.error) logErr("deleteAllTeamPunchEntriesAsync", punches.error);
+}
+
 /** Apaga progresso de importação interrompida do usuário atual. */
 export function dbDeleteAllImportProgress(): void {
   void (async () => {
