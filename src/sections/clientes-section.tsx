@@ -786,14 +786,13 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               onRegisterMGMVPartialPayment={(
                 installmentNumber,
                 amount,
-              ) => {
+              ) =>
                 registerMGMVPartialPayment(
                   drawerClient.id,
                   installmentNumber,
                   amount,
-                );
-                toast.success(`Pagamento parcial da parcela ${installmentNumber} registrado`);
-              }}
+                )
+              }
             />
           )}
         </DialogContent>
