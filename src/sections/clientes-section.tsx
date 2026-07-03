@@ -429,28 +429,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
       <Card className="mt-6">
         <div className="space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={
-                  searchActive
-                    ? `Buscando em Clientes por “${search}”…`
-                    : "Buscar em Clientes por nome, telefone, produto, pasta…"
-                }
-                aria-label="Buscar em Clientes"
-                className="h-10 w-full rounded-full border border-input bg-background px-4 pr-10 text-sm outline-none focus:border-primary/40"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label="Limpar busca"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
+            <div className="flex-1" />
             <Button
               variant="outline"
               size="sm"
