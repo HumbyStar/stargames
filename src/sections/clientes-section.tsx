@@ -37,6 +37,7 @@ import {
 } from "@/lib/store";
 import { toast } from "sonner";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
+import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
@@ -89,6 +90,9 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const registerPayment = useStore((s) => s.registerPayment);
   const setProductSituation = useStore((s) => s.setProductSituation);
   const payMGMVInstallment = useStore((s) => s.payMGMVInstallment);
+  const registerMGMVPartialPayment = useStore(
+    (s) => s.registerMGMVPartialPayment,
+  );
 
   const [search, setSearch] = usePersistedState<string>("clientes.search", "");
   const [chip, setChip] = usePersistedState<ChipFilter>("clientes.chip", "todos");
@@ -762,6 +766,17 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                 payMGMVInstallment(drawerClient.id, installmentNumber);
                 toast.success(`Parcela ${installmentNumber} marcada como paga`);
               }}
+              onRegisterMGMVPartialPayment={(
+                installmentNumber,
+                amount,
+              ) => {
+                registerMGMVPartialPayment(
+                  drawerClient.id,
+                  installmentNumber,
+                  amount,
+                );
+                toast.success(`Pagamento parcial da parcela ${installmentNumber} registrado`);
+              }}
             />
           )}
         </DialogContent>
@@ -842,6 +857,7 @@ function ClientDrawer({
   onRequestRetirado,
   onMarkPaid,
   onPayMGMVInstallment,
+  onRegisterMGMVPartialPayment,
 }: {
   client: Client;
   products: Product[];
@@ -853,6 +869,10 @@ function ClientDrawer({
   onRequestRetirado: (productId: string) => void;
   onMarkPaid: (p: Product) => void;
   onPayMGMVInstallment: (installmentNumber: number) => void;
+  onRegisterMGMVPartialPayment: (
+    installmentNumber: number,
+    amount: number,
+  ) => void;
 }) {
   const [notes, setNotes] = useState(client.notes ?? "");
   const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
@@ -889,6 +909,26 @@ function ClientDrawer({
     mgmv && mgmv.installmentsTotal > 0
       ? Math.round((mgmv.installmentsPaid / mgmv.installmentsTotal) * 100)
       : 0;
+  const mgmvPendingCount = client.mgmv
+    ? client.mgmv.installments.filter((i) => !i.paid).length
+    : 0;
+  const mgmvPaidValue = client.mgmv
+    ? client.mgmv.installments
+        .filter((i) => i.paid)
+        .reduce((s, i) => s + (i.paidAmount ?? i.value ?? 0), 0)
+    : 0;
+  const mgmvPartialPaidAmount = client.mgmv
+    ? client.mgmv.installments
+        .filter((i) => !i.paid)
+        .reduce(
+          (s, i) => s + Math.max(0, Math.min(i.value, i.paidAmount ?? 0)),
+          0,
+        )
+    : 0;
+  const mgmvAgreementRemaining = Math.max(
+    0,
+    (client.mgmv?.totalDebt ?? 0) - mgmvPaidValue - mgmvPartialPaidAmount,
+  );
 
   return (
     <div className="space-y-6">
@@ -1016,9 +1056,25 @@ function ClientDrawer({
                       </td>
                       <td className="py-2 pr-3">
                         {!i.paid && (
-                          <Button size="sm" onClick={() => onPayMGMVInstallment(i.number)}>
-                            Marcar como paga
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              onClick={() => onPayMGMVInstallment(i.number)}
+                            >
+                              Marcar como paga
+                            </Button>
+                            <MgmvPartialPaymentPopover
+                              clientId={client.id}
+                              installmentNumber={i.number}
+                              installmentValue={i.value}
+                              currentPartial={i.paidAmount ?? 0}
+                              agreementRemaining={mgmvAgreementRemaining}
+                              pendingCount={mgmvPendingCount}
+                              onSubmit={(amount) =>
+                                onRegisterMGMVPartialPayment(i.number, amount)
+                              }
+                            />
+                          </div>
                         )}
                       </td>
                     </tr>
