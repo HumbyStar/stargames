@@ -671,11 +671,9 @@ function _FloatingNavbarImpl() {
     const observer = new ResizeObserver(update);
     observer.observe(nav);
     window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, { passive: true });
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update);
     };
   }, []);
 
