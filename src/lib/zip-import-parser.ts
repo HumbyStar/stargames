@@ -53,8 +53,10 @@ function isHtml(path: string): boolean {
  * número entre parênteses no nome da pasta (`Clientes (3)`) é apenas sufixo do
  * Notion e é ignorado.
  */
-export async function parseZipNotionFile(file: File | Blob): Promise<ZipImportResult> {
-  const zip = await JSZip.loadAsync(file);
+export async function parseZipNotionFile(
+  file: File | Blob | ArrayBuffer | Uint8Array,
+): Promise<ZipImportResult> {
+  const zip = await JSZip.loadAsync(file as never);
   const htmlEntries = Object.values(zip.files).filter(
     (f) => !f.dir && isHtml(f.name),
   );
