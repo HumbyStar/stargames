@@ -6,7 +6,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
-import { formatBRL } from "@/lib/store";
+import { formatBRL, type PartialPaymentResult } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -27,10 +27,15 @@ export function MgmvPartialPaymentPopover({
   agreementRemaining: number;
   /** Quantidade de parcelas ainda pendentes (incluindo a atual). */
   pendingCount: number;
-  onSubmit: (amount: number) => void;
+  /**
+   * Executa o pagamento. Pode retornar `PartialPaymentResult` (do store) para
+   * que o popover mostre o erro do backend, ou `void` para compatibilidade.
+   */
+  onSubmit: (amount: number) => PartialPaymentResult | void;
 }) {
   const [open, setOpen] = useState(false);
   const [raw, setRaw] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const trimmed = raw.trim();
   // Aceita apenas formato numérico BR/US: dígitos com uma vírgula ou ponto opcional.
   const numericPattern = /^-?\d+([.,]\d+)?$/;
@@ -40,15 +45,28 @@ export function MgmvPartialPaymentPopover({
   const notNumber = !isEmpty && (!looksNumeric || !Number.isFinite(parsed));
   const isNegative = looksNumeric && Number.isFinite(parsed) && parsed < 0;
   const isZero = looksNumeric && Number.isFinite(parsed) && parsed === 0;
-  const valid = looksNumeric && Number.isFinite(parsed) && parsed > 0;
-  const hasError = notNumber || isNegative || isZero;
+  const exceedsRemaining =
+    looksNumeric &&
+    Number.isFinite(parsed) &&
+    parsed > 0 &&
+    parsed > agreementRemaining + 0.01;
+  const valid =
+    looksNumeric &&
+    Number.isFinite(parsed) &&
+    parsed > 0 &&
+    !exceedsRemaining;
+  const hasError = notNumber || isNegative || isZero || exceedsRemaining;
   const errorMsg = notNumber
     ? "Valor inválido — use apenas números (ex.: 50 ou 50,00)."
     : isNegative
       ? "Valor não pode ser negativo."
       : isZero
         ? "Informe um valor maior que zero."
-        : null;
+        : exceedsRemaining
+          ? `Valor excede o restante do acordo (${formatBRL(agreementRemaining)}).`
+          : isEmpty
+            ? "Informe um valor para o pagamento parcial."
+            : null;
 
   // Prévia do efeito do pagamento — para dar feedback antes do usuário confirmar.
   const preview = (() => {
@@ -148,11 +166,30 @@ export function MgmvPartialPaymentPopover({
           <Button
             size="sm"
             data-confirm
-            disabled={!valid}
+            disabled={!valid || submitting}
             onClick={() => {
-              onSubmit(parsed);
-              const summary =
-                preview?.kind === "full"
+              if (!valid || submitting) return;
+              setSubmitting(true);
+              let result: PartialPaymentResult | void;
+              try {
+                result = onSubmit(parsed);
+              } catch (err) {
+                setSubmitting(false);
+                const msg =
+                  err instanceof Error
+                    ? err.message
+                    : "Falha ao registrar pagamento parcial.";
+                toast.error(msg);
+                return;
+              }
+              setSubmitting(false);
+              if (result && result.ok === false) {
+                toast.error(result.error);
+                return;
+              }
+              const summary = result?.ok && result.becameQuitado
+                ? "Acordo MGMV quitado."
+                : preview?.kind === "full"
                   ? "Parcela quitada."
                   : preview?.message ?? "Pagamento registrado.";
               setRaw("");
@@ -160,7 +197,7 @@ export function MgmvPartialPaymentPopover({
               toast.success(summary);
             }}
           >
-            Confirmar
+            {submitting ? "Salvando…" : "Confirmar"}
           </Button>
         </div>
       </PopoverContent>
