@@ -202,7 +202,7 @@ interface State {
     clientId: string,
     installmentNumber: number,
     amount: number,
-  ) => void;
+  ) => PartialPaymentResult;
   setMGMVAgreement: (clientId: string, agreement: MGMVAgreement | undefined) => void;
   applyAiReviewToAgreement: (
     clientId: string,
