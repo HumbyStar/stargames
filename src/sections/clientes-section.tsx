@@ -128,6 +128,10 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     clientId?: string;
     product?: Product | null;
   }>({ open: false });
+  const [retiradoModal, setRetiradoModal] = useState<{
+    open: boolean;
+    productId?: string;
+  }>({ open: false });
 
   const drawerClient = clients.find((c) => c.id === drawerClientId) ?? null;
 
