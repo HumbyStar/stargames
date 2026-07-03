@@ -572,6 +572,36 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                   </button>
                 )}
               </div>
+              {searchActive && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    Buscando “{search}” em Clientes:
+                  </span>
+                  {[
+                    { k: "name", label: "Nome", n: matchCols.name },
+                    { k: "phone", label: "Telefone", n: matchCols.phone },
+                    { k: "status", label: "Status", n: matchCols.status },
+                    { k: "products", label: "Produtos", n: matchCols.products },
+                    { k: "folder", label: "Pasta", n: matchCols.folder },
+                    { k: "notes", label: "Observações", n: matchCols.notes },
+                    { k: "totals", label: "Valores", n: matchCols.totals },
+                    { k: "last", label: "Última compra", n: matchCols.last },
+                  ]
+                    .filter((c) => c.n > 0)
+                    .map((c) => (
+                      <span
+                        key={c.k}
+                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-primary"
+                      >
+                        <span className="size-1.5 rounded-full bg-primary" />
+                        {c.label} ({c.n})
+                      </span>
+                    ))}
+                  {rows.length === 0 && (
+                    <span className="italic">nenhuma correspondência</span>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
