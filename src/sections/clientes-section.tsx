@@ -1244,7 +1244,8 @@ function ClientDrawer({
                         {p.situation !== "Abandonou" &&
                           p.situation !== "Desistiu" &&
                           p.situation !== "Retirar" &&
-                          p.situation !== "Retirado" && (
+                          p.situation !== "Retirado" &&
+                          !(p.financialStatus === "Enviado" && p.situation === "Enviado") && (
                             <Button
                               size="sm"
                               variant="outline"
