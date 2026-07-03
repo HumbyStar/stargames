@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { X } from "lucide-react";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
+import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
 
 type MgmvChip =
   | "todos"
@@ -231,6 +232,7 @@ export function MGMVSection({
   const [search, setSearch] = usePersistedState<string>("mgmv.search", "");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [aiTarget, setAiTarget] = useState<string | null>(null);
+  const [editingAgreement, setEditingAgreement] = useState<string | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
   const { expanded: listExpanded, expand: expandList } = useListExpansion("mgmv");
 
