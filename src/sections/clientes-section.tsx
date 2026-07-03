@@ -6,6 +6,8 @@ import { useSectionCompact } from "@/lib/use-section-compact";
 import { Button } from "@/components/ui/button";
 import { ListExpansionToggle, MinimizedListCard } from "@/components/list-expansion";
 import { useListExpansion } from "@/lib/list-expansion";
+import { LoadMoreButton } from "@/components/load-more-button";
+import { usePaginatedList } from "@/hooks/use-paginated-list";
 import {
   Dialog,
   DialogContent,
@@ -252,7 +254,12 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     folderFilter,
   ]);
 
-  const pagedRows = rows;
+  const {
+    visible: pagedRows,
+    hasMore: hasMoreRows,
+    nextChunk: nextChunkRows,
+    loadMore: loadMoreRows,
+  } = usePaginatedList(rows, { step: 10, sectionId: "clientes" });
 
   const activeFilterCount =
     (chip !== "todos" ? 1 : 0) +
