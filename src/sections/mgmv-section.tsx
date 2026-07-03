@@ -437,6 +437,23 @@ export function MGMVSection({
     loadMore: loadMoreRows,
   } = usePaginatedList(filtered, { step: 10, sectionId: "mgmv" });
 
+  const searchActive = search.trim().length > 0;
+  const matchCols = useMemo(() => {
+    if (!searchActive)
+      return { name: 0, phone: 0, value: 0, installment: 0, remaining: 0, next: 0, status: 0 };
+    let name = 0, phone = 0, value = 0, installment = 0, remaining = 0, next = 0, status = 0;
+    for (const r of filtered) {
+      if (matchText(r.client.name, search)) name++;
+      if (matchText(r.client.phone, search)) phone++;
+      if (matchText(formatBRL(r.agreement.totalDebt), search)) value++;
+      if (matchText(formatBRL(r.agreement.installments[0]?.value ?? 0), search)) installment++;
+      if (matchText(formatBRL(r.remainingValue), search)) remaining++;
+      if (r.nextDue && matchText(formatDateBR(r.nextDue), search)) next++;
+      if (matchText(r.status, search)) status++;
+    }
+    return { name, phone, value, installment, remaining, next, status };
+  }, [filtered, search, searchActive]);
+
   const chips: { id: MgmvChip; label: string; count?: number }[] = [
     { id: "todos", label: "Todos", count: stats.clientes },
     { id: "ativos", label: "Ativos", count: stats.ativos },
