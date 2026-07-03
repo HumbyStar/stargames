@@ -1040,6 +1040,7 @@ function _FloatingNavbarImpl() {
                   setSearchOpen((v) => !v);
                 }}
                 onFinance={openFinance}
+                onEquipe={openEquipe}
                 onImport={openImport}
                 onSettings={openSettings}
                 onToggleTheme={toggleTheme}
