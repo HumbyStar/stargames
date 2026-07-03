@@ -782,7 +782,7 @@ function parseClientArticle(
   };
 }
 
-function parseNotionHtml(html: string, fileName?: string): NotionParseResult {
+export function parseNotionHtml(html: string, fileName?: string): NotionParseResult {
   const doc = new DOMParser().parseFromString(html, "text/html");
   const errors: string[] = [];
   let articles = Array.from(doc.querySelectorAll("article.page"));
