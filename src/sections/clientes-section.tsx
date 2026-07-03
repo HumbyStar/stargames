@@ -1051,7 +1051,7 @@ function ClientDrawer({
                       </Tag>
                     </td>
                     <td className="py-2 pr-3">
-                      <Tag>{p.situation}</Tag>
+                      <Tag>{displaySituation(p.situation)}</Tag>
                     </td>
                     <td className="py-2 pr-3 text-muted-foreground">
                       {formatDateBR(p.registerDate)}
