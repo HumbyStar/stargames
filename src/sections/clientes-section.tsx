@@ -287,6 +287,41 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     loadMore: loadMoreRows,
   } = usePaginatedList(rows, { step: 10, sectionId: "clientes" });
 
+  // Contagem de correspondências por coluna sobre a lista já filtrada
+  // (`rows`) — usado para pintar o indicador no cabeçalho e a legenda
+  // "encontrado em: ..." acima da tabela.
+  const searchActive = search.trim().length > 0;
+  const matchCols = useMemo(() => {
+    if (!searchActive) {
+      return { name: 0, phone: 0, status: 0, products: 0, folder: 0, notes: 0, totals: 0, last: 0 };
+    }
+    let name = 0, phone = 0, status = 0, prods = 0, folder = 0, notes = 0, totals = 0, last = 0;
+    for (const r of rows) {
+      if (matchText(r.client.name, search)) name++;
+      if (matchText(r.client.phone, search)) phone++;
+      if (matchText(r.status.label, search)) status++;
+      if (matchText(r.client.folder ?? "", search)) folder++;
+      if (matchText(r.client.notes ?? "", search)) notes++;
+      if (
+        r.products.some(
+          (p) =>
+            matchText(p.name, search) ||
+            matchText(p.platform ?? "", search) ||
+            matchText(p.financialStatus, search) ||
+            matchText(p.situation, search),
+        )
+      )
+        prods++;
+      if (
+        matchText(formatBRL(r.totalPurchased), search) ||
+        matchText(formatBRL(r.totalOpen), search)
+      )
+        totals++;
+      if (r.last && matchText(formatDateBR(r.last), search)) last++;
+    }
+    return { name, phone, status, products: prods, folder, notes, totals, last };
+  }, [rows, search, searchActive]);
+
   const activeFilterCount =
     (chip !== "todos" ? 1 : 0) +
     (financialFilter !== "Todos" ? 1 : 0) +
