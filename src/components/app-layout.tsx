@@ -724,6 +724,7 @@ function _FloatingNavbarImpl() {
   };
 
   const openImport = useUiStore((s) => s.openImport);
+  const openEquipe = useUiStore((s) => s.openEquipe);
   const openSettings = useUiStore((s) => s.openSettings);
   const openNotifications = useUiStore((s) => s.openNotifications);
   const closeNotifications = useUiStore((s) => s.closeNotifications);
