@@ -220,7 +220,7 @@ export function CollectionSection({
         const openValue =
           row.kind === "product"
             ? Math.max(0, row.product.totalValue - row.product.paidValue)
-            : row.display.remaining;
+            : row.display.remainingBalance;
         const hay = [
           rowClient?.name ?? "",
           rowClient?.folder ?? "",
