@@ -26,6 +26,7 @@ import { X } from "lucide-react";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
+import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
 
 type MgmvChip =
   | "todos"
