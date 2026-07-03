@@ -757,13 +757,21 @@ function parseClientArticle(
       `Cliente #${index}: telefone inválido e não foi possível corrigir automaticamente.`,
     );
   }
-  const table =
-    article.querySelector("table.simple-table") || article.querySelector("table");
+  // Um mesmo cliente do Notion pode ter várias <table> (histórico separado
+  // por período, lotes MGMV, itens removidos etc.). Concatenamos os produtos
+  // de todas elas para não perder linhas na migração.
+  let tables = Array.from(article.querySelectorAll("table.simple-table"));
+  if (tables.length === 0) {
+    tables = Array.from(article.querySelectorAll("table"));
+  }
   let products: NotionProduct[] = [];
-  if (!table) {
+  if (tables.length === 0) {
     errors.push(`Cliente #${index} (${client.name || "sem nome"}): tabela não encontrada.`);
   } else {
-    products = parseProductsTable(table);
+    for (const t of tables) {
+      const parsed = parseProductsTable(t, products.length);
+      products = products.concat(parsed);
+    }
   }
   return {
     index,
