@@ -46,6 +46,7 @@ import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-pop
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
+import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
 
 type ChipFilter =
   | "todos"
