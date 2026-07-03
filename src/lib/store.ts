@@ -964,6 +964,27 @@ export function getProductDisplayDueDate(p: Product): string {
   return formatDateBR(p.dueDate);
 }
 
+/**
+ * Converte o status persistido em um rótulo unificado para exibição.
+ * Regra de unificação: "Desistiu" foi absorvido por "Abandonou". Dados
+ * históricos permanecem no banco com o valor antigo, mas a UI sempre
+ * mostra "Abandonou". Novos registros nunca devem ser criados como
+ * "Desistiu" a partir da interface.
+ */
+export function displaySituation(s: Situation): Situation {
+  return s === "Desistiu" ? "Abandonou" : s;
+}
+
+/**
+ * Verifica se um produto está arquivado (fluxo Retirado concluído).
+ * Produtos arquivados saem da lista ativa do cliente mas permanecem no
+ * histórico.
+ */
+export function isProductArchived(p: Pick<Product, "situation">): boolean {
+  return p.situation === "Retirado";
+}
+}
+
 // ============= MGMV (acordo consolidado por cliente) =============
 
 export interface MGMVDisplay {
