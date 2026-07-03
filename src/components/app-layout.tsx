@@ -1,4 +1,4 @@
-import { Outlet, useNavigate } from "@tanstack/react-router";
+import { Outlet } from "@tanstack/react-router";
 import {
   Search,
   Menu,
@@ -22,9 +22,7 @@ import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
 import { setUiValue } from "@/lib/db-sync";
-import { supabase } from "@/integrations/supabase/client";
 import { HydrationSplash, useHydrationUserName } from "@/components/hydration-splash";
-import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
