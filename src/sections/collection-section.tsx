@@ -318,7 +318,11 @@ export function CollectionSection({
       if (matchText(productName, search)) product++;
       if (matchText(plat, search)) platform++;
       if (matchText(statusLabel, search)) status++;
-      if (matchText(sit, search) || matchText(displaySituation(sit), search)) situation++;
+      if (
+        matchText(sit, search) ||
+        (row.kind === "product" && matchText(displaySituation(row.product.situation), search))
+      )
+        situation++;
       if (dueIso && matchText(formatDateBR(dueIso), search)) due++;
       if (
         matchText(formatBRL(total), search) ||
