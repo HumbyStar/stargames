@@ -350,7 +350,7 @@ function NotificationsDropdown({
   );
 }
 
-function NavLink({
+function NavLinkImpl({
   id,
   label,
   active,
@@ -409,6 +409,7 @@ function NavLink({
     </Tooltip>
   );
 }
+const NavLink = memo(NavLinkImpl);
 
 function FloatingNavbar() {
   // placeholder for ordering — actual definition below
