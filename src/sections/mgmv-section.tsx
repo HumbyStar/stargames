@@ -888,12 +888,19 @@ export function MGMVSection({
                   </Fragment>
                 );
               })}
+              {hasMoreRows && (
+                <tr>
+                  <td colSpan={9} className="py-3">
+                    <LoadMoreButton count={nextChunkRows} onClick={loadMoreRows} />
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
       </div>
       {filtered.length > 0 && (
         <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
-          <span>{filtered.length} acordo(s) carregado(s)</span>
+          <span>{pagedRows.length} de {filtered.length} acordo(s) exibido(s)</span>
         </div>
       )}
       </>
