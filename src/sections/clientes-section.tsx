@@ -32,6 +32,7 @@ import {
   isOpenSituation,
   isResolvedSituation,
   productCollectionStatus,
+  shouldAppearInCollection,
   useStore,
   type Client,
   type Product,
