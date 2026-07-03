@@ -188,8 +188,11 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                 (p) => p.financialStatus === "Pago" && p.situation === "Em Aberto",
               ),
               enviado: r.products.some((p) => p.situation === "Enviado"),
-              desistiu: r.products.some((p) => p.situation === "Desistiu"),
-              abandonou: r.products.some((p) => p.situation === "Abandonou"),
+              // Desistiu foi unificado como Abandonou; ambos os valores
+              // históricos casam o mesmo chip.
+              abandonou: r.products.some(
+                (p) => p.situation === "Abandonou" || p.situation === "Desistiu",
+              ),
               em_dia: r.status.label === "Em dia",
               sem_produtos: r.products.length === 0,
             };
