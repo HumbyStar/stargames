@@ -830,6 +830,8 @@ export function MGMVSection({
                                             installmentNumber={i.number}
                                             installmentValue={i.value}
                                             currentPartial={i.paidAmount ?? 0}
+                                            agreementRemaining={r.remainingValue}
+                                            pendingCount={r.pendingCount}
                                             onSubmit={(amount) =>
                                               registerMGMVPartialPayment(
                                                 r.client.id,
