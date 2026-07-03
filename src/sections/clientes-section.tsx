@@ -751,6 +751,7 @@ function ClientDrawer({
   onSaveNotes,
   onRegisterPayment,
   onChangeSituation,
+  onRequestRetirado,
   onMarkPaid,
   onPayMGMVInstallment,
 }: {
@@ -762,6 +763,7 @@ function ClientDrawer({
   onSaveNotes: (notes: string) => void;
   onRegisterPayment: (productId: string, remaining: number) => void;
   onChangeSituation: (productId: string, s: Situation) => void;
+  onRequestRetirado: (productId: string) => void;
   onMarkPaid: (p: Product) => void;
   onPayMGMVInstallment: (installmentNumber: number) => void;
 }) {
