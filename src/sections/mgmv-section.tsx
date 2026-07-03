@@ -819,7 +819,7 @@ export function MGMVSection({
                                           >
                                             Marcar paga
                                           </Button>
-                                          <PartialPaymentPopover
+                                          <MgmvPartialPaymentPopover
                                             clientId={r.client.id}
                                             installmentNumber={i.number}
                                             installmentValue={i.value}
