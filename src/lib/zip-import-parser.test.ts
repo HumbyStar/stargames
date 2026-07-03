@@ -12,10 +12,10 @@ function makeHtml(name: string, phone: string, situation = "REMOVIDO"): string {
   </body></html>`;
 }
 
-async function makeZip(files: Record<string, string>): Promise<Blob> {
+async function makeZip(files: Record<string, string>): Promise<ArrayBuffer> {
   const zip = new JSZip();
   for (const [path, content] of Object.entries(files)) zip.file(path, content);
-  return await zip.generateAsync({ type: "blob" });
+  return await zip.generateAsync({ type: "arraybuffer" });
 }
 
 describe("zip-import-parser", () => {
@@ -27,7 +27,7 @@ describe("zip-import-parser", () => {
       "Clientes (3)/Diego - (11) 99999-4444.html": makeHtml("Diego", "(11) 99999-4444"),
       "Clientes (3)/Elena - (11) 99999-5555.html": makeHtml("Elena", "(11) 99999-5555"),
     });
-    const res = await parseZipNotionFile(zip as unknown as File);
+    const res = await parseZipNotionFile(zip as unknown as Blob);
     // 5 arquivos reais, não 3 (o "(3)" é sufixo do Notion).
     expect(res.clients).toHaveLength(5);
     expect(res.matchedFolder).toBe(true);
@@ -39,7 +39,7 @@ describe("zip-import-parser", () => {
       "Alice - (11) 99999-1111.html": makeHtml("Alice", "(11) 99999-1111"),
       "Beto - (11) 99999-2222.html": makeHtml("Beto", "(11) 99999-2222"),
     });
-    const res = await parseZipNotionFile(zip as unknown as File);
+    const res = await parseZipNotionFile(zip as unknown as Blob);
     expect(res.clients).toHaveLength(2);
     expect(res.matchedFolder).toBe(false);
   });
@@ -50,7 +50,7 @@ describe("zip-import-parser", () => {
       "Clientes/B - (11) 99999-2222.html": makeHtml("B", "(11) 99999-2222", "RETIRAR"),
       "Clientes/C - (11) 99999-3333.html": makeHtml("C", "(11) 99999-3333", "DESISTIU"),
     });
-    const res = await parseZipNotionFile(zip as unknown as File);
+    const res = await parseZipNotionFile(zip as unknown as Blob);
     const sits = res.clients.map(
       (c) => c.preview.rows.find((r) => r.productName === "Produto B")?.situation,
     );
