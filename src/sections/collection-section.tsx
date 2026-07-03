@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
 
 type Filter = "todos" | "reserva_vencida" | "pendente_vencido" | "mgmv" | "mgmv_vencido" | "em_aberto";
 
@@ -281,6 +282,57 @@ export function CollectionSection({
     nextChunk: nextChunkCollection,
     loadMore: loadMoreCollection,
   } = usePaginatedList(filtered, { step: 10, sectionId: "collection" });
+
+  const searchActive = search.trim().length > 0;
+  const matchCols = useMemo(() => {
+    if (!searchActive)
+      return { client: 0, phone: 0, product: 0, platform: 0, values: 0, status: 0, situation: 0, due: 0 };
+    let client = 0, phone = 0, product = 0, platform = 0, values = 0, status = 0, situation = 0, due = 0;
+    for (const row of filtered) {
+      const c =
+        row.kind === "mgmv" ? row.client : clients.find((x) => x.id === row.product.clientId);
+      if (matchText(c?.name ?? "", search)) client++;
+      if (matchText(c?.phone ?? "", search)) phone++;
+      const productName = row.kind === "product" ? row.product.name : "Acordo MGMV";
+      const plat = row.kind === "product" ? row.product.platform : "";
+      const statusLabel =
+        row.kind === "product"
+          ? productCollectionStatus(row.product).label
+          : row.display.hasOverdue
+            ? "Parcela MGMV vencida"
+            : "Parcela MGMV";
+      const sit = row.kind === "product" ? row.product.situation : "MGMV";
+      const dueIso =
+        row.kind === "product"
+          ? row.product.dueDate
+          : row.display.nextInstallment?.dueDate ?? "";
+      const total = row.kind === "product" ? row.product.totalValue : row.display.totalDebt;
+      const paid =
+        row.kind === "product"
+          ? row.product.paidValue
+          : row.display.totalDebt - row.display.remainingBalance;
+      const remaining =
+        row.kind === "product"
+          ? row.product.totalValue - row.product.paidValue
+          : row.display.remainingBalance;
+      if (matchText(productName, search)) product++;
+      if (matchText(plat, search)) platform++;
+      if (matchText(statusLabel, search)) status++;
+      if (
+        matchText(sit, search) ||
+        (row.kind === "product" && matchText(displaySituation(row.product.situation), search))
+      )
+        situation++;
+      if (dueIso && matchText(formatDateBR(dueIso), search)) due++;
+      if (
+        matchText(formatBRL(total), search) ||
+        matchText(formatBRL(paid), search) ||
+        matchText(formatBRL(remaining), search)
+      )
+        values++;
+    }
+    return { client, phone, product, platform, values, status, situation, due };
+  }, [filtered, search, searchActive, clients]);
 
   const totalAtraso =
     overdueProducts.reduce((a, p) => a + (p.totalValue - p.paidValue), 0) +
@@ -525,7 +577,12 @@ export function CollectionSection({
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por cliente, telefone ou produto..."
+                placeholder={
+                  searchActive
+                    ? `Buscando em Cobranças por “${search}”…`
+                    : "Buscar em Cobranças por cliente, telefone, produto, valor…"
+                }
+                aria-label="Buscar em Cobranças"
                 className="h-10 w-full rounded-full border border-input bg-background px-4 pr-10 text-sm outline-none focus:border-primary/40"
               />
               {search && (
@@ -720,6 +777,36 @@ export function CollectionSection({
                   </button>
                 )}
               </div>
+              {searchActive && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    Buscando “{search}” em Cobranças:
+                  </span>
+                  {[
+                    { k: "client", label: "Cliente", n: matchCols.client },
+                    { k: "phone", label: "Telefone", n: matchCols.phone },
+                    { k: "product", label: "Produto", n: matchCols.product },
+                    { k: "platform", label: "Plataforma", n: matchCols.platform },
+                    { k: "values", label: "Valores", n: matchCols.values },
+                    { k: "status", label: "Status", n: matchCols.status },
+                    { k: "situation", label: "Situação", n: matchCols.situation },
+                    { k: "due", label: "Data limite", n: matchCols.due },
+                  ]
+                    .filter((c) => c.n > 0)
+                    .map((c) => (
+                      <span
+                        key={c.k}
+                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-primary"
+                      >
+                        <span className="size-1.5 rounded-full bg-primary" />
+                        {c.label} ({c.n})
+                      </span>
+                    ))}
+                  {filtered.length === 0 && (
+                    <span className="italic">nenhuma correspondência</span>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -742,16 +829,16 @@ export function CollectionSection({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="py-2 pr-3 font-medium">Cliente</th>
-                <th className="py-2 pr-3 font-medium">Telefone</th>
-                <th className="py-2 pr-3 font-medium">Produto</th>
-                <th className="py-2 pr-3 font-medium">Plataforma</th>
-                <th className="py-2 pr-3 font-medium">Total</th>
-                <th className="py-2 pr-3 font-medium">Pago</th>
-                <th className="py-2 pr-3 font-medium">Restante</th>
-                <th className="py-2 pr-3 font-medium">Status</th>
-                <th className="py-2 pr-3 font-medium">Situação</th>
-                <th className="py-2 pr-3 font-medium">Data Limite</th>
+                <th className="py-2 pr-3 font-medium">Cliente<ColumnMatchDot active={searchActive} count={matchCols.client} /></th>
+                <th className="py-2 pr-3 font-medium">Telefone<ColumnMatchDot active={searchActive} count={matchCols.phone} /></th>
+                <th className="py-2 pr-3 font-medium">Produto<ColumnMatchDot active={searchActive} count={matchCols.product} /></th>
+                <th className="py-2 pr-3 font-medium">Plataforma<ColumnMatchDot active={searchActive} count={matchCols.platform} /></th>
+                <th className="py-2 pr-3 font-medium">Total<ColumnMatchDot active={searchActive} count={matchCols.values} /></th>
+                <th className="py-2 pr-3 font-medium">Pago<ColumnMatchDot active={searchActive} count={matchCols.values} /></th>
+                <th className="py-2 pr-3 font-medium">Restante<ColumnMatchDot active={searchActive} count={matchCols.values} /></th>
+                <th className="py-2 pr-3 font-medium">Status<ColumnMatchDot active={searchActive} count={matchCols.status} /></th>
+                <th className="py-2 pr-3 font-medium">Situação<ColumnMatchDot active={searchActive} count={matchCols.situation} /></th>
+                <th className="py-2 pr-3 font-medium">Data Limite<ColumnMatchDot active={searchActive} count={matchCols.due} /></th>
                 <th className="py-2 pr-3 font-medium">Atraso</th>
                 <th className="py-2 pr-3 font-medium">Ações</th>
               </tr>
@@ -771,9 +858,9 @@ export function CollectionSection({
                     : "Acordo MGMV";
                   return (
                     <tr key={`mgmv-${client.id}`} className="border-b border-border/60 last:border-0 bg-primary/[0.04]">
-                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 font-medium"}>{client.name}</td>
-                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{client.phone}</td>
-                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>{productLabel}</td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 font-medium"}>{highlight(client.name, search)}</td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{highlight(client.phone, search)}</td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>{highlight(productLabel, search)}</td>
                       <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>—</td>
                       <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums"}>{formatBRL(display.totalDebt)}</td>
                       <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums text-muted-foreground"}>
@@ -867,10 +954,10 @@ export function CollectionSection({
                 const draft = collectionEdit.draftValues;
                 return (
                   <tr key={`p-${p.id}-${idx}`} className="border-b border-border/60 last:border-0">
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 font-medium"}>{client?.name}</td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{client?.phone}</td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>{p.name}</td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{p.platform}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 font-medium"}>{highlight(client?.name ?? "", search)}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{highlight(client?.phone ?? "", search)}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>{highlight(p.name, search)}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{highlight(p.platform ?? "", search)}</td>
                     <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums"}>
                       {editing ? (
                         <input

@@ -26,6 +26,7 @@ import { X } from "lucide-react";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
+import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
 
 type MgmvChip =
   | "todos"
@@ -436,6 +437,23 @@ export function MGMVSection({
     loadMore: loadMoreRows,
   } = usePaginatedList(filtered, { step: 10, sectionId: "mgmv" });
 
+  const searchActive = search.trim().length > 0;
+  const matchCols = useMemo(() => {
+    if (!searchActive)
+      return { name: 0, phone: 0, value: 0, installment: 0, remaining: 0, next: 0, status: 0 };
+    let name = 0, phone = 0, value = 0, installment = 0, remaining = 0, next = 0, status = 0;
+    for (const r of filtered) {
+      if (matchText(r.client.name, search)) name++;
+      if (matchText(r.client.phone, search)) phone++;
+      if (matchText(formatBRL(r.agreement.totalDebt), search)) value++;
+      if (matchText(formatBRL(r.agreement.installments[0]?.value ?? 0), search)) installment++;
+      if (matchText(formatBRL(r.remainingValue), search)) remaining++;
+      if (r.nextDue && matchText(formatDateBR(r.nextDue), search)) next++;
+      if (matchText(r.status, search)) status++;
+    }
+    return { name, phone, value, installment, remaining, next, status };
+  }, [filtered, search, searchActive]);
+
   const chips: { id: MgmvChip; label: string; count?: number }[] = [
     { id: "todos", label: "Todos", count: stats.clientes },
     { id: "ativos", label: "Ativos", count: stats.ativos },
@@ -542,7 +560,12 @@ export function MGMVSection({
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar cliente, telefone…"
+                placeholder={
+                  searchActive
+                    ? `Buscando em MGMV por “${search}”…`
+                    : "Buscar em MGMV por cliente, telefone, valor, vencimento…"
+                }
+                aria-label="Buscar em MGMV"
                 className="h-10 w-full rounded-full border border-input bg-background px-4 pr-10 text-sm outline-none focus:border-primary/40"
               />
               {search && (
@@ -581,6 +604,35 @@ export function MGMVSection({
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
             <div>{filtered.length} acordo(s) encontrado(s)</div>
           </div>
+          {searchActive && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+              <span className="font-medium text-foreground">
+                Buscando “{search}” em MGMV:
+              </span>
+              {[
+                { k: "name", label: "Cliente", n: matchCols.name },
+                { k: "phone", label: "Telefone", n: matchCols.phone },
+                { k: "value", label: "Valor acordo", n: matchCols.value },
+                { k: "installment", label: "Parcela", n: matchCols.installment },
+                { k: "remaining", label: "Restante", n: matchCols.remaining },
+                { k: "next", label: "Vencimento", n: matchCols.next },
+                { k: "status", label: "Status", n: matchCols.status },
+              ]
+                .filter((c) => c.n > 0)
+                .map((c) => (
+                  <span
+                    key={c.k}
+                    className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-primary"
+                  >
+                    <span className="size-1.5 rounded-full bg-primary" />
+                    {c.label} ({c.n})
+                  </span>
+                ))}
+              {filtered.length === 0 && (
+                <span className="italic">nenhuma correspondência</span>
+              )}
+            </div>
+          )}
         </div>
 
         {!listExpanded && (
@@ -602,14 +654,14 @@ export function MGMVSection({
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-card/95 backdrop-blur">
               <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-3 py-2">Cliente</th>
-                <th className="px-3 py-2">Telefone</th>
-                <th className="px-3 py-2">Valor acordo</th>
-                <th className="px-3 py-2">Parcelas</th>
+                <th className="px-3 py-2">Cliente<ColumnMatchDot active={searchActive} count={matchCols.name} /></th>
+                <th className="px-3 py-2">Telefone<ColumnMatchDot active={searchActive} count={matchCols.phone} /></th>
+                <th className="px-3 py-2">Valor acordo<ColumnMatchDot active={searchActive} count={matchCols.value} /></th>
+                <th className="px-3 py-2">Parcelas<ColumnMatchDot active={searchActive} count={matchCols.installment} /></th>
                 <th className="px-3 py-2">Pagas</th>
-                <th className="px-3 py-2">Restante</th>
-                <th className="px-3 py-2">Próximo vencimento</th>
-                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Restante<ColumnMatchDot active={searchActive} count={matchCols.remaining} /></th>
+                <th className="px-3 py-2">Próximo vencimento<ColumnMatchDot active={searchActive} count={matchCols.next} /></th>
+                <th className="px-3 py-2">Status<ColumnMatchDot active={searchActive} count={matchCols.status} /></th>
                 <th className="px-3 py-2 text-right">Ações</th>
               </tr>
             </thead>
@@ -647,9 +699,9 @@ export function MGMVSection({
                     <tr
                       className="border-b transition-colors hover:bg-accent/50"
                     >
-                      <td className="px-3 py-2 font-medium">{r.client.name}</td>
+                      <td className="px-3 py-2 font-medium">{highlight(r.client.name, search)}</td>
                       <td className="px-3 py-2 text-muted-foreground">
-                        {r.client.phone}
+                        {highlight(r.client.phone, search)}
                       </td>
                       <td className="px-3 py-2">
                         {editing ? (

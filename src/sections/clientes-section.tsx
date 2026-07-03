@@ -46,6 +46,7 @@ import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-pop
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
+import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
 
 type ChipFilter =
   | "todos"
@@ -286,6 +287,41 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     loadMore: loadMoreRows,
   } = usePaginatedList(rows, { step: 10, sectionId: "clientes" });
 
+  // Contagem de correspondências por coluna sobre a lista já filtrada
+  // (`rows`) — usado para pintar o indicador no cabeçalho e a legenda
+  // "encontrado em: ..." acima da tabela.
+  const searchActive = search.trim().length > 0;
+  const matchCols = useMemo(() => {
+    if (!searchActive) {
+      return { name: 0, phone: 0, status: 0, products: 0, folder: 0, notes: 0, totals: 0, last: 0 };
+    }
+    let name = 0, phone = 0, status = 0, prods = 0, folder = 0, notes = 0, totals = 0, last = 0;
+    for (const r of rows) {
+      if (matchText(r.client.name, search)) name++;
+      if (matchText(r.client.phone, search)) phone++;
+      if (matchText(r.status.label, search)) status++;
+      if (matchText(r.client.folder ?? "", search)) folder++;
+      if (matchText(r.client.notes ?? "", search)) notes++;
+      if (
+        r.products.some(
+          (p) =>
+            matchText(p.name, search) ||
+            matchText(p.platform ?? "", search) ||
+            matchText(p.financialStatus, search) ||
+            matchText(p.situation, search),
+        )
+      )
+        prods++;
+      if (
+        matchText(formatBRL(r.totalPurchased), search) ||
+        matchText(formatBRL(r.totalOpen), search)
+      )
+        totals++;
+      if (r.last && matchText(formatDateBR(r.last), search)) last++;
+    }
+    return { name, phone, status, products: prods, folder, notes, totals, last };
+  }, [rows, search, searchActive]);
+
   const activeFilterCount =
     (chip !== "todos" ? 1 : 0) +
     (financialFilter !== "Todos" ? 1 : 0) +
@@ -397,7 +433,12 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por nome, telefone ou produto..."
+                placeholder={
+                  searchActive
+                    ? `Buscando em Clientes por “${search}”…`
+                    : "Buscar em Clientes por nome, telefone, produto, pasta…"
+                }
+                aria-label="Buscar em Clientes"
                 className="h-10 w-full rounded-full border border-input bg-background px-4 pr-10 text-sm outline-none focus:border-primary/40"
               />
               {search && (
@@ -531,6 +572,36 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                   </button>
                 )}
               </div>
+              {searchActive && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    Buscando “{search}” em Clientes:
+                  </span>
+                  {[
+                    { k: "name", label: "Nome", n: matchCols.name },
+                    { k: "phone", label: "Telefone", n: matchCols.phone },
+                    { k: "status", label: "Status", n: matchCols.status },
+                    { k: "products", label: "Produtos", n: matchCols.products },
+                    { k: "folder", label: "Pasta", n: matchCols.folder },
+                    { k: "notes", label: "Observações", n: matchCols.notes },
+                    { k: "totals", label: "Valores", n: matchCols.totals },
+                    { k: "last", label: "Última compra", n: matchCols.last },
+                  ]
+                    .filter((c) => c.n > 0)
+                    .map((c) => (
+                      <span
+                        key={c.k}
+                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-primary"
+                      >
+                        <span className="size-1.5 rounded-full bg-primary" />
+                        {c.label} ({c.n})
+                      </span>
+                    ))}
+                  {rows.length === 0 && (
+                    <span className="italic">nenhuma correspondência</span>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -553,14 +624,32 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="py-2 pr-3 font-medium">Cliente</th>
-                    <th className="py-2 pr-3 font-medium">Telefone</th>
-                    <th className="py-2 pr-3 font-medium">Status Geral</th>
-                    <th className="py-2 pr-3 font-medium">Qtd. Produtos</th>
-                    <th className="py-2 pr-3 font-medium">Total Comprado</th>
-                    <th className="py-2 pr-3 font-medium">Total em Aberto</th>
-                    <th className="py-2 pr-3 font-medium">Última Compra</th>
-                    {!compact && <th className="py-2 pr-3 font-medium">Observações</th>}
+                    <th className="py-2 pr-3 font-medium">
+                      Cliente<ColumnMatchDot active={searchActive} count={matchCols.name} />
+                    </th>
+                    <th className="py-2 pr-3 font-medium">
+                      Telefone<ColumnMatchDot active={searchActive} count={matchCols.phone} />
+                    </th>
+                    <th className="py-2 pr-3 font-medium">
+                      Status Geral<ColumnMatchDot active={searchActive} count={matchCols.status} />
+                    </th>
+                    <th className="py-2 pr-3 font-medium">
+                      Qtd. Produtos<ColumnMatchDot active={searchActive} count={matchCols.products} />
+                    </th>
+                    <th className="py-2 pr-3 font-medium">
+                      Total Comprado<ColumnMatchDot active={searchActive} count={matchCols.totals} />
+                    </th>
+                    <th className="py-2 pr-3 font-medium">
+                      Total em Aberto<ColumnMatchDot active={searchActive} count={matchCols.totals} />
+                    </th>
+                    <th className="py-2 pr-3 font-medium">
+                      Última Compra<ColumnMatchDot active={searchActive} count={matchCols.last} />
+                    </th>
+                    {!compact && (
+                      <th className="py-2 pr-3 font-medium">
+                        Observações<ColumnMatchDot active={searchActive} count={matchCols.notes} />
+                      </th>
+                    )}
                     <th className="py-2 pr-3 font-medium">Ações</th>
                   </tr>
                 </thead>
@@ -587,11 +676,11 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                             onClick={() => setDrawerClientId(r.client.id)}
                             className="text-left hover:text-primary"
                           >
-                            {r.client.name}
+                            {highlight(r.client.name, search)}
                             {r.client.folder && (
                               <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
                                 <Folder className="h-2.5 w-2.5" />
-                                {r.client.folder}
+                                {highlight(r.client.folder, search)}
                               </span>
                             )}
                           </button>
@@ -613,7 +702,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                             aria-label="Editar telefone do cliente"
                           />
                         ) : (
-                          r.client.phone
+                          highlight(r.client.phone, search)
                         )}
                       </td>
                       <td
@@ -653,7 +742,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                           " pr-3 transition-[padding] duration-300 text-muted-foreground"
                         }
                       >
-                        {r.last ? formatDateBR(r.last) : "—"}
+                        {r.last ? highlight(formatDateBR(r.last), search) : "—"}
                       </td>
                       {!compact && (
                         <td className="py-3 pr-3 max-w-[220px] text-muted-foreground">
@@ -668,7 +757,9 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                               rows={2}
                             />
                           ) : (
-                            <span className="block truncate">{r.client.notes ?? "—"}</span>
+                            <span className="block truncate">
+                              {r.client.notes ? highlight(r.client.notes, search) : "—"}
+                            </span>
                           )}
                         </td>
                       )}
