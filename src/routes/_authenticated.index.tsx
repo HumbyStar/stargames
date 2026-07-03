@@ -172,14 +172,12 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
         <MetricCard label="Total Clientes" value={totalClients} onClick={openHandlers["total-clients"]} tooltip="Ver clientes cadastrados" />
-        <MetricCard label="Total Produtos" value={totalProducts} onClick={openHandlers["total-products"]} tooltip="Ver produtos cadastrados" />
         <MetricCard label="Reservas Ativas" value={reservasAtivas} status="primary" onClick={openHandlers["active-reservations"]} tooltip="Ver reservas ativas" />
         <MetricCard label="Reservas Vencidas" value={reservasVencidas} status="danger" onClick={openHandlers["overdue-reservations"]} tooltip="Ver reservas vencidas" />
         <MetricCard label="Pendências" value={pendencias} status="danger" onClick={openHandlers.pending} tooltip="Ver pendências em aberto" />
         <MetricCard label="Clientes MGMV" value={clientesMGMV} onClick={openHandlers["mgmv-clients"]} tooltip="Ver clientes MGMV" />
         <MetricCard label="MGMV Vencidas" value={mgmvVencidas} status="danger" onClick={openHandlers["mgmv-overdue"]} tooltip="Ver MGMV vencidas" />
         <MetricCard label="Pagos Ag. Envio" value={pagosAgEnvio} status="success" onClick={openHandlers["paid-awaiting-shipment"]} tooltip="Ver pagos aguardando envio" />
-        <MetricCard label="Produtos Enviados" value={enviados} onClick={openHandlers.shipped} tooltip="Ver produtos enviados" />
         <MetricCard label="Desistências" value={desistencias} onClick={openHandlers.withdrawals} tooltip="Ver desistências" />
         <MetricCard label="Abandonos" value={abandonos} onClick={openHandlers.abandons} tooltip="Ver abandonos" />
       </div>
