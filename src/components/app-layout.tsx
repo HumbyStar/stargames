@@ -16,7 +16,7 @@ import {
   CircleDollarSign,
   KanbanSquare,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, lazy, Suspense, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, lazy, memo, Suspense, type ReactNode } from "react";
 import type { ComponentType, SVGProps } from "react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
@@ -41,6 +41,7 @@ import { FloatingConcierge } from "@/components/floating-concierge";
 import { FinanceDashboard } from "@/components/finance-dashboard";
 import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 import { useNavbarConfig, getIconMeta, type NavbarIconId } from "@/lib/navbar-config";
+import { scrollToSection } from "@/lib/scroll-to-section";
 
 const ImportSection = lazy(() =>
   import("@/sections/import-section").then((m) => ({ default: m.ImportSection })),
@@ -59,18 +60,6 @@ const navItems: ReadonlyArray<{
   { id: "mgmv", label: "MGMV", icon: Sparkles },
   { id: "collection", label: "Collection", icon: Wallet },
 ];
-
-function scrollToSection(id: string) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const container = document.querySelector<HTMLElement>(".page-container");
-  if (!container) {
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-    return;
-  }
-  const top = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
-  container.scrollTo({ top: Math.max(0, top - 12), behavior: "smooth" });
-}
 
 function SearchBox({
   className,
