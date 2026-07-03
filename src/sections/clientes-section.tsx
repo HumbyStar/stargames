@@ -450,8 +450,9 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                   <option value="Todas">Situação</option>
                   <option>Em Aberto</option>
                   <option>Enviado</option>
-                  <option>Desistiu</option>
                   <option>Abandonou</option>
+                  <option>Retirar</option>
+                  <option>Retirado</option>
                 </select>
                 <select
                   value={periodFilter}
