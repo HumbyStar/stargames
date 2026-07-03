@@ -1901,6 +1901,23 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         }
         // "keep" → mantém o acordo existente, nada a fazer.
       }
+      // Se algum produto importado ficou como MGMV (via forceMgmv da tabela
+      // ou por coluna Status), o cliente deve ser classificado como MGMV
+      // mesmo quando não há acordo consolidado detectado nas observações.
+      // Sem isso o cliente aparece como "MGMV inativo" no modal e não é
+      // listado na seção MGMV.
+      const hasMgmvProduct = entry.products.some(
+        (p) =>
+          p.selected &&
+          p.errors.length === 0 &&
+          !!p.product &&
+          !p.duplicate &&
+          (p.financialStatus === "MGMV" ||
+            (entry.mgmv && (entry.mgmvAction ?? "apply") !== "keep" && p.financialStatus !== "Pago")),
+      );
+      if (hasMgmvProduct && client!.clientType !== "mgmv") {
+        updateClient(client!.id, { clientType: "mgmv" });
+      }
     };
 
     // Processa pasta por pasta com pausa pra animação respirar.
