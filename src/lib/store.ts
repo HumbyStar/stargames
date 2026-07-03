@@ -983,7 +983,6 @@ export function displaySituation(s: Situation): Situation {
 export function isProductArchived(p: Pick<Product, "situation">): boolean {
   return p.situation === "Retirado";
 }
-}
 
 // ============= MGMV (acordo consolidado por cliente) =============
 
