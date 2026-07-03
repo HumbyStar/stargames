@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Folder, Filter, Maximize2, Minimize2, X } from "lucide-react";
+import { Folder, Filter, Maximize2, Minimize2 } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { useSectionCompact } from "@/lib/use-section-compact";
