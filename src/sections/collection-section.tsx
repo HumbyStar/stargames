@@ -858,9 +858,9 @@ export function CollectionSection({
                     : "Acordo MGMV";
                   return (
                     <tr key={`mgmv-${client.id}`} className="border-b border-border/60 last:border-0 bg-primary/[0.04]">
-                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 font-medium"}>{client.name}</td>
-                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{client.phone}</td>
-                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>{productLabel}</td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 font-medium"}>{highlight(client.name, search)}</td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{highlight(client.phone, search)}</td>
+                      <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>{highlight(productLabel, search)}</td>
                       <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>—</td>
                       <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums"}>{formatBRL(display.totalDebt)}</td>
                       <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums text-muted-foreground"}>
@@ -954,10 +954,10 @@ export function CollectionSection({
                 const draft = collectionEdit.draftValues;
                 return (
                   <tr key={`p-${p.id}-${idx}`} className="border-b border-border/60 last:border-0">
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 font-medium"}>{client?.name}</td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{client?.phone}</td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>{p.name}</td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{p.platform}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 font-medium"}>{highlight(client?.name ?? "", search)}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{highlight(client?.phone ?? "", search)}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>{highlight(p.name, search)}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{highlight(p.platform ?? "", search)}</td>
                     <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums"}>
                       {editing ? (
                         <input
