@@ -1240,9 +1240,6 @@ function ClientDrawer({
                             Pagar
                           </Button>
                         )}
-                        <Button size="sm" variant="ghost" onClick={() => onEditProduct(p)}>
-                          Editar
-                        </Button>
                         {!isPaid && (
                           <Button size="sm" variant="outline" onClick={() => onMarkPaid(p)}>
                             Pago
