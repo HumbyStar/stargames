@@ -569,13 +569,67 @@ export const useStore = create<State>()((set, get) => ({
                 }
               }
             } else {
-              // Pagamento parcial: acumula em paidAmount, parcela segue pendente.
+              // Pagamento parcial: o valor pago é absorvido no saldo do acordo
+              // e o restante é redistribuído igualmente entre as parcelas
+              // AINDA pendentes (mantendo quantidade, números e datas).
+              // Só o campo `value` das parcelas pendentes é recalculado; as
+              // parcelas já pagas ficam intactas. O `paidAmount` das parcelas
+              // pendentes é zerado — o parcial foi absorvido no rateio e não
+              // deve ser contado de novo em `remainingValue`; o histórico
+              // detalhado do pagamento fica no `audit_log`.
               const prevPaid = target.paidAmount ?? 0;
-              installments = installments.map((i) =>
-                i.number === installmentNumber
-                  ? { ...i, paidAmount: prevPaid + amount, paidAt: nowIso }
-                  : i,
+              const totalDebt = c.mgmv.totalDebt || 0;
+              // Total já quitado (parcelas fechadas + parciais anteriores + este pagamento agora).
+              const paidClosed = installments
+                .filter((i) => i.paid)
+                .reduce((s2, i) => s2 + (i.paidAmount ?? i.value ?? 0), 0);
+              const paidPartialOther = installments
+                .filter((i) => !i.paid && i.number !== installmentNumber)
+                .reduce(
+                  (s2, i) =>
+                    s2 + Math.max(0, Math.min(i.value, i.paidAmount ?? 0)),
+                  0,
+                );
+              const paidPartialTargetNew = prevPaid + amount;
+              const remaining = Math.max(
+                0,
+                totalDebt - paidClosed - paidPartialOther - paidPartialTargetNew,
               );
+              // Parcelas pendentes que receberão o novo valor rateado.
+              const pending = installments.filter((i) => !i.paid);
+              const pendingCount = pending.length;
+              if (pendingCount > 0 && totalDebt > 0) {
+                // Divide em centavos para evitar drift; sobra vai na última.
+                const totalCents = Math.round(remaining * 100);
+                const base = Math.floor(totalCents / pendingCount);
+                const rest = totalCents - base * pendingCount;
+                const lastPendingNumber = pending[pending.length - 1].number;
+                installments = installments.map((i) => {
+                  if (i.paid) return i;
+                  const cents = i.number === lastPendingNumber ? base + rest : base;
+                  const nextValue = Math.max(0, cents / 100);
+                  if (i.number === installmentNumber) {
+                    return {
+                      ...i,
+                      value: nextValue,
+                      // Parcial absorvido no rateio → zera paidAmount.
+                      // paidAt registra o momento do último pagamento parcial.
+                      paidAmount: 0,
+                      paidAt: nowIso,
+                    };
+                  }
+                  // Zera paidAmount de todas as demais pendentes também —
+                  // qualquer parcial anterior já foi absorvido em rateios
+                  // passados; manter aqui geraria dupla contagem.
+                  return { ...i, value: nextValue, paidAmount: 0 };
+                });
+              } else {
+                installments = installments.map((i) =>
+                  i.number === installmentNumber
+                    ? { ...i, paidAmount: paidPartialTargetNew, paidAt: nowIso }
+                    : i,
+                );
+              }
             }
             const nextAgreement = recalcPendingDueDates({
               ...c.mgmv,
