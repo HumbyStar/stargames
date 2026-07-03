@@ -233,6 +233,14 @@ export function MGMVSection({
   const [aiTarget, setAiTarget] = useState<string | null>(null);
   const [editingAgreement, setEditingAgreement] = useState<string | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
+  // IDs dos clientes cujos acordos foram efetivamente atualizados no último
+  // reprocesso. Enquanto essa lista existir, a seção MGMV mostra apenas
+  // esses acordos — é a "regra dos 58": só o que veio atualizado agora
+  // aparece. Persistido para sobreviver a reloads.
+  const [lastUpdatedIds, setLastUpdatedIds] = usePersistedState<string[] | null>(
+    "mgmv.lastUpdatedIds",
+    null,
+  );
   const { expanded: listExpanded, expand: expandList } = useListExpansion("mgmv");
 
   // Edição por lápis no acordo MGMV. Campos permitidos: totalDebt e valor
@@ -257,7 +265,7 @@ export function MGMVSection({
 
   const reprocessFromNotes = () => {
     setReprocessing(true);
-    let updated = 0;
+    const updatedIds: string[] = [];
     let unchanged = 0;
     for (const c of clients) {
       if (!c.notes) continue;
@@ -294,21 +302,27 @@ export function MGMVSection({
         continue;
       }
       setMGMVAgreement(c.id, next);
-      updated++;
+      updatedIds.push(c.id);
     }
     setReprocessing(false);
+    setLastUpdatedIds(updatedIds);
     toast.success(
-      `Reprocessamento concluído: ${updated} acordo(s) atualizado(s).` +
+      `Reprocessamento concluído: ${updatedIds.length} acordo(s) atualizado(s).` +
         (unchanged > 0 ? ` ${unchanged} sem mudanças.` : ""),
     );
   };
 
   const rows = useMemo<MgmvRow[]>(() => {
+    const onlySet =
+      lastUpdatedIds && lastUpdatedIds.length > 0
+        ? new Set(lastUpdatedIds)
+        : null;
     const list: MgmvRow[] = [];
     for (const c of clients) {
       const isMgmv =
         c.clientType === "mgmv" || (!!c.mgmv && c.mgmv.installments.length > 0);
       if (!isMgmv || !c.mgmv) continue;
+      if (onlySet && !onlySet.has(c.id)) continue;
       const row = buildRow(c, c.mgmv);
       // A seção MGMV lista apenas acordos vivos: ativos, com pendências ou em
       // atraso. Acordos já quitados saem da listagem (o histórico continua
@@ -319,7 +333,7 @@ export function MGMVSection({
     return list.sort((a, b) =>
       a.client.name.localeCompare(b.client.name, "pt-BR"),
     );
-  }, [clients]);
+  }, [clients, lastUpdatedIds]);
 
   const stats = useMemo(() => {
     const ativos = rows.filter((r) => r.status === "Ativo").length;
@@ -421,13 +435,26 @@ export function MGMVSection({
         title="MGMV"
         description="Controle acordos MGMV, parcelas, vencimentos, saldos e clientes agrupados."
         actions={
-          <Button
-            variant="outline"
-            disabled={reprocessing}
-            onClick={reprocessFromNotes}
-          >
-            {reprocessing ? "Reprocessando…" : "Reprocessar MGMV por observações"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {lastUpdatedIds && lastUpdatedIds.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setLastUpdatedIds(null)}
+                title="Mostrar todos os acordos, não só os atualizados no último reprocesso"
+              >
+                <X className="mr-1 h-3.5 w-3.5" />
+                Mostrando {lastUpdatedIds.length} atualizados · limpar
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              disabled={reprocessing}
+              onClick={reprocessFromNotes}
+            >
+              {reprocessing ? "Reprocessando…" : "Reprocessar MGMV por observações"}
+            </Button>
+          </div>
         }
       />
 
