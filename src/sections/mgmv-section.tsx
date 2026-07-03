@@ -370,11 +370,38 @@ export function MGMVSection({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const qDigits = q.replace(/\D/g, "");
     return rows.filter((r) => {
       if (q) {
+        // Busca ampla: cobre todas as colunas exibidas
+        // (nome, telefone, valores, parcelas, próximo vencimento,
+        // status, revisão, pasta e observações do cliente).
+        const reviewLabel =
+          r.reviewStatus === "review_required"
+            ? "Revisão necessária"
+            : r.reviewStatus === "ai_reviewed"
+              ? "Revisado com IA"
+              : r.reviewStatus === "manually_reviewed"
+                ? "Revisado manualmente"
+                : "";
+        const hay = [
+          r.client.name,
+          r.status,
+          reviewLabel,
+          r.client.folder ?? "",
+          r.client.notes ?? "",
+          formatBRL(r.agreement.totalDebt),
+          formatBRL(r.agreement.installments[0]?.value ?? 0),
+          formatBRL(r.remainingValue),
+          `${r.paidCount}/${r.total}`,
+          r.nextDue ? formatDateBR(r.nextDue) : "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        const phoneDigits = r.client.phone.replace(/\D/g, "");
         const hit =
-          r.client.name.toLowerCase().includes(q) ||
-          r.client.phone.replace(/\D/g, "").includes(q.replace(/\D/g, ""));
+          hay.includes(q) ||
+          (qDigits.length > 0 && phoneDigits.includes(qDigits));
         if (!hit) return false;
       }
       switch (chip) {
