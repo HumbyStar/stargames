@@ -735,9 +735,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               products={products.filter((p) => p.clientId === drawerClient.id)}
               onEdit={() => setClientModal({ open: true, client: drawerClient })}
               onAddProduct={() => setProductModal({ open: true, clientId: drawerClient.id })}
-              onEditProduct={(p) =>
-                setProductModal({ open: true, clientId: drawerClient.id, product: p })
-              }
               onSaveNotes={(notes) => {
                 updateClient(drawerClient.id, { notes });
                 toast.success("Observação salva");
