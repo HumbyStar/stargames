@@ -94,15 +94,23 @@ const RULES: Rule[] = [
     test: (s) => /^retirado\b/.test(s),
     situation: "Retirado",
   },
-  // Removido / Cancelado / Devolvido / Expirado / Desistências / Erros
+  // Abandonou — cliente desistiu / abandonou o produto (unifica "Desistiu")
+  {
+    name: "abandonou",
+    test: (s) =>
+      /^abandonou\b/.test(s) ||
+      /^desistiu\b/.test(s) ||
+      /^cliente\s+abandonou\b/.test(s),
+    situation: "Abandonou",
+  },
+  // Removido / Cancelado / Devolvido / Expirado / Erros
   {
     name: "removido",
     test: (s) =>
       /^removido\b/.test(s) ||
       /^cancelado\b/.test(s) ||
       /^devolvido\b/.test(s) ||
-      /^expirado\b/.test(s) ||
-      /^desistiu\b/.test(s),
+      /^expirado\b/.test(s),
     situation: "Removido",
   },
 ];
