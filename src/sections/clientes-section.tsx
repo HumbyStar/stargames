@@ -19,6 +19,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   calculateFinancialStatus,
+  displaySituation,
+  isProductArchived,
   formatBRL,
   formatDateBR,
   getMGMVDisplay,
@@ -35,6 +37,7 @@ import {
 } from "@/lib/store";
 import { toast } from "sonner";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
+import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 
 type ChipFilter =
   | "todos"
@@ -42,7 +45,6 @@ type ChipFilter =
   | "pendente"
   | "pago_aguardando"
   | "enviado"
-  | "desistiu"
   | "abandonou"
   | "em_dia"
   | "sem_produtos";
