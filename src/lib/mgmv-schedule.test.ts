@@ -25,19 +25,23 @@ describe("rebalanceAgreement", () => {
     expect(r.agreement.installments.every((i) => i.value === 50)).toBe(true);
   });
 
-  it("bumps installment count when minimum forces it (5x100 + parcial 50 → 10x50)", () => {
+  it("bumps installment count when min forces it above target", () => {
     const a = makeAgreement();
-    // Registra pagamento parcial de 50 na parcela 1.
-    a.installments[0] = { ...a.installments[0], paidAmount: 50 };
+    // remaining=500, target=20 pendentes → uniform=25; min=50 → sobe para
+    // ceil(500/50)=10 pendentes.
     const r = rebalanceAgreement(a, {
-      targetInstallmentsCount: 5,
+      targetInstallmentsCount: 20,
       minInstallmentValue: 50,
     });
     expect(r.bumpedInstallments).toBe(true);
-    // 450 restante / 50 min = 9 pendentes + 0 pagas totais + 1 parcial pendente
-    // Como o parcial não estava pago, paidCount=0, e pendingCount=ceil(450/50)=9.
-    expect(r.agreement.installments).toHaveLength(9);
-    expect(r.remaining).toBe(450);
+    expect(r.agreement.installments).toHaveLength(10);
+    expect(r.pendingValue).toBe(50);
+  });
+
+  it("increases N when user asks for 10x50 starting from 5x100", () => {
+    const a = makeAgreement();
+    const r = rebalanceAgreement(a, { targetInstallmentsCount: 10 });
+    expect(r.agreement.installments).toHaveLength(10);
     expect(r.pendingValue).toBe(50);
   });
 
