@@ -1,43 +1,30 @@
-## Objetivo
-Paginar todas as tabelas/listas das seções em passos de 10, com botão "Carregar mais" dentro da própria tabela. Ao navegar para outra seção e voltar, a contagem visível reseta para 10 (economiza render e mantém navegação fluida).
+## Bug 01 — HADI: apenas 1 tabela migrada
 
-## Comportamento
-- Cada tabela começa mostrando **10 itens**.
-- Botão **"Carregar mais +10"** (usa `LoadMoreButton` já existente) aparece **abaixo da última linha, dentro do container da tabela**, apenas quando há mais itens.
-- O botão soma +10 ao contador local até esgotar a lista filtrada.
-- Ao trocar de seção (ex.: Clientes → MGMV) e voltar, o contador reinicia em 10. Filtros/busca também reiniciam o contador em 10.
-- Não altera dados, filtros, ordenação nem lógica de negócio — apenas quantos itens são renderizados.
+### Causa raiz
+No fluxo de importação de ZIP do Notion, `parseClientArticle` em `src/sections/import-section.tsx` (linhas 760–767) pega **apenas a primeira** `<table>` do arquivo do cliente:
 
-## Onde aplicar
-Tabelas/listas que hoje renderizam a coleção inteira:
+```
+const table =
+  article.querySelector("table.simple-table") || article.querySelector("table");
+```
 
-1. `src/sections/clientes-section.tsx` — tabela principal de clientes.
-2. `src/sections/mgmv-section.tsx` — lista de MGMVs.
-3. `src/sections/collection-section.tsx` — `visible = filtered` (linha 264), tabela de cobrança.
-4. `src/sections/import-section.tsx` — lista de clientes agrupados por pasta (`visibleFolders` → `visible.map`, ~linha 3928). Paginar a lista plana de clientes exibidos (10 clientes por vez, mantendo agrupamento por pasta).
-5. `src/sections/equipe-section.tsx` — lista de tarefas/membros do time.
+O arquivo do Hadi (e outros clientes com histórico grande) contém 3 `<table class="simple-table">` — por isso só a primeira foi migrada. O parser alternativo `parseClientHtml` (em `src/lib/html-client-import-parser.ts`) já itera todas as tabelas corretamente; a divergência está só no caminho do ZIP.
 
-Seções sem tabelas grandes (Configurações) ficam de fora.
+### Correção
 
-## Implementação técnica
-- Criar hook `src/hooks/use-paginated-list.ts`:
-  ```ts
-  export function usePaginatedList<T>(items: T[], step = 10) {
-    const [count, setCount] = useState(step);
-    // reset quando o tamanho/identidade da lista filtrada muda
-    useEffect(() => { setCount(step); }, [items, step]);
-    const visible = items.slice(0, count);
-    const hasMore = items.length > count;
-    const remaining = items.length - count;
-    const loadMore = () => setCount(c => Math.min(c + step, items.length));
-    return { visible, hasMore, remaining, loadMore };
-  }
-  ```
-- Em cada seção, aplicar o hook na lista **já filtrada/ordenada** e trocar o `.map` para usar `visible`.
-- Renderizar `<LoadMoreButton count={Math.min(10, remaining)} onClick={loadMore} />` dentro do `<tbody>` (numa `<tr><td colSpan={N}>`) ou dentro do container da lista, logo abaixo da última linha, quando `hasMore`.
-- **Reset ao trocar de seção**: como cada seção é desmontada ao navegar (o `AppLayout` monta apenas a seção ativa), o `useState` local já reseta naturalmente. Se alguma seção estiver sempre montada, forçar reset com `key` na seção baseada em `activeSection` no `app-layout.tsx`.
+`src/sections/import-section.tsx`, função `parseClientArticle`:
+- Trocar `querySelector` por `querySelectorAll("table.simple-table")` com fallback para `querySelectorAll("table")`.
+- Iterar todas as tabelas encontradas e concatenar os produtos.
+- Passar um offset de `line` para `parseProductsTable` (ou reindexar após concatenar) para que `line` continue crescente entre tabelas e as mensagens de erro por linha façam sentido.
+- Só emitir o erro "tabela não encontrada" quando nenhuma tabela existir.
 
-## Fora de escopo
-- Virtualização (react-window) — não necessário para o passo de 10.
-- Paginação server-side / infinite scroll automático — usuário pediu botão manual.
-- Persistir contagem entre navegações — usuário pediu explicitamente o oposto.
+Pequeno ajuste em `parseProductsTable` (opcional, mais limpo): aceitar `lineOffset = 0` e usar `idx + 1 + lineOffset` no lugar de `idx + 1`.
+
+### Verificação
+- Rodar os testes existentes (`html-client-import-parser.test.ts` continua verde — não é o mesmo parser, mas serve de regressão do formato).
+- Adicionar teste em `src/sections/import-section.mgmv.test.ts` (ou arquivo próprio) com um HTML tipo Hadi contendo 3 tabelas e conferir que `parseNotionHtml(...).clients[0].products.length` = soma das 3 tabelas.
+- Testar manualmente reimportando o ZIP do Hadi na tela de Import e conferir contagem total de produtos no preview.
+
+### Fora do escopo
+- Não muda UI, preview, dedup, MGMV nem regras de status/situação.
+- Não altera o parser `parseClientHtml` (já correto).

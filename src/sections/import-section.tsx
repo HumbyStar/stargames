@@ -658,7 +658,7 @@ export function extractMGMVAgreementFromNotes(notes: string): MGMVAgreement | nu
   };
 }
 
-function parseProductsTable(table: Element): NotionProduct[] {
+function parseProductsTable(table: Element, lineOffset = 0): NotionProduct[] {
   const rows = Array.from(table.querySelectorAll("tr"));
   const dataRows = rows.slice(1);
   const products: NotionProduct[] = [];
@@ -673,7 +673,7 @@ function parseProductsTable(table: Element): NotionProduct[] {
     if (!item) {
       rowErrors.push("Produto sem nome (linha ignorada).");
       products.push({
-        line: idx + 1,
+        line: lineOffset + idx + 1,
         product: "",
         platform: platform ?? "",
         totalValue: 0,
@@ -721,7 +721,7 @@ function parseProductsTable(table: Element): NotionProduct[] {
     const registerDate = normalizeDateBR(date ?? "");
     const dueDate = calculateDueDate(financialStatus, registerDate);
     products.push({
-      line: idx + 1,
+      line: lineOffset + idx + 1,
       product: item,
       platform: platform ?? "",
       totalValue,
@@ -757,13 +757,21 @@ function parseClientArticle(
       `Cliente #${index}: telefone inválido e não foi possível corrigir automaticamente.`,
     );
   }
-  const table =
-    article.querySelector("table.simple-table") || article.querySelector("table");
+  // Um mesmo cliente do Notion pode ter várias <table> (histórico separado
+  // por período, lotes MGMV, itens removidos etc.). Concatenamos os produtos
+  // de todas elas para não perder linhas na migração.
+  let tables = Array.from(article.querySelectorAll("table.simple-table"));
+  if (tables.length === 0) {
+    tables = Array.from(article.querySelectorAll("table"));
+  }
   let products: NotionProduct[] = [];
-  if (!table) {
+  if (tables.length === 0) {
     errors.push(`Cliente #${index} (${client.name || "sem nome"}): tabela não encontrada.`);
   } else {
-    products = parseProductsTable(table);
+    for (const t of tables) {
+      const parsed = parseProductsTable(t, products.length);
+      products = products.concat(parsed);
+    }
   }
   return {
     index,
@@ -774,7 +782,7 @@ function parseClientArticle(
   };
 }
 
-function parseNotionHtml(html: string, fileName?: string): NotionParseResult {
+export function parseNotionHtml(html: string, fileName?: string): NotionParseResult {
   const doc = new DOMParser().parseFromString(html, "text/html");
   const errors: string[] = [];
   let articles = Array.from(doc.querySelectorAll("article.page"));
