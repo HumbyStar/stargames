@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo, useRef } from "react";
 import { AppLayout } from "@/components/app-layout";
 import { Alert, Card, MetricCard, PageHeader, StackedBar } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -12,21 +12,17 @@ import {
 } from "@/components/dashboard-perf-badge";
 import { useUiStore } from "@/lib/ui-store";
 import { DashboardIntegrityCard } from "@/components/dashboard-integrity-card";
-import type { DashboardCardId } from "@/components/dashboard-drilldown-modal";
 import { LazySection } from "@/components/lazy-section";
 import { ClientesSection } from "@/sections/clientes-section";
 import { scrollToSection } from "@/lib/scroll-to-section";
+import { setUiValue } from "@/lib/db-sync";
+import { useListExpansionStore, type ListSection } from "@/lib/list-expansion";
 
 const CollectionSection = lazy(() =>
   import("@/sections/collection-section").then((m) => ({ default: m.CollectionSection })),
 );
 const MGMVSection = lazy(() =>
   import("@/sections/mgmv-section").then((m) => ({ default: m.MGMVSection })),
-);
-const DashboardDrilldownModal = lazy(() =>
-  import("@/components/dashboard-drilldown-modal").then((m) => ({
-    default: m.DashboardDrilldownModal,
-  })),
 );
 
 export const Route = createFileRoute("/_authenticated/")({
@@ -65,41 +61,45 @@ function OnePage() {
 
 function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) {
   // Assinamos apenas os arrays base — o useMemo abaixo compila tudo o que o
-  // Dashboard precisa em uma única varredura. Detalhes ficam por conta do
-  // DrilldownModal (montado sob demanda).
+  // Dashboard precisa em uma única varredura. Os cards não abrem mais um
+  // modal de drilldown: cada clique aplica o filtro correspondente na
+  // seção-alvo, expande a lista e faz scroll até lá.
   const clients = useStore((s) => s.clients);
   const products = useStore((s) => s.products);
   const openImport = useUiStore((s) => s.openImport);
-  const [activeCard, setActiveCard] = useState<DashboardCardId | null>(null);
 
-  // Callbacks estáveis para não invalidar as props do MetricCard/Alert.
-  const openCard = useCallback(
-    (id: DashboardCardId) => setActiveCard(id),
-    [],
+  // Mapa card → (seção destino, chave da chip persistida, valor da chip).
+  // Ao clicar, gravamos a chip via db-sync (`setUiValue`), expandimos a
+  // lista da seção e fazemos scroll — a seção reage ao chip e já mostra
+  // o subconjunto filtrado.
+  const drillTo = useCallback(
+    (target: { section: ListSection; scrollId: string; chipKey: string; chipValue: string }) => {
+      setUiValue(target.chipKey, target.chipValue);
+      useListExpansionStore.getState().setPreferred(target.section, true);
+      onScrollTo(target.scrollId);
+    },
+    [onScrollTo],
   );
-  const closeCard = useCallback(() => setActiveCard(null), []);
 
-  // Fábrica memoizada com um handler por card — evita criar closures novas
-  // a cada render. Se surgirem novos DashboardCardId eles não vão quebrar
-  // nada (o setter continua funcionando), mas ficam fora deste cache.
   const openHandlers = useMemo(() => {
-    const ids: DashboardCardId[] = [
-      "total-clients",
-      "total-products",
-      "active-reservations",
-      "overdue-reservations",
-      "pending",
-      "mgmv-clients",
-      "mgmv-overdue",
-      "paid-awaiting-shipment",
-      "shipped",
-      "withdrawals",
-      "abandons",
-    ];
-    return Object.fromEntries(
-      ids.map((id) => [id, () => setActiveCard(id)]),
-    ) as Record<DashboardCardId, () => void>;
-  }, []);
+    const c = (chipValue: string) =>
+      () => drillTo({ section: "clients", scrollId: "clientes", chipKey: "clientes.chip", chipValue });
+    const col = (chipValue: string) =>
+      () => drillTo({ section: "collection", scrollId: "collection", chipKey: "collection.filter", chipValue });
+    const m = (chipValue: string) =>
+      () => drillTo({ section: "mgmv", scrollId: "mgmv", chipKey: "mgmv.chip", chipValue });
+    return {
+      "total-clients": c("todos"),
+      "active-reservations": col("em_aberto"),
+      "overdue-reservations": col("reserva_vencida"),
+      pending: col("pendente_vencido"),
+      "mgmv-clients": m("todos"),
+      "mgmv-overdue": m("em_atraso"),
+      "paid-awaiting-shipment": c("pago_aguardando"),
+      withdrawals: c("todos"),
+      abandons: c("abandonou"),
+    } as const;
+  }, [drillTo]);
 
   // AGREGADOS: única varredura, resultado memoizado. Instrumentado com
   // performance.now() para o badge dev-only.
@@ -243,16 +243,6 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
       <div className="mt-6">
         <DashboardIntegrityCard />
       </div>
-
-      {activeCard != null && (
-        <Suspense fallback={null}>
-          <DashboardDrilldownModal
-            cardId={activeCard}
-            onClose={closeCard}
-            onScrollTo={onScrollTo}
-          />
-        </Suspense>
-      )}
 
       <DashboardPerfBadge />
     </section>
