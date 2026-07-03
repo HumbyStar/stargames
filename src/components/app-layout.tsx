@@ -485,7 +485,7 @@ interface RightNavIconProps {
   onToggleTheme: () => void;
 }
 
-function RightNavIcon({
+function RightNavIconImpl({
   id,
   isDark,
   unreadCount,
