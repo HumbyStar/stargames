@@ -991,6 +991,16 @@ export function CollectionSection({
                   </td>
                 </tr>
               )}
+              {hasMoreCollection && (
+                <tr>
+                  <td colSpan={12} className="py-3">
+                    <LoadMoreButton
+                      count={nextChunkCollection}
+                      onClick={loadMoreCollection}
+                    />
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -998,7 +1008,7 @@ export function CollectionSection({
         {filtered.length > 0 && (
           <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
             <span className="text-center">
-              {filtered.length} cobranças encontradas
+              {visible.length} de {filtered.length} cobranças exibidas
               {period === "maximo" && filtered.length > 200 && (
                 <span className="ml-2 text-amber-500">
                   (modo Máximo — muitos registros podem ser exibidos)
