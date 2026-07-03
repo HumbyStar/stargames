@@ -277,7 +277,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     { id: "pendente", label: "Pendente" },
     { id: "pago_aguardando", label: "Pago aguardando envio" },
     { id: "enviado", label: "Enviado" },
-    { id: "desistiu", label: "Desistiu" },
     { id: "abandonou", label: "Abandonou" },
     { id: "em_dia", label: "Em dia" },
     { id: "sem_produtos", label: "Sem produtos" },
