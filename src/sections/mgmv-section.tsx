@@ -940,12 +940,18 @@ function PartialPaymentPopover({
   installmentNumber,
   installmentValue,
   currentPartial,
+  agreementRemaining,
+  pendingCount,
   onSubmit,
 }: {
   clientId: string;
   installmentNumber: number;
   installmentValue: number;
   currentPartial: number;
+  /** Saldo restante total do acordo (antes deste pagamento). */
+  agreementRemaining: number;
+  /** Quantidade de parcelas ainda pendentes (incluindo a atual). */
+  pendingCount: number;
   onSubmit: (amount: number) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -982,11 +988,15 @@ function PartialPaymentPopover({
             : "Parcela marcada como paga integralmente.",
       };
     }
-    const newPartial = currentPartial + parsed;
-    const remaining = Math.max(0, installmentValue - newPartial);
+    // Pagamento parcial: o valor é absorvido no saldo do acordo e as
+    // parcelas ainda pendentes são recalculadas (mesma quantidade, mesmas
+    // datas). Prevê o novo valor rateado por parcela pendente.
+    const nextRemaining = Math.max(0, agreementRemaining - parsed);
+    const nextPerInstallment =
+      pendingCount > 0 ? nextRemaining / pendingCount : 0;
     return {
       kind: "partial" as const,
-      message: `Pagamento parcial acumulado: ${formatBRL(newPartial)} · restam ${formatBRL(remaining)} para quitar.`,
+      message: `Pagamento parcial de ${formatBRL(parsed)} absorvido · restante do acordo ${formatBRL(nextRemaining)} redistribuído em ${pendingCount}× ${formatBRL(nextPerInstallment)}.`,
     };
   })();
 
