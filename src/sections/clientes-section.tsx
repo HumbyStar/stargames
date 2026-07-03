@@ -857,6 +857,7 @@ function ClientDrawer({
   onRequestRetirado,
   onMarkPaid,
   onPayMGMVInstallment,
+  onRegisterMGMVPartialPayment,
 }: {
   client: Client;
   products: Product[];
@@ -868,6 +869,10 @@ function ClientDrawer({
   onRequestRetirado: (productId: string) => void;
   onMarkPaid: (p: Product) => void;
   onPayMGMVInstallment: (installmentNumber: number) => void;
+  onRegisterMGMVPartialPayment: (
+    installmentNumber: number,
+    amount: number,
+  ) => void;
 }) {
   const [notes, setNotes] = useState(client.notes ?? "");
   const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
