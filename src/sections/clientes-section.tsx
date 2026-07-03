@@ -676,11 +676,11 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                             onClick={() => setDrawerClientId(r.client.id)}
                             className="text-left hover:text-primary"
                           >
-                            {r.client.name}
+                            {highlight(r.client.name, search)}
                             {r.client.folder && (
                               <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
                                 <Folder className="h-2.5 w-2.5" />
-                                {r.client.folder}
+                                {highlight(r.client.folder, search)}
                               </span>
                             )}
                           </button>
@@ -702,7 +702,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                             aria-label="Editar telefone do cliente"
                           />
                         ) : (
-                          r.client.phone
+                          highlight(r.client.phone, search)
                         )}
                       </td>
                       <td
@@ -742,7 +742,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                           " pr-3 transition-[padding] duration-300 text-muted-foreground"
                         }
                       >
-                        {r.last ? formatDateBR(r.last) : "—"}
+                        {r.last ? highlight(formatDateBR(r.last), search) : "—"}
                       </td>
                       {!compact && (
                         <td className="py-3 pr-3 max-w-[220px] text-muted-foreground">
@@ -757,7 +757,9 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                               rows={2}
                             />
                           ) : (
-                            <span className="block truncate">{r.client.notes ?? "—"}</span>
+                            <span className="block truncate">
+                              {r.client.notes ? highlight(r.client.notes, search) : "—"}
+                            </span>
                           )}
                         </td>
                       )}
