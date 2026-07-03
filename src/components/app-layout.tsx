@@ -1134,16 +1134,6 @@ function _FloatingNavbarImpl() {
             role="menuitem"
             onClick={() => {
               setOpenMobile(false);
-              openHelp();
-            }}
-            className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent"
-          >
-            <HelpCircle className="size-4 opacity-70 shrink-0" /> Ajuda
-          </button>
-          <button
-            role="menuitem"
-            onClick={() => {
-              setOpenMobile(false);
               openSettings();
             }}
             className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent"
@@ -1165,16 +1155,6 @@ function _FloatingNavbarImpl() {
               <Moon className="size-4 opacity-70 shrink-0" />
             )}
             {isDark ? "Modo claro" : "Modo escuro"}
-          </button>
-          <button
-            role="menuitem"
-            onClick={() => {
-              setOpenMobile(false);
-              void handleSignOut();
-            }}
-            className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-destructive hover:bg-destructive/10"
-          >
-            <LogOut className="size-4 shrink-0" /> Sair
           </button>
         </div>
       )}
