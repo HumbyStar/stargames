@@ -39,8 +39,16 @@ import { TutorialRunner } from "@/components/tutorial-runner";
 import { ConciergeModal } from "@/components/concierge-modal";
 import { FloatingConcierge } from "@/components/floating-concierge";
 import { FinanceDashboard } from "@/components/finance-dashboard";
+import { lazy, Suspense } from "react";
 import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 import { useNavbarConfig, getIconMeta, type NavbarIconId } from "@/lib/navbar-config";
+
+const ImportSection = lazy(() =>
+  import("@/sections/import-section").then((m) => ({ default: m.ImportSection })),
+);
+const EquipeSection = lazy(() =>
+  import("@/sections/equipe-section").then((m) => ({ default: m.EquipeSection })),
+);
 
 const navItems: ReadonlyArray<{
   id: string;
@@ -49,10 +57,8 @@ const navItems: ReadonlyArray<{
 }> = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "clientes", label: "Clientes", icon: Users },
-  { id: "equipe", label: "Equipe", icon: KanbanSquare },
   { id: "mgmv", label: "MGMV", icon: Sparkles },
   { id: "collection", label: "Collection", icon: Wallet },
-  { id: "import", label: "Importar", icon: Upload },
 ];
 
 function scrollToSection(id: string) {
