@@ -37,6 +37,7 @@ import {
 } from "@/lib/store";
 import { toast } from "sonner";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
+import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
