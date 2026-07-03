@@ -568,6 +568,8 @@ export function MGMVSection({
                 const productsOfClient = products.filter(
                   (p) => p.clientId === r.client.id,
                 );
+                const editing = mgmvEdit.isEditing(r.client.id);
+                const draft = mgmvEdit.draftValues;
                 const tagVariant: "danger" | "warning" | "success" | "primary" | "neutral" =
                   r.status === "Em atraso"
                     ? "danger"
@@ -592,10 +594,37 @@ export function MGMVSection({
                         {r.client.phone}
                       </td>
                       <td className="px-3 py-2">
-                        {formatBRL(r.agreement.totalDebt)}
+                        {editing ? (
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="h-8 w-28 rounded-md border border-input bg-background px-2 text-sm tabular-nums"
+                            value={draft?.totalDebt ?? 0}
+                            onChange={(e) => mgmvEdit.setField("totalDebt", Number(e.target.value))}
+                            aria-label="Editar valor do acordo"
+                          />
+                        ) : (
+                          formatBRL(r.agreement.totalDebt)
+                        )}
                       </td>
                       <td className="px-3 py-2">
-                        {r.total}× {formatBRL(r.agreement.installments[0]?.value ?? 0)}
+                        {editing ? (
+                          <span className="inline-flex items-center gap-1">
+                            <span className="text-muted-foreground">{r.total}×</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="h-8 w-24 rounded-md border border-input bg-background px-2 text-sm tabular-nums"
+                              value={draft?.installmentValue ?? 0}
+                              onChange={(e) => mgmvEdit.setField("installmentValue", Number(e.target.value))}
+                              aria-label="Editar valor da parcela"
+                            />
+                          </span>
+                        ) : (
+                          <>
+                            {r.total}× {formatBRL(r.agreement.installments[0]?.value ?? 0)}
+                          </>
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex flex-col leading-tight">
@@ -637,6 +666,70 @@ export function MGMVSection({
                       </td>
                       <td className="px-3 py-2 text-right">
                         <div className="flex justify-end gap-1">
+                          {editing ? (
+                            <RowEditActions
+                              onConfirm={() =>
+                                mgmvEdit.confirm(
+                                  (d) => {
+                                    // Aplica no acordo: atualiza totalDebt e o
+                                    // valor de cada parcela (mantendo estrutura
+                                    // de datas / status). Se a soma das parcelas
+                                    // não bater com totalDebt, `buildRow` marca
+                                    // "review_required" no próximo render; aqui
+                                    // ainda gravamos explicitamente para forçar
+                                    // a badge de revisão a aparecer.
+                                    const nextInstallments = r.agreement.installments.map((i) => ({
+                                      ...i,
+                                      value: d.installmentValue,
+                                    }));
+                                    const sum = nextInstallments.reduce((s, i) => s + i.value, 0);
+                                    const inconsistent = Math.abs(sum - d.totalDebt) > 0.01;
+                                    setMGMVAgreement(r.client.id, {
+                                      ...r.agreement,
+                                      totalDebt: d.totalDebt,
+                                      installments: nextInstallments,
+                                      reviewStatus: inconsistent
+                                        ? "review_required"
+                                        : r.agreement.reviewStatus === "review_required"
+                                          ? "none"
+                                          : r.agreement.reviewStatus,
+                                    });
+                                    if (inconsistent) {
+                                      toast.warning(
+                                        "Acordo inconsistente — marcado como Revisão necessária.",
+                                      );
+                                    } else {
+                                      toast.success("Acordo MGMV atualizado.");
+                                    }
+                                  },
+                                  {
+                                    validate: (d) => {
+                                      if (!Number.isFinite(d.totalDebt) || d.totalDebt <= 0)
+                                        return "Valor do acordo inválido.";
+                                      if (
+                                        !Number.isFinite(d.installmentValue) ||
+                                        d.installmentValue <= 0
+                                      )
+                                        return "Valor da parcela inválido.";
+                                      return null;
+                                    },
+                                  },
+                                )
+                              }
+                              onClose={mgmvEdit.close}
+                            />
+                          ) : (
+                            <RowEditPencil
+                              label="Editar acordo MGMV"
+                              onStart={() =>
+                                mgmvEdit.startEdit(r.client.id, {
+                                  totalDebt: r.agreement.totalDebt,
+                                  installmentValue:
+                                    r.agreement.installments[0]?.value ?? 0,
+                                })
+                              }
+                            />
+                          )}
                           {r.reviewStatus === "review_required" && (
                             <Button
                               size="sm"
