@@ -38,6 +38,9 @@ import {
 import { toast } from "sonner";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
+import { useRowEdit } from "@/lib/use-row-edit";
+import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
+import { Input } from "@/components/ui/input";
 
 type ChipFilter =
   | "todos"
