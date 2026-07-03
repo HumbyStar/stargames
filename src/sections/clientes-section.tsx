@@ -19,6 +19,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   calculateFinancialStatus,
+  displaySituation,
+  isProductArchived,
   formatBRL,
   formatDateBR,
   getMGMVDisplay,
@@ -35,6 +37,7 @@ import {
 } from "@/lib/store";
 import { toast } from "sonner";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
+import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 
 type ChipFilter =
   | "todos"
@@ -42,7 +45,6 @@ type ChipFilter =
   | "pendente"
   | "pago_aguardando"
   | "enviado"
-  | "desistiu"
   | "abandonou"
   | "em_dia"
   | "sem_produtos";
@@ -126,6 +128,10 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     clientId?: string;
     product?: Product | null;
   }>({ open: false });
+  const [retiradoModal, setRetiradoModal] = useState<{
+    open: boolean;
+    productId?: string;
+  }>({ open: false });
 
   const drawerClient = clients.find((c) => c.id === drawerClientId) ?? null;
 
@@ -186,8 +192,11 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                 (p) => p.financialStatus === "Pago" && p.situation === "Em Aberto",
               ),
               enviado: r.products.some((p) => p.situation === "Enviado"),
-              desistiu: r.products.some((p) => p.situation === "Desistiu"),
-              abandonou: r.products.some((p) => p.situation === "Abandonou"),
+              // Desistiu foi unificado como Abandonou; ambos os valores
+              // históricos casam o mesmo chip.
+              abandonou: r.products.some(
+                (p) => p.situation === "Abandonou" || p.situation === "Desistiu",
+              ),
               em_dia: r.status.label === "Em dia",
               sem_produtos: r.products.length === 0,
             };
@@ -272,7 +281,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     { id: "pendente", label: "Pendente" },
     { id: "pago_aguardando", label: "Pago aguardando envio" },
     { id: "enviado", label: "Enviado" },
-    { id: "desistiu", label: "Desistiu" },
     { id: "abandonou", label: "Abandonou" },
     { id: "em_dia", label: "Em dia" },
     { id: "sem_produtos", label: "Sem produtos" },
@@ -442,8 +450,9 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                   <option value="Todas">Situação</option>
                   <option>Em Aberto</option>
                   <option>Enviado</option>
-                  <option>Desistiu</option>
                   <option>Abandonou</option>
+                  <option>Retirar</option>
+                  <option>Retirado</option>
                 </select>
                 <select
                   value={periodFilter}
@@ -682,6 +691,9 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                 setProductSituation(productId, s);
                 toast.success("Situação atualizada");
               }}
+              onRequestRetirado={(productId) =>
+                setRetiradoModal({ open: true, productId })
+              }
               onMarkPaid={(p) => {
                 updateProduct(p.id, { paidValue: p.totalValue, financialStatus: "Pago" });
                 toast.success("Marcado como pago");
@@ -727,6 +739,34 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           setProductModal({ open: false });
         }}
       />
+
+      {/* Popup central obrigatório para confirmar Retirado */}
+      <RetiradoConfirmModal
+        open={retiradoModal.open}
+        client={
+          retiradoModal.productId
+            ? (() => {
+                const p = products.find((pr) => pr.id === retiradoModal.productId);
+                return p ? clients.find((c) => c.id === p.clientId) ?? null : null;
+              })()
+            : null
+        }
+        product={
+          retiradoModal.productId
+            ? products.find((pr) => pr.id === retiradoModal.productId) ?? null
+            : null
+        }
+        onCancel={() => setRetiradoModal({ open: false })}
+        onConfirm={() => {
+          if (retiradoModal.productId) {
+            setProductSituation(retiradoModal.productId, "Retirado");
+            toast.success(
+              "Produto retirado — enviado ao estoque central da loja.",
+            );
+          }
+          setRetiradoModal({ open: false });
+        }}
+      />
     </section>
   );
 }
@@ -740,6 +780,7 @@ function ClientDrawer({
   onSaveNotes,
   onRegisterPayment,
   onChangeSituation,
+  onRequestRetirado,
   onMarkPaid,
   onPayMGMVInstallment,
 }: {
@@ -751,6 +792,7 @@ function ClientDrawer({
   onSaveNotes: (notes: string) => void;
   onRegisterPayment: (productId: string, remaining: number) => void;
   onChangeSituation: (productId: string, s: Situation) => void;
+  onRequestRetirado: (productId: string) => void;
   onMarkPaid: (p: Product) => void;
   onPayMGMVInstallment: (installmentNumber: number) => void;
 }) {
@@ -758,12 +800,16 @@ function ClientDrawer({
   const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
   const mgmv = getMGMVDisplay(client);
   const mgmvProducts = products.filter((p) => p.financialStatus === "MGMV");
-  const individualProducts = products.filter((p) => p.financialStatus !== "MGMV");
+  const individualAll = products.filter((p) => p.financialStatus !== "MGMV");
+  // Retirado = arquivado: sai da lista ativa e migra para o histórico do
+  // cliente. Mantido nas somas totais para não perder o histórico financeiro.
+  const individualProducts = individualAll.filter((p) => !isProductArchived(p));
+  const archivedProducts = individualAll.filter((p) => isProductArchived(p));
   // Evita double-counting: produtos MGMV são consolidados no acordo.
   // Total comprado = soma dos produtos individuais + valor total do acordo MGMV.
-  const individualBought = individualProducts.reduce((a, p) => a + p.totalValue, 0);
-  const individualPaid = individualProducts.reduce((a, p) => a + p.paidValue, 0);
-  const individualRest = individualProducts
+  const individualBought = individualAll.reduce((a, p) => a + p.totalValue, 0);
+  const individualPaid = individualAll.reduce((a, p) => a + p.paidValue, 0);
+  const individualRest = individualAll
     .filter((p) => p.situation === "Em Aberto")
     .reduce((a, p) => a + (p.totalValue - p.paidValue), 0);
   const mgmvPaid = mgmv ? mgmv.installmentValue * mgmv.installmentsPaid : 0;
@@ -1010,7 +1056,7 @@ function ClientDrawer({
                       </Tag>
                     </td>
                     <td className="py-2 pr-3">
-                      <Tag>{p.situation}</Tag>
+                      <Tag>{displaySituation(p.situation)}</Tag>
                     </td>
                     <td className="py-2 pr-3 text-muted-foreground">
                       {formatDateBR(p.registerDate)}
@@ -1033,27 +1079,57 @@ function ClientDrawer({
                             Pago
                           </Button>
                         )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => onChangeSituation(p.id, "Enviado")}
-                        >
-                          Enviado
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => onChangeSituation(p.id, "Desistiu")}
-                        >
-                          Desistiu
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => onChangeSituation(p.id, "Abandonou")}
-                        >
-                          Abandonou
-                        </Button>
+                        {/* Fluxo: (aberto) Abandonou → Retirar → Retirado */}
+                        {p.situation !== "Abandonou" &&
+                          p.situation !== "Desistiu" &&
+                          p.situation !== "Retirar" &&
+                          p.situation !== "Retirado" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => onChangeSituation(p.id, "Enviado")}
+                            >
+                              Enviado
+                            </Button>
+                          )}
+                        {isOpenSituation(p) &&
+                          p.situation !== "Retirar" &&
+                          p.situation !== "Retirado" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => onChangeSituation(p.id, "Abandonou")}
+                            >
+                              Abandonou
+                            </Button>
+                          )}
+                        {(p.situation === "Abandonou" ||
+                          p.situation === "Desistiu") && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              if (
+                                !window.confirm(
+                                  "Marcar produto para retirada?\n\nEste produto continuará vinculado ao cliente, mas ficará marcado como pendente de retirada pelo estoque. Ele ainda não voltará para o estoque central.",
+                                )
+                              )
+                                return;
+                              onChangeSituation(p.id, "Retirar");
+                            }}
+                          >
+                            Retirar
+                          </Button>
+                        )}
+                        {p.situation === "Retirar" && (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => onRequestRetirado(p.id)}
+                          >
+                            Retirado
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1070,6 +1146,36 @@ function ClientDrawer({
           </table>
         </div>
       </Card>
+      {archivedProducts.length > 0 && (
+        <Card className="mt-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-muted-foreground">
+              Histórico de produtos retirados
+            </h4>
+            <span className="text-xs text-muted-foreground">
+              {archivedProducts.length} produto(s) — devolvidos ao estoque
+              central
+            </span>
+          </div>
+          <ul className="divide-y divide-border/60 text-sm">
+            {archivedProducts.map((p) => (
+              <li
+                key={p.id}
+                className="flex items-center justify-between gap-3 py-2"
+              >
+                <div className="min-w-0">
+                  <div className="truncate font-medium">{p.name}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {p.platform || "—"} · {formatBRL(p.totalValue)} ·{" "}
+                    {formatDateBR(p.registerDate)}
+                  </div>
+                </div>
+                <Tag>Retirado</Tag>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
     </div>
   );
 }
@@ -1303,7 +1409,6 @@ function ProductModal({
             >
               <option>Em Aberto</option>
               <option>Enviado</option>
-              <option>Desistiu</option>
               <option>Abandonou</option>
             </select>
           </div>

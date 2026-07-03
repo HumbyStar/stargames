@@ -79,21 +79,9 @@ describe("normalizeSituation", () => {
 
   it.each([
     "CANCELADO",
-    "Cliente desistiu",
     "Cliente sumiu",
     "De volta ao estoque",
-    "Deisitiu do item",
     "DEIXOU DE CRÉDITO",
-    "DESISISTIU",
-    "Desisistiu",
-    "Desisitiu",
-    "DESISITIU",
-    "DESISITU",
-    "DESISTIU",
-    "Desistiu",
-    "Desistiu do item",
-    "Desistência",
-    "DESITIU",
     "DEU ERRO NO PRODUTO",
     "DEVOLVIDO",
     "EXPIRADO",
@@ -128,6 +116,26 @@ describe("normalizeSituation", () => {
     "valor devolvido",
   ])("'%s' → Removido", (t) => {
     expect(bucket(t).s).toBe("Removido");
+  });
+
+  it.each([
+    "ABANDONOU",
+    "Abandonou",
+    "Cliente abandonou o produto",
+    "Cliente desistiu",
+    "Deisitiu do item",
+    "DESISISTIU",
+    "Desisistiu",
+    "Desisitiu",
+    "DESISITIU",
+    "DESISITU",
+    "DESISTIU",
+    "Desistiu",
+    "Desistiu do item",
+    "Desistência",
+    "DESITIU",
+  ])("'%s' → Abandonou (unificação)", (t) => {
+    expect(bucket(t).s).toBe("Abandonou");
   });
 
   it("desconhecido → unknown=true", () => {
