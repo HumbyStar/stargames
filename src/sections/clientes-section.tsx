@@ -36,6 +36,7 @@ import {
   type Product,
   type FinancialStatus,
   type Situation,
+  type PartialPaymentResult,
 } from "@/lib/store";
 import { toast } from "sonner";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
@@ -786,14 +787,13 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               onRegisterMGMVPartialPayment={(
                 installmentNumber,
                 amount,
-              ) => {
+              ) =>
                 registerMGMVPartialPayment(
                   drawerClient.id,
                   installmentNumber,
                   amount,
-                );
-                toast.success(`Pagamento parcial da parcela ${installmentNumber} registrado`);
-              }}
+                )
+              }
             />
           )}
         </DialogContent>
@@ -889,7 +889,7 @@ function ClientDrawer({
   onRegisterMGMVPartialPayment: (
     installmentNumber: number,
     amount: number,
-  ) => void;
+  ) => PartialPaymentResult | void;
 }) {
   const [notes, setNotes] = useState(client.notes ?? "");
   const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
