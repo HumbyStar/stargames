@@ -617,6 +617,7 @@ function RightNavIconImpl({
       );
   }
 }
+const RightNavIcon = memo(RightNavIconImpl);
 
 function _FloatingNavbarImpl() {
   const [openMobile, setOpenMobile] = useState(false);
