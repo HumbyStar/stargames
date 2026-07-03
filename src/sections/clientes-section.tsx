@@ -807,9 +807,9 @@ function ClientDrawer({
   const archivedProducts = individualAll.filter((p) => isProductArchived(p));
   // Evita double-counting: produtos MGMV são consolidados no acordo.
   // Total comprado = soma dos produtos individuais + valor total do acordo MGMV.
-  const individualBought = individualProducts.reduce((a, p) => a + p.totalValue, 0);
-  const individualPaid = individualProducts.reduce((a, p) => a + p.paidValue, 0);
-  const individualRest = individualProducts
+  const individualBought = individualAll.reduce((a, p) => a + p.totalValue, 0);
+  const individualPaid = individualAll.reduce((a, p) => a + p.paidValue, 0);
+  const individualRest = individualAll
     .filter((p) => p.situation === "Em Aberto")
     .reduce((a, p) => a + (p.totalValue - p.paidValue), 0);
   const mgmvPaid = mgmv ? mgmv.installmentValue * mgmv.installmentsPaid : 0;
