@@ -31,7 +31,6 @@ type MgmvChip =
   | "todos"
   | "ativos"
   | "em_atraso"
-  | "quitados"
   | "revisao"
   | "revisado_ia"
   | "revisado_manual"
@@ -301,7 +300,12 @@ export function MGMVSection({
       const isMgmv =
         c.clientType === "mgmv" || (!!c.mgmv && c.mgmv.installments.length > 0);
       if (!isMgmv || !c.mgmv) continue;
-      list.push(buildRow(c, c.mgmv));
+      const row = buildRow(c, c.mgmv);
+      // A seção MGMV lista apenas acordos vivos: ativos, com pendências ou em
+      // atraso. Acordos já quitados saem da listagem (o histórico continua
+      // acessível pelo modal do cliente).
+      if (row.status === "Quitado") continue;
+      list.push(row);
     }
     return list.sort((a, b) =>
       a.client.name.localeCompare(b.client.name, "pt-BR"),
@@ -311,7 +315,6 @@ export function MGMVSection({
   const stats = useMemo(() => {
     const ativos = rows.filter((r) => r.status === "Ativo").length;
     const atraso = rows.filter((r) => r.status === "Em atraso").length;
-    const quitados = rows.filter((r) => r.status === "Quitado").length;
     const revisao = rows.filter((r) => r.reviewStatus === "review_required").length;
     const revisadoIA = rows.filter((r) => r.reviewStatus === "ai_reviewed").length;
     const revisadoManual = rows.filter(
@@ -333,7 +336,6 @@ export function MGMVSection({
       clientes: rows.length,
       ativos,
       atraso,
-      quitados,
       revisao,
       revisadoIA,
       revisadoManual,
@@ -357,8 +359,6 @@ export function MGMVSection({
           return r.status === "Ativo";
         case "em_atraso":
           return r.status === "Em atraso";
-        case "quitados":
-          return r.status === "Quitado";
         case "revisao":
           return r.reviewStatus === "review_required";
         case "revisado_ia":
@@ -390,7 +390,6 @@ export function MGMVSection({
     { id: "todos", label: "Todos", count: stats.clientes },
     { id: "ativos", label: "Ativos", count: stats.ativos },
     { id: "em_atraso", label: "Em atraso", count: stats.atraso },
-    { id: "quitados", label: "Quitados", count: stats.quitados },
     { id: "revisao", label: "Revisão necessária", count: stats.revisao },
     { id: "revisado_ia", label: "Revisado com IA", count: stats.revisadoIA },
     { id: "revisado_manual", label: "Revisado manualmente", count: stats.revisadoManual },
@@ -450,13 +449,6 @@ export function MGMVSection({
           status={stats.parcelasVencidas > 0 ? "danger" : "default"}
           onClick={() => applyCardFilter("vencidos")}
           tooltip="Ver parcelas vencidas"
-        />
-        <MetricCard
-          label="Quitados"
-          value={stats.quitados}
-          status="success"
-          onClick={() => applyCardFilter("quitados")}
-          tooltip="Ver acordos quitados"
         />
         <MetricCard
           label="Revisão necessária"
