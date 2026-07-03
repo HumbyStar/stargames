@@ -6,6 +6,7 @@ import { create } from "zustand";
  */
 interface UiState {
   importOpen: boolean;
+  equipeOpen: boolean;
   settingsOpen: boolean;
   helpOpen: boolean;
   notificationsOpen: boolean;
@@ -16,6 +17,8 @@ interface UiState {
   setActiveSection: (id: string) => void;
   openImport: () => void;
   closeImport: () => void;
+  openEquipe: () => void;
+  closeEquipe: () => void;
   openSettings: () => void;
   closeSettings: () => void;
   openHelp: () => void;
@@ -32,6 +35,7 @@ interface UiState {
 
 export const useUiStore = create<UiState>((set) => ({
   importOpen: false,
+  equipeOpen: false,
   settingsOpen: false,
   helpOpen: false,
   notificationsOpen: false,
@@ -40,13 +44,10 @@ export const useUiStore = create<UiState>((set) => ({
   activeTutorialId: null,
   activeSection: "dashboard",
   setActiveSection: (id) => set({ activeSection: id }),
-  openImport: () => {
-    set({ importOpen: false });
-    if (typeof document === "undefined") return;
-    const el = document.getElementById("import");
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  },
+  openImport: () => set({ importOpen: true }),
   closeImport: () => set({ importOpen: false }),
+  openEquipe: () => set({ equipeOpen: true }),
+  closeEquipe: () => set({ equipeOpen: false }),
   openSettings: () => set({ settingsOpen: true }),
   closeSettings: () => set({ settingsOpen: false }),
   openHelp: () => set({ helpOpen: true }),

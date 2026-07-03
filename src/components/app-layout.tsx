@@ -14,9 +14,8 @@ import {
   Sparkles,
   Wallet,
   CircleDollarSign,
-  KanbanSquare,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, lazy, Suspense, type ReactNode } from "react";
 import type { ComponentType, SVGProps } from "react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
@@ -42,6 +41,13 @@ import { FinanceDashboard } from "@/components/finance-dashboard";
 import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 import { useNavbarConfig, getIconMeta, type NavbarIconId } from "@/lib/navbar-config";
 
+const ImportSection = lazy(() =>
+  import("@/sections/import-section").then((m) => ({ default: m.ImportSection })),
+);
+const EquipeSection = lazy(() =>
+  import("@/sections/equipe-section").then((m) => ({ default: m.EquipeSection })),
+);
+
 const navItems: ReadonlyArray<{
   id: string;
   label: string;
@@ -49,10 +55,8 @@ const navItems: ReadonlyArray<{
 }> = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "clientes", label: "Clientes", icon: Users },
-  { id: "equipe", label: "Equipe", icon: KanbanSquare },
   { id: "mgmv", label: "MGMV", icon: Sparkles },
   { id: "collection", label: "Collection", icon: Wallet },
-  { id: "import", label: "Importar", icon: Upload },
 ];
 
 function scrollToSection(id: string) {
@@ -720,6 +724,7 @@ function _FloatingNavbarImpl() {
   };
 
   const openImport = useUiStore((s) => s.openImport);
+  const openEquipe = useUiStore((s) => s.openEquipe);
   const openSettings = useUiStore((s) => s.openSettings);
   const openNotifications = useUiStore((s) => s.openNotifications);
   const closeNotifications = useUiStore((s) => s.closeNotifications);
@@ -1002,7 +1007,7 @@ function _FloatingNavbarImpl() {
         </div>
 
         <div className="ml-auto flex items-center gap-1.5 md:gap-2 md:pl-2">
-          {visibleIds.filter((id) => id !== "import").map((iconId) => {
+          {visibleIds.map((iconId) => {
             const meta = getIconMeta(iconId);
             if (!meta) return null;
             return (
@@ -1045,7 +1050,7 @@ function _FloatingNavbarImpl() {
           </NotificationsDropdown>
           <button
             type="button"
-            onClick={() => scrollToSection("equipe")}
+            onClick={openEquipe}
             aria-label="Equipe"
             className="md:hidden grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
           >
@@ -1103,6 +1108,16 @@ function _FloatingNavbarImpl() {
             className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent"
           >
             <Upload className="size-4 opacity-70 shrink-0" /> Importar
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpenMobile(false);
+              openEquipe();
+            }}
+            className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent"
+          >
+            <Users className="size-4 opacity-70 shrink-0" /> Equipe
           </button>
           <button
             role="menuitem"
@@ -1181,6 +1196,10 @@ function GlobalModals() {
   const closeHelp = useUiStore((s) => s.closeHelp);
   const financeOpen = useUiStore((s) => s.financeOpen);
   const closeFinance = useUiStore((s) => s.closeFinance);
+  const importOpen = useUiStore((s) => s.importOpen);
+  const closeImport = useUiStore((s) => s.closeImport);
+  const equipeOpen = useUiStore((s) => s.equipeOpen);
+  const closeEquipe = useUiStore((s) => s.closeEquipe);
 
   return (
     <>
@@ -1212,6 +1231,34 @@ function GlobalModals() {
             <DialogDescription>Dashboard financeiro consolidado.</DialogDescription>
           </DialogHeader>
           <FinanceDashboard />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={importOpen} onOpenChange={(o) => (o ? null : closeImport())}>
+        <DialogContent className="max-w-[min(1200px,95vw)] max-h-[90vh] overflow-y-auto" data-tour="import-modal">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Importar</DialogTitle>
+            <DialogDescription>Importe listas, planilhas e arquivos.</DialogDescription>
+          </DialogHeader>
+          {importOpen && (
+            <Suspense fallback={null}>
+              <ImportSection onScrollTo={(id) => scrollToSection(id)} />
+            </Suspense>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={equipeOpen} onOpenChange={(o) => (o ? null : closeEquipe())}>
+        <DialogContent className="max-w-[min(1200px,95vw)] max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Equipe</DialogTitle>
+            <DialogDescription>Gestão de tarefas e membros da equipe.</DialogDescription>
+          </DialogHeader>
+          {equipeOpen && (
+            <Suspense fallback={null}>
+              <EquipeSection />
+            </Suspense>
+          )}
         </DialogContent>
       </Dialog>
 

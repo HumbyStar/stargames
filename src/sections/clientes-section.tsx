@@ -8,6 +8,7 @@ import { ListExpansionToggle, MinimizedListCard } from "@/components/list-expans
 import { useListExpansion } from "@/lib/list-expansion";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { usePaginatedList } from "@/hooks/use-paginated-list";
+import { useUiStore } from "@/lib/ui-store";
 import {
   Dialog,
   DialogContent,
@@ -333,7 +334,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
             <Button onClick={() => setClientModal({ open: true, client: null })}>
               Adicionar Cliente
             </Button>
-            <Button variant="outline" onClick={() => onScrollTo("import")}>
+            <Button variant="outline" onClick={() => useUiStore.getState().openImport()}>
               Importar Clientes
             </Button>
             <Button variant="outline" onClick={exportBase}>
