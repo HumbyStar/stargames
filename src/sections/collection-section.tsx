@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { useSectionCompact } from "@/lib/use-section-compact";
+import { useRowEdit } from "@/lib/use-row-edit";
+import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
 import {
   ListExpansionToggle,
   MinimizedListCard,
