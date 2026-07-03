@@ -3,6 +3,7 @@ import {
   extractMGMVAgreementFromNotes,
   extractPaymentDate,
   addMonthsClampDay,
+  tableHeadingMentionsMgmv,
 } from "./import-section";
 
 describe("extractMGMVAgreementFromNotes", () => {
@@ -257,5 +258,33 @@ describe("extractPaymentDate", () => {
     expect(d.getFullYear()).toBe(2026);
     expect(d.getMonth()).toBe(3);
     expect(d.getDate()).toBe(30);
+  });
+});
+
+describe("tableHeadingMentionsMgmv", () => {
+  it("detecta 'LOTE FECHADO MEU GAME MINHA VIDA'", () => {
+    expect(
+      tableHeadingMentionsMgmv("LOTE FECHADO MEU GAME MINHA VIDA"),
+    ).not.toBeNull();
+  });
+  it("detecta 'MGMV Ativo'", () => {
+    expect(tableHeadingMentionsMgmv("MGMV Ativo")).not.toBeNull();
+  });
+  it("detecta 'Meu Game Minha Vida'", () => {
+    expect(tableHeadingMentionsMgmv("Meu Game Minha Vida — 2024")).not.toBeNull();
+  });
+  it("não detecta heading neutro", () => {
+    expect(tableHeadingMentionsMgmv("Histórico 2024")).toBeNull();
+    expect(tableHeadingMentionsMgmv("Compras avulsas")).toBeNull();
+  });
+  it("respeita negação 'fora do MGMV'", () => {
+    expect(tableHeadingMentionsMgmv("Produtos fora do MGMV")).toBeNull();
+    expect(tableHeadingMentionsMgmv("Compras não MGMV")).toBeNull();
+  });
+  it("retorna o trecho encontrado como label", () => {
+    const label = tableHeadingMentionsMgmv(
+      "Compras normais • LOTE FECHADO MEU GAME MINHA VIDA",
+    );
+    expect(label).toMatch(/lote\s+fechado/i);
   });
 });
