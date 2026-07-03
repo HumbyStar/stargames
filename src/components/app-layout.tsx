@@ -298,8 +298,15 @@ function NotificationsDropdown({
   useEffect(() => {
     if (!open) return;
     const onDocClick = (e: MouseEvent) => {
+      const wrap = wrapRef.current;
+      // Existem duas instâncias deste dropdown na árvore (desktop e
+      // mobile), mas só uma está realmente visível conforme o
+      // breakpoint. A instância oculta (display:none via md:hidden)
+      // não deve reagir ao clique — caso contrário ela fecha o painel
+      // visível assim que o usuário toca em qualquer botão dentro dele.
+      if (!wrap || wrap.getClientRects().length === 0) return;
       const target = e.target as Node | null;
-      if (wrapRef.current?.contains(target)) return;
+      if (wrap.contains(target)) return;
       // Cliques na barra de rolagem nativa disparam mousedown com target
       // no <html>/<body> — nesse caso, checar as coordenadas contra o
       // retângulo do painel para não fechar ao arrastar a scrollbar.
