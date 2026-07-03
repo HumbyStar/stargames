@@ -829,16 +829,16 @@ export function CollectionSection({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="py-2 pr-3 font-medium">Cliente</th>
-                <th className="py-2 pr-3 font-medium">Telefone</th>
-                <th className="py-2 pr-3 font-medium">Produto</th>
-                <th className="py-2 pr-3 font-medium">Plataforma</th>
-                <th className="py-2 pr-3 font-medium">Total</th>
-                <th className="py-2 pr-3 font-medium">Pago</th>
-                <th className="py-2 pr-3 font-medium">Restante</th>
-                <th className="py-2 pr-3 font-medium">Status</th>
-                <th className="py-2 pr-3 font-medium">Situação</th>
-                <th className="py-2 pr-3 font-medium">Data Limite</th>
+                <th className="py-2 pr-3 font-medium">Cliente<ColumnMatchDot active={searchActive} count={matchCols.client} /></th>
+                <th className="py-2 pr-3 font-medium">Telefone<ColumnMatchDot active={searchActive} count={matchCols.phone} /></th>
+                <th className="py-2 pr-3 font-medium">Produto<ColumnMatchDot active={searchActive} count={matchCols.product} /></th>
+                <th className="py-2 pr-3 font-medium">Plataforma<ColumnMatchDot active={searchActive} count={matchCols.platform} /></th>
+                <th className="py-2 pr-3 font-medium">Total<ColumnMatchDot active={searchActive} count={matchCols.values} /></th>
+                <th className="py-2 pr-3 font-medium">Pago<ColumnMatchDot active={searchActive} count={matchCols.values} /></th>
+                <th className="py-2 pr-3 font-medium">Restante<ColumnMatchDot active={searchActive} count={matchCols.values} /></th>
+                <th className="py-2 pr-3 font-medium">Status<ColumnMatchDot active={searchActive} count={matchCols.status} /></th>
+                <th className="py-2 pr-3 font-medium">Situação<ColumnMatchDot active={searchActive} count={matchCols.situation} /></th>
+                <th className="py-2 pr-3 font-medium">Data Limite<ColumnMatchDot active={searchActive} count={matchCols.due} /></th>
                 <th className="py-2 pr-3 font-medium">Atraso</th>
                 <th className="py-2 pr-3 font-medium">Ações</th>
               </tr>
