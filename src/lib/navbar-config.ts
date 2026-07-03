@@ -4,9 +4,7 @@ import {
   Upload,
   Settings,
   Bell,
-  HelpCircle,
   Search,
-  LogOut,
   Sun,
 } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
@@ -25,9 +23,7 @@ export type NavbarIconId =
   | "import"
   | "settings"
   | "notifications"
-  | "help"
-  | "theme"
-  | "signout";
+  | "theme";
 
 export interface NavbarIconMeta {
   id: NavbarIconId;
@@ -46,9 +42,7 @@ export const NAVBAR_ICON_CATALOG: NavbarIconMeta[] = [
   { id: "import", label: "Importar", description: "Abre o painel de importação.", icon: Upload, permission: "import.use" },
   { id: "settings", label: "Configurações", description: "Preferências, regras e zona de perigo.", icon: Settings, permission: "settings.view" },
   { id: "notifications", label: "Notificações", description: "Alertas e avisos da operação.", icon: Bell },
-  { id: "help", label: "Tutorial", description: "Central de ajuda e tutoriais guiados.", icon: HelpCircle },
   { id: "theme", label: "Tema", description: "Alterna entre modo claro e escuro.", icon: Sun, locked: true },
-  { id: "signout", label: "Sair", description: "Encerra a sessão atual.", icon: LogOut, locked: true },
 ];
 
 export const DEFAULT_NAVBAR_ORDER: NavbarIconId[] = NAVBAR_ICON_CATALOG.map(
