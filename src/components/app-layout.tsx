@@ -1028,9 +1028,7 @@ function _FloatingNavbarImpl() {
                 onFinance={openFinance}
                 onImport={openImport}
                 onSettings={openSettings}
-                onHelp={openHelp}
                 onToggleTheme={toggleTheme}
-                onSignOut={handleSignOut}
               />
             );
           })}
