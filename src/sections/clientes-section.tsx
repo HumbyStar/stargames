@@ -800,7 +800,11 @@ function ClientDrawer({
   const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
   const mgmv = getMGMVDisplay(client);
   const mgmvProducts = products.filter((p) => p.financialStatus === "MGMV");
-  const individualProducts = products.filter((p) => p.financialStatus !== "MGMV");
+  const individualAll = products.filter((p) => p.financialStatus !== "MGMV");
+  // Retirado = arquivado: sai da lista ativa e migra para o histórico do
+  // cliente. Mantido nas somas totais para não perder o histórico financeiro.
+  const individualProducts = individualAll.filter((p) => !isProductArchived(p));
+  const archivedProducts = individualAll.filter((p) => isProductArchived(p));
   // Evita double-counting: produtos MGMV são consolidados no acordo.
   // Total comprado = soma dos produtos individuais + valor total do acordo MGMV.
   const individualBought = individualProducts.reduce((a, p) => a + p.totalValue, 0);
