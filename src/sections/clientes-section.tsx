@@ -888,7 +888,7 @@ function ClientDrawer({
   onRegisterMGMVPartialPayment: (
     installmentNumber: number,
     amount: number,
-  ) => void;
+  ) => PartialPaymentResult | void;
 }) {
   const [notes, setNotes] = useState(client.notes ?? "");
   const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
