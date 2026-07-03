@@ -722,6 +722,16 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                       </td>
                     </tr>
                   )}
+                  {hasMoreRows && (
+                    <tr>
+                      <td colSpan={compact ? 8 : 9} className="py-3">
+                        <LoadMoreButton
+                          count={nextChunkRows}
+                          onClick={loadMoreRows}
+                        />
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -729,7 +739,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
             {rows.length > 0 && (
               <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
                 <span>
-                  {rows.length} cliente(s) carregado(s)
+                  {pagedRows.length} de {rows.length} cliente(s) exibido(s)
                 </span>
               </div>
             )}
