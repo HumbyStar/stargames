@@ -777,6 +777,24 @@ export function MGMVSection({
                     {isOpen && (
                       <tr className="border-b bg-accent/20">
                         <td colSpan={9} className="px-4 py-4">
+                          {editingAgreement === r.client.id ? (
+                            <MgmvAgreementEditor
+                              clientId={r.client.id}
+                              agreement={r.agreement}
+                              products={productsOfClient}
+                              onClose={() => setEditingAgreement(null)}
+                            />
+                          ) : (
+                          <>
+                          <div className="mb-3 flex justify-end">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => setEditingAgreement(r.client.id)}
+                            >
+                              Editar acordo
+                            </Button>
+                          </div>
                           <div className="grid gap-4 md:grid-cols-2">
                             <div>
                               <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
@@ -884,6 +902,8 @@ export function MGMVSection({
                               )}
                             </div>
                           </div>
+                          </>
+                          )}
                         </td>
                       </tr>
                     )}
