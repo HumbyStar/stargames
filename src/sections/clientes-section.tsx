@@ -909,6 +909,26 @@ function ClientDrawer({
     mgmv && mgmv.installmentsTotal > 0
       ? Math.round((mgmv.installmentsPaid / mgmv.installmentsTotal) * 100)
       : 0;
+  const mgmvPendingCount = client.mgmv
+    ? client.mgmv.installments.filter((i) => !i.paid).length
+    : 0;
+  const mgmvPaidValue = client.mgmv
+    ? client.mgmv.installments
+        .filter((i) => i.paid)
+        .reduce((s, i) => s + (i.paidAmount ?? i.value ?? 0), 0)
+    : 0;
+  const mgmvPartialPaidAmount = client.mgmv
+    ? client.mgmv.installments
+        .filter((i) => !i.paid)
+        .reduce(
+          (s, i) => s + Math.max(0, Math.min(i.value, i.paidAmount ?? 0)),
+          0,
+        )
+    : 0;
+  const mgmvAgreementRemaining = Math.max(
+    0,
+    (client.mgmv?.totalDebt ?? 0) - mgmvPaidValue - mgmvPartialPaidAmount,
+  );
 
   return (
     <div className="space-y-6">
