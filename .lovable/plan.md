@@ -1,88 +1,119 @@
-# Import HTML de cliente (Notion) — 1 arquivo por vez
-
 ## Objetivo
 
-Adicionar um segundo caminho de importação, ao lado do "Lista Colada" já existente, que:
-- Lê um arquivo HTML exportado do Notion (ex.: `Hadi_-_47_9986-8265_....html`).
-- Identifica **um único cliente** a partir do `<h1>` / `<title>` (nome + telefone).
-- Varre **todas as `<table>`** do arquivo — mesmo quando a lista "quebra" em vários blocos com heading intermediário (ex.: `LOTE FECHADO MEU GAME MINHA VIDA`) — e concatena tudo como produtos do mesmo cliente.
-- Preserva o grupo/lote de cada bloco (`sourceGroup`) para rastreio.
-- Reaproveita o preview de revisão, os totais e a persistência já usados pela Lista Colada.
+Importar `.zip` do Notion, um por vez. Navegar pela(s) pasta(s) de clientes dentro do ZIP e, para **cada arquivo `*.html` que houver ali dentro**, extrair um cliente com **todas as suas tabelas**, e passar por uma camada de IA (mesmo padrão do "Revisar com IA" do MGMV) antes de persistir.
 
-Sem alterar: importação por lista colada, MGMV, Collection, Concierge, Dashboard, layout.
+**Nota importante**: o `(3)` (ou qualquer número) que apareça no nome da pasta — ex.: `Clientes (3)` — é apenas sufixo do export do Notion e **não representa a quantidade de clientes**. A contagem sai da varredura real dos arquivos HTML dentro da pasta.
 
-## Regras de mapeamento (fechadas com o usuário)
+## Terminologia — regra confirmada pelo usuário
 
-- **Cliente**: nome + telefone extraídos do `<h1>`/`<title>` no formato `Nome - (DD) NNNNN-NNNN`. Telefone passa pelo mesmo `normalizePhone` do parser atual.
-- **Colunas por linha** (7): `Item | Plataforma/Categoria | Valor total | Valor Pago | Status financeiro | Data | Situação operacional`. Tabelas sem `<thead>` são tratadas por posição (é o caso das duas primeiras tabelas do arquivo do Hadi).
-- **Valor**: `parseMoney` reaproveitado (aceita `R$ 90`, `90 R$`, `R$ 100,00`, `-` → null).
-- **Status financeiro** → `ListFinancialStatus`:
-  - `PAGO` → `Pago`
-  - `Reserva Paga` / `Reserva` → `Reserva` (com `paidValue` da coluna respectiva; sem valor → `review_required`)
-  - `pendente` → `Pendente`
-  - `-` / vazio → `Revisão necessária`
-- **Situação operacional** (coluna 7):
-  - `REMOVIDO` → produto entra já como `Retirado` (histórico finalizado, sem popup de confirmação — decisão do usuário).
-  - `ENVIADO` → situação concluída/entregue (mapeada via `situation-normalizer` para o equivalente atual de "enviado").
-  - vazio → situação "aberta" padrão (Pago/Reserva/Pendente segue o status financeiro).
-- **Grupo**: cada `<h1>`/`<h2>`/`<h3>` intermediário vira `sourceGroup` das tabelas seguintes. Tabelas antes de qualquer heading extra ficam em `(sem grupo)`.
-- **Review flags**: telefone inválido, valor total ausente, Reserva sem valor pago, e qualquer status/situação não reconhecidos marcam a linha como `review_required` — mesmo comportamento do parser de texto.
+Vale só no fluxo de importação; o resto do app não muda.
 
-## Detalhes técnicos
+| Coluna "Situação" no HTML | Estado no preview | Botão(ões) na linha |
+| --- | --- | --- |
+| `REMOVIDO` | cliente desistiu → linha já entra como **`Retirado`** (= "retirado do estoque" / removido) | **sem botão** — já finalizado |
+| `RETIRAR` | linha entra como **`Retirar`** | um botão **"Removido"** (é o antigo botão "Retirado" — finaliza a linha para `Retirado`) |
+| `DESISTIU` | linha entra como **`Abandonou`** | **"Removido"** (finaliza como `Retirado`) |
+| `RETIRADO` | linha já entra como **`Retirado`** | sem botão |
+| `ENVIADO` | linha entra como **`Enviado`** | sem botão |
+| vazio / outros | linha entra "Em Aberto" (segue o status financeiro) | sem botão contextual |
 
-### 1. Novo parser — `src/lib/html-client-import-parser.ts`
-- Usa `DOMParser` (browser) para percorrer o HTML.
-- Exporta `parseClientHtml(rawHtml: string): ListImportPreview` reaproveitando os tipos `ListImportRow`, `ListImportClientGroup`, `ListImportPreview` de `list-import-parser.ts`.
-- Extrai cliente do primeiro `<h1>` (fallback: `<title>`) via regex `^(.+?)\s*-\s*(.+)$`.
-- Itera `document.body.querySelectorAll('h1, h2, h3, table')` em ordem para manter `currentGroup`.
-- Para cada `<tr>`: pega até 7 células, mapeia por posição, monta `ListImportRow` com `clientName`/`phone` do cabeçalho do arquivo (não da linha), gera `id`, `warnings`, `reviewStatus`.
-- Extensão mínima do tipo: adicionar campo opcional `situation?: "Retirado" | "Enviado" | "Aberto"` em `ListImportRow` para carregar a coluna 7 até a persistência (usado só pelo caminho HTML; parser de texto continua não populando).
-- Testes em `src/lib/html-client-import-parser.test.ts` cobrindo: extração de cliente do `<h1>`, 3 tabelas concatenadas, heading intermediário virando `sourceGroup`, `REMOVIDO`→`Retirado`, `Reserva Paga` com valor, `-` sem valor, telefone `(47) 9986-8265` normalizado para 11 dígitos.
+Nenhum novo valor de `Situation` no enum. "Removido" aparece só como **rótulo do botão** de finalização dentro do preview de importação.
 
-### 2. UI — novo modo no modal de importação
-- `src/components/list-import-modal.tsx`: adicionar aba/tab "HTML de cliente" ao lado da atual "Lista colada".
-- Nova aba: `<input type="file" accept=".html,text/html">` + textarea de fallback para colar HTML.
-- Ao carregar, chama `parseClientHtml` e alimenta o **mesmo componente de preview** já usado pela Lista Colada (tabela editável, contadores de totais, marcação `review_required`, ações "ignorar linha"). Nenhuma tela nova de preview.
-- Botão "Confirmar importação" reaproveita o mesmo caminho de persistência do fluxo de texto, com a única diferença: passa `situation` de cada linha para o `store.ts` na criação do produto, para que `REMOVIDO` já entre como `Retirado` sem acionar o `RetiradoConfirmModal`.
+## Fluxo — importação por ZIP
 
-### 3. Persistência — `src/lib/store.ts`
-- Extender a função de criação de produto usada pelo import para aceitar `initialSituation` opcional. Quando presente, gravar `situation` direto (`Retirado` ou `Enviado`) e registrar `audit_log` com origem `import_html`. Quando ausente, comportamento atual não muda.
-- **Não** alterar regras de MGMV, Collection, ou o fluxo `Abandonou → Retirar → Retirado` do dia a dia — a exceção só existe no caminho de import de histórico.
+### 1. Entrada
+- Nova aba **"ZIP Notion"** em `list-import-modal.tsx`, ao lado de "Lista colada" e "HTML de cliente" (fallback avulso).
+- Um `.zip` por vez, descompactado no browser com `jszip` (edge-safe; `bun add jszip`).
 
-### 4. Fora de escopo desta entrega
-- Upload múltiplo de HTMLs (o usuário escolheu "um por vez").
-- Persistir o HTML original no `import_history` (pode entrar em follow-up se necessário).
-- Alterações no parser de lista colada existente.
+### 2. Navegação do ZIP
+- Percorre **todas** as entradas do ZIP. Para cada entrada `*.html`:
+  - Se estiver dentro de uma pasta cujo nome começa com `Cliente` ou `Clientes` (opcionalmente com sufixo tipo ` (3)` do Notion) → **é um cliente**.
+  - Se o ZIP não tiver uma pasta desse tipo (ex.: HTMLs soltos), varre todos os `*.html` na raiz do ZIP como fallback.
+- Para cada HTML: `parseClientHtml` (já concatena **todas** as `<table>`, respeitando `sourceGroup` dos headings intermediários). Nenhuma tabela é descartada.
+- Resultado: `HtmlImportPreview[]` com um item por HTML — a quantidade sai da contagem real de arquivos, ignorando o número no nome da pasta.
 
-## Diagrama do fluxo
+### 3. Camada de IA — `src/lib/list-import-ai-zip.functions.ts`
+- Server function protegida (`requireSupabaseAuth`), padrão idêntico a `mgmv-ai-review.functions.ts`.
+- Input por cliente: `{ clientName, phone, rows: HtmlImportRow[], sourceGroups: string[], htmlSnippet: string }` (HTML truncado da(s) tabela(s) para evidências).
+- Modelo padrão `google/gemini-3-flash-preview` (rápido/barato, mesmo do resto do app).
+- Output estruturado por produto (schema Zod curto, sem enums grandes, validação em código):
+  ```ts
+  {
+    rowId: string,
+    situationSuggestion: "Retirado" | "Retirar" | "Enviado" | "Abandonou" | "Em Aberto" | "Revisar",
+    financialStatusSuggestion: "Pago" | "Reserva" | "Pendente" | "Revisar",
+    totalValue: number | null,
+    paidValue: number | null,
+    confidence: number,   // 0..1
+    evidence: string[],   // trechos citados literalmente do HTML/linha
+    warnings: string[],
+    needsReview: boolean,
+  }
+  ```
+- Também por cliente: `clientSummary`, `duplicateGroups`, `overallNeedsReview`.
+- Evidências vão para o `audit_log` na persistência.
+
+### 4. Preview — `zip-import-review.tsx`
+- Sidebar de clientes (contador de linhas + badge "revisar IA" quando `overallNeedsReview`).
+- Painel central por cliente: tabela do preview atual + colunas extras **Situação IA** e **Evidência IA**.
+- Ações por linha:
+  - **Lápis** → edição inline via `useRowEdit` (blur não salva, Confirmar persiste). Não abre dialog.
+  - **Cérebro "Revisar com IA"** → mantém, por linha e por cliente (mesmo padrão do MGMV).
+  - Botões contextuais conforme a tabela de terminologia acima.
+- Barra do cliente: "Revisar todos com IA", "Aceitar sugestões IA", "Rejeitar sugestões IA".
+- Confirmação final: **"Importar todos os clientes"** persiste via `store.ts`, sem `RetiradoConfirmModal` (histórico).
+
+### 5. Persistência — `src/lib/store.ts`
+- `initialSituation?: Situation` já cobre tudo (enum atual inclui `Retirado`, `Retirar`, `Abandonou`, `Enviado`, `Em Aberto`).
+- Cada produto criado gera `audit_log` com `origin: "import_zip_notion"` e campo opcional `importMeta` guardando `evidence[]` + `aiConfidence`.
+
+## Parser — `src/lib/html-client-import-parser.ts`
+- `ImportedSituation`: `"Retirado" | "Retirar" | "Enviado" | "Abandonou" | null`.
+- `normalizeSituation`: `REMOVIDO` → `Retirado`; `DESISTIU`/`DESISTÊNCIA` → `Abandonou`; `RETIRAR` → `Retirar`; `RETIRADO` → `Retirado`; `ENVIADO` → `Enviado`. Reaproveita `situation-normalizer`.
+
+## Testes
+
+- Fixture com 3 tabelas quebradas por `<h2>` → 1 cliente com todos os produtos e `sourceGroup` correto.
+- Fixture de ZIP (construído via `jszip` no teste) com pasta `Clientes (3)` contendo **5** HTMLs → função de navegação retorna **5** clientes (mostra que o `(3)` do nome é ignorado e a contagem sai dos arquivos).
+- Fixture de ZIP sem pasta `Clientes*`, HTMLs na raiz → varredura fallback pega todos.
+- Mapeamentos de situação: `REMOVIDO`, `RETIRAR`, `DESISTIU`, `RETIRADO`, `ENVIADO`.
+
+## Escopo mantido
+
+- "Revisar com IA" em **Clientes e MGMV** continua exatamente como está.
+- Aba "Lista colada" e aba "HTML de cliente" avulso não mudam além do enum de situações.
+- MGMV / Collection / Concierge / Dashboard sem regressão.
+
+## Diagrama
 
 ```text
-[HTML do Notion]
-       │
-       ▼
-parseClientHtml
-       │
-       ├── cliente <- <h1>/<title>
-       └── produtos <- todas as <table>, agrupados por heading
-       │
-       ▼
-ListImportPreview (mesmo tipo de hoje) + campo situation por linha
-       │
-       ▼
-Preview de revisão existente (Lista Colada)
-       │
-       ▼
-Confirmar → store.ts cria cliente + produtos
-             REMOVIDO -> situation=Retirado (sem popup)
-             ENVIADO  -> situation=Enviado
-             demais   -> fluxo padrão
+[ZIP Notion]
+   └─ Clientes (3)/            ← o "(3)" é só sufixo do Notion; não é contagem
+        ├─ Alice.html          ┐
+        ├─ Beto.html           │  parseClientHtml → todas as <table>
+        ├─ Carla.html          │
+        ├─ Diego.html          │
+        └─ Elena.html          ┘
+                 │
+                 ▼
+        HtmlImportPreview por cliente  (5 clientes reais, não 3)
+                 │
+                 ▼
+        Revisão IA por cliente (evidências, sugestões, duplicatas)
+                 │
+                 ▼
+        Preview ZIP (sidebar + tabela + lápis inline + botões)
+                 │
+                 ▼
+        Confirmar → store.ts (initialSituation, audit_log import_zip_notion)
 ```
 
 ## Critérios de aceite
 
-- Importar o arquivo do Hadi cria **1 cliente** com **as 3 tabelas concatenadas** (23 + 15 + 18 linhas descontando cabeçalhos/headers vazios), respeitando os `sourceGroup` dos headings intermediários.
-- Linhas com `REMOVIDO` aparecem no cliente com situação `Retirado`, sem abrir o popup de confirmação.
-- Linhas com `ENVIADO` entram como concluídas/enviadas.
-- Linhas com `Reserva Paga` mantêm `paidValue` da coluna correspondente; `-` gera `review_required`.
-- Telefone `(47) 9986-8265` é normalizado e válido.
-- Parser de Lista Colada, MGMV, Collection, Concierge, Dashboard e layout não sofrem regressão (typecheck + testes existentes continuam verdes; novos testes cobrindo o parser HTML).
+- Um ZIP com pasta `Clientes (3)` contendo 5 arquivos HTML gera **5** clientes (não 3).
+- ZIP com HTMLs na raiz e sem pasta `Clientes*` também gera 1 cliente por HTML.
+- Cada cliente tem **todas** as `<table>` do seu HTML concatenadas com `sourceGroup` correto.
+- `REMOVIDO` → linha já entra `Retirado`, sem botão. `RETIRAR` → `Retirar` com botão "Removido". `DESISTIU` → `Abandonou` com botão "Removido". `RETIRADO`/`ENVIADO` → estado final, sem botão.
+- "Revisar com IA" (linha e cliente) retorna sugestão + evidências citadas do HTML, com `needsReview` marcando divergência.
+- Lápis abre edição inline; blur não salva; Confirmar persiste; Fechar descarta.
+- Enum `Situation` inalterado; sem regressão em Clientes/MGMV/Collection/Concierge/Dashboard (testes verdes + novos testes cobrindo parser, navegação do ZIP e mapeamentos).
