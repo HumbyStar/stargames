@@ -1,13 +1,11 @@
-import { Outlet, useNavigate } from "@tanstack/react-router";
+import { Outlet } from "@tanstack/react-router";
 import {
   Search,
-  HelpCircle,
   Menu,
   Sun,
   Moon,
   User,
   Package,
-  LogOut,
   Upload,
   Settings,
   Bell,
@@ -24,9 +22,7 @@ import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
 import { setUiValue } from "@/lib/db-sync";
-import { supabase } from "@/integrations/supabase/client";
 import { HydrationSplash, useHydrationUserName } from "@/components/hydration-splash";
-import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
@@ -490,9 +486,7 @@ interface RightNavIconProps {
   onFinance: () => void;
   onImport: () => void;
   onSettings: () => void;
-  onHelp: () => void;
   onToggleTheme: () => void;
-  onSignOut: () => void;
 }
 
 function RightNavIcon({
@@ -504,9 +498,7 @@ function RightNavIcon({
   onFinance,
   onImport,
   onSettings,
-  onHelp,
   onToggleTheme,
-  onSignOut,
 }: RightNavIconProps) {
   const baseBtn =
     "group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90";
@@ -590,22 +582,6 @@ function RightNavIcon({
           </button>
         </NotificationsDropdown>
       );
-    case "help":
-      return (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={onHelp}
-              data-tour="help-button"
-              aria-label="Tutorial"
-              className={baseBtn}
-            >
-              <HelpCircle className="size-5 transition-transform duration-300 group-hover:scale-125 group-hover:animate-pulse" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Tutorial</TooltipContent>
-        </Tooltip>
-      );
     case "theme":
       return (
         <Tooltip>
@@ -624,21 +600,6 @@ function RightNavIcon({
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom">{isDark ? "Modo claro" : "Modo escuro"}</TooltipContent>
-        </Tooltip>
-      );
-    case "signout":
-      return (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={onSignOut}
-              aria-label="Sair"
-              className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-destructive/10 hover:text-destructive active:scale-90"
-            >
-              <LogOut className="size-5 transition-transform duration-200 group-hover:translate-x-0.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Sair</TooltipContent>
         </Tooltip>
       );
   }
@@ -758,16 +719,8 @@ function _FloatingNavbarImpl() {
     setIsDark(next);
   };
 
-  const navigate = useNavigate();
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    toast.success("Sessão encerrada");
-    navigate({ to: "/auth", replace: true });
-  };
-
   const openImport = useUiStore((s) => s.openImport);
   const openSettings = useUiStore((s) => s.openSettings);
-  const openHelp = useUiStore((s) => s.openHelp);
   const openNotifications = useUiStore((s) => s.openNotifications);
   const closeNotifications = useUiStore((s) => s.closeNotifications);
   const notificationsOpen = useUiStore((s) => s.notificationsOpen);
@@ -1065,9 +1018,7 @@ function _FloatingNavbarImpl() {
                 onFinance={openFinance}
                 onImport={openImport}
                 onSettings={openSettings}
-                onHelp={openHelp}
                 onToggleTheme={toggleTheme}
-                onSignOut={handleSignOut}
               />
             );
           })}
@@ -1173,16 +1124,6 @@ function _FloatingNavbarImpl() {
             role="menuitem"
             onClick={() => {
               setOpenMobile(false);
-              openHelp();
-            }}
-            className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent"
-          >
-            <HelpCircle className="size-4 opacity-70 shrink-0" /> Ajuda
-          </button>
-          <button
-            role="menuitem"
-            onClick={() => {
-              setOpenMobile(false);
               openSettings();
             }}
             className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent"
@@ -1204,16 +1145,6 @@ function _FloatingNavbarImpl() {
               <Moon className="size-4 opacity-70 shrink-0" />
             )}
             {isDark ? "Modo claro" : "Modo escuro"}
-          </button>
-          <button
-            role="menuitem"
-            onClick={() => {
-              setOpenMobile(false);
-              void handleSignOut();
-            }}
-            className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-destructive hover:bg-destructive/10"
-          >
-            <LogOut className="size-4 shrink-0" /> Sair
           </button>
         </div>
       )}
