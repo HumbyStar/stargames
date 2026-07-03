@@ -1074,27 +1074,57 @@ function ClientDrawer({
                             Pago
                           </Button>
                         )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => onChangeSituation(p.id, "Enviado")}
-                        >
-                          Enviado
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => onChangeSituation(p.id, "Desistiu")}
-                        >
-                          Desistiu
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => onChangeSituation(p.id, "Abandonou")}
-                        >
-                          Abandonou
-                        </Button>
+                        {/* Fluxo: (aberto) Abandonou → Retirar → Retirado */}
+                        {p.situation !== "Abandonou" &&
+                          p.situation !== "Desistiu" &&
+                          p.situation !== "Retirar" &&
+                          p.situation !== "Retirado" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => onChangeSituation(p.id, "Enviado")}
+                            >
+                              Enviado
+                            </Button>
+                          )}
+                        {isOpenSituation(p) &&
+                          p.situation !== "Retirar" &&
+                          p.situation !== "Retirado" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => onChangeSituation(p.id, "Abandonou")}
+                            >
+                              Abandonou
+                            </Button>
+                          )}
+                        {(p.situation === "Abandonou" ||
+                          p.situation === "Desistiu") && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              if (
+                                !window.confirm(
+                                  "Marcar produto para retirada?\n\nEste produto continuará vinculado ao cliente, mas ficará marcado como pendente de retirada pelo estoque. Ele ainda não voltará para o estoque central.",
+                                )
+                              )
+                                return;
+                              onChangeSituation(p.id, "Retirar");
+                            }}
+                          >
+                            Retirar
+                          </Button>
+                        )}
+                        {p.situation === "Retirar" && (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => onRequestRetirado(p.id)}
+                          >
+                            Retirado
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
