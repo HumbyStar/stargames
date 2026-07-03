@@ -33,6 +33,15 @@ export type { ImportDiagnostics } from "./db-sync";
 import { recalcPendingDueDates } from "./mgmv-schedule";
 
 export type FinancialStatus = "Pago" | "Reserva" | "Pendente" | "MGMV";
+
+/**
+ * Resultado do registro de pagamento parcial em uma parcela MGMV.
+ * Sucesso inclui `becameQuitado` para o caller decidir toasts/refresh.
+ */
+export type PartialPaymentResult =
+  | { ok: true; becameQuitado: boolean }
+  | { ok: false; error: string };
+
 export type Situation =
   | "Em Aberto"
   | "Enviado"
