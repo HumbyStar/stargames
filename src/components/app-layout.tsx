@@ -14,9 +14,8 @@ import {
   Sparkles,
   Wallet,
   CircleDollarSign,
-  KanbanSquare,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, lazy, Suspense, type ReactNode } from "react";
 import type { ComponentType, SVGProps } from "react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
@@ -39,7 +38,6 @@ import { TutorialRunner } from "@/components/tutorial-runner";
 import { ConciergeModal } from "@/components/concierge-modal";
 import { FloatingConcierge } from "@/components/floating-concierge";
 import { FinanceDashboard } from "@/components/finance-dashboard";
-import { lazy, Suspense } from "react";
 import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 import { useNavbarConfig, getIconMeta, type NavbarIconId } from "@/lib/navbar-config";
 
