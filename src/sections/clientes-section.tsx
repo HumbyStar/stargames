@@ -38,6 +38,8 @@ import {
 import { toast } from "sonner";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
+import { useRowEdit } from "@/lib/use-row-edit";
+import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
 
 type ChipFilter =
   | "todos"
@@ -134,6 +136,11 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   }>({ open: false });
 
   const drawerClient = clients.find((c) => c.id === drawerClientId) ?? null;
+
+  // Edição por lápis (linha da tabela de clientes). Somente o botão
+  // "Confirmar" persiste; "Fechar" descarta. Clique fora / blur não
+  // disparam confirm nem close — o hook não escuta esses eventos.
+  const clientEdit = useRowEdit<{ name: string; phone: string }>();
 
   const folders = useMemo(() => {
     const set = new Set<string>();
@@ -530,18 +537,29 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                           " pr-3 transition-[padding] duration-300 font-medium"
                         }
                       >
-                        <button
-                          onClick={() => setDrawerClientId(r.client.id)}
-                          className="text-left hover:text-primary"
-                        >
-                          {r.client.name}
-                          {r.client.folder && (
-                            <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
-                              <Folder className="h-2.5 w-2.5" />
-                              {r.client.folder}
-                            </span>
-                          )}
-                        </button>
+                        {clientEdit.isEditing(r.client.id) ? (
+                          <input
+                            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+                            value={clientEdit.draftValues?.name ?? ""}
+                            onChange={(e) =>
+                              clientEdit.setField("name", e.target.value)
+                            }
+                            aria-label="Editar nome do cliente"
+                          />
+                        ) : (
+                          <button
+                            onClick={() => setDrawerClientId(r.client.id)}
+                            className="text-left hover:text-primary"
+                          >
+                            {r.client.name}
+                            {r.client.folder && (
+                              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
+                                <Folder className="h-2.5 w-2.5" />
+                                {r.client.folder}
+                              </span>
+                            )}
+                          </button>
+                        )}
                       </td>
                       <td
                         className={
@@ -549,7 +567,18 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                           " pr-3 transition-[padding] duration-300 text-muted-foreground"
                         }
                       >
-                        {r.client.phone}
+                        {clientEdit.isEditing(r.client.id) ? (
+                          <input
+                            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+                            value={clientEdit.draftValues?.phone ?? ""}
+                            onChange={(e) =>
+                              clientEdit.setField("phone", e.target.value)
+                            }
+                            aria-label="Editar telefone do cliente"
+                          />
+                        ) : (
+                          r.client.phone
+                        )}
                       </td>
                       <td
                         className={
@@ -601,14 +630,48 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                         }
                       >
                         <div className="flex flex-wrap gap-1.5">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setDrawerClientId(r.client.id)}
-                          >
-                            Abrir
-                          </Button>
-                          {!compact && (
+                          {clientEdit.isEditing(r.client.id) ? (
+                            <RowEditActions
+                              onConfirm={() =>
+                                clientEdit.confirm(
+                                  (draft) => {
+                                    updateClient(r.client.id, {
+                                      name: draft.name.trim(),
+                                      phone: draft.phone.trim(),
+                                    });
+                                    toast.success("Cliente atualizado");
+                                  },
+                                  {
+                                    validate: (d) =>
+                                      !d.name.trim()
+                                        ? "Nome é obrigatório."
+                                        : null,
+                                  },
+                                )
+                              }
+                              onClose={clientEdit.close}
+                            />
+                          ) : (
+                            <>
+                              <RowEditPencil
+                                label="Editar cliente"
+                                onStart={() =>
+                                  clientEdit.startEdit(r.client.id, {
+                                    name: r.client.name,
+                                    phone: r.client.phone,
+                                  })
+                                }
+                              />
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setDrawerClientId(r.client.id)}
+                              >
+                                Abrir
+                              </Button>
+                            </>
+                          )}
+                          {!compact && !clientEdit.isEditing(r.client.id) && (
                             <>
                               <Button
                                 size="sm"
@@ -798,6 +861,16 @@ function ClientDrawer({
 }) {
   const [notes, setNotes] = useState(client.notes ?? "");
   const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
+  const updateProduct = useStore((s) => s.updateProduct);
+  // Edição por lápis dos produtos do cliente. Apenas Confirmar persiste;
+  // Fechar descarta. Blur / click-outside são ignorados pelo hook.
+  const productEdit = useRowEdit<{
+    name: string;
+    platform: string;
+    totalValue: number;
+    paidValue: number;
+    financialStatus: FinancialStatus;
+  }>();
   const mgmv = getMGMVDisplay(client);
   const mgmvProducts = products.filter((p) => p.financialStatus === "MGMV");
   const individualAll = products.filter((p) => p.financialStatus !== "MGMV");
@@ -1033,13 +1106,65 @@ function ClientDrawer({
                 const remaining = p.totalValue - p.paidValue;
                 const status = productCollectionStatus(p);
                 const isPaid = p.financialStatus === "Pago";
+                const editing = productEdit.isEditing(p.id);
+                const draft = productEdit.draftValues;
                 return (
                   <tr key={p.id} className="border-b border-border/60 last:border-0">
-                    <td className="py-2 pr-3 font-medium">{p.name}</td>
-                    <td className="py-2 pr-3 text-muted-foreground">{p.platform}</td>
-                    <td className="py-2 pr-3 tabular-nums">{formatBRL(p.totalValue)}</td>
+                    <td className="py-2 pr-3 font-medium">
+                      {editing ? (
+                        <input
+                          className="h-8 w-full min-w-[10rem] rounded-md border border-input bg-background px-2 text-sm"
+                          value={draft?.name ?? ""}
+                          onChange={(e) => productEdit.setField("name", e.target.value)}
+                          aria-label="Editar nome do produto"
+                        />
+                      ) : (
+                        p.name
+                      )}
+                    </td>
+                    <td className="py-2 pr-3 text-muted-foreground">
+                      {editing ? (
+                        <input
+                          className="h-8 w-full min-w-[6rem] rounded-md border border-input bg-background px-2 text-sm"
+                          value={draft?.platform ?? ""}
+                          onChange={(e) => productEdit.setField("platform", e.target.value)}
+                          aria-label="Editar plataforma"
+                        />
+                      ) : (
+                        p.platform
+                      )}
+                    </td>
+                    <td className="py-2 pr-3 tabular-nums">
+                      {editing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="h-8 w-24 rounded-md border border-input bg-background px-2 text-sm tabular-nums"
+                          value={draft?.totalValue ?? 0}
+                          onChange={(e) =>
+                            productEdit.setField("totalValue", Number(e.target.value))
+                          }
+                          aria-label="Editar valor total"
+                        />
+                      ) : (
+                        formatBRL(p.totalValue)
+                      )}
+                    </td>
                     <td className="py-2 pr-3 tabular-nums text-muted-foreground">
-                      {formatBRL(p.paidValue)}
+                      {editing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="h-8 w-24 rounded-md border border-input bg-background px-2 text-sm tabular-nums"
+                          value={draft?.paidValue ?? 0}
+                          onChange={(e) =>
+                            productEdit.setField("paidValue", Number(e.target.value))
+                          }
+                          aria-label="Editar valor pago"
+                        />
+                      ) : (
+                        formatBRL(p.paidValue)
+                      )}
                     </td>
                     <td className="py-2 pr-3 tabular-nums font-medium">{formatBRL(remaining)}</td>
                     <td className="py-2 pr-3">
@@ -1066,6 +1191,50 @@ function ClientDrawer({
                     </td>
                     <td className="py-2 pr-3">
                       <div className="flex flex-wrap gap-1">
+                        {editing ? (
+                          <RowEditActions
+                            onConfirm={() =>
+                              productEdit.confirm(
+                                (d) => {
+                                  updateProduct(p.id, {
+                                    name: d.name.trim(),
+                                    platform: d.platform.trim(),
+                                    totalValue: Math.max(0, d.totalValue),
+                                    paidValue: Math.max(0, d.paidValue),
+                                    financialStatus: d.financialStatus,
+                                  });
+                                  toast.success("Produto atualizado");
+                                },
+                                {
+                                  validate: (d) => {
+                                    if (!d.name.trim()) return "Nome é obrigatório.";
+                                    if (!Number.isFinite(d.totalValue) || d.totalValue < 0)
+                                      return "Valor total inválido.";
+                                    if (!Number.isFinite(d.paidValue) || d.paidValue < 0)
+                                      return "Valor pago inválido.";
+                                    if (d.paidValue > d.totalValue)
+                                      return "Valor pago não pode exceder o total.";
+                                    return null;
+                                  },
+                                },
+                              )
+                            }
+                            onClose={productEdit.close}
+                          />
+                        ) : (
+                          <RowEditPencil
+                            label="Editar produto"
+                            onStart={() =>
+                              productEdit.startEdit(p.id, {
+                                name: p.name,
+                                platform: p.platform,
+                                totalValue: p.totalValue,
+                                paidValue: p.paidValue,
+                                financialStatus: p.financialStatus,
+                              })
+                            }
+                          />
+                        )}
                         {!isPaid && (
                           <Button size="sm" onClick={() => onRegisterPayment(p.id, remaining)}>
                             Pagar
