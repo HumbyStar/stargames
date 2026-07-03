@@ -14,6 +14,7 @@ import {
   Sparkles,
   Wallet,
   CircleDollarSign,
+  KanbanSquare,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, lazy, Suspense, type ReactNode } from "react";
 import type { ComponentType, SVGProps } from "react";
@@ -488,6 +489,7 @@ interface RightNavIconProps {
   searchOpen: boolean;
   onSearch: () => void;
   onFinance: () => void;
+  onEquipe: () => void;
   onImport: () => void;
   onSettings: () => void;
   onToggleTheme: () => void;
@@ -500,6 +502,7 @@ function RightNavIcon({
   searchOpen,
   onSearch,
   onFinance,
+  onEquipe,
   onImport,
   onSettings,
   onToggleTheme,
@@ -526,6 +529,22 @@ function RightNavIcon({
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom">Finanças</TooltipContent>
+        </Tooltip>
+      );
+    case "equipe":
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={onEquipe}
+              aria-label="Equipe"
+              className={baseBtn}
+            >
+              <KanbanSquare className="size-5 transition-transform duration-300 group-hover:scale-110" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Equipe</TooltipContent>
         </Tooltip>
       );
     case "import":
@@ -1021,6 +1040,7 @@ function _FloatingNavbarImpl() {
                   setSearchOpen((v) => !v);
                 }}
                 onFinance={openFinance}
+                onEquipe={openEquipe}
                 onImport={openImport}
                 onSettings={openSettings}
                 onToggleTheme={toggleTheme}
