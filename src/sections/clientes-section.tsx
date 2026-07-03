@@ -630,22 +630,49 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                         }
                       >
                         <div className="flex flex-wrap gap-1.5">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setDrawerClientId(r.client.id)}
-                          >
-                            Abrir
-                          </Button>
-                          {!compact && (
+                          {clientEdit.isEditing(r.client.id) ? (
+                            <RowEditActions
+                              onConfirm={() =>
+                                clientEdit.confirm(
+                                  (draft) => {
+                                    updateClient(r.client.id, {
+                                      name: draft.name.trim(),
+                                      phone: draft.phone.trim(),
+                                    });
+                                    toast.success("Cliente atualizado");
+                                  },
+                                  {
+                                    validate: (d) =>
+                                      !d.name.trim()
+                                        ? "Nome é obrigatório."
+                                        : null,
+                                  },
+                                )
+                              }
+                              onClose={clientEdit.close}
+                            />
+                          ) : (
                             <>
+                              <RowEditPencil
+                                label="Editar cliente"
+                                onStart={() =>
+                                  clientEdit.startEdit(r.client.id, {
+                                    name: r.client.name,
+                                    phone: r.client.phone,
+                                  })
+                                }
+                              />
                               <Button
                                 size="sm"
-                                variant="ghost"
-                                onClick={() => setClientModal({ open: true, client: r.client })}
+                                variant="outline"
+                                onClick={() => setDrawerClientId(r.client.id)}
                               >
-                                Editar
+                                Abrir
                               </Button>
+                            </>
+                          )}
+                          {!compact && !clientEdit.isEditing(r.client.id) && (
+                            <>
                               <Button
                                 size="sm"
                                 onClick={() =>
