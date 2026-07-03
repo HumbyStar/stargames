@@ -27,13 +27,16 @@ function baseNormalize(raw: string): string {
     .replace(/enviad0/g, "enviado")
     .replace(/removid0/g, "removido")
     .replace(/removdo/g, "removido")
+    // Bug 04: qualquer variação de desistência/abandono/expiração/cancelamento/
+    // devolução/retirado etc. converge para "removido". Só "RETIRAR" exato
+    // permanece como Retirar (avaliado depois em RULES).
     .replace(/desisistiu|desisitiu|desisitu|desitiu|deisitiu/g, "desistiu")
     .replace(/desistencia/g, "desistiu")
     .replace(/expirou item|item expirado/g, "expirado")
     .replace(/itens? removidos?/g, "removido")
     .replace(/item removido/g, "removido")
     .replace(/^remover\b/, "removido")
-    .replace(/cliente retirou[^-,]*/g, "retirado")
+    .replace(/cliente retirou[^-,]*/g, "removido")
     .replace(/de volta ao estoque/g, "removido")
     .replace(/saiu do grupo|cliente sumiu|sumiu|perdeu/g, "removido")
     .replace(/quer trocar/g, "removido")
@@ -44,7 +47,7 @@ function baseNormalize(raw: string): string {
     .replace(/reserva expirou/g, "removido")
     .replace(/valor devolvido|valor estornado/g, "removido")
     .replace(/item repetido/g, "removido")
-    .replace(/cliente desistiu|desistiu do item|desistencia/g, "desistiu");
+    .replace(/cliente desistiu|desistiu do item/g, "desistiu");
   // colapsar múltiplos espaços
   s = s.replace(/\s+/g, " ").trim();
   // remover pontuações e dígitos “colados” tipo "retirado6" → "retirado "
@@ -82,32 +85,24 @@ const RULES: Rule[] = [
     test: (s) => /^enviado\b/.test(s) || /^entregue\b/.test(s) || /^enviou\b/.test(s) || /^m\s+enviado\b/.test(s) || /^m\s*-\s*enviado\b/.test(s),
     situation: "Enviado",
   },
-  // Retirar (antes de "retirado" para não colidir)
+  // Bug 04: só RETIRAR exato vira Retirar. Qualquer texto com sufixo
+  // ("RETIRAR - valor estornado", "RETIRAR desistencia") cai em Removido.
   {
     name: "retirar",
-    test: (s) => /^retirar\b/.test(s),
+    test: (s) => /^retirar$/.test(s),
     situation: "Retirar",
   },
-  // Retirado
-  {
-    name: "retirado",
-    test: (s) => /^retirado\b/.test(s),
-    situation: "Retirado",
-  },
-  // Abandonou — cliente desistiu / abandonou o produto (unifica "Desistiu")
-  {
-    name: "abandonou",
-    test: (s) =>
-      /^abandonou\b/.test(s) ||
-      /^desistiu\b/.test(s) ||
-      /^cliente\s+abandonou\b/.test(s),
-    situation: "Abandonou",
-  },
-  // Removido / Cancelado / Devolvido / Expirado / Erros
+  // Removido — engloba retirado/abandonou/desistiu/cancelado/devolvido/expirado
+  // e todas as variações do Notion (Bug 04).
   {
     name: "removido",
     test: (s) =>
       /^removido\b/.test(s) ||
+      /^retirado\b/.test(s) ||
+      /^retirar\b/.test(s) ||
+      /^abandonou\b/.test(s) ||
+      /^cliente\s+abandonou\b/.test(s) ||
+      /^desistiu\b/.test(s) ||
       /^cancelado\b/.test(s) ||
       /^devolvido\b/.test(s) ||
       /^expirado\b/.test(s),

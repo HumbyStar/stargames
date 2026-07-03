@@ -58,20 +58,8 @@ describe("normalizeSituation", () => {
     expect(b.f).toBe("MGMV");
   });
 
-  it.each([
-    "CLIENTE RETIROU NA LOJA",
-    "RETIRADO",
-    "RETIRADO - já devolvido valor",
-    "RETIRADO6 de maio",
-    "RETIRADO6 junho",
-    "RETIRADO6 Junho",
-    "RETIRADOIRAN",
-  ])("'%s' → Retirado", (t) => {
-    expect(bucket(t).s).toBe("Retirado");
-  });
-
-  it.each(["RETIRAR", "RETIRAR - valor estornado", "RETIRAR desistencia"])(
-    "'%s' → Retirar",
+  it.each(["RETIRAR", "Retirar", "retirar"])(
+    "'%s' (exato) → Retirar",
     (t) => {
       expect(bucket(t).s).toBe("Retirar");
     },
@@ -114,11 +102,16 @@ describe("normalizeSituation", () => {
     "SAIU DO GRUPO",
     "SUMIU",
     "valor devolvido",
-  ])("'%s' → Removido", (t) => {
-    expect(bucket(t).s).toBe("Removido");
-  });
-
-  it.each([
+    // Bug 04: RETIRADO* e variantes de abandono/desistência viram Removido.
+    "CLIENTE RETIROU NA LOJA",
+    "RETIRADO",
+    "RETIRADO - já devolvido valor",
+    "RETIRADO6 de maio",
+    "RETIRADO6 junho",
+    "RETIRADO6 Junho",
+    "RETIRADOIRAN",
+    "RETIRAR - valor estornado",
+    "RETIRAR desistencia",
     "ABANDONOU",
     "Abandonou",
     "Cliente abandonou o produto",
@@ -134,8 +127,8 @@ describe("normalizeSituation", () => {
     "Desistiu do item",
     "Desistência",
     "DESITIU",
-  ])("'%s' → Abandonou (unificação)", (t) => {
-    expect(bucket(t).s).toBe("Abandonou");
+  ])("'%s' → Removido", (t) => {
+    expect(bucket(t).s).toBe("Removido");
   });
 
   it("desconhecido → unknown=true", () => {

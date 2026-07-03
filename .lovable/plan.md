@@ -1,44 +1,34 @@
-## Detecção de MGMV por tabela na importação do Notion (Hadi)
+## Bug 04 — Normalizar status da importação do Notion
 
-Hoje `parseClientArticle` em `src/sections/import-section.tsx` concatena todas as `<table>` do artigo do cliente e todas as linhas passam pela mesma regra (`financialStatus` derivado só do valor da célula Status/Situação). Isso está errado quando o cliente tem múltiplas tabelas separadas por seção — como no print enviado, onde uma tabela é precedida pelo título **"LOTE FECHADO MEU GAME MINHA VIDA"** (variante de MGMV) e todas as linhas estão como `PAGO / ENVIADO`. Essas linhas deveriam ser tratadas como itens de um MGMV ativo, enquanto tabelas sem menção a MGMV continuam sendo produtos fora do acordo.
+Ajustar `src/lib/situation-normalizer.ts` para seguir a regra do PDF:
 
-### Regra
+- `RETIRAR` (match exato, case-insensitive, após trim) → situação **Retirar**.
+- Qualquer variação de desistência, remoção, cancelamento, expiração, abandono, retirado, devolvido, sumiço, troca, expirou etc. → situação **Removido**.
+- `ENVIADO` / `PAGO` / `MGMV` / `LOTE …` continuam com o comportamento atual (fora do escopo do bug).
+- Vazio / `-` continua como **Em Aberto**.
 
-Para cada tabela do artigo:
+### Mudanças em `situation-normalizer.ts`
 
-1. Coleta o **contexto textual precedente** — sobe pelos `previousElementSibling` do `<table>` até encontrar outra `<table>` ou o topo do `<article>`, concatenando `textContent` de headings (`h1-h4`), parágrafos, e blocos toggle/callout do Notion.
-2. Se o contexto casar com **`/mgmv|meu\s*game\s*minha\s*vida|lote\s*fechado|acordo/i`**, a tabela é marcada como `mgmvTable = true`.
-3. Todas as linhas dessa tabela recebem `financialStatus = "MGMV"` e `situation = "Resolvido"` (padrão do sistema para itens dentro de acordo), preservando `paidValue` original. Um `warning` de linha "Item classificado como MGMV pelo cabeçalho da tabela: <trecho>" é gravado para transparência no preview.
-4. Tabelas sem esse contexto mantêm o comportamento atual — regra por célula.
+1. Regra `retirar`: passa a exigir match exato (`^retirar$` após `baseNormalize`) em vez de `^retirar\b`. Assim `RETIRAR - valor estornado` e `RETIRAR desistencia` caem na regra removido.
+2. Remover regra `retirado` — todos os `RETIRADO*` passam a ser tratados como removido (adicionar `^retirado\b` na regra removido; manter o pré-processamento que separa `retiradoiran` / `retirado6` etc.).
+3. Regra `abandonou` deixa de existir como bucket próprio. `abandonou`, `desistiu`, `cliente abandonou`, `desistência` etc. viram **Removido** (adicionar esses gatilhos na regra removido, ou converter no `baseNormalize` para `removido`).
+4. Manter regras `pago`, `mgmv`, `enviado` intactas. Manter fallback `Em Aberto` seguro.
 
-Casos edge:
-- Se o próprio Status/Situação da linha já é MGMV, nada muda.
-- Se a linha está `PAGO/ENVIADO`: continua com `paidValue` intacto, apenas `financialStatus="MGMV"` (fica como parcela quitada dentro do lote).
-- Se o contexto contém "fora do MGMV" ou "não MGMV", ignora o match (negação explícita).
+Não alterar o tipo `Situation` em `src/lib/store.ts` — os buckets `Retirado` e `Abandonou` continuam existindo internamente (usados por outros fluxos: retirado-confirm modal, filtros), apenas deixam de ser destino da importação do Notion.
 
-### Alterações
+### Testes em `situation-normalizer.test.ts`
 
-- `parseProductsTable(table, lineOffset = 0, opts?: { forceMgmv?: boolean; mgmvHeading?: string })` — quando `forceMgmv=true`, sobrescreve `financialStatus="MGMV"` e adiciona o warning; mantém demais regras.
-- `parseClientArticle` — para cada tabela: computa `tableContext` (função nova `collectTableContext(table, article)`), detecta MGMV via regex, e chama `parseProductsTable` com `forceMgmv` conforme necessário.
-- Nova função utilitária `tableHeadingMentionsMgmv(text): boolean` — mesma regex, ignorando trechos com negação explícita.
-
-Nenhuma mudança em `parseNotionHtml`, MGMV agreement extraction, preview, ou UI. Apenas classificação por tabela.
-
-### Testes
-
-Em `src/sections/import-section.mgmv.test.ts`:
-- HTML com 2 tabelas: a primeira sem heading MGMV (linhas PAGO/ENVIADO → continuam Pago) e a segunda precedida por "LOTE FECHADO MEU GAME MINHA VIDA" (linhas PAGO/ENVIADO → viram MGMV com warning).
-- Heading "MGMV Ativo" → força MGMV.
-- Heading neutro ("Histórico 2024") + linha com Status=MGMV → linha continua MGMV (comportamento por célula intacto).
-- Negação "produtos fora do MGMV" → tabela NÃO vira MGMV.
+- Mover todo o bloco `'%s' → Retirado` (RETIRADO, RETIRADO6 junho, RETIRADOIRAN, CLIENTE RETIROU NA LOJA, RETIRADO - já devolvido valor) para o bloco `→ Removido`.
+- Mover o bloco `'%s' → Abandonou` (ABANDONOU, DESISTIU e variantes) para `→ Removido`.
+- Ajustar o bloco `→ Retirar`: manter apenas `RETIRAR` (e talvez ` retirar `, `Retirar`). Adicionar cobertura de que `RETIRAR - valor estornado` e `RETIRAR desistencia` agora caem em **Removido**.
+- Adicionar caso `RETIRAR` exato ainda vira Retirar.
 
 ### Fora do escopo
 
-- Não altera o extrator do `MGMVAgreement` a partir de `notes` (mantém contrato atual).
-- Não muda UI da seção Import/MGMV.
-- Não mexe no `parseClientHtml` (parser alternativo já não é usado no ZIP).
+- UI da importação, preview, MGMV e demais parsers permanecem inalterados.
+- Situações `Retirado`/`Abandonou` continuam existindo no domínio para uso manual em outros fluxos.
 
 ### Arquivos afetados
 
-- `src/sections/import-section.tsx` — parser das tabelas.
-- `src/sections/import-section.mgmv.test.ts` — cobertura nova.
+- `src/lib/situation-normalizer.ts`
+- `src/lib/situation-normalizer.test.ts`
