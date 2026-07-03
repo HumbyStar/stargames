@@ -1180,11 +1180,40 @@ export function AppLayout({ children }: { children?: ReactNode }) {
   const hydrated = useStore((s) => s.hydrated);
   const hydrate = useStore((s) => s.hydrate);
   const userName = useHydrationUserName();
+  const [warm, setWarm] = useState(false);
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+  // Pré-aquece os chunks lazy das seções e modais em paralelo à
+  // hidratação. O splash só desmonta quando `hydrated && warm`, então ao
+  // chegar na one-page as seções montam instantaneamente (sem placeholder
+  // de altura e sem "salto" ao rolar).
+  useEffect(() => {
+    let cancelled = false;
+    const prefetches: Promise<unknown>[] = [
+      import("@/sections/mgmv-section"),
+      import("@/sections/collection-section"),
+      import("@/components/dashboard-drilldown-modal"),
+      import("@/sections/import-section"),
+      import("@/sections/equipe-section"),
+    ];
+    // Fallback: se algum chunk demorar demais (rede ruim), não trava o
+    // splash — libera após 4s mesmo assim.
+    const timeout = window.setTimeout(() => {
+      if (!cancelled) setWarm(true);
+    }, 4000);
+    Promise.allSettled(prefetches).then(() => {
+      if (cancelled) return;
+      window.clearTimeout(timeout);
+      setWarm(true);
+    });
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, []);
 
-  if (!hydrated) {
+  if (!hydrated || !warm) {
     return <HydrationSplash userName={userName} />;
   }
 
