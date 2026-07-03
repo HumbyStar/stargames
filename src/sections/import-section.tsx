@@ -658,7 +658,7 @@ export function extractMGMVAgreementFromNotes(notes: string): MGMVAgreement | nu
   };
 }
 
-function parseProductsTable(table: Element): NotionProduct[] {
+function parseProductsTable(table: Element, lineOffset = 0): NotionProduct[] {
   const rows = Array.from(table.querySelectorAll("tr"));
   const dataRows = rows.slice(1);
   const products: NotionProduct[] = [];
@@ -673,7 +673,7 @@ function parseProductsTable(table: Element): NotionProduct[] {
     if (!item) {
       rowErrors.push("Produto sem nome (linha ignorada).");
       products.push({
-        line: idx + 1,
+        line: lineOffset + idx + 1,
         product: "",
         platform: platform ?? "",
         totalValue: 0,
@@ -721,7 +721,7 @@ function parseProductsTable(table: Element): NotionProduct[] {
     const registerDate = normalizeDateBR(date ?? "");
     const dueDate = calculateDueDate(financialStatus, registerDate);
     products.push({
-      line: idx + 1,
+      line: lineOffset + idx + 1,
       product: item,
       platform: platform ?? "",
       totalValue,
