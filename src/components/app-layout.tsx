@@ -1050,7 +1050,7 @@ function _FloatingNavbarImpl() {
           </NotificationsDropdown>
           <button
             type="button"
-            onClick={() => scrollToSection("equipe")}
+            onClick={openEquipe}
             aria-label="Equipe"
             className="md:hidden grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
           >
