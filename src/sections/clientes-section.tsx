@@ -839,7 +839,6 @@ function ClientDrawer({
   products,
   onEdit,
   onAddProduct,
-  onEditProduct,
   onSaveNotes,
   onRegisterPayment,
   onChangeSituation,
@@ -851,7 +850,6 @@ function ClientDrawer({
   products: Product[];
   onEdit: () => void;
   onAddProduct: () => void;
-  onEditProduct: (p: Product) => void;
   onSaveNotes: (notes: string) => void;
   onRegisterPayment: (productId: string, remaining: number) => void;
   onChangeSituation: (productId: string, s: Situation) => void;
