@@ -263,7 +263,12 @@ export function CollectionSection({
     });
   }, [allRows, filter, period, customFrom, customTo, search, folderFilter, financialFilter, situationFilter, clients]);
 
-  const visible = filtered;
+  const {
+    visible,
+    hasMore: hasMoreCollection,
+    nextChunk: nextChunkCollection,
+    loadMore: loadMoreCollection,
+  } = usePaginatedList(filtered, { step: 10, sectionId: "collection" });
 
   const totalAtraso =
     overdueProducts.reduce((a, p) => a + (p.totalValue - p.paidValue), 0) +
