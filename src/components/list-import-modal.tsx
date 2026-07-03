@@ -586,34 +586,80 @@ export function ListImportModal({
         <DialogHeader>
           <DialogTitle>Importar lista de grupos</DialogTitle>
           <DialogDescription>
-            Cole a lista de vendas/reservas para revisar antes de salvar. Nada é gravado antes da
-            confirmação.
+            Cole a lista de vendas/reservas ou envie um HTML de cliente (Notion) para revisar
+            antes de salvar. Nada é gravado antes da confirmação.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
-          <Label htmlFor="list-text">Lista de grupos</Label>
-          <Textarea
-            id="list-text"
-            value={rawText}
-            onChange={(e) => setRawText(e.target.value)}
-            placeholder={SAMPLE}
-            className="min-h-44 font-mono text-xs"
-          />
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs text-muted-foreground">
-              Formato: <code>Nome - Telefone - Produto - Plataforma - Valor - Status</code>
-            </span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setRawText(SAMPLE)}>
-                Usar exemplo
-              </Button>
-              <Button size="sm" onClick={analyze}>
-                Analisar lista
+        <Tabs value={mode} onValueChange={(v) => setMode(v as "text" | "html")}>
+          <TabsList>
+            <TabsTrigger value="text">Lista colada</TabsTrigger>
+            <TabsTrigger value="html">HTML de cliente (Notion)</TabsTrigger>
+          </TabsList>
+          <TabsContent value="text" className="space-y-3">
+            <Label htmlFor="list-text">Lista de grupos</Label>
+            <Textarea
+              id="list-text"
+              value={rawText}
+              onChange={(e) => setRawText(e.target.value)}
+              placeholder={SAMPLE}
+              className="min-h-44 font-mono text-xs"
+            />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">
+                Formato: <code>Nome - Telefone - Produto - Plataforma - Valor - Status</code>
+              </span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setRawText(SAMPLE)}>
+                  Usar exemplo
+                </Button>
+                <Button size="sm" onClick={analyze}>
+                  Analisar lista
+                </Button>
+              </div>
+            </div>
+          </TabsContent>
+          <TabsContent value="html" className="space-y-3">
+            <Label htmlFor="html-file">Arquivo HTML do cliente</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                id="html-file"
+                type="file"
+                accept=".html,text/html"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void onHtmlFile(f);
+                }}
+                className="max-w-md"
+              />
+              {htmlFileName && (
+                <Badge variant="secondary" className="text-xs">
+                  {htmlFileName}
+                </Badge>
+              )}
+            </div>
+            <Label htmlFor="html-text" className="text-xs text-muted-foreground">
+              …ou cole o HTML abaixo
+            </Label>
+            <Textarea
+              id="html-text"
+              value={rawHtml}
+              onChange={(e) => setRawHtml(e.target.value)}
+              placeholder="<html>...</html>"
+              className="min-h-32 font-mono text-xs"
+            />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">
+                Um HTML por cliente. Lê todas as tabelas do arquivo e concatena como
+                produtos do mesmo cliente. <strong>REMOVIDO</strong> vira Retirado,{" "}
+                <strong>ENVIADO</strong> vira Enviado.
+              </span>
+              <Button size="sm" onClick={analyzeHtml}>
+                Analisar HTML
               </Button>
             </div>
-          </div>
-        </div>
+          </TabsContent>
+        </Tabs>
 
         {preview && (
           <div className="space-y-4">
