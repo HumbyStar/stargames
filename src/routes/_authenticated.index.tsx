@@ -22,12 +22,6 @@ const CollectionSection = lazy(() =>
 const MGMVSection = lazy(() =>
   import("@/sections/mgmv-section").then((m) => ({ default: m.MGMVSection })),
 );
-const EquipeSection = lazy(() =>
-  import("@/sections/equipe-section").then((m) => ({ default: m.EquipeSection })),
-);
-const ImportSection = lazy(() =>
-  import("@/sections/import-section").then((m) => ({ default: m.ImportSection })),
-);
 const DashboardDrilldownModal = lazy(() =>
   import("@/components/dashboard-drilldown-modal").then((m) => ({
     default: m.DashboardDrilldownModal,
@@ -67,11 +61,6 @@ function OnePage() {
       <div id="clientes">
         <ClientesSection onScrollTo={onScrollTo} />
       </div>
-      <LazySection id="equipe">
-        <Suspense fallback={null}>
-          <EquipeSection />
-        </Suspense>
-      </LazySection>
       <LazySection id="mgmv">
         <Suspense fallback={null}>
           <MGMVSection onScrollTo={onScrollTo} />
@@ -80,11 +69,6 @@ function OnePage() {
       <LazySection id="collection">
         <Suspense fallback={null}>
           <CollectionSection onScrollTo={onScrollTo} />
-        </Suspense>
-      </LazySection>
-      <LazySection id="import" minHeight="60vh">
-        <Suspense fallback={null}>
-          <ImportSection onScrollTo={onScrollTo} />
         </Suspense>
       </LazySection>
     </AppLayout>
