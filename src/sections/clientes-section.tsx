@@ -433,7 +433,12 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por nome, telefone ou produto..."
+                placeholder={
+                  searchActive
+                    ? `Buscando em Clientes por “${search}”…`
+                    : "Buscar em Clientes por nome, telefone, produto, pasta…"
+                }
+                aria-label="Buscar em Clientes"
                 className="h-10 w-full rounded-full border border-input bg-background px-4 pr-10 text-sm outline-none focus:border-primary/40"
               />
               {search && (
