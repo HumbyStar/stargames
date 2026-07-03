@@ -260,9 +260,9 @@ export function MgmvAgreementEditor({ clientId, agreement, products, onClose }: 
           Saldo restante: <strong className="tabular-nums">{formatBRL(remaining)}</strong> ·
           {" "}Soma parcelas: <strong className="tabular-nums">{formatBRL(sumInstallments)}</strong>
           {inconsistent && (
-            <Tag variant="warning" className="ml-2">
-              Divergência
-            </Tag>
+            <span className="ml-2 inline-block">
+              <Tag variant="warning">Divergência</Tag>
+            </span>
           )}
         </div>
         <Button size="sm" variant="secondary" onClick={applyRebalance}>
