@@ -844,21 +844,100 @@ export function CollectionSection({
                 const status = productCollectionStatus(p);
                 const remaining = p.totalValue - p.paidValue;
                 const late = daysLate(p.dueDate);
+                const editing = collectionEdit.isEditing(p.id);
+                const draft = collectionEdit.draftValues;
                 return (
                   <tr key={`p-${p.id}-${idx}`} className="border-b border-border/60 last:border-0">
                     <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 font-medium"}>{client?.name}</td>
                     <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{client?.phone}</td>
                     <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>{p.name}</td>
                     <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{p.platform}</td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums"}>{formatBRL(p.totalValue)}</td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums text-muted-foreground"}>{formatBRL(p.paidValue)}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums"}>
+                      {editing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="h-8 w-24 rounded-md border border-input bg-background px-2 text-sm tabular-nums"
+                          value={draft?.totalValue ?? 0}
+                          onChange={(e) => collectionEdit.setField("totalValue", Number(e.target.value))}
+                          aria-label="Editar valor total"
+                        />
+                      ) : (
+                        formatBRL(p.totalValue)
+                      )}
+                    </td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums text-muted-foreground"}>
+                      {editing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="h-8 w-24 rounded-md border border-input bg-background px-2 text-sm tabular-nums"
+                          value={draft?.paidValue ?? 0}
+                          onChange={(e) => collectionEdit.setField("paidValue", Number(e.target.value))}
+                          aria-label="Editar valor pago"
+                        />
+                      ) : (
+                        formatBRL(p.paidValue)
+                      )}
+                    </td>
                     <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums font-medium"}>{formatBRL(remaining)}</td>
                     <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}><Tag variant={status.variant === "danger" ? "danger" : status.variant === "warning" ? "warning" : "neutral"}>{status.label}</Tag></td>
                     <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}><Tag>{displaySituation(p.situation)}</Tag></td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{formatDateBR(p.dueDate)}</td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>
+                      {editing ? (
+                        <input
+                          type="date"
+                          className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                          value={(draft?.dueDate ?? "").slice(0, 10)}
+                          onChange={(e) => collectionEdit.setField("dueDate", e.target.value ? new Date(e.target.value).toISOString() : "")}
+                          aria-label="Editar data limite"
+                        />
+                      ) : (
+                        formatDateBR(p.dueDate)
+                      )}
+                    </td>
                     <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}><Tag variant={late > 7 ? "danger" : "warning"}>{late} dias</Tag></td>
                     <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>
                       <div className="flex flex-wrap gap-1.5">
+                        {editing ? (
+                          <RowEditActions
+                            onConfirm={() =>
+                              collectionEdit.confirm(
+                                (d) => {
+                                  updateProduct(p.id, {
+                                    totalValue: Math.max(0, d.totalValue),
+                                    paidValue: Math.max(0, d.paidValue),
+                                    dueDate: d.dueDate || p.dueDate,
+                                  });
+                                  toast.success("Cobrança atualizada");
+                                },
+                                {
+                                  validate: (d) => {
+                                    if (!Number.isFinite(d.totalValue) || d.totalValue < 0)
+                                      return "Valor total inválido.";
+                                    if (!Number.isFinite(d.paidValue) || d.paidValue < 0)
+                                      return "Valor pago inválido.";
+                                    if (d.paidValue > d.totalValue)
+                                      return "Valor pago não pode exceder o total.";
+                                    return null;
+                                  },
+                                },
+                              )
+                            }
+                            onClose={collectionEdit.close}
+                          />
+                        ) : (
+                          <RowEditPencil
+                            label="Editar cobrança"
+                            onStart={() =>
+                              collectionEdit.startEdit(p.id, {
+                                totalValue: p.totalValue,
+                                paidValue: p.paidValue,
+                                dueDate: p.dueDate,
+                              })
+                            }
+                          />
+                        )}
                         <Button
                           size="sm"
                           variant="outline"
