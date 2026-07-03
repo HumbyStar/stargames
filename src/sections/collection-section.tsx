@@ -777,6 +777,36 @@ export function CollectionSection({
                   </button>
                 )}
               </div>
+              {searchActive && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    Buscando “{search}” em Cobranças:
+                  </span>
+                  {[
+                    { k: "client", label: "Cliente", n: matchCols.client },
+                    { k: "phone", label: "Telefone", n: matchCols.phone },
+                    { k: "product", label: "Produto", n: matchCols.product },
+                    { k: "platform", label: "Plataforma", n: matchCols.platform },
+                    { k: "values", label: "Valores", n: matchCols.values },
+                    { k: "status", label: "Status", n: matchCols.status },
+                    { k: "situation", label: "Situação", n: matchCols.situation },
+                    { k: "due", label: "Data limite", n: matchCols.due },
+                  ]
+                    .filter((c) => c.n > 0)
+                    .map((c) => (
+                      <span
+                        key={c.k}
+                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-primary"
+                      >
+                        <span className="size-1.5 rounded-full bg-primary" />
+                        {c.label} ({c.n})
+                      </span>
+                    ))}
+                  {filtered.length === 0 && (
+                    <span className="italic">nenhuma correspondência</span>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
