@@ -21,17 +21,13 @@ export interface ZipImportResult {
   clients: ZipClientEntry[];
   /** Nome da(s) pasta(s) de clientes detectadas. */
   folders: string[];
-  /** true quando encontramos pasta `Cliente*/Clientes*`; false = fallback raiz. */
+  // true quando encontramos pasta "Cliente"/"Clientes"; false = fallback raiz.
   matchedFolder: boolean;
 }
 
-/**
- * Regex da pasta de clientes exportada pelo Notion. Aceita:
- *  - "Clientes"
- *  - "Cliente"
- *  - "Clientes (3)" — o "(3)" é sufixo do Notion, não é quantidade de clientes.
- *  - subpastas ("Vendas/Clientes (2)").
- */
+// Regex da pasta de clientes exportada pelo Notion. Aceita "Clientes",
+// "Cliente", "Clientes (3)" (o "(3)" é sufixo do Notion, não é quantidade),
+// e subpastas ("Vendas/Clientes (2)").
 const CLIENTS_FOLDER_RE = /(^|\/)Clientes?(\s*\([^)]*\))?\/?$/i;
 
 function folderOf(path: string): string {
