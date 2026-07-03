@@ -755,6 +755,29 @@ export function ConfiguracoesSection() {
               status="Modo CEO"
               onOpen={() => setAiTrainingOpen(true)}
             />
+            <SecondaryCard
+              icon={HelpCircle}
+              title="Tutorial"
+              summary="Central de ajuda e tutoriais guiados."
+              onOpen={() => {
+                closeSettings();
+                setTimeout(() => openHelp(), 0);
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="group flex w-full min-h-[112px] flex-col gap-2 rounded-xl border border-border bg-card p-4 text-left shadow-xs transition-all hover:-translate-y-0.5 hover:border-destructive/30 hover:shadow-md active:scale-[0.99]"
+            >
+              <div className="flex items-center gap-2">
+                <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-destructive/10 text-destructive">
+                  <LogOut className="size-4" />
+                </div>
+                <h4 className="min-w-0 flex-1 truncate text-sm font-semibold">Sair da conta</h4>
+                <ArrowRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+              </div>
+              <p className="text-xs text-muted-foreground">Encerra a sessão atual de forma segura.</p>
+            </button>
           </div>
         </>
       )}
