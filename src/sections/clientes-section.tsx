@@ -137,6 +137,11 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
 
   const drawerClient = clients.find((c) => c.id === drawerClientId) ?? null;
 
+  // Edição por lápis (linha da tabela de clientes). Somente o botão
+  // "Confirmar" persiste; "Fechar" descarta. Clique fora / blur não
+  // disparam confirm nem close — o hook não escuta esses eventos.
+  const clientEdit = useRowEdit<{ name: string; phone: string }>();
+
   const folders = useMemo(() => {
     const set = new Set<string>();
     clients.forEach((c) => {
