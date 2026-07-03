@@ -919,6 +919,10 @@ export function isResolvedSituation(p: Pick<Product, "situation" | "financialSta
     case "Abandonou":
     case "Resolvido":
       return true;
+    case "Retirar":
+      // Produto marcado para retirada pelo estoque — não deve mais aparecer
+      // como cobrança ativa nem como pendente de envio.
+      return true;
     default:
       return false;
   }
