@@ -854,6 +854,7 @@ export const useStore = create<State>()((set, get) => ({
             await dbDeleteAllProductsAsync();
             await dbDeleteAllClientsAsync();
             await dbDeleteHistoryAllAsync();
+            await dbDeleteAllTeamAsync();
             dbSaveSettings({
               preferences: defaultPreferences,
               rules: defaultRules,
