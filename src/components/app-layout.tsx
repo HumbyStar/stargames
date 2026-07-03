@@ -488,9 +488,7 @@ interface RightNavIconProps {
   onFinance: () => void;
   onImport: () => void;
   onSettings: () => void;
-  onHelp: () => void;
   onToggleTheme: () => void;
-  onSignOut: () => void;
 }
 
 function RightNavIcon({
@@ -502,9 +500,7 @@ function RightNavIcon({
   onFinance,
   onImport,
   onSettings,
-  onHelp,
   onToggleTheme,
-  onSignOut,
 }: RightNavIconProps) {
   const baseBtn =
     "group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90";
@@ -588,22 +584,6 @@ function RightNavIcon({
           </button>
         </NotificationsDropdown>
       );
-    case "help":
-      return (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={onHelp}
-              data-tour="help-button"
-              aria-label="Tutorial"
-              className={baseBtn}
-            >
-              <HelpCircle className="size-5 transition-transform duration-300 group-hover:scale-125 group-hover:animate-pulse" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Tutorial</TooltipContent>
-        </Tooltip>
-      );
     case "theme":
       return (
         <Tooltip>
@@ -622,21 +602,6 @@ function RightNavIcon({
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom">{isDark ? "Modo claro" : "Modo escuro"}</TooltipContent>
-        </Tooltip>
-      );
-    case "signout":
-      return (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={onSignOut}
-              aria-label="Sair"
-              className="group hidden md:grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-destructive/10 hover:text-destructive active:scale-90"
-            >
-              <LogOut className="size-5 transition-transform duration-200 group-hover:translate-x-0.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Sair</TooltipContent>
         </Tooltip>
       );
   }
