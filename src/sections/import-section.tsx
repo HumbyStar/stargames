@@ -658,7 +658,11 @@ export function extractMGMVAgreementFromNotes(notes: string): MGMVAgreement | nu
   };
 }
 
-function parseProductsTable(table: Element, lineOffset = 0): NotionProduct[] {
+function parseProductsTable(
+  table: Element,
+  lineOffset = 0,
+  opts: { forceMgmv?: boolean; mgmvHeading?: string } = {},
+): NotionProduct[] {
   const rows = Array.from(table.querySelectorAll("tr"));
   const dataRows = rows.slice(1);
   const products: NotionProduct[] = [];
@@ -695,12 +699,28 @@ function parseProductsTable(table: Element, lineOffset = 0): NotionProduct[] {
     if (!status) rowWarnings.push('Status vazio (usado "Pendente").');
     // MGMV pode chegar via coluna Status OU via coluna Situação.
     const situationMentionsMgmv = /mgmv/i.test(String(situation ?? ""));
-    const financialStatus =
-      originalStatus === "MGMV" || situationMentionsMgmv
+    const financialStatus: FinancialStatus =
+      opts.forceMgmv || originalStatus === "MGMV" || situationMentionsMgmv
         ? "MGMV"
         : calculateFinancialStatus(totalValue, paidValue);
+    if (
+      opts.forceMgmv &&
+      originalStatus !== "MGMV" &&
+      !situationMentionsMgmv
+    ) {
+      const label = opts.mgmvHeading
+        ? `"${opts.mgmvHeading}"`
+        : "cabeçalho da tabela";
+      rowWarnings.push(
+        `Item classificado como MGMV pelo ${label}.`,
+      );
+    }
     let statusWarning: string | undefined;
-    if (financialStatus !== originalStatus && !situationMentionsMgmv) {
+    if (
+      financialStatus !== originalStatus &&
+      !situationMentionsMgmv &&
+      !opts.forceMgmv
+    ) {
       statusWarning =
         paidValue === 0
           ? "Valor pago é zero, portanto o status correto é Pendente."
