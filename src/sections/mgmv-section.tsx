@@ -18,6 +18,8 @@ import {
 } from "@/components/list-expansion";
 import { useListExpansion } from "@/lib/list-expansion";
 import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
+import { LoadMoreButton } from "@/components/load-more-button";
+import { usePaginatedList } from "@/hooks/use-paginated-list";
 import { extractMGMVAgreementFromNotes } from "@/sections/import-section";
 import { toast } from "sonner";
 import { X } from "lucide-react";
@@ -375,7 +377,12 @@ export function MGMVSection({
     });
   }, [rows, search, chip, products]);
 
-  const pagedRows = filtered;
+  const {
+    visible: pagedRows,
+    hasMore: hasMoreRows,
+    nextChunk: nextChunkRows,
+    loadMore: loadMoreRows,
+  } = usePaginatedList(filtered, { step: 10, sectionId: "mgmv" });
 
   const chips: { id: MgmvChip; label: string; count?: number }[] = [
     { id: "todos", label: "Todos", count: stats.clientes },
@@ -881,12 +888,19 @@ export function MGMVSection({
                   </Fragment>
                 );
               })}
+              {hasMoreRows && (
+                <tr>
+                  <td colSpan={9} className="py-3">
+                    <LoadMoreButton count={nextChunkRows} onClick={loadMoreRows} />
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
       </div>
       {filtered.length > 0 && (
         <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
-          <span>{filtered.length} acordo(s) carregado(s)</span>
+          <span>{pagedRows.length} de {filtered.length} acordo(s) exibido(s)</span>
         </div>
       )}
       </>

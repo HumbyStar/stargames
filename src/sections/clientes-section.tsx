@@ -6,6 +6,8 @@ import { useSectionCompact } from "@/lib/use-section-compact";
 import { Button } from "@/components/ui/button";
 import { ListExpansionToggle, MinimizedListCard } from "@/components/list-expansion";
 import { useListExpansion } from "@/lib/list-expansion";
+import { LoadMoreButton } from "@/components/load-more-button";
+import { usePaginatedList } from "@/hooks/use-paginated-list";
 import {
   Dialog,
   DialogContent,
@@ -252,7 +254,12 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     folderFilter,
   ]);
 
-  const pagedRows = rows;
+  const {
+    visible: pagedRows,
+    hasMore: hasMoreRows,
+    nextChunk: nextChunkRows,
+    loadMore: loadMoreRows,
+  } = usePaginatedList(rows, { step: 10, sectionId: "clientes" });
 
   const activeFilterCount =
     (chip !== "todos" ? 1 : 0) +
@@ -715,6 +722,16 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                       </td>
                     </tr>
                   )}
+                  {hasMoreRows && (
+                    <tr>
+                      <td colSpan={compact ? 8 : 9} className="py-3">
+                        <LoadMoreButton
+                          count={nextChunkRows}
+                          onClick={loadMoreRows}
+                        />
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -722,7 +739,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
             {rows.length > 0 && (
               <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
                 <span>
-                  {rows.length} cliente(s) carregado(s)
+                  {pagedRows.length} de {rows.length} cliente(s) exibido(s)
                 </span>
               </div>
             )}
