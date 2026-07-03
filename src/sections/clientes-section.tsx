@@ -36,6 +36,7 @@ import {
   type Product,
   type FinancialStatus,
   type Situation,
+  type PartialPaymentResult,
 } from "@/lib/store";
 import { toast } from "sonner";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
