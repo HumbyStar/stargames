@@ -32,6 +32,7 @@ import {
   isOpenSituation,
   isResolvedSituation,
   productCollectionStatus,
+  shouldAppearInCollection,
   useStore,
   type Client,
   type Product,
@@ -708,13 +709,15 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                               >
                                 + Produto
                               </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => onScrollTo("collection")}
-                              >
-                                Cobrança
-                              </Button>
+                              {r.products.some(shouldAppearInCollection) && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => onScrollTo("collection")}
+                                >
+                                  Cobrança
+                                </Button>
+                              )}
                             </>
                           )}
                         </div>
