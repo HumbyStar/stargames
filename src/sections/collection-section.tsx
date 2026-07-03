@@ -82,6 +82,19 @@ export function CollectionSection({
   const registerPayment = useStore((s) => s.registerPayment);
   const openClient = useStore((s) => s.openClient);
   const payMGMVInstallment = useStore((s) => s.payMGMVInstallment);
+  const updateProduct = useStore((s) => s.updateProduct);
+  // Edição por lápis das cobranças. Só Confirmar persiste; Fechar descarta.
+  // Blur / click-outside são ignorados (o hook não escuta esses eventos).
+  //
+  // Regra de status: linhas cobráveis são filtradas por `shouldAppearInCollection`
+  // (situação `Em Aberto` + reserva/pendente + em atraso), portanto produtos
+  // marcados como Abandonou / Retirar / Retirado nunca chegam nesta tabela —
+  // a edição por definição não altera essas categorias.
+  const collectionEdit = useRowEdit<{
+    totalValue: number;
+    paidValue: number;
+    dueDate: string;
+  }>();
   const [filter, setFilter] = usePersistedState<Filter>("collection.filter", initialFilter);
   const [period, setPeriod] = usePersistedState<Period>("collection.period", "todos");
   const [customFrom, setCustomFrom] = usePersistedState<string>("collection.customFrom", "");
