@@ -719,16 +719,8 @@ function _FloatingNavbarImpl() {
     setIsDark(next);
   };
 
-  const navigate = useNavigate();
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    toast.success("Sessão encerrada");
-    navigate({ to: "/auth", replace: true });
-  };
-
   const openImport = useUiStore((s) => s.openImport);
   const openSettings = useUiStore((s) => s.openSettings);
-  const openHelp = useUiStore((s) => s.openHelp);
   const openNotifications = useUiStore((s) => s.openNotifications);
   const closeNotifications = useUiStore((s) => s.closeNotifications);
   const notificationsOpen = useUiStore((s) => s.notificationsOpen);
