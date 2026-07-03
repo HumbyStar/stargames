@@ -3,6 +3,7 @@ import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
   daysLate,
+  displaySituation,
   formatBRL,
   formatDateBR,
   getMGMVDisplay,
