@@ -1007,7 +1007,7 @@ function _FloatingNavbarImpl() {
         </div>
 
         <div className="ml-auto flex items-center gap-1.5 md:gap-2 md:pl-2">
-          {visibleIds.filter((id) => id !== "import").map((iconId) => {
+          {visibleIds.map((iconId) => {
             const meta = getIconMeta(iconId);
             if (!meta) return null;
             return (
