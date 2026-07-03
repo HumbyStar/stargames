@@ -191,10 +191,32 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
         })
         .filter((r) => {
           if (q) {
+            // Busca ampla: casa qualquer célula visível da linha
+            // (nome, telefone, status, produtos, plataformas, pasta,
+            // observações, totais formatados em BRL e última compra).
+            const productHay = r.products
+              .map(
+                (p) =>
+                  `${p.name} ${p.platform ?? ""} ${p.financialStatus} ${p.situation}`,
+              )
+              .join(" ");
+            const hay = [
+              r.client.name,
+              r.status.label,
+              r.client.notes ?? "",
+              r.client.folder ?? "",
+              productHay,
+              formatBRL(r.totalPurchased),
+              formatBRL(r.totalOpen),
+              r.last ? formatDateBR(r.last) : "",
+            ]
+              .join(" ")
+              .toLowerCase();
+            const qDigits = q.replace(/\D/g, "");
+            const phoneDigits = r.client.phone.replace(/\D/g, "");
             const hit =
-              r.client.name.toLowerCase().includes(q) ||
-              r.client.phone.replace(/\D/g, "").includes(q.replace(/\D/g, "")) ||
-              r.products.some((p) => p.name.toLowerCase().includes(q));
+              hay.includes(q) ||
+              (qDigits.length > 0 && phoneDigits.includes(qDigits));
             if (!hit) return false;
           }
           if (chip !== "todos") {
