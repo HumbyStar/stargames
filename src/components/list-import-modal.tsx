@@ -57,6 +57,7 @@ import {
 import { reviewListImportLine } from "@/lib/list-import-ai.functions";
 import { parseClientHtml } from "@/lib/html-client-import-parser";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ZipImportReview } from "@/components/zip-import-review";
 
 type FilterKey =
   | "all"
@@ -117,7 +118,7 @@ export function ListImportModal({
 }) {
   const [rawText, setRawText] = useState("");
   const [rawHtml, setRawHtml] = useState("");
-  const [mode, setMode] = useState<"text" | "html">("text");
+  const [mode, setMode] = useState<"text" | "html" | "zip">("text");
   const [htmlFileName, setHtmlFileName] = useState<string | null>(null);
   const [preview, setPreview] = useState<ListImportPreview | null>(null);
   const [filter, setFilter] = useState<FilterKey>("all");
@@ -591,10 +592,11 @@ export function ListImportModal({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={mode} onValueChange={(v) => setMode(v as "text" | "html")}>
+        <Tabs value={mode} onValueChange={(v) => setMode(v as "text" | "html" | "zip")}>
           <TabsList>
             <TabsTrigger value="text">Lista colada</TabsTrigger>
             <TabsTrigger value="html">HTML de cliente (Notion)</TabsTrigger>
+            <TabsTrigger value="zip">ZIP Notion</TabsTrigger>
           </TabsList>
           <TabsContent value="text" className="space-y-3">
             <Label htmlFor="list-text">Lista de grupos</Label>
