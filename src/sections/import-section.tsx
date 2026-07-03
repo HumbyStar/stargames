@@ -1901,21 +1901,63 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         }
         // "keep" → mantém o acordo existente, nada a fazer.
       }
-      // Se algum produto importado ficou como MGMV (via forceMgmv da tabela
-      // ou por coluna Status), o cliente deve ser classificado como MGMV
-      // mesmo quando não há acordo consolidado detectado nas observações.
-      // Sem isso o cliente aparece como "MGMV inativo" no modal e não é
-      // listado na seção MGMV.
-      const hasMgmvProduct = entry.products.some(
+      // Produtos marcados como MGMV (via tabela contextual "LOTE FECHADO MEU
+      // GAME MINHA VIDA" ou coluna Status=MGMV) precisam gerar um acordo
+      // MGMV sintético quando não há acordo consolidado nas observações.
+      // Cada produto vira uma parcela, preservando o histórico de pagamento.
+      const mgmvProducts = entry.products.filter(
         (p) =>
           p.selected &&
           p.errors.length === 0 &&
           !!p.product &&
           !p.duplicate &&
-          (p.financialStatus === "MGMV" ||
-            (entry.mgmv && (entry.mgmvAction ?? "apply") !== "keep" && p.financialStatus !== "Pago")),
+          p.financialStatus === "MGMV",
       );
-      if (hasMgmvProduct && client!.clientType !== "mgmv") {
+      const alreadyHasAgreement =
+        !!entry.mgmv && (entry.mgmvAction ?? "apply") !== "keep";
+      if (mgmvProducts.length > 0 && !alreadyHasAgreement) {
+        const sorted = [...mgmvProducts].sort((a, b) =>
+          (a.registerDate ?? "").localeCompare(b.registerDate ?? ""),
+        );
+        const totalDebt = sorted.reduce((s, p) => s + (p.totalValue || 0), 0);
+        const startDate =
+          (sorted[0]?.registerDate
+            ? new Date(`${sorted[0].registerDate}T12:00:00`).toISOString()
+            : todayISO);
+        const installments: MGMVInstallment[] = sorted.map((p, idx) => {
+          const value = p.totalValue || 0;
+          const paid = (p.paidValue || 0) >= value && value > 0;
+          const dueISO = p.dueDate
+            ? new Date(`${p.dueDate}T12:00:00`).toISOString()
+            : p.registerDate
+              ? new Date(`${p.registerDate}T12:00:00`).toISOString()
+              : todayISO;
+          return {
+            number: idx + 1,
+            total: sorted.length,
+            dueDate: dueISO,
+            value,
+            paid,
+            paidAt: paid
+              ? p.registerDate
+                ? new Date(`${p.registerDate}T12:00:00`).toISOString()
+                : todayISO
+              : undefined,
+            paidAmount: p.paidValue || 0,
+          };
+        });
+        const synthetic: MGMVAgreement = {
+          startDate,
+          totalDebt,
+          installments,
+          reviewStatus: "review_required",
+        };
+        setMGMVAgreement(client!.id, synthetic);
+        stats.createdAgreements++;
+      }
+      // Garante clientType = "mgmv" quando há produtos MGMV, mesmo que o
+      // acordo já exista (caso "keep").
+      if (mgmvProducts.length > 0 && client!.clientType !== "mgmv") {
         updateClient(client!.id, { clientType: "mgmv" });
       }
     };
