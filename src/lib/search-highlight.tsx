@@ -43,7 +43,7 @@ export function highlight(
     return (
       <>
         {parts.map((part, i) =>
-          re.test(part) && part.toLowerCase() === q.toLowerCase() ? (
+          i % 2 === 1 ? (
             <mark
               key={i}
               className="rounded-sm bg-primary/25 px-0.5 text-foreground"
