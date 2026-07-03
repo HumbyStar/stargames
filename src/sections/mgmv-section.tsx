@@ -560,7 +560,12 @@ export function MGMVSection({
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar cliente, telefone…"
+                placeholder={
+                  searchActive
+                    ? `Buscando em MGMV por “${search}”…`
+                    : "Buscar em MGMV por cliente, telefone, valor, vencimento…"
+                }
+                aria-label="Buscar em MGMV"
                 className="h-10 w-full rounded-full border border-input bg-background px-4 pr-10 text-sm outline-none focus:border-primary/40"
               />
               {search && (
