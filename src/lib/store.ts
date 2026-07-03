@@ -3,6 +3,7 @@ import {
   dbDeleteAllClientsAsync,
   dbDeleteAllProductsAsync,
   dbDeleteAllMGMVAsync,
+  dbDeleteAllTeamAsync,
   dbDeleteAllImportProgressAsync,
   clearImportRuntimeState,
   dbDeleteHistoryAllAsync,
