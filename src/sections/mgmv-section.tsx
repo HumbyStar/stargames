@@ -283,11 +283,20 @@ export function MGMVSection({
           return ni;
         });
       }
+      // Só marca como atualizado se o acordo mudou de fato em relação ao
+      // que já estava salvo. Comparação estrutural via JSON garante que
+      // reprocessos sucessivos não inflem a contagem.
+      const isSame =
+        c.mgmv != null &&
+        JSON.stringify(c.mgmv) === JSON.stringify(next);
+      if (isSame) {
+        unchanged++;
+        continue;
+      }
       setMGMVAgreement(c.id, next);
       updated++;
     }
     setReprocessing(false);
-    unchanged = rows.length - updated;
     toast.success(
       `Reprocessamento concluído: ${updated} acordo(s) atualizado(s).` +
         (unchanged > 0 ? ` ${unchanged} sem mudanças.` : ""),
