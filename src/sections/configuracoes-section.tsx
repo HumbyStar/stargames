@@ -357,6 +357,14 @@ export function ConfiguracoesSection() {
 
   const openImportModal = useUiStore((s) => s.openImport);
   const closeSettings = useUiStore((s) => s.closeSettings);
+  const openHelp = useUiStore((s) => s.openHelp);
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    toast.success("Sessão encerrada");
+    navigate({ to: "/auth", replace: true });
+  };
 
   const [view, setView] = useState<View>("home");
   const [diag, setDiag] = useState<ImportDiagnostics | null>(null);
