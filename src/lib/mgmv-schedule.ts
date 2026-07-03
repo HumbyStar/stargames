@@ -122,9 +122,9 @@ export function rebalanceAgreement(
   ) {
     const uniform = remaining / pendingCount;
     if (uniform < opts.minInstallmentValue - 0.005) {
-      const bumpedPending = Math.ceil(remaining / opts.minInstallmentValue);
-      if (bumpedPending > pendingCount) {
-        pendingCount = Math.min(60 - paidCount, bumpedPending);
+      const adjustedPending = Math.ceil(remaining / opts.minInstallmentValue);
+      if (adjustedPending !== pendingCount) {
+        pendingCount = Math.min(60 - paidCount, Math.max(1, adjustedPending));
         bumped = true;
       }
     }
