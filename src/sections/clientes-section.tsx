@@ -738,6 +738,34 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           setProductModal({ open: false });
         }}
       />
+
+      {/* Popup central obrigatório para confirmar Retirado */}
+      <RetiradoConfirmModal
+        open={retiradoModal.open}
+        client={
+          retiradoModal.productId
+            ? (() => {
+                const p = products.find((pr) => pr.id === retiradoModal.productId);
+                return p ? clients.find((c) => c.id === p.clientId) ?? null : null;
+              })()
+            : null
+        }
+        product={
+          retiradoModal.productId
+            ? products.find((pr) => pr.id === retiradoModal.productId) ?? null
+            : null
+        }
+        onCancel={() => setRetiradoModal({ open: false })}
+        onConfirm={() => {
+          if (retiradoModal.productId) {
+            setProductSituation(retiradoModal.productId, "Retirado");
+            toast.success(
+              "Produto retirado — enviado ao estoque central da loja.",
+            );
+          }
+          setRetiradoModal({ open: false });
+        }}
+      />
     </section>
   );
 }
