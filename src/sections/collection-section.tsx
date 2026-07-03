@@ -283,6 +283,53 @@ export function CollectionSection({
     loadMore: loadMoreCollection,
   } = usePaginatedList(filtered, { step: 10, sectionId: "collection" });
 
+  const searchActive = search.trim().length > 0;
+  const matchCols = useMemo(() => {
+    if (!searchActive)
+      return { client: 0, phone: 0, product: 0, platform: 0, values: 0, status: 0, situation: 0, due: 0 };
+    let client = 0, phone = 0, product = 0, platform = 0, values = 0, status = 0, situation = 0, due = 0;
+    for (const row of filtered) {
+      const c =
+        row.kind === "mgmv" ? row.client : clients.find((x) => x.id === row.product.clientId);
+      if (matchText(c?.name ?? "", search)) client++;
+      if (matchText(c?.phone ?? "", search)) phone++;
+      const productName = row.kind === "product" ? row.product.name : "Acordo MGMV";
+      const plat = row.kind === "product" ? row.product.platform : "";
+      const statusLabel =
+        row.kind === "product"
+          ? productCollectionStatus(row.product).label
+          : row.display.hasOverdue
+            ? "Parcela MGMV vencida"
+            : "Parcela MGMV";
+      const sit = row.kind === "product" ? row.product.situation : "MGMV";
+      const dueIso =
+        row.kind === "product"
+          ? row.product.dueDate
+          : row.display.nextInstallment?.dueDate ?? "";
+      const total = row.kind === "product" ? row.product.totalValue : row.display.totalDebt;
+      const paid =
+        row.kind === "product"
+          ? row.product.paidValue
+          : row.display.totalDebt - row.display.remainingBalance;
+      const remaining =
+        row.kind === "product"
+          ? row.product.totalValue - row.product.paidValue
+          : row.display.remainingBalance;
+      if (matchText(productName, search)) product++;
+      if (matchText(plat, search)) platform++;
+      if (matchText(statusLabel, search)) status++;
+      if (matchText(sit, search) || matchText(displaySituation(sit), search)) situation++;
+      if (dueIso && matchText(formatDateBR(dueIso), search)) due++;
+      if (
+        matchText(formatBRL(total), search) ||
+        matchText(formatBRL(paid), search) ||
+        matchText(formatBRL(remaining), search)
+      )
+        values++;
+    }
+    return { client, phone, product, platform, values, status, situation, due };
+  }, [filtered, search, searchActive, clients]);
+
   const totalAtraso =
     overdueProducts.reduce((a, p) => a + (p.totalValue - p.paidValue), 0) +
     mgmvRows.reduce((a, r) => a + r.display.remainingBalance, 0);
