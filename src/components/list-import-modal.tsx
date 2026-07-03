@@ -55,6 +55,8 @@ import {
   type ListImportRow,
 } from "@/lib/list-import-parser";
 import { reviewListImportLine } from "@/lib/list-import-ai.functions";
+import { parseClientHtml } from "@/lib/html-client-import-parser";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type FilterKey =
   | "all"
@@ -87,6 +89,21 @@ function statusToSituation(s: ListImportRow["financialStatus"]): Situation {
   return s === "Pago" ? "Em Aberto" : "Em Aberto";
 }
 
+/**
+ * Uma linha vinda do parser HTML pode carregar a Situação operacional
+ * lida da coluna 7 do arquivo (REMOVIDO -> Retirado, ENVIADO -> Enviado).
+ * Quando ausente, cai no fluxo padrão do parser de lista colada.
+ */
+type RowWithSituation = ListImportRow & {
+  situation?: "Retirado" | "Enviado" | null;
+};
+
+function resolveSituation(r: RowWithSituation): Situation {
+  if (r.situation === "Retirado") return "Retirado";
+  if (r.situation === "Enviado") return "Enviado";
+  return statusToSituation(r.financialStatus);
+}
+
 export function ListImportModal({
   open,
   onOpenChange,
@@ -99,6 +116,9 @@ export function ListImportModal({
   autoAnalyze?: boolean;
 }) {
   const [rawText, setRawText] = useState("");
+  const [rawHtml, setRawHtml] = useState("");
+  const [mode, setMode] = useState<"text" | "html">("text");
+  const [htmlFileName, setHtmlFileName] = useState<string | null>(null);
   const [preview, setPreview] = useState<ListImportPreview | null>(null);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [filterGroup, setFilterGroup] = useState<string | null>(null);
@@ -125,6 +145,9 @@ export function ListImportModal({
 
   function close() {
     setRawText("");
+    setRawHtml("");
+    setHtmlFileName(null);
+    setMode("text");
     setPreview(null);
     setFilter("all");
     setFilterGroup(null);
@@ -149,6 +172,49 @@ export function ListImportModal({
     setPreview(out);
     setFilter("all");
     setFilterGroup(null);
+  }
+
+  function analyzeHtml() {
+    if (!rawHtml.trim()) {
+      toast.error("Cole ou selecione um arquivo HTML de cliente.");
+      return;
+    }
+    try {
+      const out = parseClientHtml(rawHtml);
+      if (out.rows.length === 0) {
+        toast.error("Nenhuma linha de produto encontrada nas tabelas do HTML.");
+      } else {
+        toast.success(
+          `Cliente ${out.clientHeader.name || "(?)"} · ${out.rows.length} produto(s) em ${out.groups.length || 1} bloco(s).`,
+        );
+      }
+      setPreview(out);
+      setFilter("all");
+      setFilterGroup(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao ler o HTML.");
+    }
+  }
+
+  async function onHtmlFile(file: File) {
+    try {
+      const text = await file.text();
+      setRawHtml(text);
+      setHtmlFileName(file.name);
+      const out = parseClientHtml(text);
+      setPreview(out);
+      setFilter("all");
+      setFilterGroup(null);
+      if (out.rows.length === 0) {
+        toast.warning("Nenhuma linha detectada no HTML.");
+      } else {
+        toast.success(
+          `${file.name}: ${out.rows.length} produto(s) para revisão.`,
+        );
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao ler o arquivo.");
+    }
   }
 
   // Pré-carrega texto vindo da sessão e analisa automaticamente.
@@ -411,10 +477,13 @@ export function ListImportModal({
           totalValue: r.totalValue ?? 0,
           paidValue: r.paidValue ?? 0,
           financialStatus: statusToFinancial(r.financialStatus),
-          situation: statusToSituation(r.financialStatus),
+          situation: resolveSituation(r as RowWithSituation),
           registerDate: now,
           dueDate: now,
-          notes: `Importado por lista colada • Grupo: ${r.sourceGroup}`,
+          notes:
+            mode === "html"
+              ? `Importado por HTML de cliente • Grupo: ${r.sourceGroup}`
+              : `Importado por lista colada • Grupo: ${r.sourceGroup}`,
         });
         productsCreated++;
         const snapshotClients = clientsCreated;
