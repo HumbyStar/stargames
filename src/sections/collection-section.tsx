@@ -577,7 +577,12 @@ export function CollectionSection({
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por cliente, telefone ou produto..."
+                placeholder={
+                  searchActive
+                    ? `Buscando em Cobranças por “${search}”…`
+                    : "Buscar em Cobranças por cliente, telefone, produto, valor…"
+                }
+                aria-label="Buscar em Cobranças"
                 className="h-10 w-full rounded-full border border-input bg-background px-4 pr-10 text-sm outline-none focus:border-primary/40"
               />
               {search && (
