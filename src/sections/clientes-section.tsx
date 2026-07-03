@@ -690,6 +690,9 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                 setProductSituation(productId, s);
                 toast.success("Situação atualizada");
               }}
+              onRequestRetirado={(productId) =>
+                setRetiradoModal({ open: true, productId })
+              }
               onMarkPaid={(p) => {
                 updateProduct(p.id, { paidValue: p.totalValue, financialStatus: "Pago" });
                 toast.success("Marcado como pago");
