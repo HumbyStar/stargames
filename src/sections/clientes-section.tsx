@@ -1375,7 +1375,6 @@ function ProductModal({
             >
               <option>Em Aberto</option>
               <option>Enviado</option>
-              <option>Desistiu</option>
               <option>Abandonou</option>
             </select>
           </div>
