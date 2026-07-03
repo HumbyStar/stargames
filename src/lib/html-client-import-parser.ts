@@ -43,7 +43,12 @@ export interface ClientHeader {
 }
 
 /** Situação operacional na 7ª coluna do HTML importado. */
-export type ImportedSituation = "Retirado" | "Enviado" | null;
+export type ImportedSituation =
+  | "Retirado"
+  | "Retirar"
+  | "Enviado"
+  | "Abandonou"
+  | null;
 
 /** Extrai "Nome - (DD) NNNNN-NNNN" do topo do arquivo. */
 export function extractClientHeader(root: HTMLElement): ClientHeader {
@@ -91,8 +96,20 @@ function normalizeSituation(token: string): {
 } {
   const t = (token || "").trim().toLowerCase();
   if (!t || t === "-" || t === "—") return { situation: null };
+  // REMOVIDO no HTML = cliente desistiu do produto -> já entra como Retirado
+  // (semanticamente "removido do estoque" na terminologia do usuário).
   if (t === "removido") return { situation: "Retirado" };
+  if (t === "retirado") return { situation: "Retirado" };
+  if (t === "retirar") return { situation: "Retirar" };
   if (t === "enviado") return { situation: "Enviado" };
+  if (
+    t === "desistiu" ||
+    t === "desistência" ||
+    t === "desistencia" ||
+    t.startsWith("desist")
+  ) {
+    return { situation: "Abandonou" };
+  }
   return {
     situation: null,
     warning: `Situação "${token}" não reconhecida.`,
