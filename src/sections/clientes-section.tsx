@@ -537,18 +537,29 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                           " pr-3 transition-[padding] duration-300 font-medium"
                         }
                       >
-                        <button
-                          onClick={() => setDrawerClientId(r.client.id)}
-                          className="text-left hover:text-primary"
-                        >
-                          {r.client.name}
-                          {r.client.folder && (
-                            <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
-                              <Folder className="h-2.5 w-2.5" />
-                              {r.client.folder}
-                            </span>
-                          )}
-                        </button>
+                        {clientEdit.isEditing(r.client.id) ? (
+                          <input
+                            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+                            value={clientEdit.draftValues?.name ?? ""}
+                            onChange={(e) =>
+                              clientEdit.setField("name", e.target.value)
+                            }
+                            aria-label="Editar nome do cliente"
+                          />
+                        ) : (
+                          <button
+                            onClick={() => setDrawerClientId(r.client.id)}
+                            className="text-left hover:text-primary"
+                          >
+                            {r.client.name}
+                            {r.client.folder && (
+                              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
+                                <Folder className="h-2.5 w-2.5" />
+                                {r.client.folder}
+                              </span>
+                            )}
+                          </button>
+                        )}
                       </td>
                       <td
                         className={
@@ -556,7 +567,18 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                           " pr-3 transition-[padding] duration-300 text-muted-foreground"
                         }
                       >
-                        {r.client.phone}
+                        {clientEdit.isEditing(r.client.id) ? (
+                          <input
+                            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+                            value={clientEdit.draftValues?.phone ?? ""}
+                            onChange={(e) =>
+                              clientEdit.setField("phone", e.target.value)
+                            }
+                            aria-label="Editar telefone do cliente"
+                          />
+                        ) : (
+                          r.client.phone
+                        )}
                       </td>
                       <td
                         className={
