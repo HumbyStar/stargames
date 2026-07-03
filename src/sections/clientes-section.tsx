@@ -8,6 +8,7 @@ import { ListExpansionToggle, MinimizedListCard } from "@/components/list-expans
 import { useListExpansion } from "@/lib/list-expansion";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { usePaginatedList } from "@/hooks/use-paginated-list";
+import { useUiStore } from "@/lib/ui-store";
 import {
   Dialog,
   DialogContent,
