@@ -699,9 +699,9 @@ export function MGMVSection({
                     <tr
                       className="border-b transition-colors hover:bg-accent/50"
                     >
-                      <td className="px-3 py-2 font-medium">{r.client.name}</td>
+                      <td className="px-3 py-2 font-medium">{highlight(r.client.name, search)}</td>
                       <td className="px-3 py-2 text-muted-foreground">
-                        {r.client.phone}
+                        {highlight(r.client.phone, search)}
                       </td>
                       <td className="px-3 py-2">
                         {editing ? (
