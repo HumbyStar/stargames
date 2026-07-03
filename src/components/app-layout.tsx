@@ -1,13 +1,11 @@
 import { Outlet, useNavigate } from "@tanstack/react-router";
 import {
   Search,
-  HelpCircle,
   Menu,
   Sun,
   Moon,
   User,
   Package,
-  LogOut,
   Upload,
   Settings,
   Bell,
