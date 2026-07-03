@@ -654,14 +654,14 @@ export function MGMVSection({
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-card/95 backdrop-blur">
               <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-3 py-2">Cliente</th>
-                <th className="px-3 py-2">Telefone</th>
-                <th className="px-3 py-2">Valor acordo</th>
-                <th className="px-3 py-2">Parcelas</th>
+                <th className="px-3 py-2">Cliente<ColumnMatchDot active={searchActive} count={matchCols.name} /></th>
+                <th className="px-3 py-2">Telefone<ColumnMatchDot active={searchActive} count={matchCols.phone} /></th>
+                <th className="px-3 py-2">Valor acordo<ColumnMatchDot active={searchActive} count={matchCols.value} /></th>
+                <th className="px-3 py-2">Parcelas<ColumnMatchDot active={searchActive} count={matchCols.installment} /></th>
                 <th className="px-3 py-2">Pagas</th>
-                <th className="px-3 py-2">Restante</th>
-                <th className="px-3 py-2">Próximo vencimento</th>
-                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Restante<ColumnMatchDot active={searchActive} count={matchCols.remaining} /></th>
+                <th className="px-3 py-2">Próximo vencimento<ColumnMatchDot active={searchActive} count={matchCols.next} /></th>
+                <th className="px-3 py-2">Status<ColumnMatchDot active={searchActive} count={matchCols.status} /></th>
                 <th className="px-3 py-2 text-right">Ações</th>
               </tr>
             </thead>
