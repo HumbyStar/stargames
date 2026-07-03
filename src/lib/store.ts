@@ -545,9 +545,41 @@ export const useStore = create<State>()((set, get) => ({
           }
           return { clients };
         }),
-      registerMGMVPartialPayment: (clientId, installmentNumber, amount) =>
+      registerMGMVPartialPayment: (clientId, installmentNumber, amount) => {
+        // Validações — devolvem erros legíveis para o caller exibir em toast.
+        if (!Number.isFinite(amount)) {
+          return { ok: false, error: "Informe um valor numérico válido." };
+        }
+        if (amount <= 0) {
+          return { ok: false, error: "Informe um valor maior que zero." };
+        }
+        const state = get();
+        const client = state.clients.find((c) => c.id === clientId);
+        if (!client || !client.mgmv) {
+          return { ok: false, error: "Acordo MGMV não encontrado para este cliente." };
+        }
+        const target = client.mgmv.installments.find(
+          (i) => i.number === installmentNumber,
+        );
+        if (!target) {
+          return { ok: false, error: `Parcela ${installmentNumber} não encontrada.` };
+        }
+        if (target.paid) {
+          return { ok: false, error: `Parcela ${installmentNumber} já está paga.` };
+        }
+        // Saldo restante do acordo (antes deste pagamento).
+        const display = getMGMVDisplay(client);
+        const agreementRemaining = display?.remainingBalance ?? 0;
+        // Tolerância de 1 centavo para não travar quando o valor foi digitado
+        // com o mesmo formato exibido no popover.
+        if (amount > agreementRemaining + 0.01) {
+          return {
+            ok: false,
+            error: `Valor excede o restante do acordo (${formatBRL(agreementRemaining)}).`,
+          };
+        }
+        let becameQuitado = false;
         set((s) => {
-          if (!(amount > 0)) return {} as Partial<State>;
           const clients = s.clients.map((c) => {
             if (c.id !== clientId || !c.mgmv) return c;
             const target = c.mgmv.installments.find(
@@ -644,15 +676,34 @@ export const useStore = create<State>()((set, get) => ({
               ...c.mgmv,
               installments,
             });
+            // Se todas as parcelas ficaram pagas, o acordo está quitado.
+            const allPaid = nextAgreement.installments.every((i) => i.paid);
+            if (allPaid) becameQuitado = true;
             return { ...c, mgmv: nextAgreement };
           });
+          // Se o acordo virou Quitado, refletir na lista: produtos vinculados
+          // ao MGMV (financialStatus === "MGMV") que ainda não foram enviados
+          // passam para "Resolvido". Produtos "Enviado" permanecem "Enviado".
+          let products = s.products;
+          if (becameQuitado) {
+            products = s.products.map((p) => {
+              if (p.clientId !== clientId) return p;
+              if (p.financialStatus !== "MGMV") return p;
+              if (p.situation === "Enviado" || p.situation === "Resolvido") return p;
+              const next = { ...p, situation: "Resolvido" as Situation };
+              queueProductUpsert(next);
+              return next;
+            });
+          }
           const updated = clients.find((c) => c.id === clientId);
           if (updated) {
             queueClientUpsert(updated);
             dbSyncAgreementForClient(updated);
           }
-          return { clients };
-        }),
+          return { clients, products };
+        });
+        return { ok: true, becameQuitado };
+      },
       setMGMVAgreement: (clientId, agreement) =>
         set((s) => {
           const nextAgreement = agreement
