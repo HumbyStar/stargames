@@ -789,7 +789,12 @@ function parseClientArticle(
     errors.push(`Cliente #${index} (${client.name || "sem nome"}): tabela não encontrada.`);
   } else {
     for (const t of tables) {
-      const parsed = parseProductsTable(t, products.length);
+      const ctx = collectTableContext(t);
+      const mgmvHit = tableHeadingMentionsMgmv(ctx);
+      const parsed = parseProductsTable(t, products.length, {
+        forceMgmv: !!mgmvHit,
+        mgmvHeading: mgmvHit || undefined,
+      });
       products = products.concat(parsed);
     }
   }
@@ -800,6 +805,48 @@ function parseClientArticle(
     notes: extractClientNotes(article),
     errors,
   };
+}
+
+/**
+ * Concatena o texto dos elementos imediatamente anteriores à tabela — subindo
+ * pelos `previousElementSibling` até encontrar outra `<table>` ou o topo do
+ * artigo. É esse contexto que decide se a tabela pertence a uma seção MGMV
+ * (ex.: heading "LOTE FECHADO MEU GAME MINHA VIDA" antes da tabela).
+ */
+function collectTableContext(table: Element): string {
+  const parts: string[] = [];
+  let node: Element | null = table.previousElementSibling;
+  // Também sobe um nível se necessário para pegar heading dentro de wrapper.
+  let hops = 0;
+  while (node && hops < 12) {
+    const tag = node.tagName.toLowerCase();
+    if (tag === "table") break;
+    // ignora elementos vazios
+    const text = (node.textContent ?? "").replace(/\s+/g, " ").trim();
+    if (text) parts.unshift(text);
+    node = node.previousElementSibling;
+    hops++;
+  }
+  return parts.join(" \u2022 ");
+}
+
+/**
+ * Retorna o trecho do heading que menciona MGMV (para uso como label em
+ * warning), ou `null` quando não há match ou o contexto contém negação
+ * explícita ("fora do MGMV", "não MGMV").
+ */
+export function tableHeadingMentionsMgmv(context: string): string | null {
+  if (!context) return null;
+  const lower = context.toLowerCase();
+  if (/(fora\s+do\s+mgmv|n[aã]o\s+mgmv|sem\s+mgmv)/.test(lower)) return null;
+  const re = /(mgmv|meu\s*game\s*minha\s*vida|lote\s*fechado|acordo)/i;
+  const m = context.match(re);
+  if (!m) return null;
+  // Tenta devolver a "linha" (trecho separado por • ou quebra) que contém o
+  // match, para o warning ficar informativo.
+  const chunks = context.split(/[\u2022\n]/).map((c) => c.trim());
+  const hit = chunks.find((c) => re.test(c));
+  return (hit || m[0]).slice(0, 80);
 }
 
 export function parseNotionHtml(html: string, fileName?: string): NotionParseResult {
