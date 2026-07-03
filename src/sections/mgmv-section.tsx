@@ -27,6 +27,8 @@ import {
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useRowEdit } from "@/lib/use-row-edit";
+import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
 
 type MgmvChip =
   | "todos"
