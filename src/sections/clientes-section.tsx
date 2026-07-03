@@ -675,6 +675,13 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                             <>
                               <Button
                                 size="sm"
+                                variant="ghost"
+                                onClick={() => setClientModal({ open: true, client: r.client })}
+                              >
+                                Editar
+                              </Button>
+                              <Button
+                                size="sm"
                                 onClick={() =>
                                   setProductModal({ open: true, clientId: r.client.id })
                                 }
