@@ -28,6 +28,8 @@ import {
   X,
 } from "lucide-react";
 import { usePersistedState } from "@/lib/use-persisted-state";
+import { LoadMoreButton } from "@/components/load-more-button";
+import { usePaginatedList } from "@/hooks/use-paginated-list";
 import { useSectionCompact } from "@/lib/use-section-compact";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
