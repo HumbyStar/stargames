@@ -15,6 +15,7 @@ import { DashboardIntegrityCard } from "@/components/dashboard-integrity-card";
 import type { DashboardCardId } from "@/components/dashboard-drilldown-modal";
 import { LazySection } from "@/components/lazy-section";
 import { ClientesSection } from "@/sections/clientes-section";
+import { scrollToSection } from "@/lib/scroll-to-section";
 
 const CollectionSection = lazy(() =>
   import("@/sections/collection-section").then((m) => ({ default: m.CollectionSection })),
@@ -40,19 +41,6 @@ export const Route = createFileRoute("/_authenticated/")({
   component: OnePage,
 });
 
-function scrollToSection(id: string) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const container = document.querySelector<HTMLElement>(".page-container");
-  if (!container) {
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-    return;
-  }
-  const top =
-    el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
-  container.scrollTo({ top: Math.max(0, top - 12), behavior: "smooth" });
-}
-
 function OnePage() {
   const onScrollTo = useCallback(scrollToSection, []);
   return (
@@ -61,12 +49,12 @@ function OnePage() {
       <div id="clientes">
         <ClientesSection onScrollTo={onScrollTo} />
       </div>
-      <LazySection id="mgmv">
+      <LazySection id="mgmv" delayMs={0}>
         <Suspense fallback={null}>
           <MGMVSection onScrollTo={onScrollTo} />
         </Suspense>
       </LazySection>
-      <LazySection id="collection">
+      <LazySection id="collection" delayMs={80}>
         <Suspense fallback={null}>
           <CollectionSection onScrollTo={onScrollTo} />
         </Suspense>
