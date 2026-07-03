@@ -1196,6 +1196,10 @@ function GlobalModals() {
   const closeHelp = useUiStore((s) => s.closeHelp);
   const financeOpen = useUiStore((s) => s.financeOpen);
   const closeFinance = useUiStore((s) => s.closeFinance);
+  const importOpen = useUiStore((s) => s.importOpen);
+  const closeImport = useUiStore((s) => s.closeImport);
+  const equipeOpen = useUiStore((s) => s.equipeOpen);
+  const closeEquipe = useUiStore((s) => s.closeEquipe);
 
   return (
     <>
@@ -1227,6 +1231,34 @@ function GlobalModals() {
             <DialogDescription>Dashboard financeiro consolidado.</DialogDescription>
           </DialogHeader>
           <FinanceDashboard />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={importOpen} onOpenChange={(o) => (o ? null : closeImport())}>
+        <DialogContent className="max-w-[min(1200px,95vw)] max-h-[90vh] overflow-y-auto" data-tour="import-modal">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Importar</DialogTitle>
+            <DialogDescription>Importe listas, planilhas e arquivos.</DialogDescription>
+          </DialogHeader>
+          {importOpen && (
+            <Suspense fallback={null}>
+              <ImportSection onScrollTo={(id) => scrollToSection(id)} />
+            </Suspense>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={equipeOpen} onOpenChange={(o) => (o ? null : closeEquipe())}>
+        <DialogContent className="max-w-[min(1200px,95vw)] max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Equipe</DialogTitle>
+            <DialogDescription>Gestão de tarefas e membros da equipe.</DialogDescription>
+          </DialogHeader>
+          {equipeOpen && (
+            <Suspense fallback={null}>
+              <EquipeSection />
+            </Suspense>
+          )}
         </DialogContent>
       </Dialog>
 
