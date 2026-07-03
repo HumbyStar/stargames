@@ -861,6 +861,16 @@ function ClientDrawer({
 }) {
   const [notes, setNotes] = useState(client.notes ?? "");
   const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
+  const updateProduct = useStore((s) => s.updateProduct);
+  // Edição por lápis dos produtos do cliente. Apenas Confirmar persiste;
+  // Fechar descarta. Blur / click-outside são ignorados pelo hook.
+  const productEdit = useRowEdit<{
+    name: string;
+    platform: string;
+    totalValue: number;
+    paidValue: number;
+    financialStatus: FinancialStatus;
+  }>();
   const mgmv = getMGMVDisplay(client);
   const mgmvProducts = products.filter((p) => p.financialStatus === "MGMV");
   const individualAll = products.filter((p) => p.financialStatus !== "MGMV");
