@@ -148,7 +148,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   // Edição por lápis (linha da tabela de clientes). Somente o botão
   // "Confirmar" persiste; "Fechar" descarta. Clique fora / blur não
   // disparam confirm nem close — o hook não escuta esses eventos.
-  const clientEdit = useRowEdit<{ name: string; phone: string }>();
+  const clientEdit = useRowEdit<{ name: string; phone: string; notes: string }>();
 
   const folders = useMemo(() => {
     const set = new Set<string>();
@@ -633,8 +633,20 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                         {r.last ? formatDateBR(r.last) : "—"}
                       </td>
                       {!compact && (
-                        <td className="py-3 pr-3 max-w-[220px] truncate text-muted-foreground">
-                          {r.client.notes ?? "—"}
+                        <td className="py-3 pr-3 max-w-[220px] text-muted-foreground">
+                          {clientEdit.isEditing(r.client.id) ? (
+                            <textarea
+                              className="min-h-[32px] w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+                              value={clientEdit.draftValues?.notes ?? ""}
+                              onChange={(e) =>
+                                clientEdit.setField("notes", e.target.value)
+                              }
+                              aria-label="Editar observação do cliente"
+                              rows={2}
+                            />
+                          ) : (
+                            <span className="block truncate">{r.client.notes ?? "—"}</span>
+                          )}
                         </td>
                       )}
                       <td
@@ -651,6 +663,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                                     updateClient(r.client.id, {
                                       name: draft.name.trim(),
                                       phone: draft.phone.trim(),
+                                      notes: draft.notes.trim() || undefined,
                                     });
                                     toast.success("Cliente atualizado");
                                   },
@@ -672,6 +685,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                                   clientEdit.startEdit(r.client.id, {
                                     name: r.client.name,
                                     phone: r.client.phone,
+                                    notes: r.client.notes ?? "",
                                   })
                                 }
                               />
@@ -686,13 +700,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                           )}
                           {!compact && !clientEdit.isEditing(r.client.id) && (
                             <>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setClientModal({ open: true, client: r.client })}
-                              >
-                                Editar
-                              </Button>
                               <Button
                                 size="sm"
                                 onClick={() =>
