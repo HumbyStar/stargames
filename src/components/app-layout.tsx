@@ -16,7 +16,7 @@ import {
   CircleDollarSign,
   KanbanSquare,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, lazy, Suspense, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, lazy, memo, Suspense, type ReactNode } from "react";
 import type { ComponentType, SVGProps } from "react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
@@ -41,6 +41,7 @@ import { FloatingConcierge } from "@/components/floating-concierge";
 import { FinanceDashboard } from "@/components/finance-dashboard";
 import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 import { useNavbarConfig, getIconMeta, type NavbarIconId } from "@/lib/navbar-config";
+import { scrollToSection } from "@/lib/scroll-to-section";
 
 const ImportSection = lazy(() =>
   import("@/sections/import-section").then((m) => ({ default: m.ImportSection })),
@@ -59,18 +60,6 @@ const navItems: ReadonlyArray<{
   { id: "mgmv", label: "MGMV", icon: Sparkles },
   { id: "collection", label: "Collection", icon: Wallet },
 ];
-
-function scrollToSection(id: string) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const container = document.querySelector<HTMLElement>(".page-container");
-  if (!container) {
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-    return;
-  }
-  const top = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
-  container.scrollTo({ top: Math.max(0, top - 12), behavior: "smooth" });
-}
 
 function SearchBox({
   className,
@@ -361,7 +350,7 @@ function NotificationsDropdown({
   );
 }
 
-function NavLink({
+function NavLinkImpl({
   id,
   label,
   active,
@@ -420,6 +409,7 @@ function NavLink({
     </Tooltip>
   );
 }
+const NavLink = memo(NavLinkImpl);
 
 function FloatingNavbar() {
   // placeholder for ordering — actual definition below
@@ -495,7 +485,7 @@ interface RightNavIconProps {
   onToggleTheme: () => void;
 }
 
-function RightNavIcon({
+function RightNavIconImpl({
   id,
   isDark,
   unreadCount,
@@ -627,6 +617,7 @@ function RightNavIcon({
       );
   }
 }
+const RightNavIcon = memo(RightNavIconImpl);
 
 function _FloatingNavbarImpl() {
   const [openMobile, setOpenMobile] = useState(false);
@@ -680,11 +671,9 @@ function _FloatingNavbarImpl() {
     const observer = new ResizeObserver(update);
     observer.observe(nav);
     window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, { passive: true });
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update);
     };
   }, []);
 
@@ -1191,11 +1180,40 @@ export function AppLayout({ children }: { children?: ReactNode }) {
   const hydrated = useStore((s) => s.hydrated);
   const hydrate = useStore((s) => s.hydrate);
   const userName = useHydrationUserName();
+  const [warm, setWarm] = useState(false);
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+  // Pré-aquece os chunks lazy das seções e modais em paralelo à
+  // hidratação. O splash só desmonta quando `hydrated && warm`, então ao
+  // chegar na one-page as seções montam instantaneamente (sem placeholder
+  // de altura e sem "salto" ao rolar).
+  useEffect(() => {
+    let cancelled = false;
+    const prefetches: Promise<unknown>[] = [
+      import("@/sections/mgmv-section"),
+      import("@/sections/collection-section"),
+      import("@/components/dashboard-drilldown-modal"),
+      import("@/sections/import-section"),
+      import("@/sections/equipe-section"),
+    ];
+    // Fallback: se algum chunk demorar demais (rede ruim), não trava o
+    // splash — libera após 4s mesmo assim.
+    const timeout = window.setTimeout(() => {
+      if (!cancelled) setWarm(true);
+    }, 4000);
+    Promise.allSettled(prefetches).then(() => {
+      if (cancelled) return;
+      window.clearTimeout(timeout);
+      setWarm(true);
+    });
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, []);
 
-  if (!hydrated) {
+  if (!hydrated || !warm) {
     return <HydrationSplash userName={userName} />;
   }
 
