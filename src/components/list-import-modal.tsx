@@ -661,6 +661,9 @@ export function ListImportModal({
               </Button>
             </div>
           </TabsContent>
+          <TabsContent value="zip" className="space-y-3">
+            <ZipImportReview onDone={close} />
+          </TabsContent>
         </Tabs>
 
         {preview && (
