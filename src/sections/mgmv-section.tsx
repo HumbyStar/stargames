@@ -10,6 +10,7 @@ import {
   type Client,
   type MGMVAgreement,
 } from "@/lib/store";
+import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
 import { MgmvAiReviewModal } from "@/components/mgmv-ai-review-modal";
 import {
   ListExpansionToggle,
