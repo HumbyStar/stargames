@@ -435,13 +435,26 @@ export function MGMVSection({
         title="MGMV"
         description="Controle acordos MGMV, parcelas, vencimentos, saldos e clientes agrupados."
         actions={
-          <Button
-            variant="outline"
-            disabled={reprocessing}
-            onClick={reprocessFromNotes}
-          >
-            {reprocessing ? "Reprocessando…" : "Reprocessar MGMV por observações"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {lastUpdatedIds && lastUpdatedIds.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setLastUpdatedIds(null)}
+                title="Mostrar todos os acordos, não só os atualizados no último reprocesso"
+              >
+                <X className="mr-1 h-3.5 w-3.5" />
+                Mostrando {lastUpdatedIds.length} atualizados · limpar
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              disabled={reprocessing}
+              onClick={reprocessFromNotes}
+            >
+              {reprocessing ? "Reprocessando…" : "Reprocessar MGMV por observações"}
+            </Button>
+          </div>
         }
       />
 
