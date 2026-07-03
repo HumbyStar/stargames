@@ -238,6 +238,15 @@ export function MGMVSection({
   const [reprocessing, setReprocessing] = useState(false);
   const { expanded: listExpanded, expand: expandList } = useListExpansion("mgmv");
 
+  // Edição por lápis no acordo MGMV. Campos permitidos: totalDebt e valor
+  // da parcela. Não expomos ações Retirar/Retirado nesta seção (MGMV é
+  // acordo, não produto físico de retirada). Se a edição deixar o acordo
+  // matematicamente inconsistente (soma parcelas ≠ totalDebt), o
+  // `reviewStatus` cai para "review_required" automaticamente via `buildRow`
+  // — o próprio Confirmar marca isso explicitamente também para forçar o
+  // recálculo na próxima render.
+  const mgmvEdit = useRowEdit<{ totalDebt: number; installmentValue: number }>();
+
   /**
    * Aplica filtro a partir do clique em um card de resumo, mantendo o
    * contexto da seção MGMV. Garante que a lista esteja expandida e
