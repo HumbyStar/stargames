@@ -356,7 +356,6 @@ export function CollectionSection({
   );
 
   const chips: { id: Filter; label: string }[] = [
-    { id: "todos", label: "Todos" },
     { id: "reserva_vencida", label: "Reserva vencida" },
     { id: "pendente_vencido", label: "Pendente vencido" },
     { id: "mgmv", label: "MGMV" },
