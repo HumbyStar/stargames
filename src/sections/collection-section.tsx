@@ -435,7 +435,7 @@ export function CollectionSection({
   };
 
   const clearFilters = () => {
-    setFilter("todos");
+    setFilter("em_aberto");
     setPeriod("todos");
     setCustomFrom("");
     setCustomTo("");
