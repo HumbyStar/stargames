@@ -52,6 +52,17 @@ import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 import { useNavbarConfig, getIconMeta, type NavbarIconId } from "@/lib/navbar-config";
 import { scrollToSection } from "@/lib/scroll-to-section";
 
+// Normaliza texto para busca: remove acentos, minúsculas e trim.
+// Compartilhado entre input e campos comparados para tratar
+// "Túlio"/"tu"/"TÚ" como equivalentes.
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 const ImportSection = lazy(() =>
   import("@/sections/import-section").then((m) => ({ default: m.ImportSection })),
 );
@@ -152,30 +163,32 @@ function SearchBox({
   }, []);
 
   // Debounce do termo de busca para evitar reprocessar a cada tecla em listas
-  // grandes. Limpa o timer no unmount para não vazar callbacks.
+  // grandes. 300ms atende ao requisito de fluidez sem consultar a cada letra.
   useEffect(() => {
-    const id = window.setTimeout(() => setDebouncedQuery(query), 120);
+    const id = window.setTimeout(() => setDebouncedQuery(query), 300);
     return () => window.clearTimeout(id);
   }, [query]);
 
   const results = useMemo(() => {
-    const q = debouncedQuery.trim().toLowerCase();
-    if (!q)
-      return [] as Array<
-        | { type: "client"; id: string; title: string; subtitle: string; statusLabel: string }
-        | {
-            type: "agreement";
-            id: string;
-            clientId: string;
-            title: string;
-            subtitle: string;
-            statusLabel: string;
-          }
-      >;
-    const digits = q.replace(/\D/g, "");
-    // Index products by clientId once, para não escanear todo o array por cliente
-    // encontrado. Sem isso, para cada match a função de status faria um
-    // products.filter linear — O(n*m) em bases grandes.
+    const rawQuery = debouncedQuery.trim();
+    const q = normalizeSearchText(rawQuery);
+    type ResultItem =
+      | { type: "client"; id: string; title: string; subtitle: string; statusLabel: string; score: number; sortKey: string }
+      | {
+          type: "agreement";
+          id: string;
+          clientId: string;
+          title: string;
+          subtitle: string;
+          statusLabel: string;
+          score: number;
+          sortKey: string;
+        };
+    if (!q) return [] as ResultItem[];
+
+    const digits = rawQuery.replace(/\D/g, "");
+    // Index products by clientId once (O(n)); depois lookups O(1) por cliente
+    // — evita products.filter linear a cada match em bases grandes.
     const productsByClient = new Map<string, Product[]>();
     for (const p of products) {
       const arr = productsByClient.get(p.clientId);
@@ -183,43 +196,66 @@ function SearchBox({
       else productsByClient.set(p.clientId, [p]);
     }
     const getPs = (id: string): Product[] => productsByClient.get(id) ?? [];
-    const clientMatches = clients
-      .filter((c) => {
-        const inName = c.name.toLowerCase().includes(q);
-        const inPhone = digits.length > 0 && c.phone.replace(/\D/g, "").includes(digits);
-        return inName || inPhone;
-      })
-      .slice(0, 6)
-      .map((c) => ({
-        type: "client" as const,
+
+    // Score de relevância (menor = mais relevante):
+    // 1 nome começa com termo · 2 nome contém · 3 telefone começa ·
+    // 4 telefone contém · 5 produto contém · 99 sem match.
+    const scoreClient = (c: Client): number => {
+      const name = normalizeSearchText(c.name);
+      if (name.startsWith(q)) return 1;
+      if (name.includes(q)) return 2;
+      if (digits.length > 0) {
+        const phone = c.phone.replace(/\D/g, "");
+        if (phone.startsWith(digits)) return 3;
+        if (phone.includes(digits)) return 4;
+      }
+      const ps = getPs(c.id);
+      if (ps.some((p) => normalizeSearchText(p.name).includes(q))) return 5;
+      return 99;
+    };
+
+    const scored: ResultItem[] = [];
+    for (const c of clients) {
+      const s = scoreClient(c);
+      if (s === 99) continue;
+      const sortKey = normalizeSearchText(c.name);
+      scored.push({
+        type: "client",
         id: c.id,
         title: c.name,
         subtitle: c.phone,
         statusLabel: clientSearchStatus(c, getPs(c.id)),
-      }));
-    const agreementMatches = clients
-      .filter((c) => {
-        if (!c.mgmv) return false;
-        const inName = c.name.toLowerCase().includes(q);
-        const inPhone = digits.length > 0 && c.phone.replace(/\D/g, "").includes(digits);
-        return inName || inPhone;
-      })
-      .slice(0, 6)
-      .map((c) => {
+        score: s,
+        sortKey,
+      });
+      if (c.mgmv) {
         const display = getMGMVDisplay(c);
         const subtitle = display
           ? `${display.installmentsPaid}/${display.installmentsTotal} parcelas · ${formatBRL(display.remainingBalance)} restante`
           : "Acordo MGMV";
-        return {
-          type: "agreement" as const,
+        scored.push({
+          type: "agreement",
           id: c.id,
           clientId: c.id,
           title: `Acordo MGMV — ${c.name}`,
           subtitle,
           statusLabel: clientSearchStatus(c, getPs(c.id)),
-        };
-      });
-    return [...clientMatches, ...agreementMatches];
+          score: s,
+          sortKey,
+        });
+      }
+    }
+
+    scored.sort((a, b) => {
+      if (a.score !== b.score) return a.score - b.score;
+      // Cliente antes do acordo do mesmo cliente
+      if (a.sortKey === b.sortKey && a.type !== b.type) {
+        return a.type === "client" ? -1 : 1;
+      }
+      return a.sortKey.localeCompare(b.sortKey, "pt-BR");
+    });
+
+    return scored.slice(0, 10);
   }, [debouncedQuery, clients, products]);
 
   useEffect(() => {
