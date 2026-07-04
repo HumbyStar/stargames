@@ -101,14 +101,8 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const [search, setSearch] = usePersistedState<string>("clientes.search", "");
   const [chip, setChip] = usePersistedState<ChipFilter>(
     "clientes.chip",
-    "pago_aguardando",
+    "todos",
   );
-  // Migração: usuários com o antigo default "todos" persistido migram
-  // automaticamente para o novo default operacional na primeira montagem.
-  useEffect(() => {
-    if (chip === "todos") setChip("pago_aguardando");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   const [financialFilter, setFinancialFilter] = usePersistedState<string>(
     "clientes.financial",
     "Todos",
@@ -123,9 +117,9 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   );
   const [periodFilter, setPeriodFilter] = usePersistedState<string>("clientes.period", "Todos");
   const [folderFilter, setFolderFilter] = usePersistedState<string>("clientes.folder", "Todas");
-  const [compact, setCompact] = useSectionCompact("clientes");
+  const compact = true;
   const [showFilters, setShowFilters] = useState(true);
-  const { expanded: listExpanded, expand: expandList } = useListExpansion("clients");
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
   /**
    * Drill-down a partir de um card de resumo: ajusta o chip do contexto
@@ -134,7 +128,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const applyCardFilter = (next: ChipFilter) => {
     setChip(next);
     setSearch("");
-    if (!listExpanded) expandList();
   };
 
   const drawerClientId = openClientId;
