@@ -52,6 +52,17 @@ import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 import { useNavbarConfig, getIconMeta, type NavbarIconId } from "@/lib/navbar-config";
 import { scrollToSection } from "@/lib/scroll-to-section";
 
+// Normaliza texto para busca: remove acentos, minúsculas e trim.
+// Compartilhado entre input e campos comparados para tratar
+// "Túlio"/"tu"/"TÚ" como equivalentes.
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 const ImportSection = lazy(() =>
   import("@/sections/import-section").then((m) => ({ default: m.ImportSection })),
 );
