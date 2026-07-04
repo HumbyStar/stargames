@@ -55,7 +55,7 @@ export function useServerTable<TRow, TFilters extends Record<string, unknown>>(
   keyPrefix: readonly unknown[],
   opts: UseServerTableOptions<TFilters> = {},
 ) {
-  const call = useServerFn(fn as never) as ServerFn<
+  const call = useServerFn(fn as never) as unknown as ServerFn<
     {
       page: number;
       pageSize: number;
