@@ -443,6 +443,19 @@ export interface DashboardAggregates {
   clientesMGMV: number;
   mgmvVencidas: number;
   cobrancaAtiva: number; // itens elegíveis a cobrança individual (vencidos)
+  aberto: number;
+  finPago: number;
+  finReserva: number;
+  finMGMV: number;
+  finPend: number;
+  topAlerts: Array<{
+    productId: string;
+    clientId: string;
+    clientName: string;
+    productName: string;
+    remaining: number;
+    financialStatus: string;
+  }>;
 }
 
 // (helper `countRows` removido — as contagens do dashboard usam chamadas
@@ -473,6 +486,12 @@ export const getDashboardAggregates = createServerFn({ method: "POST" })
       clientesMGMV,
       mgmvVencidas,
       cobrancaAtiva,
+      aberto,
+      finPago,
+      finReserva,
+      finMGMV,
+      finPend,
+      alertsRes,
     ] = await Promise.all([
       supabase.from("clients").select("id", { count: "exact", head: true }),
       supabase.from("products").select("id", { count: "exact", head: true }),
@@ -522,12 +541,40 @@ export const getDashboardAggregates = createServerFn({ method: "POST" })
         .eq("situation", "Em Aberto")
         .eq("included_in_mgmv", false)
         .lt("due_date", nowIso),
+      supabase.from("products").select("id", { count: "exact", head: true }).eq("situation", "Em Aberto"),
+      supabase.from("products").select("id", { count: "exact", head: true }).eq("financial_status", "Pago"),
+      supabase.from("products").select("id", { count: "exact", head: true }).eq("financial_status", "Reserva"),
+      supabase.from("products").select("id", { count: "exact", head: true }).eq("financial_status", "MGMV"),
+      supabase.from("products").select("id", { count: "exact", head: true }).eq("financial_status", "Pendente"),
+      supabase
+        .from("products")
+        .select("id,client_id,name,total_value,paid_value,financial_status,clients(name)")
+        .in("financial_status", ["Reserva", "Pendente"])
+        .eq("situation", "Em Aberto")
+        .eq("included_in_mgmv", false)
+        .lt("due_date", nowIso)
+        .order("due_date", { ascending: true })
+        .limit(3),
     ]);
 
     const c = (r: { count: number | null; error: unknown }) => {
       if (r.error) throw new Error(String((r.error as { message?: string })?.message ?? r.error));
       return r.count ?? 0;
     };
+
+    if (alertsRes.error)
+      throw new Error(String((alertsRes.error as { message?: string })?.message ?? alertsRes.error));
+    const topAlerts = (alertsRes.data ?? []).map((r) => {
+      const rel = (r as unknown as { clients?: { name?: string } }).clients;
+      return {
+        productId: r.id,
+        clientId: r.client_id,
+        clientName: rel?.name ?? "Cliente",
+        productName: r.name,
+        remaining: (Number(r.total_value) || 0) - (Number(r.paid_value) || 0),
+        financialStatus: r.financial_status,
+      };
+    });
 
     return {
       totalClients: c(totalClients),
@@ -546,6 +593,12 @@ export const getDashboardAggregates = createServerFn({ method: "POST" })
       clientesMGMV: c(clientesMGMV),
       mgmvVencidas: c(mgmvVencidas),
       cobrancaAtiva: c(cobrancaAtiva),
+      aberto: c(aberto),
+      finPago: c(finPago),
+      finReserva: c(finReserva),
+      finMGMV: c(finMGMV),
+      finPend: c(finPend),
+      topAlerts,
     };
   });
 
