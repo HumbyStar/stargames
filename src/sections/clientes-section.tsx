@@ -1027,6 +1027,58 @@ function ClientDrawer({
   // cliente. Mantido nas somas totais para não perder o histórico financeiro.
   const individualProducts = individualAll.filter((p) => !isProductArchived(p));
   const archivedProducts = individualAll.filter((p) => isProductArchived(p));
+  // Sincroniza seleção: remove ids que sumiram da lista ativa (ex.: produto
+  // virou Removido/Retirado e foi arquivado).
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const alive = new Set(individualProducts.map((p) => p.id));
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (alive.has(id)) next.add(id);
+        else changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, [individualProducts]);
+  const selectedCount = selectedIds.size;
+  const allSelected =
+    individualProducts.length > 0 && selectedCount === individualProducts.length;
+  const someSelected = selectedCount > 0 && !allSelected;
+  const toggleOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleAll = () => {
+    setSelectedIds(
+      allSelected ? new Set() : new Set(individualProducts.map((p) => p.id)),
+    );
+  };
+  const clearSelection = () => setSelectedIds(new Set());
+  const selectedProducts = () =>
+    individualProducts.filter((p) => selectedIds.has(p.id));
+  const bulkMarkPaid = () => {
+    const targets = selectedProducts().filter((p) => p.financialStatus !== "Pago");
+    if (targets.length === 0) {
+      toast.info("Nenhum produto pendente na seleção");
+      return;
+    }
+    targets.forEach((p) => onMarkPaid(p));
+    toast.success(`${targets.length} produto(s) marcados como pagos`);
+    clearSelection();
+  };
+  const bulkChangeSituation = (situation: Situation, confirmMsg: string) => {
+    const targets = selectedProducts();
+    if (targets.length === 0) return;
+    if (!window.confirm(confirmMsg)) return;
+    targets.forEach((p) => onChangeSituation(p.id, situation));
+    toast.success(`${targets.length} produto(s) atualizados`);
+    clearSelection();
+  };
   // Evita double-counting: produtos MGMV são consolidados no acordo.
   // Total comprado = soma dos produtos individuais + valor total do acordo MGMV.
   const individualBought = individualAll.reduce((a, p) => a + p.totalValue, 0);
