@@ -19,7 +19,16 @@ import {
 import { useEffect, useMemo, useRef, useState, lazy, memo, Suspense, type ReactNode } from "react";
 import type { ComponentType, SVGProps } from "react";
 import { cn } from "@/lib/utils";
-import { useStore } from "@/lib/store";
+import {
+  useStore,
+  isOpenSituation,
+  isOverdue,
+  isResolvedSituation,
+  getMGMVDisplay,
+  formatBRL,
+  type Client,
+  type Product,
+} from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
 import { setUiValue } from "@/lib/db-sync";
 import { HydrationSplash, useHydrationUserName } from "@/components/hydration-splash";
