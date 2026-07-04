@@ -546,8 +546,8 @@ export function MGMVSection({
         <MetricCard
           label="Saldo total"
           value={formatBRL(stats.saldoTotal)}
-          onClick={() => applyCardFilter("todos")}
-          tooltip="Ver acordos com saldo restante"
+          onClick={() => useUiStore.getState().openHistory("mgmv-todos")}
+          tooltip="Abrir base completa de acordos MGMV"
         />
         <MetricCard
           label="Com produtos externos"
