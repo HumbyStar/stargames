@@ -1,31 +1,52 @@
-## Contexto
+## Objetivo
 
-O bug relata que "não existe opção para editar" o acordo MGMV. Investigando:
+Adicionar **5 botões de ação** direto na linha do cliente na tabela principal de **Clientes** (mesma célula onde hoje ficam "lápis / Abrir / + Produto"), sem precisar abrir modal ou expandir:
 
-- `MgmvAgreementEditor` (`src/components/mgmv-agreement-editor.tsx`) **já existe** e cobre tudo pedido no bug: editar Nº de parcelas, valor mínimo/reduzido, recalcular saldo, redistribuir, aumentar parcelas, remover parcelas e remover produtos.
-- Ele **só está exposto na seção MGMV** (`src/sections/mgmv-section.tsx`, linha 872).
-- A tela do PDF vem do **modal de detalhes do cliente** (`src/sections/clientes-section.tsx`, Card "Acordo MGMV — {status}" em ~L1113), onde **não há botão para abrir o editor**. Por isso o usuário conclui que a edição não existe.
+1. **Editar** (ícone lápis) — já existe, sem mudança.
+2. **Pago**
+3. **Enviado**
+4. **Retirar**
+5. **Removido**
 
-## Correção
+Como cada cliente tem N produtos, os 4 botões de status agem **em lote** sobre os produtos do cliente que ainda estão em aberto (situation `Em Aberto` / `Abandonou` / `Desistiu` — não toca em produtos já `Enviado`, `Retirar`, `Retirado`, `Removido`). Isso reproduz o comportamento "atualizar status" no nível de cliente sem exigir clique por produto.
 
-Expor o editor no modal do cliente, reutilizando o componente existente — sem lógica nova.
+Também aparece no modal do cliente (`ClientDrawer`), por produto, conforme já planejado antes.
 
-### 1. `src/sections/clientes-section.tsx`
-- Importar `MgmvAgreementEditor`.
-- Adicionar estado local `mgmvEditOpen` no componente que renderiza o Card "Acordo MGMV".
-- No header do Card, adicionar botão **"Editar acordo"** (ícone `Pencil`), habilitado quando `client.mgmv` existe.
-- Ao abrir, renderizar `<MgmvAgreementEditor clientId={client.id} agreement={client.mgmv} products={mgmvProducts} onClose={...} />` logo acima (ou substituindo) o bloco tabela de parcelas + itens, no mesmo padrão da MGMV section.
-- Enquanto aberto, esconder a tabela de "Marcar como paga" para evitar duas UIs conflitantes; ao fechar, volta ao estado atual.
+## Regras de cada botão (linha do cliente)
 
-### 2. Verificação
-- Abrir cliente com acordo MGMV → botão "Editar acordo" aparece no Card.
-- Alterar Nº de parcelas / valor mínimo → "Recalcular parcelas" redistribui saldo.
-- Adicionar/remover parcela pendente funciona.
-- Remover produto do acordo (Trash na lista de produtos do editor) muda `financialStatus` para Pendente.
-- Salvar persiste via `setMGMVAgreement`, fecha o editor e mostra os novos valores no Card.
+Todos aplicam via handlers já existentes na store (`updateProduct`, `setProductSituation`) — sem nova lógica de negócio:
+
+- **Pago**: para cada produto com `financialStatus !== "Pago"` e situação em aberto → `updateProduct(id, { paidValue: totalValue, financialStatus: "Pago" })`. Toast: "N produto(s) marcados como pagos".
+- **Enviado**: `window.confirm("Marcar todos os produtos em aberto como Enviado?")` → para cada produto em aberto → `setProductSituation(id, "Enviado")`. Toast igual.
+- **Retirar**: `window.confirm(...)` → para cada produto em aberto → `setProductSituation(id, "Retirar")`.
+- **Removido**: `window.confirm(...)` → para cada produto em aberto → `setProductSituation(id, "Removido")`.
+
+Se o cliente não tem produtos em aberto, os 4 botões ficam **desabilitados** (visual claro de que não há nada a atualizar). O contador de produtos aplicáveis vira `title` do botão (tooltip) — ex.: "Marcar 3 produto(s) como Pago".
+
+## Layout
+
+Na célula de ações da linha do cliente (~L759-824, `src/sections/clientes-section.tsx`), quando NÃO está em modo edição e NÃO está compacto:
+
+```
+[lápis] [Abrir] [+ Produto] [Pago] [Enviado] [Retirar] [Removido] [Cobrança?]
+```
+
+- Botões novos: `size="sm" variant="outline"` para consistência.
+- No modo compacto: manter apenas [lápis] [Abrir] + os 4 de status (esconde "+ Produto" e "Cobrança" como já é feito hoje) — assim os 5 pedidos ficam sempre visíveis.
+- Nada muda quando `clientEdit.isEditing(r.client.id)` está ativo (mantém `RowEditActions`).
+
+## Modal do cliente
+
+Manter o plano anterior: substituir o bloco condicional (~L1443-1504) por [lápis] [Pago] [Enviado] [Retirar] [Removido] fixos por produto.
+
+## Verificação
+
+1. Tabela principal de Clientes: cada linha exibe os 5 botões inline.
+2. Cliente com 3 produtos em aberto → clicar "Pago" na tabela → todos os 3 viram Pago (badge do cliente atualiza para "Pago ag. envio"), toast confirma quantidade.
+3. Clicar "Enviado" com confirm → situações dos abertos viram Enviado.
+4. Cliente sem produtos em aberto → botões de status desabilitados; lápis e Abrir seguem funcionando.
+5. Abrir modal do cliente → tabela de produtos individuais mostra por linha [lápis] [Pago] [Enviado] [Retirar] [Removido].
 
 ## Arquivos afetados
 
-- `src/sections/clientes-section.tsx` — importar editor, adicionar toggle e botão, renderizar componente.
-
-Nenhum novo componente, nenhuma mudança de store/regra de negócio: só discoverability.
+- `src/sections/clientes-section.tsx` — apenas duas células de ações (linha da tabela do cliente ~L759-824 e linha do produto no drawer ~L1443-1504). Nenhuma mudança de store, tipos, ou outros componentes.
