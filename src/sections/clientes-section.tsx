@@ -197,7 +197,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
             .map((p) => p.registerDate)
             .sort()
             .pop();
-          const status = generalStatus(c, products);
+          const status = generalStatus(c, ps);
           return { client: c, products: ps, totalPurchased, totalOpen, last, status };
         })
         .filter((r) => {
