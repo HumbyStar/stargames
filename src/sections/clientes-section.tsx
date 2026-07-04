@@ -309,37 +309,37 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   // Contagem de correspondências por coluna sobre a lista já filtrada
   // (`rows`) — usado para pintar o indicador no cabeçalho e a legenda
   // "encontrado em: ..." acima da tabela.
-  const searchActive = search.trim().length > 0;
+  const searchActive = debouncedSearch.trim().length > 0;
   const matchCols = useMemo(() => {
     if (!searchActive) {
       return { name: 0, phone: 0, status: 0, products: 0, folder: 0, notes: 0, totals: 0, last: 0 };
     }
     let name = 0, phone = 0, status = 0, prods = 0, folder = 0, notes = 0, totals = 0, last = 0;
     for (const r of rows) {
-      if (matchText(r.client.name, search)) name++;
-      if (matchText(r.client.phone, search)) phone++;
-      if (matchText(r.status.label, search)) status++;
-      if (matchText(r.client.folder ?? "", search)) folder++;
-      if (matchText(r.client.notes ?? "", search)) notes++;
+      if (matchText(r.client.name, debouncedSearch)) name++;
+      if (matchText(r.client.phone, debouncedSearch)) phone++;
+      if (matchText(r.status.label, debouncedSearch)) status++;
+      if (matchText(r.client.folder ?? "", debouncedSearch)) folder++;
+      if (matchText(r.client.notes ?? "", debouncedSearch)) notes++;
       if (
         r.products.some(
           (p) =>
-            matchText(p.name, search) ||
-            matchText(p.platform ?? "", search) ||
-            matchText(p.financialStatus, search) ||
-            matchText(p.situation, search),
+            matchText(p.name, debouncedSearch) ||
+            matchText(p.platform ?? "", debouncedSearch) ||
+            matchText(p.financialStatus, debouncedSearch) ||
+            matchText(p.situation, debouncedSearch),
         )
       )
         prods++;
       if (
-        matchText(formatBRL(r.totalPurchased), search) ||
-        matchText(formatBRL(r.totalOpen), search)
+        matchText(formatBRL(r.totalPurchased), debouncedSearch) ||
+        matchText(formatBRL(r.totalOpen), debouncedSearch)
       )
         totals++;
-      if (r.last && matchText(formatDateBR(r.last), search)) last++;
+      if (r.last && matchText(formatDateBR(r.last), debouncedSearch)) last++;
     }
     return { name, phone, status, products: prods, folder, notes, totals, last };
-  }, [rows, search, searchActive]);
+  }, [rows, debouncedSearch, searchActive]);
 
   const activeFilterCount =
     (chip !== "pago_aguardando" ? 1 : 0) +
