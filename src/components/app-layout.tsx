@@ -75,9 +75,9 @@ const navItems: ReadonlyArray<{
 // arquivo pesado da seção. Inclui variação "Reserva" (não vencida) → amarelo.
 function clientSearchStatus(
   client: Client,
-  products: Product[],
+  clientProducts: Product[],
 ): "Em dia" | "Pendente" | "Reserva vencida" | "Reserva" | "Pago ag. envio" | "MGMV" | "Enviado" | "Sem produtos" {
-  const ps = products.filter((p) => p.clientId === client.id);
+  const ps = clientProducts;
   if (
     ps.some(
       (p) => p.financialStatus === "Reserva" && isOpenSituation(p) && isOverdue(p.dueDate),
@@ -173,6 +173,16 @@ function SearchBox({
           }
       >;
     const digits = q.replace(/\D/g, "");
+    // Index products by clientId once, para não escanear todo o array por cliente
+    // encontrado. Sem isso, para cada match a função de status faria um
+    // products.filter linear — O(n*m) em bases grandes.
+    const productsByClient = new Map<string, Product[]>();
+    for (const p of products) {
+      const arr = productsByClient.get(p.clientId);
+      if (arr) arr.push(p);
+      else productsByClient.set(p.clientId, [p]);
+    }
+    const getPs = (id: string): Product[] => productsByClient.get(id) ?? [];
     const clientMatches = clients
       .filter((c) => {
         const inName = c.name.toLowerCase().includes(q);
@@ -185,7 +195,7 @@ function SearchBox({
         id: c.id,
         title: c.name,
         subtitle: c.phone,
-        statusLabel: clientSearchStatus(c, products),
+        statusLabel: clientSearchStatus(c, getPs(c.id)),
       }));
     const agreementMatches = clients
       .filter((c) => {
@@ -206,7 +216,7 @@ function SearchBox({
           clientId: c.id,
           title: `Acordo MGMV — ${c.name}`,
           subtitle,
-          statusLabel: clientSearchStatus(c, products),
+          statusLabel: clientSearchStatus(c, getPs(c.id)),
         };
       });
     return [...clientMatches, ...agreementMatches];
