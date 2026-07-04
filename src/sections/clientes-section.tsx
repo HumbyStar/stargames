@@ -1346,10 +1346,74 @@ function ClientDrawer({
             cobrados pelas parcelas do acordo (sem cobrança individual).
           </p>
         )}
+        {selectedCount > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2">
+            <span className="text-sm font-medium">
+              {selectedCount} selecionado(s)
+            </span>
+            <div className="ml-auto flex flex-wrap gap-1.5">
+              <Button size="sm" variant="outline" onClick={bulkMarkPaid}>
+                Pago
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  bulkChangeSituation(
+                    "Enviado",
+                    `Marcar ${selectedCount} produto(s) selecionado(s) como Enviado?`,
+                  )
+                }
+              >
+                Enviado
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  bulkChangeSituation(
+                    "Retirar",
+                    `Marcar ${selectedCount} produto(s) selecionado(s) para retirada?\n\nEles continuam vinculados ao cliente, mas ficam pendentes de retirada.`,
+                  )
+                }
+              >
+                Retirar
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  bulkChangeSituation(
+                    "Removido",
+                    `Marcar ${selectedCount} produto(s) selecionado(s) como Removido?\n\nEles saem da lista ativa do cliente.`,
+                  )
+                }
+              >
+                Removido
+              </Button>
+              <Button size="sm" variant="ghost" onClick={clearSelection}>
+                Limpar
+              </Button>
+            </div>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="py-2 pr-2 font-medium w-8">
+                  <input
+                    type="checkbox"
+                    aria-label="Selecionar todos"
+                    className="h-4 w-4 cursor-pointer"
+                    checked={allSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someSelected;
+                    }}
+                    onChange={toggleAll}
+                    disabled={individualProducts.length === 0}
+                  />
+                </th>
                 <th className="py-2 pr-3 font-medium">Produto</th>
                 <th className="py-2 pr-3 font-medium">Plataforma</th>
                 <th className="py-2 pr-3 font-medium">Total</th>
@@ -1366,11 +1430,19 @@ function ClientDrawer({
               {individualProducts.map((p) => {
                 const remaining = p.totalValue - p.paidValue;
                 const status = productCollectionStatus(p);
-                const isPaid = p.financialStatus === "Pago";
                 const editing = productEdit.isEditing(p.id);
                 const draft = productEdit.draftValues;
                 return (
                   <tr key={p.id} className="border-b border-border/60 last:border-0">
+                    <td className="py-2 pr-2 align-middle">
+                      <input
+                        type="checkbox"
+                        aria-label={`Selecionar ${p.name}`}
+                        className="h-4 w-4 cursor-pointer"
+                        checked={selectedIds.has(p.id)}
+                        onChange={() => toggleOne(p.id)}
+                      />
+                    </td>
                     <td className="py-2 pr-3 font-medium">
                       {editing ? (
                         <input
@@ -1496,43 +1568,6 @@ function ClientDrawer({
                             }
                           />
                         )}
-                        {!isPaid && (
-                          <Button size="sm" variant="outline" onClick={() => onMarkPaid(p)}>
-                            Pago
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={p.situation === "Enviado"}
-                          onClick={() => onChangeSituation(p.id, "Enviado")}
-                        >
-                          Enviado
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={p.situation === "Retirar" || p.situation === "Retirado"}
-                          onClick={() => {
-                            if (
-                              !window.confirm(
-                                "Marcar produto para retirada?\n\nEste produto continuará vinculado ao cliente, mas ficará marcado como pendente de retirada pelo estoque. Ele ainda não voltará para o estoque central.",
-                              )
-                            )
-                              return;
-                            onChangeSituation(p.id, "Retirar");
-                          }}
-                        >
-                          Retirar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={p.situation === "Removido"}
-                          onClick={() => onChangeSituation(p.id, "Removido")}
-                        >
-                          Removido
-                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -1540,7 +1575,7 @@ function ClientDrawer({
               })}
               {individualProducts.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={11} className="py-6 text-center text-muted-foreground">
                     Nenhum produto.
                   </td>
                 </tr>
