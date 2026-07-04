@@ -12,11 +12,6 @@ import {
 } from "@/lib/store";
 import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
 import { MgmvAiReviewModal } from "@/components/mgmv-ai-review-modal";
-import {
-  ListExpansionToggle,
-  MinimizedListCard,
-} from "@/components/list-expansion";
-import { useListExpansion } from "@/lib/list-expansion";
 import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { usePaginatedList } from "@/hooks/use-paginated-list";
