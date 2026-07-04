@@ -798,6 +798,105 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                               >
                                 Abrir
                               </Button>
+                              {(() => {
+                                const openProducts = r.products.filter((p) => isOpenSituation(p));
+                                const payableProducts = openProducts.filter(
+                                  (p) => p.financialStatus !== "Pago",
+                                );
+                                const applyToOpen = (
+                                  situation: Situation,
+                                  confirmMsg: string,
+                                ) => {
+                                  if (openProducts.length === 0) return;
+                                  if (!window.confirm(confirmMsg)) return;
+                                  openProducts.forEach((p) => setProductSituation(p.id, situation));
+                                  toast.success(
+                                    `${openProducts.length} produto(s) atualizados`,
+                                  );
+                                };
+                                return (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={payableProducts.length === 0}
+                                      title={
+                                        payableProducts.length === 0
+                                          ? "Nenhum produto pendente"
+                                          : `Marcar ${payableProducts.length} produto(s) como Pago`
+                                      }
+                                      onClick={() => {
+                                        if (payableProducts.length === 0) return;
+                                        payableProducts.forEach((p) =>
+                                          updateProduct(p.id, {
+                                            paidValue: p.totalValue,
+                                            financialStatus: "Pago",
+                                          }),
+                                        );
+                                        toast.success(
+                                          `${payableProducts.length} produto(s) marcados como pagos`,
+                                        );
+                                      }}
+                                    >
+                                      Pago
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={openProducts.length === 0}
+                                      title={
+                                        openProducts.length === 0
+                                          ? "Nenhum produto em aberto"
+                                          : `Marcar ${openProducts.length} produto(s) como Enviado`
+                                      }
+                                      onClick={() =>
+                                        applyToOpen(
+                                          "Enviado",
+                                          `Marcar ${openProducts.length} produto(s) em aberto como Enviado?`,
+                                        )
+                                      }
+                                    >
+                                      Enviado
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={openProducts.length === 0}
+                                      title={
+                                        openProducts.length === 0
+                                          ? "Nenhum produto em aberto"
+                                          : `Marcar ${openProducts.length} produto(s) para Retirar`
+                                      }
+                                      onClick={() =>
+                                        applyToOpen(
+                                          "Retirar",
+                                          `Marcar ${openProducts.length} produto(s) para retirada?\n\nEles continuam vinculados ao cliente, mas ficam pendentes de retirada.`,
+                                        )
+                                      }
+                                    >
+                                      Retirar
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={openProducts.length === 0}
+                                      title={
+                                        openProducts.length === 0
+                                          ? "Nenhum produto em aberto"
+                                          : `Marcar ${openProducts.length} produto(s) como Removido`
+                                      }
+                                      onClick={() =>
+                                        applyToOpen(
+                                          "Removido",
+                                          `Marcar ${openProducts.length} produto(s) como Removido?\n\nEles saem da lista ativa do cliente.`,
+                                        )
+                                      }
+                                    >
+                                      Removido
+                                    </Button>
+                                  </>
+                                );
+                              })()}
                             </>
                           )}
                           {!compact && !clientEdit.isEditing(r.client.id) && (
@@ -1441,67 +1540,42 @@ function ClientDrawer({
                           />
                         )}
                         {!isPaid && (
-                          <Button size="sm" onClick={() => onRegisterPayment(p.id, remaining)}>
-                            Pagar
-                          </Button>
-                        )}
-                        {!isPaid && (
                           <Button size="sm" variant="outline" onClick={() => onMarkPaid(p)}>
                             Pago
                           </Button>
                         )}
-                        {/* Fluxo: (aberto) Abandonou → Retirar → Retirado */}
-                        {p.situation !== "Abandonou" &&
-                          p.situation !== "Desistiu" &&
-                          p.situation !== "Retirar" &&
-                          p.situation !== "Retirado" &&
-                          !(status.label === "Enviado" && p.situation === "Enviado") && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => onChangeSituation(p.id, "Enviado")}
-                            >
-                              Enviado
-                            </Button>
-                          )}
-                        {isOpenSituation(p) &&
-                          p.situation !== "Retirar" &&
-                          p.situation !== "Retirado" && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => onChangeSituation(p.id, "Abandonou")}
-                            >
-                              Abandonou
-                            </Button>
-                          )}
-                        {(p.situation === "Abandonou" ||
-                          p.situation === "Desistiu") && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              if (
-                                !window.confirm(
-                                  "Marcar produto para retirada?\n\nEste produto continuará vinculado ao cliente, mas ficará marcado como pendente de retirada pelo estoque. Ele ainda não voltará para o estoque central.",
-                                )
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={p.situation === "Enviado"}
+                          onClick={() => onChangeSituation(p.id, "Enviado")}
+                        >
+                          Enviado
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={p.situation === "Retirar" || p.situation === "Retirado"}
+                          onClick={() => {
+                            if (
+                              !window.confirm(
+                                "Marcar produto para retirada?\n\nEste produto continuará vinculado ao cliente, mas ficará marcado como pendente de retirada pelo estoque. Ele ainda não voltará para o estoque central.",
                               )
-                                return;
-                              onChangeSituation(p.id, "Retirar");
-                            }}
-                          >
-                            Retirar
-                          </Button>
-                        )}
-                        {p.situation === "Retirar" && (
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => onRequestRetirado(p.id)}
-                          >
-                            Retirado
-                          </Button>
-                        )}
+                            )
+                              return;
+                            onChangeSituation(p.id, "Retirar");
+                          }}
+                        >
+                          Retirar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={p.situation === "Removido"}
+                          onClick={() => onChangeSituation(p.id, "Removido")}
+                        >
+                          Removido
+                        </Button>
                       </div>
                     </td>
                   </tr>
