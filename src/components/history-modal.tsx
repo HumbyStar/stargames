@@ -147,7 +147,7 @@ export function HistoryModal() {
             </Table>
           </div>
           {hasMore && (
-            <LoadMoreButton onClick={loadMore} nextChunk={nextChunk} />
+            <LoadMoreButton onClick={loadMore} count={nextChunk} />
           )}
           <div className="flex justify-end">
             <Button variant="outline" onClick={() => closeHistory()}>
