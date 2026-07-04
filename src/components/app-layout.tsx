@@ -70,6 +70,49 @@ const navItems: ReadonlyArray<{
   { id: "collection", label: "Collection", icon: Wallet },
 ];
 
+// Status geral do cliente para a busca global. Mesmas regras da tabela de
+// Clientes (`generalStatus`), replicadas aqui para não acoplar app-layout ao
+// arquivo pesado da seção. Inclui variação "Reserva" (não vencida) → amarelo.
+function clientSearchStatus(
+  client: Client,
+  products: Product[],
+): "Em dia" | "Pendente" | "Reserva vencida" | "Reserva" | "Pago ag. envio" | "MGMV" | "Enviado" | "Sem produtos" {
+  const ps = products.filter((p) => p.clientId === client.id);
+  if (
+    ps.some(
+      (p) => p.financialStatus === "Reserva" && isOpenSituation(p) && isOverdue(p.dueDate),
+    )
+  )
+    return "Reserva vencida";
+  if (ps.some((p) => p.financialStatus === "Pendente" && isOpenSituation(p)))
+    return "Pendente";
+  if (client.mgmv && client.mgmv.installments.some((i) => !i.paid)) return "MGMV";
+  if (ps.some((p) => p.financialStatus === "Pago" && isOpenSituation(p)))
+    return "Pago ag. envio";
+  if (ps.some((p) => p.financialStatus === "Reserva" && isOpenSituation(p)))
+    return "Reserva";
+  if (ps.some((p) => isResolvedSituation(p) && p.financialStatus !== "MGMV"))
+    return "Enviado";
+  if (ps.length === 0) return "Sem produtos";
+  return "Em dia";
+}
+
+function statusBorderClass(label: string): string {
+  switch (label) {
+    case "Em dia":
+      return "border-l-blue-500";
+    case "Pendente":
+      return "border-l-red-500";
+    case "Reserva":
+    case "Reserva vencida":
+      return "border-l-yellow-500";
+    case "Pago ag. envio":
+      return "border-l-green-500";
+    default:
+      return "border-l-transparent";
+  }
+}
+
 function SearchBox({
   className,
   inputRef,
