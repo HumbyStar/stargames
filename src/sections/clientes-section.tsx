@@ -1006,6 +1006,10 @@ function ClientDrawer({
   const [notes, setNotes] = useState(client.notes ?? "");
   const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
   const [mgmvEditOpen, setMgmvEditOpen] = useState(false);
+  // Seleção múltipla de produtos individuais para ações em lote (Pago /
+  // Enviado / Retirar / Removido). Só o clique nos botões da barra aplica;
+  // marcar o checkbox nunca altera status sozinho.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const updateProduct = useStore((s) => s.updateProduct);
   // Edição por lápis dos produtos do cliente. Apenas Confirmar persiste;
   // Fechar descarta. Blur / click-outside são ignorados pelo hook.
