@@ -1,11 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import { Folder, Filter, Maximize2, Minimize2, Pencil } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { Folder, Filter, Pencil, Eye, EyeOff } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { usePersistedState } from "@/lib/use-persisted-state";
-import { useSectionCompact } from "@/lib/use-section-compact";
 import { Button } from "@/components/ui/button";
-import { ListExpansionToggle, MinimizedListCard } from "@/components/list-expansion";
-import { useListExpansion } from "@/lib/list-expansion";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { usePaginatedList } from "@/hooks/use-paginated-list";
 import { useUiStore } from "@/lib/ui-store";
