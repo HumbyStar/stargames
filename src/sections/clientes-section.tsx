@@ -351,18 +351,21 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   };
 
   const totalClients = clients.length;
-  const clientesPendencia = clients.filter((c) =>
-    products.some(
-      (p) =>
-        p.clientId === c.id &&
-        p.situation === "Em Aberto" &&
-        (p.financialStatus === "Pendente" ||
-          (p.financialStatus === "Reserva" && isOverdue(p.dueDate))),
-    ),
-  ).length;
-  const pagosAgEnvio = products.filter(
-    (p) => p.financialStatus === "Pago" && p.situation === "Em Aberto",
-  ).length;
+  const { clientesPendencia, pagosAgEnvio } = useMemo(() => {
+    const pending = new Set<string>();
+    let pagos = 0;
+    for (const p of products) {
+      if (p.situation !== "Em Aberto") continue;
+      if (p.financialStatus === "Pago") pagos++;
+      if (
+        p.financialStatus === "Pendente" ||
+        (p.financialStatus === "Reserva" && isOverdue(p.dueDate))
+      ) {
+        pending.add(p.clientId);
+      }
+    }
+    return { clientesPendencia: pending.size, pagosAgEnvio: pagos };
+  }, [products]);
 
   const chips: { id: ChipFilter; label: string }[] = [
     { id: "reserva_vencida", label: "Reserva vencida" },
