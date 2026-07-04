@@ -367,6 +367,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   }, [products]);
 
   const chips: { id: ChipFilter; label: string }[] = [
+    { id: "todos", label: "Todos" },
     { id: "reserva_vencida", label: "Reserva vencida" },
     { id: "pendente", label: "Pendente" },
     { id: "pago_aguardando", label: "Pago aguardando envio" },
