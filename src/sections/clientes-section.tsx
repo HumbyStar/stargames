@@ -1112,7 +1112,29 @@ function ClientDrawer({
       )}
 
       {mgmv && (
-        <Card title={`Acordo MGMV — ${mgmv.status}`}>
+        <Card
+          title={`Acordo MGMV — ${mgmv.status}`}
+          action={
+            client.mgmv && !mgmvEditOpen ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setMgmvEditOpen(true)}
+              >
+                <Pencil className="mr-1 size-3" /> Editar acordo
+              </Button>
+            ) : null
+          }
+        >
+          {mgmvEditOpen && client.mgmv ? (
+            <MgmvAgreementEditor
+              clientId={client.id}
+              agreement={client.mgmv}
+              products={mgmvProducts}
+              onClose={() => setMgmvEditOpen(false)}
+            />
+          ) : (
+          <>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
             <MetricCard
               label="Valor total do acordo"
@@ -1255,6 +1277,8 @@ function ClientDrawer({
                 </table>
               </div>
             </div>
+          )}
+          </>
           )}
         </Card>
       )}
