@@ -836,7 +836,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               </div>
             )}
           </>
-        )}
       </Card>
 
       {/* Modal cliente em tela cheia */}
