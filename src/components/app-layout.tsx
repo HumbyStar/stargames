@@ -75,9 +75,9 @@ const navItems: ReadonlyArray<{
 // arquivo pesado da seção. Inclui variação "Reserva" (não vencida) → amarelo.
 function clientSearchStatus(
   client: Client,
-  products: Product[],
+  clientProducts: Product[],
 ): "Em dia" | "Pendente" | "Reserva vencida" | "Reserva" | "Pago ag. envio" | "MGMV" | "Enviado" | "Sem produtos" {
-  const ps = products.filter((p) => p.clientId === client.id);
+  const ps = clientProducts;
   if (
     ps.some(
       (p) => p.financialStatus === "Reserva" && isOpenSituation(p) && isOverdue(p.dueDate),
