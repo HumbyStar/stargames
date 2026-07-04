@@ -19,8 +19,6 @@ import {
 import { toast } from "sonner";
 import {
   MessageCircle,
-  Maximize2,
-  Minimize2,
   Filter as FilterIcon,
   Save,
   Trash2,
@@ -30,14 +28,8 @@ import {
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { usePaginatedList } from "@/hooks/use-paginated-list";
-import { useSectionCompact } from "@/lib/use-section-compact";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
-import {
-  ListExpansionToggle,
-  MinimizedListCard,
-} from "@/components/list-expansion";
-import { useListExpansion } from "@/lib/list-expansion";
 import {
   Dialog,
   DialogContent,
@@ -99,19 +91,13 @@ export function CollectionSection({
     dueDate: string;
   }>();
   const [filter, setFilter] = usePersistedState<Filter>("collection.filter", initialFilter);
-  useEffect(() => {
-    if (filter === "todos") setFilter("em_aberto");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   const [period, setPeriod] = usePersistedState<Period>("collection.period", "todos");
   const [customFrom, setCustomFrom] = usePersistedState<string>("collection.customFrom", "");
   const [customTo, setCustomTo] = usePersistedState<string>("collection.customTo", "");
-  const [compact, setCompact] = useSectionCompact("collection");
+  const compact = true;
   const [payTarget, setPayTarget] = useState<{ id: string; remaining: number; productName: string } | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [showFilters, setShowFilters] = useState(true);
-  const { expanded: listExpanded, expand: expandList } = useListExpansion("collection");
-
   /**
    * Aplica filtro a partir do clique em um card de resumo na Collection.
    * Mantém o contexto da seção e expande a lista quando minimizada.
@@ -119,7 +105,6 @@ export function CollectionSection({
   const applyCardFilter = (next: Filter) => {
     setFilter(next);
     setSearch("");
-    if (!listExpanded) expandList();
   };
   const [savedFilters, setSavedFilters] = usePersistedState<SavedFilter[]>("collection.savedFilters", []);
   const [activeSavedId, setActiveSavedId] = usePersistedState<string>("collection.activeSavedId", "");
