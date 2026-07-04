@@ -608,20 +608,6 @@ export function MGMVSection({
           )}
         </div>
 
-        {!listExpanded && (
-          <MinimizedListCard
-            section="mgmv"
-            title="Lista MGMV minimizada"
-            lines={[
-              `${filtered.length} acordo(s) encontrado(s)`,
-              stats.revisao > 0
-                ? `${stats.revisao} em revisão necessária`
-                : "Nenhum em revisão necessária",
-              `Saldo total: ${formatBRL(stats.saldoTotal)}`,
-            ]}
-          />
-        )}
-        {listExpanded && (
       <>
       <div className="table-scroll-y mt-4 max-h-[28rem] overflow-x-auto rounded-xl border border-border bg-card shadow-xs">
           <table className="w-full text-sm">
