@@ -75,7 +75,7 @@ type SavedFilter = {
 
 export function CollectionSection({
   onScrollTo,
-  initialFilter = "todos",
+  initialFilter = "em_aberto",
 }: {
   onScrollTo: (id: string) => void;
   initialFilter?: Filter;
