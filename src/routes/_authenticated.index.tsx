@@ -244,7 +244,7 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
       <div className="mt-6">
         <Card title="Alertas Operacionais">
           <div className="space-y-3">
-            {topAlerts.map((a: DashboardAlertPreview) => (
+            {topAlerts.map((a) => (
               <Alert
                 key={a.productId}
                 type="danger"
