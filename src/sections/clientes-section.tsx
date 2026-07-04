@@ -798,105 +798,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                               >
                                 Abrir
                               </Button>
-                              {(() => {
-                                const openProducts = r.products.filter((p) => isOpenSituation(p));
-                                const payableProducts = openProducts.filter(
-                                  (p) => p.financialStatus !== "Pago",
-                                );
-                                const applyToOpen = (
-                                  situation: Situation,
-                                  confirmMsg: string,
-                                ) => {
-                                  if (openProducts.length === 0) return;
-                                  if (!window.confirm(confirmMsg)) return;
-                                  openProducts.forEach((p) => setProductSituation(p.id, situation));
-                                  toast.success(
-                                    `${openProducts.length} produto(s) atualizados`,
-                                  );
-                                };
-                                return (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      disabled={payableProducts.length === 0}
-                                      title={
-                                        payableProducts.length === 0
-                                          ? "Nenhum produto pendente"
-                                          : `Marcar ${payableProducts.length} produto(s) como Pago`
-                                      }
-                                      onClick={() => {
-                                        if (payableProducts.length === 0) return;
-                                        payableProducts.forEach((p) =>
-                                          updateProduct(p.id, {
-                                            paidValue: p.totalValue,
-                                            financialStatus: "Pago",
-                                          }),
-                                        );
-                                        toast.success(
-                                          `${payableProducts.length} produto(s) marcados como pagos`,
-                                        );
-                                      }}
-                                    >
-                                      Pago
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      disabled={openProducts.length === 0}
-                                      title={
-                                        openProducts.length === 0
-                                          ? "Nenhum produto em aberto"
-                                          : `Marcar ${openProducts.length} produto(s) como Enviado`
-                                      }
-                                      onClick={() =>
-                                        applyToOpen(
-                                          "Enviado",
-                                          `Marcar ${openProducts.length} produto(s) em aberto como Enviado?`,
-                                        )
-                                      }
-                                    >
-                                      Enviado
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      disabled={openProducts.length === 0}
-                                      title={
-                                        openProducts.length === 0
-                                          ? "Nenhum produto em aberto"
-                                          : `Marcar ${openProducts.length} produto(s) para Retirar`
-                                      }
-                                      onClick={() =>
-                                        applyToOpen(
-                                          "Retirar",
-                                          `Marcar ${openProducts.length} produto(s) para retirada?\n\nEles continuam vinculados ao cliente, mas ficam pendentes de retirada.`,
-                                        )
-                                      }
-                                    >
-                                      Retirar
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      disabled={openProducts.length === 0}
-                                      title={
-                                        openProducts.length === 0
-                                          ? "Nenhum produto em aberto"
-                                          : `Marcar ${openProducts.length} produto(s) como Removido`
-                                      }
-                                      onClick={() =>
-                                        applyToOpen(
-                                          "Removido",
-                                          `Marcar ${openProducts.length} produto(s) como Removido?\n\nEles saem da lista ativa do cliente.`,
-                                        )
-                                      }
-                                    >
-                                      Removido
-                                    </Button>
-                                  </>
-                                );
-                              })()}
                             </>
                           )}
                           {!compact && !clientEdit.isEditing(r.client.id) && (
@@ -1105,6 +1006,10 @@ function ClientDrawer({
   const [notes, setNotes] = useState(client.notes ?? "");
   const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
   const [mgmvEditOpen, setMgmvEditOpen] = useState(false);
+  // Seleção múltipla de produtos individuais para ações em lote (Pago /
+  // Enviado / Retirar / Removido). Só o clique nos botões da barra aplica;
+  // marcar o checkbox nunca altera status sozinho.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const updateProduct = useStore((s) => s.updateProduct);
   // Edição por lápis dos produtos do cliente. Apenas Confirmar persiste;
   // Fechar descarta. Blur / click-outside são ignorados pelo hook.
@@ -1122,6 +1027,58 @@ function ClientDrawer({
   // cliente. Mantido nas somas totais para não perder o histórico financeiro.
   const individualProducts = individualAll.filter((p) => !isProductArchived(p));
   const archivedProducts = individualAll.filter((p) => isProductArchived(p));
+  // Sincroniza seleção: remove ids que sumiram da lista ativa (ex.: produto
+  // virou Removido/Retirado e foi arquivado).
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const alive = new Set(individualProducts.map((p) => p.id));
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (alive.has(id)) next.add(id);
+        else changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, [individualProducts]);
+  const selectedCount = selectedIds.size;
+  const allSelected =
+    individualProducts.length > 0 && selectedCount === individualProducts.length;
+  const someSelected = selectedCount > 0 && !allSelected;
+  const toggleOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleAll = () => {
+    setSelectedIds(
+      allSelected ? new Set() : new Set(individualProducts.map((p) => p.id)),
+    );
+  };
+  const clearSelection = () => setSelectedIds(new Set());
+  const selectedProducts = () =>
+    individualProducts.filter((p) => selectedIds.has(p.id));
+  const bulkMarkPaid = () => {
+    const targets = selectedProducts().filter((p) => p.financialStatus !== "Pago");
+    if (targets.length === 0) {
+      toast.info("Nenhum produto pendente na seleção");
+      return;
+    }
+    targets.forEach((p) => onMarkPaid(p));
+    toast.success(`${targets.length} produto(s) marcados como pagos`);
+    clearSelection();
+  };
+  const bulkChangeSituation = (situation: Situation, confirmMsg: string) => {
+    const targets = selectedProducts();
+    if (targets.length === 0) return;
+    if (!window.confirm(confirmMsg)) return;
+    targets.forEach((p) => onChangeSituation(p.id, situation));
+    toast.success(`${targets.length} produto(s) atualizados`);
+    clearSelection();
+  };
   // Evita double-counting: produtos MGMV são consolidados no acordo.
   // Total comprado = soma dos produtos individuais + valor total do acordo MGMV.
   const individualBought = individualAll.reduce((a, p) => a + p.totalValue, 0);
@@ -1389,10 +1346,74 @@ function ClientDrawer({
             cobrados pelas parcelas do acordo (sem cobrança individual).
           </p>
         )}
+        {selectedCount > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2">
+            <span className="text-sm font-medium">
+              {selectedCount} selecionado(s)
+            </span>
+            <div className="ml-auto flex flex-wrap gap-1.5">
+              <Button size="sm" variant="outline" onClick={bulkMarkPaid}>
+                Pago
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  bulkChangeSituation(
+                    "Enviado",
+                    `Marcar ${selectedCount} produto(s) selecionado(s) como Enviado?`,
+                  )
+                }
+              >
+                Enviado
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  bulkChangeSituation(
+                    "Retirar",
+                    `Marcar ${selectedCount} produto(s) selecionado(s) para retirada?\n\nEles continuam vinculados ao cliente, mas ficam pendentes de retirada.`,
+                  )
+                }
+              >
+                Retirar
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  bulkChangeSituation(
+                    "Removido",
+                    `Marcar ${selectedCount} produto(s) selecionado(s) como Removido?\n\nEles saem da lista ativa do cliente.`,
+                  )
+                }
+              >
+                Removido
+              </Button>
+              <Button size="sm" variant="ghost" onClick={clearSelection}>
+                Limpar
+              </Button>
+            </div>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="py-2 pr-2 font-medium w-8">
+                  <input
+                    type="checkbox"
+                    aria-label="Selecionar todos"
+                    className="h-4 w-4 cursor-pointer"
+                    checked={allSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someSelected;
+                    }}
+                    onChange={toggleAll}
+                    disabled={individualProducts.length === 0}
+                  />
+                </th>
                 <th className="py-2 pr-3 font-medium">Produto</th>
                 <th className="py-2 pr-3 font-medium">Plataforma</th>
                 <th className="py-2 pr-3 font-medium">Total</th>
@@ -1409,11 +1430,19 @@ function ClientDrawer({
               {individualProducts.map((p) => {
                 const remaining = p.totalValue - p.paidValue;
                 const status = productCollectionStatus(p);
-                const isPaid = p.financialStatus === "Pago";
                 const editing = productEdit.isEditing(p.id);
                 const draft = productEdit.draftValues;
                 return (
                   <tr key={p.id} className="border-b border-border/60 last:border-0">
+                    <td className="py-2 pr-2 align-middle">
+                      <input
+                        type="checkbox"
+                        aria-label={`Selecionar ${p.name}`}
+                        className="h-4 w-4 cursor-pointer"
+                        checked={selectedIds.has(p.id)}
+                        onChange={() => toggleOne(p.id)}
+                      />
+                    </td>
                     <td className="py-2 pr-3 font-medium">
                       {editing ? (
                         <input
@@ -1539,43 +1568,6 @@ function ClientDrawer({
                             }
                           />
                         )}
-                        {!isPaid && (
-                          <Button size="sm" variant="outline" onClick={() => onMarkPaid(p)}>
-                            Pago
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={p.situation === "Enviado"}
-                          onClick={() => onChangeSituation(p.id, "Enviado")}
-                        >
-                          Enviado
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={p.situation === "Retirar" || p.situation === "Retirado"}
-                          onClick={() => {
-                            if (
-                              !window.confirm(
-                                "Marcar produto para retirada?\n\nEste produto continuará vinculado ao cliente, mas ficará marcado como pendente de retirada pelo estoque. Ele ainda não voltará para o estoque central.",
-                              )
-                            )
-                              return;
-                            onChangeSituation(p.id, "Retirar");
-                          }}
-                        >
-                          Retirar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={p.situation === "Removido"}
-                          onClick={() => onChangeSituation(p.id, "Removido")}
-                        >
-                          Removido
-                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -1583,7 +1575,7 @@ function ClientDrawer({
               })}
               {individualProducts.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={11} className="py-6 text-center text-muted-foreground">
                     Nenhum produto.
                   </td>
                 </tr>
