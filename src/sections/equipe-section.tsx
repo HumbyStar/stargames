@@ -158,21 +158,21 @@ export function EquipeSection() {
       <PageHeader
         title="Equipe"
         description="Quadro estilo Trello com atribuição em escada empresarial e responsabilidades por papel."
-        actions={
-          <Button onClick={() => setOpenCreate(true)} size="sm">
-            <Plus className="size-4" /> Nova tarefa
-          </Button>
-        }
       />
 
       <Tabs defaultValue="kanban" className="w-full">
-        <TabsList>
-          <TabsTrigger value="kanban">Kanban</TabsTrigger>
-          <TabsTrigger value="punch">Ponto</TabsTrigger>
-          {(hasPermission("team.assign.all") || hasPermission("team.assign.team")) && (
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          )}
-        </TabsList>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <TabsList>
+            <TabsTrigger value="kanban">Kanban</TabsTrigger>
+            <TabsTrigger value="punch">Ponto</TabsTrigger>
+            {(hasPermission("team.assign.all") || hasPermission("team.assign.team")) && (
+              <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            )}
+          </TabsList>
+          <Button onClick={() => setOpenCreate(true)} size="sm">
+            <Plus className="size-4" /> Nova tarefa
+          </Button>
+        </div>
         <TabsContent value="kanban" className="mt-4">
           {tasksQ.isLoading ? (
         <div className="grid place-items-center py-24 text-sm text-muted-foreground">
