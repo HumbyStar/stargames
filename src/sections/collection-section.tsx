@@ -1060,7 +1060,6 @@ export function CollectionSection({
           </div>
         )}
         </>
-        )}
       </Card>
 
       <div className="mt-4 text-xs text-muted-foreground">
