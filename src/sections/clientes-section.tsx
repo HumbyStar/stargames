@@ -455,17 +455,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                 </span>
               )}
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCompact((v) => !v)}
-              className="gap-1.5"
-              title={compact ? "Expandir linhas" : "Compactar linhas"}
-            >
-              {compact ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
-              {compact ? "Expandir" : "Compactar"}
-            </Button>
-            <ListExpansionToggle section="clients" />
           </div>
 
           {showFilters && (
