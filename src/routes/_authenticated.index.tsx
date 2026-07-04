@@ -24,6 +24,9 @@ const CollectionSection = lazy(() =>
 const MGMVSection = lazy(() =>
   import("@/sections/mgmv-section").then((m) => ({ default: m.MGMVSection })),
 );
+const HistoryModal = lazy(() =>
+  import("@/components/history-modal").then((m) => ({ default: m.HistoryModal })),
+);
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
@@ -39,6 +42,7 @@ export const Route = createFileRoute("/_authenticated/")({
 
 function OnePage() {
   const onScrollTo = useCallback(scrollToSection, []);
+  const historyOpen = useUiStore((s) => s.historyContext !== null);
   return (
     <AppLayout>
       <DashboardSection onScrollTo={onScrollTo} />
@@ -55,6 +59,11 @@ function OnePage() {
           <CollectionSection onScrollTo={onScrollTo} />
         </Suspense>
       </LazySection>
+      {historyOpen && (
+        <Suspense fallback={null}>
+          <HistoryModal />
+        </Suspense>
+      )}
     </AppLayout>
   );
 }
@@ -67,6 +76,7 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
   const clients = useStore((s) => s.clients);
   const products = useStore((s) => s.products);
   const openImport = useUiStore((s) => s.openImport);
+  const openHistory = useUiStore((s) => s.openHistory);
 
   // Mapa card → (seção destino, chave da chip persistida, valor da chip).
   // Ao clicar, gravamos a chip via db-sync (`setUiValue`), expandimos a
@@ -89,17 +99,17 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
     const m = (chipValue: string) =>
       () => drillTo({ section: "mgmv", scrollId: "mgmv", chipKey: "mgmv.chip", chipValue });
     return {
-      "total-clients": c("todos"),
+      "total-clients": () => openHistory("clientes-todos"),
       "active-reservations": col("em_aberto"),
       "overdue-reservations": col("reserva_vencida"),
       pending: col("pendente_vencido"),
-      "mgmv-clients": m("todos"),
+      "mgmv-clients": () => openHistory("mgmv-todos"),
       "mgmv-overdue": m("em_atraso"),
       "paid-awaiting-shipment": c("pago_aguardando"),
-      withdrawals: c("todos"),
-      abandons: c("abandonou"),
+      withdrawals: () => openHistory("desistiu"),
+      abandons: () => openHistory("abandonou"),
     } as const;
-  }, [drillTo]);
+  }, [drillTo, openHistory]);
 
   // AGREGADOS: única varredura, resultado memoizado. Instrumentado com
   // performance.now() para o badge dev-only.
