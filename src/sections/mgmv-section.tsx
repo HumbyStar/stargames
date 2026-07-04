@@ -12,17 +12,13 @@ import {
 } from "@/lib/store";
 import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
 import { MgmvAiReviewModal } from "@/components/mgmv-ai-review-modal";
-import {
-  ListExpansionToggle,
-  MinimizedListCard,
-} from "@/components/list-expansion";
-import { useListExpansion } from "@/lib/list-expansion";
 import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { usePaginatedList } from "@/hooks/use-paginated-list";
 import { extractMGMVAgreementFromNotes } from "@/sections/import-section";
 import { toast } from "sonner";
 import { X } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
@@ -229,12 +225,7 @@ export function MGMVSection({
   const registerMGMVPartialPayment = useStore((s) => s.registerMGMVPartialPayment);
   const setMGMVAgreement = useStore((s) => s.setMGMVAgreement);
   const applyAiReviewToAgreement = useStore((s) => s.applyAiReviewToAgreement);
-  const [chip, setChip] = usePersistedState<MgmvChip>("mgmv.chip", "em_atraso");
-  // Migração: default antigo "todos" cai para "em_atraso" (subconjunto operacional).
-  useEffect(() => {
-    if (chip === "todos") setChip("em_atraso");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const [chip, setChip] = usePersistedState<MgmvChip>("mgmv.chip", "todos");
   const [search, setSearch] = usePersistedState<string>("mgmv.search", "");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [aiTarget, setAiTarget] = useState<string | null>(null);
@@ -248,8 +239,6 @@ export function MGMVSection({
     "mgmv.lastUpdatedIds",
     null,
   );
-  const { expanded: listExpanded, expand: expandList } = useListExpansion("mgmv");
-
   // Edição por lápis no acordo MGMV. Campos permitidos: totalDebt e valor
   // da parcela. Não expomos ações Retirar/Retirado nesta seção (MGMV é
   // acordo, não produto físico de retirada). Se a edição deixar o acordo
@@ -267,7 +256,6 @@ export function MGMVSection({
   const applyCardFilter = (next: MgmvChip) => {
     setChip(next);
     setSearch("");
-    if (!listExpanded) expandList();
   };
 
   const reprocessFromNotes = () => {
@@ -466,6 +454,7 @@ export function MGMVSection({
   }, [filtered, search, searchActive]);
 
   const chips: { id: MgmvChip; label: string; count?: number }[] = [
+    { id: "todos", label: "Todos" },
     { id: "ativos", label: "Ativos", count: stats.ativos },
     { id: "em_atraso", label: "Em atraso", count: stats.atraso },
     { id: "revisao", label: "Revisão necessária", count: stats.revisao },
@@ -565,11 +554,6 @@ export function MGMVSection({
 
       <Card className="mt-6">
         <div className="space-y-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="flex-1" />
-            <ListExpansionToggle section="mgmv" />
-          </div>
-
           <div className="flex flex-wrap gap-2">
             {chips.map((c) => (
               <button
@@ -624,20 +608,6 @@ export function MGMVSection({
           )}
         </div>
 
-        {!listExpanded && (
-          <MinimizedListCard
-            section="mgmv"
-            title="Lista MGMV minimizada"
-            lines={[
-              `${filtered.length} acordo(s) encontrado(s)`,
-              stats.revisao > 0
-                ? `${stats.revisao} em revisão necessária`
-                : "Nenhum em revisão necessária",
-              `Saldo total: ${formatBRL(stats.saldoTotal)}`,
-            ]}
-          />
-        )}
-        {listExpanded && (
       <>
       <div className="table-scroll-y mt-4 max-h-[28rem] overflow-x-auto rounded-xl border border-border bg-card shadow-xs">
           <table className="w-full text-sm">
@@ -851,11 +821,13 @@ export function MGMVSection({
                           <Button
                             size="sm"
                             variant="ghost"
+                            title={isOpen ? "Fechar detalhes" : "Ver detalhes"}
+                            aria-label={isOpen ? "Fechar detalhes" : "Ver detalhes"}
                             onClick={() =>
                               setExpanded(isOpen ? null : r.client.id)
                             }
                           >
-                            {isOpen ? "Fechar" : "Detalhes"}
+                            {isOpen ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                           </Button>
                           <Button
                             size="sm"
@@ -1022,7 +994,6 @@ export function MGMVSection({
         </div>
       )}
       </>
-      )}
       </Card>
       {(() => {
         if (!aiTarget) return null;

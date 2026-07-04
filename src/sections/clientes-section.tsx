@@ -1,11 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import { Folder, Filter, Maximize2, Minimize2, Pencil } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { Folder, Filter, Pencil, Eye, EyeOff } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { usePersistedState } from "@/lib/use-persisted-state";
-import { useSectionCompact } from "@/lib/use-section-compact";
 import { Button } from "@/components/ui/button";
-import { ListExpansionToggle, MinimizedListCard } from "@/components/list-expansion";
-import { useListExpansion } from "@/lib/list-expansion";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { usePaginatedList } from "@/hooks/use-paginated-list";
 import { useUiStore } from "@/lib/ui-store";
@@ -104,14 +101,8 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const [search, setSearch] = usePersistedState<string>("clientes.search", "");
   const [chip, setChip] = usePersistedState<ChipFilter>(
     "clientes.chip",
-    "pago_aguardando",
+    "todos",
   );
-  // Migração: usuários com o antigo default "todos" persistido migram
-  // automaticamente para o novo default operacional na primeira montagem.
-  useEffect(() => {
-    if (chip === "todos") setChip("pago_aguardando");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   const [financialFilter, setFinancialFilter] = usePersistedState<string>(
     "clientes.financial",
     "Todos",
@@ -126,9 +117,9 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   );
   const [periodFilter, setPeriodFilter] = usePersistedState<string>("clientes.period", "Todos");
   const [folderFilter, setFolderFilter] = usePersistedState<string>("clientes.folder", "Todas");
-  const [compact, setCompact] = useSectionCompact("clientes");
+  const compact = true;
   const [showFilters, setShowFilters] = useState(true);
-  const { expanded: listExpanded, expand: expandList } = useListExpansion("clients");
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
   /**
    * Drill-down a partir de um card de resumo: ajusta o chip do contexto
@@ -137,7 +128,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const applyCardFilter = (next: ChipFilter) => {
     setChip(next);
     setSearch("");
-    if (!listExpanded) expandList();
   };
 
   const drawerClientId = openClientId;
@@ -377,6 +367,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   }, [products]);
 
   const chips: { id: ChipFilter; label: string }[] = [
+    { id: "todos", label: "Todos" },
     { id: "reserva_vencida", label: "Reserva vencida" },
     { id: "pendente", label: "Pendente" },
     { id: "pago_aguardando", label: "Pago aguardando envio" },
@@ -465,17 +456,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                 </span>
               )}
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCompact((v) => !v)}
-              className="gap-1.5"
-              title={compact ? "Expandir linhas" : "Compactar linhas"}
-            >
-              {compact ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
-              {compact ? "Expandir" : "Compactar"}
-            </Button>
-            <ListExpansionToggle section="clients" />
           </div>
 
           {showFilters && (
@@ -606,20 +586,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           )}
         </div>
 
-        {!listExpanded && (
-          <MinimizedListCard
-            section="clients"
-            title="Lista de clientes minimizada"
-            lines={[
-              `${rows.length} cliente(s) encontrado(s)`,
-              activeFilterCount > 0
-                ? `${activeFilterCount} filtro(s) ativo(s)`
-                : "Sem filtros ativos",
-            ]}
-          />
-        )}
-        {listExpanded && (
-          <>
+        <>
             <div className="table-scroll-y mt-5 max-h-[28rem] overflow-x-auto rounded-md border border-border/60">
               <table className="w-full text-sm">
                 <thead>
@@ -654,8 +621,11 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                   </tr>
                 </thead>
                 <tbody>
-                  {pagedRows.map((r) => (
-                    <tr key={r.client.id} className="border-b border-border/60 last:border-0">
+                  {pagedRows.map((r) => {
+                    const isRowOpen = expandedRow === r.client.id;
+                    return (
+                    <Fragment key={r.client.id}>
+                    <tr className="border-b border-border/60 last:border-0">
                       <td
                         className={
                           (compact ? "py-1.5" : "py-3") +
@@ -810,37 +780,98 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                               >
                                 Abrir
                               </Button>
-                            </>
-                          )}
-                          {!compact && !clientEdit.isEditing(r.client.id) && (
-                            <>
                               <Button
                                 size="sm"
+                                variant="ghost"
+                                title={isRowOpen ? "Fechar detalhes" : "Ver detalhes"}
+                                aria-label={isRowOpen ? "Fechar detalhes" : "Ver detalhes"}
                                 onClick={() =>
-                                  setProductModal({ open: true, clientId: r.client.id })
+                                  setExpandedRow(isRowOpen ? null : r.client.id)
                                 }
                               >
-                                + Produto
+                                {isRowOpen ? (
+                                  <EyeOff className="h-4 w-4" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
                               </Button>
-                              {r.products.some(shouldAppearInCollection) && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => onScrollTo("collection")}
-                                >
-                                  Cobrança
-                                </Button>
-                              )}
                             </>
                           )}
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    {isRowOpen && (
+                      <tr className="border-b border-border/60 bg-accent/20">
+                        <td colSpan={8} className="px-4 py-4">
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div>
+                              <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                                Produtos ({r.products.length})
+                              </div>
+                              <div className="space-y-1 text-xs">
+                                {r.products.length === 0 && (
+                                  <p className="text-muted-foreground">
+                                    Nenhum produto cadastrado.
+                                  </p>
+                                )}
+                                {r.products.map((p) => (
+                                  <div
+                                    key={p.id}
+                                    className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-card px-2 py-1"
+                                  >
+                                    <span className="truncate font-medium">{p.name}</span>
+                                    <span className="text-muted-foreground">{p.platform ?? "—"}</span>
+                                    <span className="tabular-nums">{formatBRL(p.totalValue)}</span>
+                                    <Tag>{displaySituation(p.situation)}</Tag>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="mt-3 flex flex-wrap gap-1.5">
+                                <Button
+                                  size="sm"
+                                  onClick={() =>
+                                    setProductModal({ open: true, clientId: r.client.id })
+                                  }
+                                >
+                                  + Produto
+                                </Button>
+                                {r.products.some(shouldAppearInCollection) && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => onScrollTo("collection")}
+                                  >
+                                    Cobrança
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                                Observações
+                              </div>
+                              <div className="whitespace-pre-wrap rounded-md border border-border/60 bg-card p-2 text-xs text-muted-foreground">
+                                {r.client.notes && r.client.notes.trim()
+                                  ? highlight(r.client.notes, search)
+                                  : "Nenhuma observação."}
+                              </div>
+                              {r.client.folder && (
+                                <div className="mt-2 text-xs text-muted-foreground">
+                                  Pasta: <span className="font-medium">{r.client.folder}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
+                    );
+                  })}
                   {pagedRows.length === 0 && (
                     <tr>
                       <td
-                        colSpan={compact ? 8 : 9}
+                        colSpan={8}
                         className="py-10 text-center text-muted-foreground"
                       >
                         Nenhum cliente encontrado.
@@ -849,7 +880,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                   )}
                   {hasMoreRows && (
                     <tr>
-                      <td colSpan={compact ? 8 : 9} className="py-3">
+                      <td colSpan={8} className="py-3">
                         <LoadMoreButton
                           count={nextChunkRows}
                           onClick={loadMoreRows}
@@ -869,7 +900,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               </div>
             )}
           </>
-        )}
       </Card>
 
       {/* Modal cliente em tela cheia */}
