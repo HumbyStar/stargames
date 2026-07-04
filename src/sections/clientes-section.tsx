@@ -415,8 +415,8 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
         <MetricCard
           label="Total de Clientes"
           value={totalClients}
-          onClick={() => applyCardFilter("todos")}
-          tooltip="Ver todos os clientes"
+          onClick={() => useUiStore.getState().openHistory("clientes-todos")}
+          tooltip="Abrir base completa de clientes"
         />
         <MetricCard
           label="Clientes com Pendência"
