@@ -992,7 +992,6 @@ export function MGMVSection({
         </div>
       )}
       </>
-      )}
       </Card>
       {(() => {
         if (!aiTarget) return null;
