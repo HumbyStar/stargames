@@ -162,8 +162,15 @@ function SearchBox({
     const q = debouncedQuery.trim().toLowerCase();
     if (!q)
       return [] as Array<
-        | { type: "client"; id: string; title: string; subtitle: string }
-        | { type: "product"; id: string; clientId: string; title: string; subtitle: string }
+        | { type: "client"; id: string; title: string; subtitle: string; statusLabel: string }
+        | {
+            type: "agreement";
+            id: string;
+            clientId: string;
+            title: string;
+            subtitle: string;
+            statusLabel: string;
+          }
       >;
     const digits = q.replace(/\D/g, "");
     const clientMatches = clients
@@ -178,21 +185,31 @@ function SearchBox({
         id: c.id,
         title: c.name,
         subtitle: c.phone,
+        statusLabel: clientSearchStatus(c, products),
       }));
-    const productMatches = products
-      .filter((p) => p.name.toLowerCase().includes(q) || p.platform.toLowerCase().includes(q))
+    const agreementMatches = clients
+      .filter((c) => {
+        if (!c.mgmv) return false;
+        const inName = c.name.toLowerCase().includes(q);
+        const inPhone = digits.length > 0 && c.phone.replace(/\D/g, "").includes(digits);
+        return inName || inPhone;
+      })
       .slice(0, 6)
-      .map((p) => {
-        const owner = clients.find((c) => c.id === p.clientId);
+      .map((c) => {
+        const display = getMGMVDisplay(c);
+        const subtitle = display
+          ? `${display.installmentsPaid}/${display.installmentsTotal} parcelas · ${formatBRL(display.remainingBalance)} restante`
+          : "Acordo MGMV";
         return {
-          type: "product" as const,
-          id: p.id,
-          clientId: p.clientId,
-          title: p.name,
-          subtitle: `${p.platform} · ${owner?.name ?? "Cliente"}`,
+          type: "agreement" as const,
+          id: c.mgmv!.id ?? c.id,
+          clientId: c.id,
+          title: `Acordo MGMV — ${c.name}`,
+          subtitle,
+          statusLabel: clientSearchStatus(c, products),
         };
       });
-    return [...clientMatches, ...productMatches];
+    return [...clientMatches, ...agreementMatches];
   }, [debouncedQuery, clients, products]);
 
   useEffect(() => {
@@ -245,7 +262,7 @@ function SearchBox({
             setOpen(false);
           }
         }}
-        placeholder="Buscar cliente, telefone ou produto..."
+        placeholder="Buscar cliente ou acordo..."
         className="h-9 w-full rounded-full border border-border bg-background/60 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none transition focus:border-primary/40 focus:bg-background"
       />
       {open && query.trim() && (
