@@ -61,12 +61,12 @@ type ChipFilter =
 
 function generalStatus(
   client: Client,
-  products: Product[],
+  clientProducts: Product[],
 ): {
   label: string;
   variant: "danger" | "warning" | "success" | "neutral" | "primary";
 } {
-  const ps = products.filter((p) => p.clientId === client.id);
+  const ps = clientProducts;
   if (
     ps.some(
       (p) => p.financialStatus === "Reserva" && isOpenSituation(p) && isOverdue(p.dueDate),
