@@ -1,52 +1,40 @@
-## Objetivo
+## Ajuste
 
-Adicionar **5 botões de ação** direto na linha do cliente na tabela principal de **Clientes** (mesma célula onde hoje ficam "lápis / Abrir / + Produto"), sem precisar abrir modal ou expandir:
+Reverter os 5 botões da linha da tabela principal de Clientes e mover a interação para dentro do **modal do cliente**, com **seleção múltipla** de produtos.
 
-1. **Editar** (ícone lápis) — já existe, sem mudança.
-2. **Pago**
-3. **Enviado**
-4. **Retirar**
-5. **Removido**
+## Mudanças
 
-Como cada cliente tem N produtos, os 4 botões de status agem **em lote** sobre os produtos do cliente que ainda estão em aberto (situation `Em Aberto` / `Abandonou` / `Desistiu` — não toca em produtos já `Enviado`, `Retirar`, `Retirado`, `Removido`). Isso reproduz o comportamento "atualizar status" no nível de cliente sem exigir clique por produto.
+### 1. `src/sections/clientes-section.tsx` — linha do cliente (tabela principal)
 
-Também aparece no modal do cliente (`ClientDrawer`), por produto, conforme já planejado antes.
+Remover o bloco `{(() => { const openProducts = ... })()}` que adicionei (Pago/Enviado/Retirar/Removido em lote). A célula de ações volta ao estado anterior: `[lápis] [Abrir] [+ Produto] [Cobrança?]`.
 
-## Regras de cada botão (linha do cliente)
+### 2. `src/sections/clientes-section.tsx` — `ClientDrawer` (modal do cliente)
 
-Todos aplicam via handlers já existentes na store (`updateProduct`, `setProductSituation`) — sem nova lógica de negócio:
+Na tabela de produtos individuais do cliente:
 
-- **Pago**: para cada produto com `financialStatus !== "Pago"` e situação em aberto → `updateProduct(id, { paidValue: totalValue, financialStatus: "Pago" })`. Toast: "N produto(s) marcados como pagos".
-- **Enviado**: `window.confirm("Marcar todos os produtos em aberto como Enviado?")` → para cada produto em aberto → `setProductSituation(id, "Enviado")`. Toast igual.
-- **Retirar**: `window.confirm(...)` → para cada produto em aberto → `setProductSituation(id, "Retirar")`.
-- **Removido**: `window.confirm(...)` → para cada produto em aberto → `setProductSituation(id, "Removido")`.
+- **Nova coluna de checkbox** (primeira coluna) em cada linha (`individualProducts`), com estado local `selectedIds: Set<string>` no `ClientDrawer`.
+- **Checkbox no header** funciona como "selecionar todos" / "desmarcar todos" (indeterminate quando parcial).
+- **Barra de ações em lote** acima da tabela (só aparece quando `selectedIds.size > 0`), com contador "N selecionado(s)" e 4 botões:
+  - **Pago** → para cada selecionado com `financialStatus !== "Pago"` → `updateProduct(id, { paidValue: totalValue, financialStatus: "Pago" })`. Após: `setSelectedIds(new Set())`, toast "N produto(s) marcados como pagos".
+  - **Enviado** → `window.confirm(...)` → `setProductSituation(id, "Enviado")` em cada selecionado (aplica em todos, independente da situação atual — permite corrigir engano).
+  - **Retirar** → `window.confirm(...)` → `setProductSituation(id, "Retirar")` em cada selecionado.
+  - **Removido** → `window.confirm(...)` → `setProductSituation(id, "Removido")` em cada selecionado.
+- **Remover os botões por linha** que adicionei antes (Pago / Enviado / Retirar / Removido). A coluna Ações da linha mantém apenas o **lápis** (`RowEditPencil`) para edição inline dos campos do produto (nome/plataforma/valores), que continua sendo por linha por natureza.
+- IDs que somem da lista após a ação (produto vira Removido/Retirado e sai de `individualProducts`) são removidos do `selectedIds` via efeito de sincronização baseado nos ids atuais.
 
-Se o cliente não tem produtos em aberto, os 4 botões ficam **desabilitados** (visual claro de que não há nada a atualizar). O contador de produtos aplicáveis vira `title` do botão (tooltip) — ex.: "Marcar 3 produto(s) como Pago".
+### Handlers
 
-## Layout
-
-Na célula de ações da linha do cliente (~L759-824, `src/sections/clientes-section.tsx`), quando NÃO está em modo edição e NÃO está compacto:
-
-```
-[lápis] [Abrir] [+ Produto] [Pago] [Enviado] [Retirar] [Removido] [Cobrança?]
-```
-
-- Botões novos: `size="sm" variant="outline"` para consistência.
-- No modo compacto: manter apenas [lápis] [Abrir] + os 4 de status (esconde "+ Produto" e "Cobrança" como já é feito hoje) — assim os 5 pedidos ficam sempre visíveis.
-- Nada muda quando `clientEdit.isEditing(r.client.id)` está ativo (mantém `RowEditActions`).
-
-## Modal do cliente
-
-Manter o plano anterior: substituir o bloco condicional (~L1443-1504) por [lápis] [Pago] [Enviado] [Retirar] [Removido] fixos por produto.
+Reaproveitam os já disponíveis via props do drawer: `onMarkPaid` (para Pago), `onChangeSituation` (para Enviado/Retirar/Removido). Não altera store nem tipos.
 
 ## Verificação
 
-1. Tabela principal de Clientes: cada linha exibe os 5 botões inline.
-2. Cliente com 3 produtos em aberto → clicar "Pago" na tabela → todos os 3 viram Pago (badge do cliente atualiza para "Pago ag. envio"), toast confirma quantidade.
-3. Clicar "Enviado" com confirm → situações dos abertos viram Enviado.
-4. Cliente sem produtos em aberto → botões de status desabilitados; lápis e Abrir seguem funcionando.
-5. Abrir modal do cliente → tabela de produtos individuais mostra por linha [lápis] [Pago] [Enviado] [Retirar] [Removido].
+1. Tabela principal de Clientes: linha volta a ter só [lápis] [Abrir] [+ Produto].
+2. Abrir modal do cliente: cada produto tem checkbox; header seleciona todos.
+3. Selecionar 3 produtos → barra "3 selecionado(s)" aparece com 4 botões.
+4. Clicar "Pago" → 3 viram Pago, seleção limpa, toast confirma.
+5. Selecionar 2 → "Removido" com confirm → 2 saem da tabela ativa e vão para "Histórico de produtos retirados"; seleção limpa.
+6. Nenhum selecionado → barra de ações escondida; só o lápis por linha para edição inline.
 
 ## Arquivos afetados
 
-- `src/sections/clientes-section.tsx` — apenas duas células de ações (linha da tabela do cliente ~L759-824 e linha do produto no drawer ~L1443-1504). Nenhuma mudança de store, tipos, ou outros componentes.
+- `src/sections/clientes-section.tsx` — apenas.
