@@ -359,8 +359,12 @@ export function MGMVSection({
     );
     const saldoTotal = rows.reduce((s, r) => s + r.remainingValue, 0);
     // Clientes MGMV que também compraram produtos comuns (fora do acordo).
+    // Indexa uma única vez os clientIds com produtos para evitar O(n*m) —
+    // antes, para cada acordo, rodava products.some percorrendo tudo.
+    const clientsWithProducts = new Set<string>();
+    for (const p of products) clientsWithProducts.add(p.clientId);
     const comProdutosExternos = rows.filter((r) =>
-      products.some((p) => p.clientId === r.client.id),
+      clientsWithProducts.has(r.client.id),
     ).length;
     return {
       clientes: rows.length,
@@ -372,6 +376,7 @@ export function MGMVSection({
       parcelasVencidas,
       saldoTotal,
       comProdutosExternos,
+      clientsWithProducts,
     };
   }, [rows, products]);
 
@@ -429,12 +434,12 @@ export function MGMVSection({
             (i) => !i.paid && isOverdue(i.dueDate),
           );
         case "com_produtos_externos":
-          return products.some((p) => p.clientId === r.client.id);
+          return stats.clientsWithProducts.has(r.client.id);
         default:
           return true;
       }
     });
-  }, [rows, search, chip, products]);
+  }, [rows, search, chip, stats.clientsWithProducts]);
 
   const {
     visible: pagedRows,
