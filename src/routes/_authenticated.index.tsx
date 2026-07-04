@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense, useCallback, useMemo, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { AppLayout } from "@/components/app-layout";
 import { Alert, Card, MetricCard, PageHeader, StackedBar } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
-import { useStore, formatBRL } from "@/lib/store";
-import { computeDashboardAggregates } from "@/lib/dashboard-metrics";
-import type { DashboardAlertPreview } from "@/lib/dashboard-metrics";
+import { formatBRL } from "@/lib/store";
+import { getDashboardAggregates } from "@/lib/api/queries.functions";
 import {
   DashboardPerfBadge,
   reportDashboardPerf,
@@ -69,12 +70,16 @@ function OnePage() {
 }
 
 function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) {
-  // Assinamos apenas os arrays base — o useMemo abaixo compila tudo o que o
-  // Dashboard precisa em uma única varredura. Os cards não abrem mais um
-  // modal de drilldown: cada clique aplica o filtro correspondente na
-  // seção-alvo, expande a lista e faz scroll até lá.
-  const clients = useStore((s) => s.clients);
-  const products = useStore((s) => s.products);
+  // Dashboard agora consulta agregados diretamente no banco — nenhuma
+  // lista completa é carregada no front. Os cards continuam clicáveis:
+  // cada clique aplica o filtro correspondente na seção-alvo, expande a
+  // lista e faz scroll até lá.
+  const aggregatesFn = useServerFn(getDashboardAggregates);
+  const aggregatesQuery = useQuery({
+    queryKey: ["dashboard-aggregates"],
+    queryFn: () => aggregatesFn(),
+    staleTime: 30_000,
+  });
   const openImport = useUiStore((s) => s.openImport);
   const openHistory = useUiStore((s) => s.openHistory);
 
@@ -111,14 +116,43 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
     } as const;
   }, [drillTo, openHistory]);
 
-  // AGREGADOS: única varredura, resultado memoizado. Instrumentado com
-  // performance.now() para o badge dev-only.
-  const aggregates = useMemo(() => {
-    const t0 = performance.now();
-    const a = computeDashboardAggregates(clients, products);
-    reportDashboardPerf({ type: "aggregate", ms: performance.now() - t0 });
-    return a;
-  }, [clients, products]);
+  // Instrumentamos o badge com o tempo do fetch server-side (round-trip).
+  const perfStartRef = useRef<number>(performance.now());
+  const aggregates = aggregatesQuery.data ?? {
+    totalClients: 0,
+    totalProducts: 0,
+    reservasAtivas: 0,
+    reservasVencidas: 0,
+    pendencias: 0,
+    pendenciasVencidas: 0,
+    pagosAgEnvio: 0,
+    enviados: 0,
+    desistencias: 0,
+    abandonos: 0,
+    retirar: 0,
+    retirados: 0,
+    removidos: 0,
+    clientesMGMV: 0,
+    mgmvVencidas: 0,
+    cobrancaAtiva: 0,
+    aberto: 0,
+    finPago: 0,
+    finReserva: 0,
+    finMGMV: 0,
+    finPend: 0,
+    topAlerts: [] as Array<{
+      productId: string;
+      clientId: string;
+      clientName: string;
+      productName: string;
+      remaining: number;
+      financialStatus: string;
+    }>,
+  };
+  if (aggregatesQuery.isSuccess && perfStartRef.current > 0) {
+    reportDashboardPerf({ type: "aggregate", ms: performance.now() - perfStartRef.current });
+    perfStartRef.current = 0;
+  }
 
   // Contador de renders p/ o badge (dev-only, sem custo em prod).
   const renderRef = useRef(0);
@@ -210,7 +244,7 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
       <div className="mt-6">
         <Card title="Alertas Operacionais">
           <div className="space-y-3">
-            {topAlerts.map((a: DashboardAlertPreview) => (
+            {topAlerts.map((a) => (
               <Alert
                 key={a.productId}
                 type="danger"
