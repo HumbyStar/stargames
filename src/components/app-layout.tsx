@@ -19,7 +19,16 @@ import {
 import { useEffect, useMemo, useRef, useState, lazy, memo, Suspense, type ReactNode } from "react";
 import type { ComponentType, SVGProps } from "react";
 import { cn } from "@/lib/utils";
-import { useStore } from "@/lib/store";
+import {
+  useStore,
+  isOpenSituation,
+  isOverdue,
+  isResolvedSituation,
+  getMGMVDisplay,
+  formatBRL,
+  type Client,
+  type Product,
+} from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
 import { setUiValue } from "@/lib/db-sync";
 import { HydrationSplash, useHydrationUserName } from "@/components/hydration-splash";
@@ -60,6 +69,49 @@ const navItems: ReadonlyArray<{
   { id: "mgmv", label: "MGMV", icon: Sparkles },
   { id: "collection", label: "Collection", icon: Wallet },
 ];
+
+// Status geral do cliente para a busca global. Mesmas regras da tabela de
+// Clientes (`generalStatus`), replicadas aqui para não acoplar app-layout ao
+// arquivo pesado da seção. Inclui variação "Reserva" (não vencida) → amarelo.
+function clientSearchStatus(
+  client: Client,
+  products: Product[],
+): "Em dia" | "Pendente" | "Reserva vencida" | "Reserva" | "Pago ag. envio" | "MGMV" | "Enviado" | "Sem produtos" {
+  const ps = products.filter((p) => p.clientId === client.id);
+  if (
+    ps.some(
+      (p) => p.financialStatus === "Reserva" && isOpenSituation(p) && isOverdue(p.dueDate),
+    )
+  )
+    return "Reserva vencida";
+  if (ps.some((p) => p.financialStatus === "Pendente" && isOpenSituation(p)))
+    return "Pendente";
+  if (client.mgmv && client.mgmv.installments.some((i) => !i.paid)) return "MGMV";
+  if (ps.some((p) => p.financialStatus === "Pago" && isOpenSituation(p)))
+    return "Pago ag. envio";
+  if (ps.some((p) => p.financialStatus === "Reserva" && isOpenSituation(p)))
+    return "Reserva";
+  if (ps.some((p) => isResolvedSituation(p) && p.financialStatus !== "MGMV"))
+    return "Enviado";
+  if (ps.length === 0) return "Sem produtos";
+  return "Em dia";
+}
+
+function statusBorderClass(label: string): string {
+  switch (label) {
+    case "Em dia":
+      return "border-l-blue-500";
+    case "Pendente":
+      return "border-l-red-500";
+    case "Reserva":
+    case "Reserva vencida":
+      return "border-l-yellow-500";
+    case "Pago ag. envio":
+      return "border-l-green-500";
+    default:
+      return "border-l-transparent";
+  }
+}
 
 function SearchBox({
   className,
@@ -110,8 +162,15 @@ function SearchBox({
     const q = debouncedQuery.trim().toLowerCase();
     if (!q)
       return [] as Array<
-        | { type: "client"; id: string; title: string; subtitle: string }
-        | { type: "product"; id: string; clientId: string; title: string; subtitle: string }
+        | { type: "client"; id: string; title: string; subtitle: string; statusLabel: string }
+        | {
+            type: "agreement";
+            id: string;
+            clientId: string;
+            title: string;
+            subtitle: string;
+            statusLabel: string;
+          }
       >;
     const digits = q.replace(/\D/g, "");
     const clientMatches = clients
@@ -126,21 +185,31 @@ function SearchBox({
         id: c.id,
         title: c.name,
         subtitle: c.phone,
+        statusLabel: clientSearchStatus(c, products),
       }));
-    const productMatches = products
-      .filter((p) => p.name.toLowerCase().includes(q) || p.platform.toLowerCase().includes(q))
+    const agreementMatches = clients
+      .filter((c) => {
+        if (!c.mgmv) return false;
+        const inName = c.name.toLowerCase().includes(q);
+        const inPhone = digits.length > 0 && c.phone.replace(/\D/g, "").includes(digits);
+        return inName || inPhone;
+      })
       .slice(0, 6)
-      .map((p) => {
-        const owner = clients.find((c) => c.id === p.clientId);
+      .map((c) => {
+        const display = getMGMVDisplay(c);
+        const subtitle = display
+          ? `${display.installmentsPaid}/${display.installmentsTotal} parcelas · ${formatBRL(display.remainingBalance)} restante`
+          : "Acordo MGMV";
         return {
-          type: "product" as const,
-          id: p.id,
-          clientId: p.clientId,
-          title: p.name,
-          subtitle: `${p.platform} · ${owner?.name ?? "Cliente"}`,
+          type: "agreement" as const,
+          id: c.id,
+          clientId: c.id,
+          title: `Acordo MGMV — ${c.name}`,
+          subtitle,
+          statusLabel: clientSearchStatus(c, products),
         };
       });
-    return [...clientMatches, ...productMatches];
+    return [...clientMatches, ...agreementMatches];
   }, [debouncedQuery, clients, products]);
 
   useEffect(() => {
@@ -193,7 +262,7 @@ function SearchBox({
             setOpen(false);
           }
         }}
-        placeholder="Buscar cliente, telefone ou produto..."
+        placeholder="Buscar cliente ou acordo..."
         className="h-9 w-full rounded-full border border-border bg-background/60 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none transition focus:border-primary/40 focus:bg-background"
       />
       {open && query.trim() && (
@@ -225,7 +294,7 @@ function SearchBox({
                 Nenhum resultado para “{query.trim()}”
               </p>
               <p className="text-xs text-muted-foreground">
-                Tente outro nome, telefone ou produto.
+                Tente outro nome, telefone ou acordo.
               </p>
             </div>
           ) : (
@@ -238,7 +307,8 @@ function SearchBox({
                 onMouseEnter={() => setActive(idx)}
                 onClick={() => handleSelect(item)}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors",
+                  "flex w-full items-center gap-3 rounded-xl border-l-4 px-3 py-2 text-left transition-colors",
+                  statusBorderClass(item.statusLabel),
                   idx === active ? "bg-accent text-accent-foreground" : "hover:bg-accent/60",
                 )}
               >
@@ -254,7 +324,7 @@ function SearchBox({
                   <p className="truncate text-xs text-muted-foreground">{item.subtitle}</p>
                 </div>
                 <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {item.type === "client" ? "Cliente" : "Produto"}
+                  {item.statusLabel}
                 </span>
               </button>
             ))
