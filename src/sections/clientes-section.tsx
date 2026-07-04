@@ -170,37 +170,48 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
   }, [clients]);
 
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
+  // Agregados por cliente derivados apenas de (clients, products). Isolar
+  // esta camada custosa da camada de filtros evita recomputar tudo a cada
+  // tecla digitada na busca ou troca de chip. Um único pass O(n+m) constrói
+  // o índice de produtos por cliente e os totais.
+  const baseRows = useMemo(() => {
     const productsByClient = new Map<string, typeof products>();
     for (const p of products) {
       const arr = productsByClient.get(p.clientId);
       if (arr) arr.push(p);
       else productsByClient.set(p.clientId, [p]);
     }
-    return (
-      clients
-        // Seção Clientes lista apenas clientes comuns. Clientes MGMV (com
-        // acordo ativo ou classificados como mgmv pela importação) vão para
-        // a seção MGMV dedicada.
-        .filter((c) => {
-          const isMgmv = c.clientType === "mgmv" || (!!c.mgmv && c.mgmv.installments.length > 0);
-          return !isMgmv;
-        })
-        .map((c) => {
-          const ps = productsByClient.get(c.id) ?? [];
-          const totalPurchased = ps.reduce((a, p) => a + p.totalValue, 0);
-          const totalOpen = ps
-            .filter((p) => isOpenSituation(p))
-            .reduce((a, p) => a + (p.totalValue - p.paidValue), 0);
-          const last = ps
-            .map((p) => p.registerDate)
-            .sort()
-            .pop();
-          const status = generalStatus(c, ps);
-          return { client: c, products: ps, totalPurchased, totalOpen, last, status };
-        })
-        .filter((r) => {
+    return clients
+      .filter((c) => {
+        const isMgmv = c.clientType === "mgmv" || (!!c.mgmv && c.mgmv.installments.length > 0);
+        return !isMgmv;
+      })
+      .map((c) => {
+        const ps = productsByClient.get(c.id) ?? [];
+        let totalPurchased = 0;
+        let totalOpen = 0;
+        let last: string | undefined;
+        for (const p of ps) {
+          totalPurchased += p.totalValue;
+          if (isOpenSituation(p)) totalOpen += p.totalValue - p.paidValue;
+          if (!last || p.registerDate > last) last = p.registerDate;
+        }
+        const status = generalStatus(c, ps);
+        return { client: c, products: ps, totalPurchased, totalOpen, last, status };
+      });
+  }, [clients, products]);
+
+  // Debounce do termo de busca. Digitar não deve reprocessar imediatamente
+  // uma lista de milhares — 200ms basta para percepção fluida.
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedSearch(search), 200);
+    return () => window.clearTimeout(id);
+  }, [search]);
+
+  const rows = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    return baseRows.filter((r) => {
           if (q) {
             // Busca ampla: casa qualquer célula visível da linha
             // (nome, telefone, status, produtos, plataformas, pasta,
@@ -276,12 +287,10 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
             }
           }
           return true;
-        })
-    );
+    });
   }, [
-    clients,
-    products,
-    search,
+    baseRows,
+    debouncedSearch,
     chip,
     financialFilter,
     situationFilter,
@@ -300,37 +309,37 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   // Contagem de correspondências por coluna sobre a lista já filtrada
   // (`rows`) — usado para pintar o indicador no cabeçalho e a legenda
   // "encontrado em: ..." acima da tabela.
-  const searchActive = search.trim().length > 0;
+  const searchActive = debouncedSearch.trim().length > 0;
   const matchCols = useMemo(() => {
     if (!searchActive) {
       return { name: 0, phone: 0, status: 0, products: 0, folder: 0, notes: 0, totals: 0, last: 0 };
     }
     let name = 0, phone = 0, status = 0, prods = 0, folder = 0, notes = 0, totals = 0, last = 0;
     for (const r of rows) {
-      if (matchText(r.client.name, search)) name++;
-      if (matchText(r.client.phone, search)) phone++;
-      if (matchText(r.status.label, search)) status++;
-      if (matchText(r.client.folder ?? "", search)) folder++;
-      if (matchText(r.client.notes ?? "", search)) notes++;
+      if (matchText(r.client.name, debouncedSearch)) name++;
+      if (matchText(r.client.phone, debouncedSearch)) phone++;
+      if (matchText(r.status.label, debouncedSearch)) status++;
+      if (matchText(r.client.folder ?? "", debouncedSearch)) folder++;
+      if (matchText(r.client.notes ?? "", debouncedSearch)) notes++;
       if (
         r.products.some(
           (p) =>
-            matchText(p.name, search) ||
-            matchText(p.platform ?? "", search) ||
-            matchText(p.financialStatus, search) ||
-            matchText(p.situation, search),
+            matchText(p.name, debouncedSearch) ||
+            matchText(p.platform ?? "", debouncedSearch) ||
+            matchText(p.financialStatus, debouncedSearch) ||
+            matchText(p.situation, debouncedSearch),
         )
       )
         prods++;
       if (
-        matchText(formatBRL(r.totalPurchased), search) ||
-        matchText(formatBRL(r.totalOpen), search)
+        matchText(formatBRL(r.totalPurchased), debouncedSearch) ||
+        matchText(formatBRL(r.totalOpen), debouncedSearch)
       )
         totals++;
-      if (r.last && matchText(formatDateBR(r.last), search)) last++;
+      if (r.last && matchText(formatDateBR(r.last), debouncedSearch)) last++;
     }
     return { name, phone, status, products: prods, folder, notes, totals, last };
-  }, [rows, search, searchActive]);
+  }, [rows, debouncedSearch, searchActive]);
 
   const activeFilterCount =
     (chip !== "pago_aguardando" ? 1 : 0) +
