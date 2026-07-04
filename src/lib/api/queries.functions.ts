@@ -416,7 +416,7 @@ export const listMgmvInstallments = createServerFn({ method: "POST" })
       number: r.installment_number,
       amount: Number(r.amount) || 0,
       paidAmount: r.paid_amount == null ? null : Number(r.paid_amount) || 0,
-      dueDate: r.due_date,
+      dueDate: r.due_date ?? "",
       paidAt: r.paid_at ?? null,
       status: r.status,
     }));
@@ -445,20 +445,8 @@ export interface DashboardAggregates {
   cobrancaAtiva: number; // itens elegíveis a cobrança individual (vencidos)
 }
 
-async function countRows(
-  supabase: Awaited<ReturnType<typeof requireSupabaseAuthClient>>,
-  table: "clients" | "products" | "mgmv_agreements" | "mgmv_installments",
-  build: (q: ReturnType<typeof supabase.from>) => unknown,
-): Promise<number> {
-  const q = supabase.from(table).select("id", { count: "exact", head: true });
-  const chained = build(q as unknown as ReturnType<typeof supabase.from>) as {
-    then: PromiseLike<{ count: number | null; error: unknown }>["then"];
-  };
-  const res = (await chained) as unknown as { count: number | null; error: unknown };
-  return res.count ?? 0;
-}
-// Type-only helper alias.
-type requireSupabaseAuthClient = never;
+// (helper `countRows` removido — as contagens do dashboard usam chamadas
+// diretas `supabase.from(...).select('id', { count: 'exact', head: true })`).
 
 export const getDashboardAggregates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -466,7 +454,6 @@ export const getDashboardAggregates = createServerFn({ method: "POST" })
     const { supabase } = context;
     const nowIso = new Date().toISOString();
 
-    const q = (fn: (b: ReturnType<typeof supabase.from>) => unknown) => fn as never;
     // Rodamos todas as contagens em paralelo. Cada chamada é `head:true`,
     // então o Postgres retorna apenas o count.
     const [
@@ -537,14 +524,10 @@ export const getDashboardAggregates = createServerFn({ method: "POST" })
         .lt("due_date", nowIso),
     ]);
 
-    // Guarda uso da variável `q` para evitar unused warning.
-    void q;
-
     const c = (r: { count: number | null; error: unknown }) => {
       if (r.error) throw new Error(String((r.error as { message?: string })?.message ?? r.error));
       return r.count ?? 0;
     };
-    void countRows; // keep helper exportable if needed in future
 
     return {
       totalClients: c(totalClients),
