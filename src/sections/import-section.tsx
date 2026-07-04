@@ -3255,12 +3255,23 @@ function PreviewVirtualTable({ rows }: { rows: ParsedRow[] }) {
 
 function _UploadAreaImpl({ accept, onFile, hint, tall }: { accept: string; onFile: (f: File) => void; hint: string; tall?: boolean }) {
   const [drag, setDrag] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   return (
-    <label
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => inputRef.current?.click()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          inputRef.current?.click();
+        }
+      }}
       onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
       onDragLeave={() => setDrag(false)}
       onDrop={(e) => {
         e.preventDefault();
+        e.stopPropagation();
         setDrag(false);
         const f = e.dataTransfer.files[0];
         if (f) onFile(f);
@@ -3274,6 +3285,7 @@ function _UploadAreaImpl({ accept, onFile, hint, tall }: { accept: string; onFil
       <p className="font-medium">{hint}</p>
       <p className="mt-1 text-xs text-muted-foreground">Aceita: {accept}</p>
       <input
+        ref={inputRef}
         type="file"
         accept={accept}
         className="hidden"
@@ -3283,7 +3295,7 @@ function _UploadAreaImpl({ accept, onFile, hint, tall }: { accept: string; onFil
           e.target.value = "";
         }}
       />
-    </label>
+    </div>
   );
 }
 
