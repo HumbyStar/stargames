@@ -621,8 +621,11 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                   </tr>
                 </thead>
                 <tbody>
-                  {pagedRows.map((r) => (
-                    <tr key={r.client.id} className="border-b border-border/60 last:border-0">
+                  {pagedRows.map((r) => {
+                    const isRowOpen = expandedRow === r.client.id;
+                    return (
+                    <Fragment key={r.client.id}>
+                    <tr className="border-b border-border/60 last:border-0">
                       <td
                         className={
                           (compact ? "py-1.5" : "py-3") +
@@ -777,37 +780,98 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                               >
                                 Abrir
                               </Button>
-                            </>
-                          )}
-                          {!compact && !clientEdit.isEditing(r.client.id) && (
-                            <>
                               <Button
                                 size="sm"
+                                variant="ghost"
+                                title={isRowOpen ? "Fechar detalhes" : "Ver detalhes"}
+                                aria-label={isRowOpen ? "Fechar detalhes" : "Ver detalhes"}
                                 onClick={() =>
-                                  setProductModal({ open: true, clientId: r.client.id })
+                                  setExpandedRow(isRowOpen ? null : r.client.id)
                                 }
                               >
-                                + Produto
+                                {isRowOpen ? (
+                                  <EyeOff className="h-4 w-4" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
                               </Button>
-                              {r.products.some(shouldAppearInCollection) && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => onScrollTo("collection")}
-                                >
-                                  Cobrança
-                                </Button>
-                              )}
                             </>
                           )}
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    {isRowOpen && (
+                      <tr className="border-b border-border/60 bg-accent/20">
+                        <td colSpan={8} className="px-4 py-4">
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div>
+                              <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                                Produtos ({r.products.length})
+                              </div>
+                              <div className="space-y-1 text-xs">
+                                {r.products.length === 0 && (
+                                  <p className="text-muted-foreground">
+                                    Nenhum produto cadastrado.
+                                  </p>
+                                )}
+                                {r.products.map((p) => (
+                                  <div
+                                    key={p.id}
+                                    className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-card px-2 py-1"
+                                  >
+                                    <span className="truncate font-medium">{p.name}</span>
+                                    <span className="text-muted-foreground">{p.platform ?? "—"}</span>
+                                    <span className="tabular-nums">{formatBRL(p.totalValue)}</span>
+                                    <Tag>{displaySituation(p.situation)}</Tag>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="mt-3 flex flex-wrap gap-1.5">
+                                <Button
+                                  size="sm"
+                                  onClick={() =>
+                                    setProductModal({ open: true, clientId: r.client.id })
+                                  }
+                                >
+                                  + Produto
+                                </Button>
+                                {r.products.some(shouldAppearInCollection) && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => onScrollTo("collection")}
+                                  >
+                                    Cobrança
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                                Observações
+                              </div>
+                              <div className="whitespace-pre-wrap rounded-md border border-border/60 bg-card p-2 text-xs text-muted-foreground">
+                                {r.client.notes && r.client.notes.trim()
+                                  ? highlight(r.client.notes, search)
+                                  : "Nenhuma observação."}
+                              </div>
+                              {r.client.folder && (
+                                <div className="mt-2 text-xs text-muted-foreground">
+                                  Pasta: <span className="font-medium">{r.client.folder}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
+                    );
+                  })}
                   {pagedRows.length === 0 && (
                     <tr>
                       <td
-                        colSpan={compact ? 8 : 9}
+                        colSpan={8}
                         className="py-10 text-center text-muted-foreground"
                       >
                         Nenhum cliente encontrado.
@@ -816,7 +880,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                   )}
                   {hasMoreRows && (
                     <tr>
-                      <td colSpan={compact ? 8 : 9} className="py-3">
+                      <td colSpan={8} className="py-3">
                         <LoadMoreButton
                           count={nextChunkRows}
                           onClick={loadMoreRows}
