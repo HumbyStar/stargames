@@ -202,7 +202,7 @@ function SearchBox({
           : "Acordo MGMV";
         return {
           type: "agreement" as const,
-          id: c.mgmv!.id ?? c.id,
+          id: c.id,
           clientId: c.id,
           title: `Acordo MGMV — ${c.name}`,
           subtitle,
