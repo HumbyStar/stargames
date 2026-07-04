@@ -294,7 +294,7 @@ function SearchBox({
                 Nenhum resultado para “{query.trim()}”
               </p>
               <p className="text-xs text-muted-foreground">
-                Tente outro nome, telefone ou produto.
+                Tente outro nome, telefone ou acordo.
               </p>
             </div>
           ) : (
@@ -307,7 +307,8 @@ function SearchBox({
                 onMouseEnter={() => setActive(idx)}
                 onClick={() => handleSelect(item)}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors",
+                  "flex w-full items-center gap-3 rounded-xl border-l-4 px-3 py-2 text-left transition-colors",
+                  statusBorderClass(item.statusLabel),
                   idx === active ? "bg-accent text-accent-foreground" : "hover:bg-accent/60",
                 )}
               >
@@ -323,7 +324,7 @@ function SearchBox({
                   <p className="truncate text-xs text-muted-foreground">{item.subtitle}</p>
                 </div>
                 <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {item.type === "client" ? "Cliente" : "Produto"}
+                  {item.statusLabel}
                 </span>
               </button>
             ))
