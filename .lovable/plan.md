@@ -1,40 +1,61 @@
-## Ajuste
+## Mudanças na busca global (navbar)
 
-Reverter os 5 botões da linha da tabela principal de Clientes e mover a interação para dentro do **modal do cliente**, com **seleção múltipla** de produtos.
+### 1. `src/components/app-layout.tsx` → `SearchBox`
 
-## Mudanças
+**Remover busca por produto.** Hoje `results` mescla `clientMatches` + `productMatches`. Manter apenas resultados de **clientes** e **acordos MGMV**.
 
-### 1. `src/sections/clientes-section.tsx` — linha do cliente (tabela principal)
+Novo shape de `results`:
 
-Remover o bloco `{(() => { const openProducts = ... })()}` que adicionei (Pago/Enviado/Retirar/Removido em lote). A célula de ações volta ao estado anterior: `[lápis] [Abrir] [+ Produto] [Cobrança?]`.
+```ts
+{ type: "client"; id: string; title: string; subtitle: string; statusLabel: string }
+| { type: "agreement"; id: string; clientId: string; title: string; subtitle: string; statusLabel: string }
+```
 
-### 2. `src/sections/clientes-section.tsx` — `ClientDrawer` (modal do cliente)
+Lógica:
 
-Na tabela de produtos individuais do cliente:
+- **Clientes**: match por nome (case-insensitive) ou telefone (dígitos). Igual ao atual, sem produtos.
+- **Acordos**: itera `clients` que tenham `client.mgmv`; casa quando o nome do cliente casa o termo OU quando o termo bate número de parcelas / valor / algum id do acordo. Escopo simples: match pelo nome do cliente do acordo. `title = "Acordo MGMV — <cliente>"`, `subtitle = "N/M parcelas · <restante>"`.
+- Limitar 6 clientes + 6 acordos.
+- Placeholder do input: `"Buscar cliente ou acordo..."` (remover "produto").
 
-- **Nova coluna de checkbox** (primeira coluna) em cada linha (`individualProducts`), com estado local `selectedIds: Set<string>` no `ClientDrawer`.
-- **Checkbox no header** funciona como "selecionar todos" / "desmarcar todos" (indeterminate quando parcial).
-- **Barra de ações em lote** acima da tabela (só aparece quando `selectedIds.size > 0`), com contador "N selecionado(s)" e 4 botões:
-  - **Pago** → para cada selecionado com `financialStatus !== "Pago"` → `updateProduct(id, { paidValue: totalValue, financialStatus: "Pago" })`. Após: `setSelectedIds(new Set())`, toast "N produto(s) marcados como pagos".
-  - **Enviado** → `window.confirm(...)` → `setProductSituation(id, "Enviado")` em cada selecionado (aplica em todos, independente da situação atual — permite corrigir engano).
-  - **Retirar** → `window.confirm(...)` → `setProductSituation(id, "Retirar")` em cada selecionado.
-  - **Removido** → `window.confirm(...)` → `setProductSituation(id, "Removido")` em cada selecionado.
-- **Remover os botões por linha** que adicionei antes (Pago / Enviado / Retirar / Removido). A coluna Ações da linha mantém apenas o **lápis** (`RowEditPencil`) para edição inline dos campos do produto (nome/plataforma/valores), que continua sendo por linha por natureza.
-- IDs que somem da lista após a ação (produto vira Removido/Retirado e sai de `individualProducts`) são removidos do `selectedIds` via efeito de sincronização baseado nos ids atuais.
+**Reaproveitar `generalStatus(client, products)`** (exportar de `clientes-section.tsx` OU duplicar helper local em `app-layout.tsx` importando `store` — vou **exportar** `generalStatus` já existente para evitar duplicação). Ela devolve `{ label, variant }` com labels: `"Reserva vencida"`, `"Pendente"`, `"MGMV"`, `"Pago ag. envio"`, `"Enviado"`, `"Sem produtos"`, `"Em dia"`.
 
-### Handlers
+Também considerar produtos com `financialStatus === "Reserva"` NÃO vencidos: para mapear "reserva simples" → amarelo, checar `ps.some(p => p.financialStatus === "Reserva" && isOpenSituation(p))` como fallback antes de "Em dia".
 
-Reaproveitam os já disponíveis via props do drawer: `onMarkPaid` (para Pago), `onChangeSituation` (para Enviado/Retirar/Removido). Não altera store nem tipos.
+### 2. Borda colorida por resultado
+
+Cada `<button>` de resultado ganha borda esquerda grossa (`border-l-4`) via `statusLabel`:
+
+| statusLabel                           | Borda                        |
+| ------------------------------------- | ---------------------------- |
+| `Em dia`                              | `border-l-blue-500` (azul)   |
+| `Pendente`                            | `border-l-red-500` (vermelho)|
+| `Reserva vencida` / reserva em aberto | `border-l-yellow-500` (amarelo) |
+| `Pago ag. envio`                      | `border-l-green-500` (verde) |
+| `MGMV` / `Enviado` / `Sem produtos`   | `border-l-transparent`       |
+
+Aplicar via `cn(..., statusToBorder(statusLabel))`. Cores diretas Tailwind (não são semânticas do design system, mas o pedido é literal e explícito — azul/vermelho/amarelo/verde).
+
+Também exibir um pequeno badge com o `statusLabel` na direita do item (substitui o "Cliente"/"Produto" atual), para reforçar o motivo da cor. Ícone: `User` para cliente, `FileText` (já disponível em lucide) ou `Package` para acordo.
+
+### 3. Seleção
+
+`handleSelect`:
+- `client` → mantém (`openClient(id)` + scroll para `#clientes`).
+- `agreement` → `openClient(clientId)` + scroll para `#clientes` (o modal do cliente já mostra o acordo MGMV).
 
 ## Verificação
 
-1. Tabela principal de Clientes: linha volta a ter só [lápis] [Abrir] [+ Produto].
-2. Abrir modal do cliente: cada produto tem checkbox; header seleciona todos.
-3. Selecionar 3 produtos → barra "3 selecionado(s)" aparece com 4 botões.
-4. Clicar "Pago" → 3 viram Pago, seleção limpa, toast confirma.
-5. Selecionar 2 → "Removido" com confirm → 2 saem da tabela ativa e vão para "Histórico de produtos retirados"; seleção limpa.
-6. Nenhum selecionado → barra de ações escondida; só o lápis por linha para edição inline.
+1. Buscar por termo que hoje casa um produto (ex.: `"PS5"`) → não retorna mais produtos, só clientes que tenham "PS5" no nome/telefone (nenhum, provavelmente) e/ou acordos.
+2. Buscar por nome de cliente com produto pago aguardando envio → resultado com borda verde.
+3. Cliente com reserva vencida → borda amarela.
+4. Cliente com pendência → borda vermelha.
+5. Cliente em dia → borda azul.
+6. Cliente com acordo MGMV → aparece um resultado extra "Acordo MGMV — <cliente>", com borda conforme status geral do cliente.
 
 ## Arquivos afetados
 
-- `src/sections/clientes-section.tsx` — apenas.
+- `src/components/app-layout.tsx` — `SearchBox` (remover ramo product, adicionar ramo agreement, aplicar bordas).
+- `src/sections/clientes-section.tsx` — exportar `generalStatus` (é `function generalStatus(...)`, virar `export function generalStatus(...)`).
+
+Sem mudanças em store/tipos.
