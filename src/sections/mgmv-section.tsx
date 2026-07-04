@@ -554,11 +554,6 @@ export function MGMVSection({
 
       <Card className="mt-6">
         <div className="space-y-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="flex-1" />
-            <ListExpansionToggle section="mgmv" />
-          </div>
-
           <div className="flex flex-wrap gap-2">
             {chips.map((c) => (
               <button
