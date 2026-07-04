@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Folder, Filter, Maximize2, Minimize2 } from "lucide-react";
+import { Folder, Filter, Maximize2, Minimize2, Pencil } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { useSectionCompact } from "@/lib/use-section-compact";
@@ -43,6 +43,7 @@ import {
 import { toast } from "sonner";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
 import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
+import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
@@ -1004,6 +1005,7 @@ function ClientDrawer({
 }) {
   const [notes, setNotes] = useState(client.notes ?? "");
   const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
+  const [mgmvEditOpen, setMgmvEditOpen] = useState(false);
   const updateProduct = useStore((s) => s.updateProduct);
   // Edição por lápis dos produtos do cliente. Apenas Confirmar persiste;
   // Fechar descarta. Blur / click-outside são ignorados pelo hook.
@@ -1110,7 +1112,29 @@ function ClientDrawer({
       )}
 
       {mgmv && (
-        <Card title={`Acordo MGMV — ${mgmv.status}`}>
+        <Card
+          title={`Acordo MGMV — ${mgmv.status}`}
+          action={
+            client.mgmv && !mgmvEditOpen ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setMgmvEditOpen(true)}
+              >
+                <Pencil className="mr-1 size-3" /> Editar acordo
+              </Button>
+            ) : null
+          }
+        >
+          {mgmvEditOpen && client.mgmv ? (
+            <MgmvAgreementEditor
+              clientId={client.id}
+              agreement={client.mgmv}
+              products={mgmvProducts}
+              onClose={() => setMgmvEditOpen(false)}
+            />
+          ) : (
+          <>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
             <MetricCard
               label="Valor total do acordo"
@@ -1253,6 +1277,8 @@ function ClientDrawer({
                 </table>
               </div>
             </div>
+          )}
+          </>
           )}
         </Card>
       )}
