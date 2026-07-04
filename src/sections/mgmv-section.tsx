@@ -821,11 +821,13 @@ export function MGMVSection({
                           <Button
                             size="sm"
                             variant="ghost"
+                            title={isOpen ? "Fechar detalhes" : "Ver detalhes"}
+                            aria-label={isOpen ? "Fechar detalhes" : "Ver detalhes"}
                             onClick={() =>
                               setExpanded(isOpen ? null : r.client.id)
                             }
                           >
-                            {isOpen ? "Fechar" : "Detalhes"}
+                            {isOpen ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                           </Button>
                           <Button
                             size="sm"
