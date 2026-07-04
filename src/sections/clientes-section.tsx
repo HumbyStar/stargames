@@ -101,7 +101,16 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   );
 
   const [search, setSearch] = usePersistedState<string>("clientes.search", "");
-  const [chip, setChip] = usePersistedState<ChipFilter>("clientes.chip", "todos");
+  const [chip, setChip] = usePersistedState<ChipFilter>(
+    "clientes.chip",
+    "pago_aguardando",
+  );
+  // Migração: usuários com o antigo default "todos" persistido migram
+  // automaticamente para o novo default operacional na primeira montagem.
+  useEffect(() => {
+    if (chip === "todos") setChip("pago_aguardando");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [financialFilter, setFinancialFilter] = usePersistedState<string>(
     "clientes.financial",
     "Todos",
@@ -323,7 +332,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   }, [rows, search, searchActive]);
 
   const activeFilterCount =
-    (chip !== "todos" ? 1 : 0) +
+    (chip !== "pago_aguardando" ? 1 : 0) +
     (financialFilter !== "Todos" ? 1 : 0) +
     (situationFilter !== "Todas" ? 1 : 0) +
     (platformFilter !== "Todas" ? 1 : 0) +
@@ -331,7 +340,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     (folderFilter !== "Todas" ? 1 : 0);
 
   const clearFilters = () => {
-    setChip("todos");
+    setChip("pago_aguardando");
     setFinancialFilter("Todos");
     setSituationFilter("Todas");
     setPlatformFilter("Todas");
@@ -355,7 +364,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   ).length;
 
   const chips: { id: ChipFilter; label: string }[] = [
-    { id: "todos", label: "Todos" },
     { id: "reserva_vencida", label: "Reserva vencida" },
     { id: "pendente", label: "Pendente" },
     { id: "pago_aguardando", label: "Pago aguardando envio" },
@@ -407,8 +415,8 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
         <MetricCard
           label="Total de Clientes"
           value={totalClients}
-          onClick={() => applyCardFilter("todos")}
-          tooltip="Ver todos os clientes"
+          onClick={() => useUiStore.getState().openHistory("clientes-todos")}
+          tooltip="Abrir base completa de clientes"
         />
         <MetricCard
           label="Clientes com Pendência"

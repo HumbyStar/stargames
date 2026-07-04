@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
@@ -75,7 +75,7 @@ type SavedFilter = {
 
 export function CollectionSection({
   onScrollTo,
-  initialFilter = "todos",
+  initialFilter = "em_aberto",
 }: {
   onScrollTo: (id: string) => void;
   initialFilter?: Filter;
@@ -99,6 +99,10 @@ export function CollectionSection({
     dueDate: string;
   }>();
   const [filter, setFilter] = usePersistedState<Filter>("collection.filter", initialFilter);
+  useEffect(() => {
+    if (filter === "todos") setFilter("em_aberto");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [period, setPeriod] = usePersistedState<Period>("collection.period", "todos");
   const [customFrom, setCustomFrom] = usePersistedState<string>("collection.customFrom", "");
   const [customTo, setCustomTo] = usePersistedState<string>("collection.customTo", "");
@@ -125,7 +129,7 @@ export function CollectionSection({
   const [situationFilter, setSituationFilter] = usePersistedState<string>("collection.situation", "Todas");
 
   const activeFilterCount =
-    (filter !== "todos" ? 1 : 0) +
+    (filter !== "em_aberto" ? 1 : 0) +
     (period !== "todos" ? 1 : 0) +
     (period === "personalizado" && (customFrom || customTo) ? 1 : 0) +
     (folderFilter !== "Todas" ? 1 : 0) +
@@ -352,7 +356,6 @@ export function CollectionSection({
   );
 
   const chips: { id: Filter; label: string }[] = [
-    { id: "todos", label: "Todos" },
     { id: "reserva_vencida", label: "Reserva vencida" },
     { id: "pendente_vencido", label: "Pendente vencido" },
     { id: "mgmv", label: "MGMV" },
@@ -431,7 +434,7 @@ export function CollectionSection({
   };
 
   const clearFilters = () => {
-    setFilter("todos");
+    setFilter("em_aberto");
     setPeriod("todos");
     setCustomFrom("");
     setCustomTo("");
