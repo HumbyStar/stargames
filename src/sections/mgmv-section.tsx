@@ -512,8 +512,8 @@ export function MGMVSection({
           label="Clientes MGMV"
           value={stats.clientes}
           status="primary"
-          onClick={() => applyCardFilter("todos")}
-          tooltip="Ver todos os acordos MGMV"
+          onClick={() => useUiStore.getState().openHistory("mgmv-todos")}
+          tooltip="Abrir base completa de acordos MGMV"
         />
         <MetricCard
           label="Acordos ativos"
