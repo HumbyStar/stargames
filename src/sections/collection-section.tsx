@@ -99,6 +99,10 @@ export function CollectionSection({
     dueDate: string;
   }>();
   const [filter, setFilter] = usePersistedState<Filter>("collection.filter", initialFilter);
+  useEffect(() => {
+    if (filter === "todos") setFilter("em_aberto");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [period, setPeriod] = usePersistedState<Period>("collection.period", "todos");
   const [customFrom, setCustomFrom] = usePersistedState<string>("collection.customFrom", "");
   const [customTo, setCustomTo] = usePersistedState<string>("collection.customTo", "");
