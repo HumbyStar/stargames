@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { usePersistedState } from "@/lib/use-persisted-state";
@@ -228,7 +228,12 @@ export function MGMVSection({
   const registerMGMVPartialPayment = useStore((s) => s.registerMGMVPartialPayment);
   const setMGMVAgreement = useStore((s) => s.setMGMVAgreement);
   const applyAiReviewToAgreement = useStore((s) => s.applyAiReviewToAgreement);
-  const [chip, setChip] = usePersistedState<MgmvChip>("mgmv.chip", "todos");
+  const [chip, setChip] = usePersistedState<MgmvChip>("mgmv.chip", "em_atraso");
+  // Migração: default antigo "todos" cai para "em_atraso" (subconjunto operacional).
+  useEffect(() => {
+    if (chip === "todos") setChip("em_atraso");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [search, setSearch] = usePersistedState<string>("mgmv.search", "");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [aiTarget, setAiTarget] = useState<string | null>(null);
@@ -455,7 +460,6 @@ export function MGMVSection({
   }, [filtered, search, searchActive]);
 
   const chips: { id: MgmvChip; label: string; count?: number }[] = [
-    { id: "todos", label: "Todos", count: stats.clientes },
     { id: "ativos", label: "Ativos", count: stats.ativos },
     { id: "em_atraso", label: "Em atraso", count: stats.atraso },
     { id: "revisao", label: "Revisão necessária", count: stats.revisao },
