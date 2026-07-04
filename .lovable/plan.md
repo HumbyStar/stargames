@@ -1,61 +1,84 @@
-## Mudanças na busca global (navbar)
+## Diagnóstico
 
-### 1. `src/components/app-layout.tsx` → `SearchBox`
+O sistema hoje carrega **tudo em memória** via `db-sync.ts::hydrateStoreFromDb()` (chamado no boot da app), usando `fetchAllRows` para `clients`, `products`, `mgmv_agreements`, `mgmv_installments`, `import_history`. Tudo vai para um Zustand store (`src/lib/store.ts`, 1165 linhas) e cada seção faz `useStore(s => s.products)` + `.filter()` em arrays locais.
 
-**Remover busca por produto.** Hoje `results` mescla `clientMatches` + `productMatches`. Manter apenas resultados de **clientes** e **acordos MGMV**.
+Arquivos-gargalo mapeados:
+- `src/lib/db-sync.ts` — `fetchAllRows` sem paginação, chamado no hydrate
+- `src/lib/store.ts` — estado monolítico persistido
+- `src/sections/clientes-section.tsx` (1900L) — filtra todos os produtos localmente
+- `src/sections/collection-section.tsx` (1144L) — deriva collection de `allProducts`
+- `src/sections/mgmv-section.tsx` (1058L) — carrega todas as parcelas
+- `src/routes/_authenticated.index.tsx` — Dashboard usa `computeDashboardAggregates(clients, products)` em cima do store inteiro
+- `src/sections/import-section.tsx` (4298L) — preview pesado
 
-Novo shape de `results`:
+Isso é o motivo do travamento pós-importação: milhares de linhas em memória + `.filter/.sort/.map` recalculando a cada render de cada seção da one-page.
 
-```ts
-{ type: "client"; id: string; title: string; subtitle: string; statusLabel: string }
-| { type: "agreement"; id: string; clientId: string; title: string; subtitle: string; statusLabel: string }
-```
+## Estratégia (7 lotes, um por vez, com relatório entre lotes)
 
-Lógica:
+Refatoração grande — proponho executar **um lote por turno** conforme a seção 17 do pedido, com validação (build + smoke test no preview) entre lotes. Cada lote é reversível isoladamente.
 
-- **Clientes**: match por nome (case-insensitive) ou telefone (dígitos). Igual ao atual, sem produtos.
-- **Acordos**: itera `clients` que tenham `client.mgmv`; casa quando o nome do cliente casa o termo OU quando o termo bate número de parcelas / valor / algum id do acordo. Escopo simples: match pelo nome do cliente do acordo. `title = "Acordo MGMV — <cliente>"`, `subtitle = "N/M parcelas · <restante>"`.
-- Limitar 6 clientes + 6 acordos.
-- Placeholder do input: `"Buscar cliente ou acordo..."` (remover "produto").
+### Lote 0 — Infra de queries server-side (base, sem mudar UI)
+- Criar `src/lib/api/` com server functions paginadas:
+  - `listClients.functions.ts` — `{ page, pageSize, search, sortBy, sortDir, filters }` → `{ rows, total }` usando `range()` + `count: 'exact'` no Supabase
+  - `listProducts.functions.ts` — idem, com filtros por `client_id`, `financial_status`, `situation`, `platform`, `due_date`, `included_in_mgmv`
+  - `listCollection.functions.ts` — só itens cobráveis (WHERE server-side espelhando `shouldAppearInCollection`)
+  - `listMgmvAgreements.functions.ts` + `listMgmvInstallments.functions.ts`
+  - `getDashboardAggregates.functions.ts` — retorna só contadores (SELECT count(*) por status/situação, sem trazer linhas)
+  - `getClientDetail.functions.ts` — cliente + agregados + produtos paginados
+- Migração SQL adicionando índices faltantes:
+  - `products (client_id)`, `products (financial_status, situation)`, `products (due_date)`, `products (included_in_mgmv)`
+  - `clients (phone_normalized)`, extensão `pg_trgm` + índice GIN em `clients.name` e `products.product_name`
+  - `mgmv_agreements (client_id, status)`, `mgmv_installments (agreement_id, due_date)`
+- Hook `useServerTable(queryKey, fetcher, { page, pageSize, search, filters, debounceMs: 400 })` reutilizável, encapsulando useQuery + debounce + keepPreviousData.
 
-**Reaproveitar `generalStatus(client, products)`** (exportar de `clientes-section.tsx` OU duplicar helper local em `app-layout.tsx` importando `store` — vou **exportar** `generalStatus` já existente para evitar duplicação). Ela devolve `{ label, variant }` com labels: `"Reserva vencida"`, `"Pendente"`, `"MGMV"`, `"Pago ag. envio"`, `"Enviado"`, `"Sem produtos"`, `"Em dia"`.
+### Lote 1 — Dashboard leve
+- Trocar `computeDashboardAggregates` local por `getDashboardAggregates` server function (uma única RPC que retorna os ~15 contadores via `count` queries paralelas).
+- Cards clicáveis abrem modal/drilldown já existente, que agora usa `listProducts` paginado com filtro pré-aplicado.
+- Remover dependência do Dashboard sobre `store.clients` / `store.products`.
 
-Também considerar produtos com `financialStatus === "Reserva"` NÃO vencidos: para mapear "reserva simples" → amarelo, checar `ps.some(p => p.financialStatus === "Reserva" && isOpenSituation(p))` como fallback antes de "Em dia".
+### Lote 2 — Seção Clientes com paginação server-side
+- Substituir o array local por `useServerTable` chamando `listClients` (page/pageSize/search/sort).
+- Debounce 400ms no campo de busca.
+- Lista de clientes exibe **apenas resumo** (contadores por cliente vindos do banco).
+- Ao abrir `ClientDrawer`, chamar `getClientDetail(clientId)` para carregar produtos daquele cliente sob demanda.
+- Manter toolbar de bulk actions em produtos individuais (já implementada).
 
-### 2. Borda colorida por resultado
+### Lote 3 — Collection sob demanda
+- Query server-side retornando só itens onde `shouldAppearInCollection` é verdadeiro (financialStatus IN (...) AND situation='Em Aberto' AND (dueDate < now OR pendente)).
+- Filtros e busca também server-side.
+- Paginação real (10/25/50/100).
 
-Cada `<button>` de resultado ganha borda esquerda grossa (`border-l-4`) via `statusLabel`:
+### Lote 4 — MGMV sob demanda
+- `listMgmvAgreements` paginado.
+- Parcelas + produtos incluídos carregam só ao expandir um acordo (`listMgmvInstallments(agreementId)`).
 
-| statusLabel                           | Borda                        |
-| ------------------------------------- | ---------------------------- |
-| `Em dia`                              | `border-l-blue-500` (azul)   |
-| `Pendente`                            | `border-l-red-500` (vermelho)|
-| `Reserva vencida` / reserva em aberto | `border-l-yellow-500` (amarelo) |
-| `Pago ag. envio`                      | `border-l-green-500` (verde) |
-| `MGMV` / `Enviado` / `Sem produtos`   | `border-l-transparent`       |
+### Lote 5 — Realtime controlado + invalidação seletiva
+- Substituir qualquer subscribe global por invalidação de queries específicas (`queryClient.invalidateQueries(['products', clientId])` etc.) em resposta a eventos das seções ativas.
+- Filtros do usuário preservados.
 
-Aplicar via `cn(..., statusToBorder(statusLabel))`. Cores diretas Tailwind (não são semânticas do design system, mas o pedido é literal e explícito — azul/vermelho/amarelo/verde).
+### Lote 6 — Store enxuto + limpeza
+- Remover `hydrateStoreFromDb` fetch-all. O store passa a guardar apenas: sessão, filtros ativos, dados do modal aberto, estado de UI.
+- Mutations (create/update/delete) continuam via server functions e invalidam queries.
+- Remover uso do store como fonte de listas.
 
-Também exibir um pequeno badge com o `statusLabel` na direita do item (substitui o "Cliente"/"Produto" atual), para reforçar o motivo da cor. Ícone: `User` para cliente, `FileText` (já disponível em lucide) ou `Package` para acordo.
+### Lote 7 (opcional) — Virtualização + Importação
+- `@tanstack/react-virtual` só onde ainda houver tabela com centenas de linhas (após paginação, provavelmente desnecessário exceto no preview de importação).
+- Preview de importação paginado + processamento em Web Worker se ainda travar.
 
-### 3. Seleção
+## Detalhes técnicos
 
-`handleSelect`:
-- `client` → mantém (`openClient(id)` + scroll para `#clientes`).
-- `agreement` → `openClient(clientId)` + scroll para `#clientes` (o modal do cliente já mostra o acordo MGMV).
+- **Server functions**: `createServerFn` com `requireSupabaseAuth` para respeitar RLS por usuário. Retornam DTOs planos `{ rows, total, page, pageSize }`.
+- **Índices**: migração única no Lote 0. `CREATE INDEX IF NOT EXISTS` — sem `CONCURRENTLY` (não pode em migração).
+- **Query keys**: `['clients', { page, pageSize, search, sort, filters }]` — TanStack Query cuida de dedup/cache.
+- **Contratos preservados**: importação com preview, Concierge, fluxo Abandonou→Retirar→Retirado, lápis com confirmação, audit_log — nenhum tocado.
+- **Compat**: durante os lotes, quem ainda lê do store continua funcionando (o store só é desligado no Lote 6).
 
-## Verificação
+## O que NÃO vou mudar
 
-1. Buscar por termo que hoje casa um produto (ex.: `"PS5"`) → não retorna mais produtos, só clientes que tenham "PS5" no nome/telefone (nenhum, provavelmente) e/ou acordos.
-2. Buscar por nome de cliente com produto pago aguardando envio → resultado com borda verde.
-3. Cliente com reserva vencida → borda amarela.
-4. Cliente com pendência → borda vermelha.
-5. Cliente em dia → borda azul.
-6. Cliente com acordo MGMV → aparece um resultado extra "Acordo MGMV — <cliente>", com borda conforme status geral do cliente.
+- Regras de negócio (Collection, MGMV consolidado, importação com preview, Concierge, edição por lápis, audit_log).
+- Arquitetura visual (one-page com seções, cards clicáveis, drawers).
+- LocalStorage deixa de ser fonte de listas, mas ainda pode guardar preferências de UI (filtros ativos, paginação preferida).
 
-## Arquivos afetados
+## Próximo passo
 
-- `src/components/app-layout.tsx` — `SearchBox` (remover ramo product, adicionar ramo agreement, aplicar bordas).
-- `src/sections/clientes-section.tsx` — exportar `generalStatus` (é `function generalStatus(...)`, virar `export function generalStatus(...)`).
-
-Sem mudanças em store/tipos.
+Confirme e eu começo pelo **Lote 0** (infra + índices), sem alteração visível de UI. Ao final desse lote reporto: arquivos criados, migração aplicada, e sigo para o Lote 1 no próximo turno.
