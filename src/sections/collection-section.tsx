@@ -129,7 +129,7 @@ export function CollectionSection({
   const [situationFilter, setSituationFilter] = usePersistedState<string>("collection.situation", "Todas");
 
   const activeFilterCount =
-    (filter !== "todos" ? 1 : 0) +
+    (filter !== "em_aberto" ? 1 : 0) +
     (period !== "todos" ? 1 : 0) +
     (period === "personalizado" && (customFrom || customTo) ? 1 : 0) +
     (folderFilter !== "Todas" ? 1 : 0) +
