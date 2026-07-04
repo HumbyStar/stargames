@@ -23,6 +23,7 @@ import { usePaginatedList } from "@/hooks/use-paginated-list";
 import { extractMGMVAgreementFromNotes } from "@/sections/import-section";
 import { toast } from "sonner";
 import { X } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
