@@ -38,7 +38,8 @@ import {
   type PartialPaymentResult,
 } from "@/lib/store";
 import { toast } from "sonner";
-import { NotionHtmlActions, NotionHtmlAttachButton } from "@/components/notion-html-actions";
+import { NotionHtmlActions } from "@/components/notion-html-actions";
+import { NotionHtmlBackfillButton } from "@/components/notion-html-backfill-modal";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
 import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
@@ -412,6 +413,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
             <Button variant="outline" onClick={exportBase}>
               Exportar Base
             </Button>
+            <NotionHtmlBackfillButton />
           </>
         }
       />
