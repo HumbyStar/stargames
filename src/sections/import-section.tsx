@@ -1106,6 +1106,17 @@ function parseHTMLList(html: string) {
 }
 
 function parseTabular(rows: Record<string, unknown>[]): RawParsedRow[] {
+  const toYMD = (v: string | undefined | null): string | null => {
+    if (!v) return null;
+    const s = String(v).trim();
+    if (!s) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+      const d = new Date(s);
+      if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    }
+    return normalizeDateBR(s);
+  };
   return rows.map((r, idx) => {
     const get = (k: string) => {
       const key = Object.keys(r).find((kk) => kk.toLowerCase().trim() === k);
@@ -1124,8 +1135,8 @@ function parseTabular(rows: Record<string, unknown>[]): RawParsedRow[] {
       paidValue: get("valor_pago") ? parseValue(get("valor_pago")) : null,
       financialStatus: get("status_financeiro") || get("status"),
       situation: get("situacao") || "Em Aberto",
-      registerDate: toISO(reg),
-      dueDate: toISO(due),
+      registerDate: toYMD(reg),
+      dueDate: toYMD(due),
       notes: get("observacoes") || undefined,
     };
   });
