@@ -1747,21 +1747,7 @@ function ClientModal({
   );
 }
 
-function NotionHtmlActions({
-  fileName,
-  path,
-  importedAt,
-  sourceFolder,
-}: {
-  fileName?: string;
-  path: string;
-  importedAt?: string;
-  sourceFolder?: string;
-}) {
-// Componente movido para @/components/notion-html-actions (importado no topo)
-// para reuso em Clientes, MGMV e preview de importação.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _NotionHtmlActionsRemoved = null;
+// NotionHtmlActions foi movido para @/components/notion-html-actions.
 
 function ProductModal({
   state,
