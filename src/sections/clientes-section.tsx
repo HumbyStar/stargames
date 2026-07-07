@@ -1459,6 +1459,19 @@ function ClientDrawer({
               <Button
                 size="sm"
                 variant="outline"
+                onClick={bulkAddToMgmv}
+                disabled={!client.mgmv}
+                title={
+                  client.mgmv
+                    ? "Adicionar produtos selecionados ao acordo MGMV"
+                    : "Cliente sem acordo MGMV ativo"
+                }
+              >
+                Adicionar ao acordo
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
                 onClick={() =>
                   bulkChangeSituation(
                     "Enviado",
