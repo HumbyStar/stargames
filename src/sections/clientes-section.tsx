@@ -770,6 +770,26 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                                       phone: draft.phone.trim(),
                                       notes: draft.notes.trim() || undefined,
                                     });
+                                    // "Última compra" é derivada do produto de maior
+                                    // registerDate do cliente. Se o usuário editou a
+                                    // data, aplica no produto mais recente para que
+                                    // a coluna reflita imediatamente.
+                                    const nextYmd = draft.lastPurchase?.trim() ?? "";
+                                    const prevYmd = r.last ? r.last.slice(0, 10) : "";
+                                    if (nextYmd && nextYmd !== prevYmd) {
+                                      const newest = [...r.products].sort((a, b) =>
+                                        (b.registerDate ?? "").localeCompare(
+                                          a.registerDate ?? "",
+                                        ),
+                                      )[0];
+                                      if (newest) {
+                                        updateProduct(newest.id, {
+                                          registerDate: new Date(
+                                            `${nextYmd}T12:00:00`,
+                                          ).toISOString(),
+                                        });
+                                      }
+                                    }
                                     toast.success("Cliente atualizado");
                                   },
                                   {
