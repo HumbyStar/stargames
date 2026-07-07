@@ -515,6 +515,10 @@ export function ListImportModal({
             : prev,
         );
       }
+      // Garante que clientes e produtos foram gravados no backend antes de
+      // registrar o histórico. Sem isso, os produtos podem falhar por FK
+      // (client_id ainda não commitado) e o import termina "vazio" na onepage.
+      await flushAllPendingUpserts();
       addImportHistory({
         source: "Texto",
         file: `Lista colada (${preview?.groups.length ?? 0} grupos)`,
