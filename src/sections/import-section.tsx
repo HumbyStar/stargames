@@ -3391,6 +3391,7 @@ function NotionPreview({
                     <tbody>
                       {block.products.map((p, idx) => {
                         const ok = p.product && p.errors.length === 0;
+                        const isRemoved = p.situation === "Removido";
                         return (
                           <tr key={idx} className="border-b border-border/60 last:border-0">
                             <td className="py-3 pr-3">{p.product || "—"}</td>
@@ -3399,19 +3400,25 @@ function NotionPreview({
                             <td className="py-3 pr-3 tabular-nums">{formatBRL(p.paidValue)}</td>
                             <td className="py-3 pr-3 tabular-nums">{formatBRL(p.remainingValue)}</td>
                             <td className="py-3 pr-3">
-                              <Tag variant={p.financialStatus === "Pago" ? "success" : p.financialStatus === "Pendente" ? "danger" : "warning"}>{p.financialStatus}</Tag>
-                              {p.statusWarning && p.originalFinancialStatus && p.originalFinancialStatus !== p.financialStatus && (
+                              {isRemoved ? (
+                                <Tag variant="danger">Removido</Tag>
+                              ) : (
+                                <Tag variant={p.financialStatus === "Pago" ? "success" : p.financialStatus === "Pendente" ? "danger" : "warning"}>{p.financialStatus}</Tag>
+                              )}
+                              {!isRemoved && p.statusWarning && p.originalFinancialStatus && p.originalFinancialStatus !== p.financialStatus && (
                                 <div className="mt-1 text-[10px] text-muted-foreground">
                                   original: <span className="line-through">{p.originalFinancialStatus}</span>
                                 </div>
                               )}
                             </td>
-                            <td className="py-3 pr-3 text-xs text-amber-600 dark:text-amber-400">{p.statusWarning ?? "—"}</td>
+                            <td className="py-3 pr-3 text-xs text-amber-600 dark:text-amber-400">{isRemoved ? "—" : (p.statusWarning ?? "—")}</td>
                             <td className="py-3 pr-3 text-muted-foreground">{p.situation}</td>
                             <td className="py-3 pr-3 text-muted-foreground">{p.registerDate ?? "—"}</td>
                             <td className="py-3 pr-3 text-muted-foreground">{p.dueDate ?? "—"}</td>
                             <td className="py-3 pr-3">
-                              <Tag variant={ok ? "success" : "danger"}>{ok ? "Pronto" : "Erro"}</Tag>
+                              <Tag variant={isRemoved ? "danger" : ok ? "success" : "danger"}>
+                                {isRemoved ? "Removido" : ok ? "Pronto" : "Erro"}
+                              </Tag>
                               {(p.errors.length > 0 || p.warnings.length > 0) && (
                                 <div className="mt-1 text-[10px] text-muted-foreground">
                                   {[...p.errors, ...p.warnings].join(" • ")}
