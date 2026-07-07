@@ -169,9 +169,8 @@ function parseStatusToken(token: string, totalValue: number | null): ParsedStatu
   if (RESERVA_RE.test(t)) {
     return {
       status: "Reserva",
-      paidValue: null,
-      reviewRequired: true,
-      warning: "Valor pago da reserva não informado.",
+      paidValue: 10,
+      reviewRequired: false,
     };
   }
   if (PENDENTE_RE.test(t)) {
@@ -468,8 +467,11 @@ export function recalcRow(row: ListImportRow): ListImportRow {
     next.paidValue = next.totalValue;
     next.remainingValue = 0;
   }
-  if (next.financialStatus === "Reserva" && next.paidValue === null) {
-    next.warnings.push("Reserva sem valor pago.");
+  if (next.financialStatus === "Reserva" && (next.paidValue === null || next.paidValue === 0)) {
+    next.paidValue = 10;
+    if (next.totalValue !== null) {
+      next.remainingValue = Math.max(0, next.totalValue - 10);
+    }
   }
 
   const review =
