@@ -375,7 +375,10 @@ export function parseListText(raw: string): ListImportPreview {
     const line = rawLine.trim();
     if (!line) continue;
     if (GROUP_HEADER_RE.test(line) || /\s-\s/.test(line)) break;
-    const m = line.match(/(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})/);
+    // IMPORTANTE: usar \d{4} antes de \d{2} — alternação em regex é
+    // avaliada da esquerda p/ a direita, então (\d{2}|\d{4}) casaria "20"
+    // em "2026" e transformaria o ano em 2020.
+    const m = line.match(/(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})(?!\d)/);
     if (m) {
       const day = Number(m[1]);
       const month = Number(m[2]);
