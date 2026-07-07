@@ -1213,15 +1213,9 @@ function ClientDrawer({
             sourceFolder={client.originalHtmlSourceFolder}
           />
         ) : (
-          <div className="space-y-2">
-            <p className="text-[11px] italic text-muted-foreground">
-              HTML original ainda não vinculado a este cliente.
-            </p>
-            <NotionHtmlAttachButton
-              clientId={client.id}
-              sourceFolder={client.folder}
-            />
-          </div>
+          <p className="text-[11px] italic text-muted-foreground">
+            HTML original ainda não vinculado. Use "Vincular HTMLs originais" no topo da seção Clientes para importar em lote.
+          </p>
         )}
       </div>
 
