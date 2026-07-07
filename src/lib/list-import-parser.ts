@@ -169,9 +169,9 @@ function parseStatusToken(token: string, totalValue: number | null): ParsedStatu
   if (RESERVA_RE.test(t)) {
     return {
       status: "Reserva",
-      paidValue: null,
-      reviewRequired: true,
-      warning: "Valor pago da reserva não informado.",
+      paidValue: 10,
+      reviewRequired: false,
+      warning: "Valor pago da reserva não informado — aplicado mínimo de R$ 10,00.",
     };
   }
   if (PENDENTE_RE.test(t)) {
