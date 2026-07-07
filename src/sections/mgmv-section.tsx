@@ -982,15 +982,9 @@ export function MGMVSection({
                                     sourceFolder={r.client.originalHtmlSourceFolder}
                                   />
                                 ) : (
-                                  <div className="space-y-2">
-                                    <p className="text-[11px] italic text-muted-foreground">
-                                      HTML original ainda não vinculado a este cliente.
-                                    </p>
-                                    <NotionHtmlAttachButton
-                                      clientId={r.client.id}
-                                      sourceFolder={r.client.folder}
-                                    />
-                                  </div>
+                                  <p className="text-[11px] italic text-muted-foreground">
+                                    HTML original ainda não vinculado. Use "Vincular HTMLs originais" na seção Clientes para importar em lote.
+                                  </p>
                                 )}
                               </div>
                             </div>
