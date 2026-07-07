@@ -1697,12 +1697,18 @@ function ClientDrawer({
                             onConfirm={() =>
                               productEdit.confirm(
                                 (d) => {
+                                  const total = Math.max(0, d.totalValue);
+                                  const paid = Math.max(0, d.paidValue);
+                                  const nextStatus =
+                                    d.financialStatus === "MGMV"
+                                      ? "MGMV"
+                                      : calculateFinancialStatus(total, paid);
                                   updateProduct(p.id, {
                                     name: d.name.trim(),
                                     platform: d.platform.trim(),
-                                    totalValue: Math.max(0, d.totalValue),
-                                    paidValue: Math.max(0, d.paidValue),
-                                    financialStatus: d.financialStatus,
+                                    totalValue: total,
+                                    paidValue: paid,
+                                    financialStatus: nextStatus,
                                   });
                                   toast.success("Produto atualizado");
                                 },
