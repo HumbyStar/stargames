@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Folder, Filter, Pencil, Eye, EyeOff, FileText, Download } from "lucide-react";
+import { Folder, Filter, Pencil, Eye, EyeOff } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { Button } from "@/components/ui/button";
@@ -38,7 +38,7 @@ import {
   type PartialPaymentResult,
 } from "@/lib/store";
 import { toast } from "sonner";
-import { getNotionHtmlSignedUrl } from "@/lib/notion-html-storage";
+import { NotionHtmlActions } from "@/components/notion-html-actions";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
 import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
@@ -867,6 +867,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                                 </div>
                                 {r.client.originalHtmlStoragePath ? (
                                   <NotionHtmlActions
+                                    clientId={r.client.id}
                                     fileName={r.client.originalHtmlFileName}
                                     path={r.client.originalHtmlStoragePath}
                                     importedAt={r.client.originalHtmlImportedAt}
