@@ -24,6 +24,7 @@ import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
 import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
 import { useUiStore } from "@/lib/ui-store";
+import { NotionHtmlActions } from "@/components/notion-html-actions";
 
 type MgmvChip =
   | "todos"
@@ -968,6 +969,24 @@ export function MGMVSection({
                                   </pre>
                                 </div>
                               )}
+                              <div className="mt-4">
+                                <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
+                                  HTML original do Notion
+                                </div>
+                                {r.client.originalHtmlStoragePath ? (
+                                  <NotionHtmlActions
+                                    clientId={r.client.id}
+                                    fileName={r.client.originalHtmlFileName}
+                                    path={r.client.originalHtmlStoragePath}
+                                    importedAt={r.client.originalHtmlImportedAt}
+                                    sourceFolder={r.client.originalHtmlSourceFolder}
+                                  />
+                                ) : (
+                                  <p className="text-[11px] italic text-muted-foreground">
+                                    HTML original não disponível para este cliente.
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </div>
                           </>
