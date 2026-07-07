@@ -983,7 +983,7 @@ export function MGMVSection({
                                   />
                                 ) : (
                                   <p className="text-[11px] italic text-muted-foreground">
-                                    HTML original ainda não vinculado. Use "Vincular HTMLs originais" na seção Clientes para importar em lote.
+                                    HTML original não disponível — reimporte este cliente pelo ZIP do Notion para salvar o arquivo automaticamente.
                                   </p>
                                 )}
                               </div>
