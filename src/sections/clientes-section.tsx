@@ -1267,6 +1267,7 @@ function ClientDrawer({
               clientId={client.id}
               agreement={client.mgmv}
               products={mgmvProducts}
+              availableProducts={individualAll}
               onClose={() => setMgmvEditOpen(false)}
             />
           ) : (
