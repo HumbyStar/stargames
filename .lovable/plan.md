@@ -1,40 +1,35 @@
-## Bug: MGMV — pagamento parcial deve marcar a parcela como "Paga Parcialmente" e redistribuir o saldo apenas nas demais parcelas
+## Bug: importação por Lista/CSV não usa a data marcada no cabeçalho
 
-### Comportamento atual
-`registerMGMVPartialPayment` (em `src/lib/store.ts`) absorve o valor pago no rateio geral, zera o `paidAmount` da parcela alvo e recalcula `value` de **todas** as pendentes (inclusive a própria alvo). A parcela alvo continua com o mesmo status "Pendente"/"Vencida" e não há distinção visual de "paga parcialmente".
+### Causa raiz
+`ParsedRow.registerDate`/`dueDate` são tipados como **`YYYY-MM-DD`** e o parser do Notion respeita isso (via `normalizeDateBR`). Mas os parsers de lista fazem o contrário e devolvem **ISO completo**:
 
-### Comportamento esperado
-1. A parcela onde o pagamento parcial foi registrado exibe status **"Paga Parcialmente"**, preserva seu `paidAmount` acumulado e seu `value` original.
-2. O saldo que sobrou (total do acordo − parcelas totalmente pagas − parciais acumulados) é redistribuído **apenas entre as outras parcelas pendentes** — a alvo fica congelada com o valor original e o parcial registrado.
-3. Se o parcial atingir o valor da parcela (via novo parcial que soma ao anterior), ela vira "Pago" pela regra atual do else de `amount >= target.value`.
+- `src/sections/import-section.tsx` linha 1091 (`parseTextList`): `registerDate: headerDate ? brDateToISO(headerDate) : null` — `brDateToISO` retorna `new Date(...).toISOString()` (ex.: `2026-06-25T15:00:00.000Z`).
+- Linha 1127/1128 (`parseTabular`): `registerDate: toISO(reg)`, `dueDate: toISO(due)` — mesma coisa.
 
-### Mudanças
+No commit da importação (linhas ~1868–1875, 1924–1944, 2329) todo o código assume `YYYY-MM-DD` e concatena `T12:00:00`:
 
-**1. `src/lib/store.ts` — `registerMGMVPartialPayment`** (bloco `else` do `amount < target.value`)
-- Manter na parcela alvo:
-  - `value`: inalterado (valor original da parcela).
-  - `paidAmount`: `prevPaid + amount` (acumula).
-  - `paidAt`: `nowIso`.
-  - `paid`: `false`.
-- Redistribuir `remaining` entre as **outras** parcelas pendentes (`!i.paid && i.number !== installmentNumber`), preservando `paidAmount` prévio dessas (para não perder parciais anteriores) mas recalculando `value` uniformemente em centavos (com sobra na última).
-- Se não houver outras pendentes, deixar apenas o `paidAmount` da alvo atualizado (sem rateio).
-- Se `paidAmount` acumulado na alvo ≥ `value`, promover para `paid=true` (mesma regra do ramo `amount >= target.value`) — cobre caso de novo parcial que fecha a parcela.
+```
+new Date(`${p.registerDate}T12:00:00`).toISOString()
+```
 
-**2. UI — rótulo "Paga Parcialmente"**
-- `src/sections/clientes-section.tsx` (linhas ~1350): quando `!i.paid && (i.paidAmount ?? 0) > 0`, exibir `Tag variant="primary"` com texto "Paga Parcialmente" no lugar de "Pendente"/"Vencido". Manter `overdue` só quando não há parcial.
-- `src/sections/mgmv-section.tsx` (linhas ~895): mesma alteração no `<Tag>`.
-- Manter o subtítulo `(parcial R$ X,XX)` que já existe.
+Com um ISO completo isso vira `"2026-06-25T15:00:00.000ZT12:00:00"` → `Invalid Date` → `toISOString()` lança `RangeError`, o `addProduct` nunca é chamado com a data correta e o produto **não aparece na data marcada** (cai em hoje ou quebra a linha).
 
-**3. Testes (`src/lib/store.test.ts`)**
-- Novo caso: acordo 10×100 (R$1.000). Pagar R$50 parcial na parcela 2 → parcela 2 fica com `value=100`, `paidAmount=50`, `paid=false`; demais 8 pendentes (3..10) recebem `(1000-0-50)/8 = 118.75` cada. Parcela 1 se paga integralmente antes segue paga com valor 100.
+### Correção
+Padronizar os parsers de lista/tabular para devolver **`YYYY-MM-DD`** em `registerDate`/`dueDate`, igual ao parser do Notion.
 
-### Detalhes técnicos
-- Sem mudança de schema/DB. Continua espelhando via `dbSyncAgreementForClient`.
-- `getMGMVDisplay` já soma parciais em `remainingBalance`; comportamento fica correto após o novo rateio.
-- Regra de arredondamento em centavos idêntica à existente (base + resto na última).
+1. `parseTextList` (linha 1050): trocar `brDateToISO(headerDate)` por `normalizeDateBR(headerDate)`; manter `date: headerDate` (BR) para a UI de preview.
+2. `parseTabular` (linha 1108): trocar `toISO(reg)`/`toISO(due)` por um `toYMD(v)` local que:
+   - Aceita `YYYY-MM-DD` (retorna igual).
+   - Aceita `DD/MM/AAAA` via `normalizeDateBR`.
+   - Aceita ISO completo → devolve `slice(0,10)` do UTC.
+   - Caso contrário devolve `null`.
+3. `parseHTMLList` já delega para `parseTextList`, então fica coberto.
+
+### Verificação
+- Colar no textarea de importação por lista uma primeira linha com data (ex.: `25/06/2026` ou `Itens 25/06/2026`) seguida de linhas de produtos e clicar em **Validar aqui / Importação Assistida**.
+- No preview a coluna Data deve mostrar `2026-06-25` (não um ISO completo) e o item precisa ser confirmado no commit sem `RangeError` no console.
+- Após confirmar, o produto deve aparecer agrupado/filtrado pela data marcada, e não pela data de hoje.
+- Rodar `bun tsgo --noEmit` para confirmar tipos.
 
 ### Arquivos afetados
-- `src/lib/store.ts`
-- `src/sections/clientes-section.tsx`
-- `src/sections/mgmv-section.tsx`
-- `src/lib/store.test.ts`
+- `src/sections/import-section.tsx` (apenas `parseTextList` e `parseTabular`; nenhuma mudança em store, DB ou UI).

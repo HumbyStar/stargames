@@ -1088,7 +1088,7 @@ function parseTextList(input: string): RawParsedRow[] {
       paidValue,
       financialStatus: normalizedStatus,
       situation: "Em Aberto",
-      registerDate: headerDate ? brDateToISO(headerDate) : null,
+      registerDate: headerDate ? normalizeDateBR(headerDate) : null,
       dueDate: null,
     };
   });
