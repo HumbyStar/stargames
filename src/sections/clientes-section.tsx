@@ -1198,6 +1198,25 @@ function ClientDrawer({
         )}
       </div>
 
+      <div className="rounded-md border border-border/60 bg-card p-3">
+        <div className="mb-2 text-[11px] font-semibold uppercase text-muted-foreground">
+          HTML original do Notion
+        </div>
+        {client.originalHtmlStoragePath ? (
+          <NotionHtmlActions
+            clientId={client.id}
+            fileName={client.originalHtmlFileName}
+            path={client.originalHtmlStoragePath}
+            importedAt={client.originalHtmlImportedAt}
+            sourceFolder={client.originalHtmlSourceFolder}
+          />
+        ) : (
+          <p className="text-[11px] italic text-muted-foreground">
+            HTML original não disponível para este cliente.
+          </p>
+        )}
+      </div>
+
       <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
         <MetricCard label="Total Comprado" value={formatBRL(totalBought)} />
         <MetricCard label="Valor Pago" value={formatBRL(totalPaid)} status="success" />
