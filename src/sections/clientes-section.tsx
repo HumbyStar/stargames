@@ -1140,6 +1140,26 @@ function ClientDrawer({
     toast.success(`${targets.length} produto(s) atualizados`);
     clearSelection();
   };
+  const bulkAddToMgmv = () => {
+    if (!client.mgmv) {
+      toast.error("Este cliente não possui acordo MGMV ativo.");
+      return;
+    }
+    const targets = selectedProducts().filter((p) => p.financialStatus !== "MGMV");
+    if (targets.length === 0) {
+      toast.info("Nenhum produto individual selecionado para adicionar ao acordo.");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Adicionar ${targets.length} produto(s) selecionado(s) ao acordo MGMV?`,
+      )
+    )
+      return;
+    targets.forEach((p) => updateProduct(p.id, { financialStatus: "MGMV" }));
+    toast.success(`${targets.length} produto(s) adicionado(s) ao acordo MGMV`);
+    clearSelection();
+  };
   // Evita double-counting: produtos MGMV são consolidados no acordo.
   // Total comprado = soma dos produtos individuais + valor total do acordo MGMV.
   const individualBought = individualAll.reduce((a, p) => a + p.totalValue, 0);
@@ -1435,6 +1455,19 @@ function ClientDrawer({
             <div className="ml-auto flex flex-wrap gap-1.5">
               <Button size="sm" variant="outline" onClick={bulkMarkPaid}>
                 Pago
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={bulkAddToMgmv}
+                disabled={!client.mgmv}
+                title={
+                  client.mgmv
+                    ? "Adicionar produtos selecionados ao acordo MGMV"
+                    : "Cliente sem acordo MGMV ativo"
+                }
+              >
+                Adicionar ao acordo
               </Button>
               <Button
                 size="sm"
