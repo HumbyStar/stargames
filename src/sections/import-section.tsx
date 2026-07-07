@@ -288,7 +288,9 @@ export function extractPaymentDate(
   refYear: number,
 ): string | undefined {
   // DD/MM/YYYY ou DD-MM-YYYY ou DD/MM/YY
-  const numeric = fragment.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{2}|\d{4})/);
+  // Ordem \d{4}|\d{2} é obrigatória: alternação testa esquerda p/ direita e
+  // (\d{2}|\d{4}) casaria "20" em "2026" quando não há âncora de fim.
+  const numeric = fragment.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{4}|\d{2})(?!\d)/);
   if (numeric) {
     const iso = normalizeDateBR(
       `${numeric[1]}/${numeric[2]}/${numeric[3].length === 2 ? "20" + numeric[3] : numeric[3]}`,
