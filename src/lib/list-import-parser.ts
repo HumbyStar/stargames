@@ -468,8 +468,12 @@ export function recalcRow(row: ListImportRow): ListImportRow {
     next.paidValue = next.totalValue;
     next.remainingValue = 0;
   }
-  if (next.financialStatus === "Reserva" && next.paidValue === null) {
-    next.warnings.push("Reserva sem valor pago.");
+  if (next.financialStatus === "Reserva" && (next.paidValue === null || next.paidValue === 0)) {
+    next.paidValue = 10;
+    if (next.totalValue !== null) {
+      next.remainingValue = Math.max(0, next.totalValue - 10);
+    }
+    next.warnings.push("Reserva sem valor pago — aplicado mínimo de R$ 10,00.");
   }
 
   const review =
