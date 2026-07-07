@@ -26,6 +26,11 @@ export interface DbClientRow {
   folder: string | null;
   mgmv: Json;
   client_type?: string;
+  original_html_file_name?: string | null;
+  original_html_storage_path?: string | null;
+  original_html_imported_at?: string | null;
+  original_html_source_folder?: string | null;
+  original_html_checksum?: string | null;
 }
 
 export interface DbProductRow {
@@ -67,6 +72,11 @@ export function rowToClient(r: DbClientRow): Client {
     folder: r.folder ?? undefined,
     mgmv: (r.mgmv as MGMVAgreement | null) ?? undefined,
     clientType: r.client_type === "mgmv" ? "mgmv" : "common",
+    originalHtmlFileName: r.original_html_file_name ?? undefined,
+    originalHtmlStoragePath: r.original_html_storage_path ?? undefined,
+    originalHtmlImportedAt: r.original_html_imported_at ?? undefined,
+    originalHtmlSourceFolder: r.original_html_source_folder ?? undefined,
+    originalHtmlChecksum: r.original_html_checksum ?? undefined,
   };
 }
 
@@ -79,6 +89,11 @@ export function clientToRow(c: Client): DbClientRow {
     folder: c.folder ?? null,
     mgmv: (c.mgmv as unknown as Json) ?? null,
     client_type: c.clientType ?? (c.mgmv ? "mgmv" : "common"),
+    original_html_file_name: c.originalHtmlFileName ?? null,
+    original_html_storage_path: c.originalHtmlStoragePath ?? null,
+    original_html_imported_at: c.originalHtmlImportedAt ?? null,
+    original_html_source_folder: c.originalHtmlSourceFolder ?? null,
+    original_html_checksum: c.originalHtmlChecksum ?? null,
   };
 }
 

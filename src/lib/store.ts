@@ -123,6 +123,16 @@ export interface Client {
    * recebe um acordo MGMV ativo.
    */
   clientType?: "common" | "mgmv";
+  /** Nome do arquivo HTML original importado do Notion (auditoria). */
+  originalHtmlFileName?: string;
+  /** Caminho no bucket privado `notion-html-originals`. */
+  originalHtmlStoragePath?: string;
+  /** Momento em que o HTML original foi importado (ISO). */
+  originalHtmlImportedAt?: string;
+  /** Pasta de origem no ZIP importado. */
+  originalHtmlSourceFolder?: string;
+  /** SHA-1 do HTML original, para detectar duplicidade. */
+  originalHtmlChecksum?: string;
 }
 
 export interface SystemPreferences {
