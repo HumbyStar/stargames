@@ -74,6 +74,12 @@ export interface ListImportPreview {
   rows: ListImportRow[];
   groups: string[];
   clients: ListImportClientGroup[];
+  /**
+   * Data (YYYY-MM-DD) informada no cabeçalho da lista colada, quando presente.
+   * Ex.: primeira linha "25/06/2026" ou "Itens 25/06/2026". Usada pelo modal
+   * de importação para gravar `registerDate` do produto na data marcada.
+   */
+  headerDate?: string;
   totals: {
     lines: number;
     validRows: number;
@@ -362,6 +368,29 @@ export function parseListText(raw: string): ListImportPreview {
   let currentGroup = "(sem grupo)";
 
   const lines = (raw || "").split(/\r?\n/);
+  // Detecta uma data BR (DD/MM/AAAA) no cabeçalho — precisa aparecer nas
+  // primeiras linhas não vazias antes de qualquer registro de produto/grupo,
+  // caso contrário poderíamos confundir com valores dentro das linhas.
+  let headerDate: string | undefined;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (GROUP_HEADER_RE.test(line) || /\s-\s/.test(line)) break;
+    const m = line.match(/(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})/);
+    if (m) {
+      const day = Number(m[1]);
+      const month = Number(m[2]);
+      let year = Number(m[3]);
+      if (m[3].length === 2) year = 2000 + year;
+      if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900) {
+        const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        if (!Number.isNaN(new Date(`${iso}T12:00:00`).getTime())) {
+          headerDate = iso;
+          break;
+        }
+      }
+    }
+  }
   lines.forEach((rawLine, idx) => {
     const line = rawLine.trim();
     if (!line) return;
@@ -381,6 +410,7 @@ export function parseListText(raw: string): ListImportPreview {
     rows,
     groups: Array.from(groupsSeen),
     clients,
+    headerDate,
     totals: computeTotals(rows, clients),
   };
 }

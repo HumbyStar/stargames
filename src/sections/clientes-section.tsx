@@ -151,7 +151,13 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   // Edição por lápis (linha da tabela de clientes). Somente o botão
   // "Confirmar" persiste; "Fechar" descarta. Clique fora / blur não
   // disparam confirm nem close — o hook não escuta esses eventos.
-  const clientEdit = useRowEdit<{ name: string; phone: string; notes: string }>();
+  const clientEdit = useRowEdit<{
+    name: string;
+    phone: string;
+    notes: string;
+    /** YYYY-MM-DD — data da última compra editável via lápis. */
+    lastPurchase: string;
+  }>();
 
   const folders = useMemo(() => {
     const set = new Set<string>();
@@ -713,7 +719,21 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                           " pr-3 transition-[padding] duration-300 text-muted-foreground"
                         }
                       >
-                        {r.last ? highlight(formatDateBR(r.last), search) : "—"}
+                        {clientEdit.isEditing(r.client.id) ? (
+                          <input
+                            type="date"
+                            className="w-[140px] rounded-md border border-input bg-background px-2 py-1 text-sm"
+                            value={clientEdit.draftValues?.lastPurchase ?? ""}
+                            onChange={(e) =>
+                              clientEdit.setField("lastPurchase", e.target.value)
+                            }
+                            aria-label="Editar data da última compra"
+                          />
+                        ) : r.last ? (
+                          highlight(formatDateBR(r.last), search)
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       {!compact && (
                         <td className="py-3 pr-3 max-w-[220px] text-muted-foreground">
@@ -750,6 +770,26 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                                       phone: draft.phone.trim(),
                                       notes: draft.notes.trim() || undefined,
                                     });
+                                    // "Última compra" é derivada do produto de maior
+                                    // registerDate do cliente. Se o usuário editou a
+                                    // data, aplica no produto mais recente para que
+                                    // a coluna reflita imediatamente.
+                                    const nextYmd = draft.lastPurchase?.trim() ?? "";
+                                    const prevYmd = r.last ? r.last.slice(0, 10) : "";
+                                    if (nextYmd && nextYmd !== prevYmd) {
+                                      const newest = [...r.products].sort((a, b) =>
+                                        (b.registerDate ?? "").localeCompare(
+                                          a.registerDate ?? "",
+                                        ),
+                                      )[0];
+                                      if (newest) {
+                                        updateProduct(newest.id, {
+                                          registerDate: new Date(
+                                            `${nextYmd}T12:00:00`,
+                                          ).toISOString(),
+                                        });
+                                      }
+                                    }
                                     toast.success("Cliente atualizado");
                                   },
                                   {
@@ -771,6 +811,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                                     name: r.client.name,
                                     phone: r.client.phone,
                                     notes: r.client.notes ?? "",
+                                    lastPurchase: r.last ? r.last.slice(0, 10) : "",
                                   })
                                 }
                               />
