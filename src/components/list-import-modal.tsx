@@ -397,6 +397,11 @@ export function ListImportModal({
       return;
     }
     setSaving(true);
+    // Data marcada no cabeçalho da lista (ex.: "25/06/2026"). Quando presente,
+    // os produtos importados refletem nessa data em vez de "hoje".
+    const headerISO = preview?.headerDate
+      ? new Date(`${preview.headerDate}T12:00:00`).toISOString()
+      : null;
     // Agrupar por "pasta" (grupo da lista) para reaproveitar a mesma esteira
     // visual dos imports de ZIP/Notion.
     const folders: string[] = Array.from(
@@ -470,7 +475,7 @@ export function ListImportModal({
           }
           cache.set(r.phone, clientId);
         }
-        const now = new Date().toISOString();
+        const now = headerISO ?? new Date().toISOString();
         addProduct({
           clientId,
           name: r.productName || "(sem nome)",
