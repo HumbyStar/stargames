@@ -30,6 +30,7 @@ import {
 import { RowEditActions, RowEditPencil } from "@/components/row-edit-controls";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { uploadNotionHtml } from "@/lib/notion-html-storage";
+import { NotionHtmlInlineActions } from "@/components/notion-html-actions";
 
 type PreviewRow = HtmlImportRow & {
   ignored?: boolean;
@@ -432,6 +433,12 @@ export function ZipImportReview({ onDone }: { onDone: () => void }) {
                     IA: {active.aiSummary}
                   </span>
                 )}
+                <div className="mt-1">
+                  <NotionHtmlInlineActions
+                    fileName={active.entry.fileName}
+                    rawHtml={active.entry.rawHtml}
+                  />
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <Button

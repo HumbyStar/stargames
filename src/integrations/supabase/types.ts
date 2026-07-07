@@ -477,6 +477,47 @@ export type Database = {
           },
         ]
       }
+      notion_html_access_log: {
+        Row: {
+          action: string
+          client_id: string | null
+          created_at: string
+          file_name: string | null
+          id: string
+          storage_path: string
+          user_email: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          client_id?: string | null
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          storage_path: string
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          client_id?: string | null
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          storage_path?: string
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notion_html_access_log_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           client_id: string

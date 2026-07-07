@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Folder, Filter, Pencil, Eye, EyeOff, FileText, Download } from "lucide-react";
+import { Folder, Filter, Pencil, Eye, EyeOff } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { Button } from "@/components/ui/button";
@@ -38,7 +38,7 @@ import {
   type PartialPaymentResult,
 } from "@/lib/store";
 import { toast } from "sonner";
-import { getNotionHtmlSignedUrl } from "@/lib/notion-html-storage";
+import { NotionHtmlActions } from "@/components/notion-html-actions";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
 import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
@@ -867,6 +867,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                                 </div>
                                 {r.client.originalHtmlStoragePath ? (
                                   <NotionHtmlActions
+                                    clientId={r.client.id}
                                     fileName={r.client.originalHtmlFileName}
                                     path={r.client.originalHtmlStoragePath}
                                     importedAt={r.client.originalHtmlImportedAt}
@@ -1746,87 +1747,7 @@ function ClientModal({
   );
 }
 
-function NotionHtmlActions({
-  fileName,
-  path,
-  importedAt,
-  sourceFolder,
-}: {
-  fileName?: string;
-  path: string;
-  importedAt?: string;
-  sourceFolder?: string;
-}) {
-  const [busy, setBusy] = useState<"view" | "download" | null>(null);
-
-  async function open(mode: "view" | "download") {
-    setBusy(mode);
-    try {
-      const url = await getNotionHtmlSignedUrl(path, {
-        download: mode === "download",
-        expiresInSec: 120,
-      });
-      if (!url) {
-        toast.error("Você não tem permissão para acessar o HTML original.");
-        return;
-      }
-      if (mode === "view") {
-        window.open(url, "_blank", "noopener,noreferrer");
-      } else {
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName || "notion-original.html";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      }
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha ao abrir o HTML original.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="text-[11px] text-muted-foreground">
-        <div className="truncate" title={fileName}>
-          Arquivo: <span className="font-medium">{fileName || "(sem nome)"}</span>
-        </div>
-        {sourceFolder && (
-          <div>
-            Pasta de origem: <span className="font-medium">{sourceFolder}</span>
-          </div>
-        )}
-        {importedAt && (
-          <div>Importado em: {new Date(importedAt).toLocaleString("pt-BR")}</div>
-        )}
-      </div>
-      <div className="flex flex-wrap gap-1">
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 text-xs"
-          disabled={busy !== null}
-          onClick={() => void open("view")}
-        >
-          <FileText className="mr-1 h-3.5 w-3.5" />
-          Ver HTML original do Notion
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 text-xs"
-          disabled={busy !== null}
-          onClick={() => void open("download")}
-        >
-          <Download className="mr-1 h-3.5 w-3.5" />
-          Baixar
-        </Button>
-      </div>
-    </div>
-  );
-}
+// NotionHtmlActions foi movido para @/components/notion-html-actions.
 
 function ProductModal({
   state,

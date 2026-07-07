@@ -79,3 +79,34 @@ export async function getNotionHtmlSignedUrl(
   if (error || !data?.signedUrl) return null;
   return data.signedUrl;
 }
+
+export type NotionHtmlAccessAction =
+  | "view_original_notion_html"
+  | "download_original_notion_html";
+
+/**
+ * Registra visualização/download do HTML original.
+ * Silencioso em caso de erro — RLS + policies bloqueiam usuários sem role.
+ */
+export async function logNotionHtmlAccess(params: {
+  action: NotionHtmlAccessAction;
+  clientId?: string;
+  storagePath: string;
+  fileName?: string;
+}): Promise<void> {
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData?.user;
+    if (!user) return;
+    await supabase.from("notion_html_access_log").insert({
+      action: params.action,
+      client_id: params.clientId ?? null,
+      storage_path: params.storagePath,
+      file_name: params.fileName ?? null,
+      user_id: user.id,
+      user_email: user.email ?? null,
+    });
+  } catch (err) {
+    console.warn("[notion-html] audit log falhou", err);
+  }
+}
