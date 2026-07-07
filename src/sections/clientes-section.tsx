@@ -151,7 +151,13 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   // Edição por lápis (linha da tabela de clientes). Somente o botão
   // "Confirmar" persiste; "Fechar" descarta. Clique fora / blur não
   // disparam confirm nem close — o hook não escuta esses eventos.
-  const clientEdit = useRowEdit<{ name: string; phone: string; notes: string }>();
+  const clientEdit = useRowEdit<{
+    name: string;
+    phone: string;
+    notes: string;
+    /** YYYY-MM-DD — data da última compra editável via lápis. */
+    lastPurchase: string;
+  }>();
 
   const folders = useMemo(() => {
     const set = new Set<string>();
