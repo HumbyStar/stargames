@@ -80,7 +80,9 @@ export function applySuggestionToAgreement(
       paid,
       paidAt: paid ? aiPaidIso ?? prior?.paidAt ?? nowIso : undefined,
       paidAmount: paid
-        ? V
+        ? (Array.isArray(s.paidValues) && typeof s.paidValues[i] === "number" && s.paidValues[i] > 0
+            ? s.paidValues[i]
+            : V)
         : isPartial
           ? (s.partialPaidAmount as number)
           : hasDiscount
