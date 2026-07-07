@@ -777,6 +777,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                                     name: r.client.name,
                                     phone: r.client.phone,
                                     notes: r.client.notes ?? "",
+                                    lastPurchase: r.last ? r.last.slice(0, 10) : "",
                                   })
                                 }
                               />
