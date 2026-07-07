@@ -70,6 +70,13 @@ export interface MgmvAiReviewSuggestion {
    * Vazio quando o texto não trouxer datas.
    */
   paidDates?: string[];
+  /**
+   * Valores efetivamente pagos em cada parcela paga, na mesma ordem das
+   * parcelas (índice 0 = parcela 1). Use quando o texto disser valores
+   * diferentes por parcela (ex.: "parcela 1: R$ 60, parcela 2: R$ 54").
+   * Vazio quando o texto não trouxer valores por parcela.
+   */
+  paidValues?: number[];
 }
 
 const SYSTEM_PROMPT = `Você é um extrator de dados financeiros de acordos MGMV.
@@ -105,6 +112,7 @@ Extraia:
 - nextInstallmentDiscount (number|null) — quando o cliente pagou MAIS que o valor da parcela (ex.: "Pago 58 reais" numa parcela de 54), conte a parcela como PAGA integralmente e registre o excedente (4) como desconto para a próxima parcela.
 - discountAppliedToInstallment (1..N|null) — número da parcela que receberá o desconto (geralmente paidInstallments + 1).
 - paidDates (array de datas YYYY-MM-DD) — DATA em que cada parcela paga foi quitada, NA ORDEM (1ª data = parcela 1, 2ª = parcela 2 ...). Se o texto trouxer datas em português por extenso ("6 de Abril", "12 Maio", "dia 30 de junho de 2026"), converta para YYYY-MM-DD usando o ano de referência do texto (ou o ano corrente quando não houver). Se uma parcela paga não tiver data, coloque string vazia "" na respectiva posição. Se nenhuma data existir, retorne array vazio.
+- paidValues (array de números) — VALOR pago em cada parcela paga, NA ORDEM (1º valor = parcela 1, 2º = parcela 2 ...). Use quando o texto trouxer valor explícito por parcela (ex.: "parcela 1 R$ 60, parcela 2 R$ 54"). Se uma parcela paga não tiver valor explícito no texto, coloque 0 na respectiva posição para herdar installmentValue. Se nenhum valor por parcela existir, retorne array vazio.
 
 Regras de ANO ao converter datas sem ano no texto:
 - Use o ANO CORRENTE informado no prompt do usuário.
@@ -204,6 +212,11 @@ function normalize(raw: unknown): MgmvAiReviewSuggestion {
     discountAppliedToInstallment: coerceNumberOrNull(r.discountAppliedToInstallment),
     paidDates: Array.isArray(r.paidDates)
       ? (r.paidDates as unknown[]).map((x) => (typeof x === "string" ? x : ""))
+      : [],
+    paidValues: Array.isArray(r.paidValues)
+      ? (r.paidValues as unknown[])
+          .map((x) => coerceNumberOrNull(x))
+          .map((n) => (n === null ? 0 : n))
       : [],
   };
 }
