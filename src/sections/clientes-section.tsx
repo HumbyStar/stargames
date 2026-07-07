@@ -39,7 +39,6 @@ import {
 } from "@/lib/store";
 import { toast } from "sonner";
 import { NotionHtmlActions } from "@/components/notion-html-actions";
-import { NotionHtmlBackfillButton } from "@/components/notion-html-backfill-modal";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
 import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
@@ -413,7 +412,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
             <Button variant="outline" onClick={exportBase}>
               Exportar Base
             </Button>
-            <NotionHtmlBackfillButton />
           </>
         }
       />
@@ -877,7 +875,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                                   />
                                 ) : (
                                   <p className="text-[11px] italic text-muted-foreground">
-                                    HTML original ainda não vinculado. Use "Vincular HTMLs originais" no topo para importar em lote.
+                                    HTML original não disponível — reimporte este cliente pelo ZIP do Notion para salvar o arquivo automaticamente.
                                   </p>
                                 )}
                               </div>
@@ -1214,7 +1212,7 @@ function ClientDrawer({
           />
         ) : (
           <p className="text-[11px] italic text-muted-foreground">
-            HTML original ainda não vinculado. Use "Vincular HTMLs originais" no topo da seção Clientes para importar em lote.
+            HTML original não disponível — reimporte este cliente pelo ZIP do Notion para salvar o arquivo automaticamente.
           </p>
         )}
       </div>
