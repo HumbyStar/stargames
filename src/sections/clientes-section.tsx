@@ -1348,8 +1348,21 @@ function ClientDrawer({
               <tbody>
                 {client.mgmv?.installments.map((i) => {
                   const overdue = !i.paid && isOverdue(i.dueDate);
-                  const label = i.paid ? "Pago" : overdue ? "Vencido" : "Pendente";
-                  const variant = i.paid ? "success" : overdue ? "danger" : "warning";
+                  const isPartial = !i.paid && (i.paidAmount ?? 0) > 0;
+                  const label = i.paid
+                    ? "Pago"
+                    : isPartial
+                      ? "Paga Parcialmente"
+                      : overdue
+                        ? "Vencido"
+                        : "Pendente";
+                  const variant: "success" | "primary" | "danger" | "warning" = i.paid
+                    ? "success"
+                    : isPartial
+                      ? "primary"
+                      : overdue
+                        ? "danger"
+                        : "warning";
                   return (
                     <tr key={i.number} className="border-b border-border/60 last:border-0">
                       <td className="py-2 pr-3 font-medium">

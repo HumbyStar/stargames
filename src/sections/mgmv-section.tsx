@@ -894,6 +894,8 @@ export function MGMVSection({
                                       <span>
                                         {i.paid ? (
                                           <Tag variant="success">Paga</Tag>
+                                        ) : (i.paidAmount ?? 0) > 0 ? (
+                                          <Tag variant="primary">Paga Parcialmente</Tag>
                                         ) : isLate ? (
                                           <Tag variant="danger">Vencida</Tag>
                                         ) : (
