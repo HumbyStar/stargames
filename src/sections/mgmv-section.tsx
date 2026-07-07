@@ -850,7 +850,8 @@ export function MGMVSection({
                             <MgmvAgreementEditor
                               clientId={r.client.id}
                               agreement={r.agreement}
-                              products={productsOfClient}
+                              products={productsOfClient.filter((p) => p.financialStatus === "MGMV")}
+                              availableProducts={productsOfClient.filter((p) => p.financialStatus !== "MGMV")}
                               onClose={() => setEditingAgreement(null)}
                             />
                           ) : (
