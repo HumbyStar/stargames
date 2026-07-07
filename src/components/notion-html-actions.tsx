@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Download, FileText } from "lucide-react";
+import { Download, FileText, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   getNotionHtmlSignedUrl,
   logNotionHtmlAccess,
+  uploadNotionHtml,
 } from "@/lib/notion-html-storage";
+import { useStore } from "@/lib/store";
 
 export interface NotionHtmlActionsProps {
   clientId?: string;
@@ -144,6 +146,85 @@ export function NotionHtmlInlineActions({
       <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={download}>
         <Download className="mr-1 h-3.5 w-3.5" /> Baixar
       </Button>
+    </div>
+  );
+}
+
+/**
+ * Botão de anexar HTML original manualmente a um cliente existente que
+ * ainda não tem HTML vinculado (ex.: importações antigas).
+ */
+export function NotionHtmlAttachButton({
+  clientId,
+  sourceFolder,
+}: {
+  clientId: string;
+  sourceFolder?: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const updateClient = useStore((s) => s.updateClient);
+
+  async function handleFile(file: File) {
+    setBusy(true);
+    try {
+      const html = await file.text();
+      if (!/<html/i.test(html)) {
+        toast.error("Arquivo não parece ser um HTML válido.");
+        return;
+      }
+      const uploaded = await uploadNotionHtml({
+        clientId,
+        fileName: file.name,
+        html,
+        sourceFolder,
+      });
+      updateClient(clientId, {
+        originalHtmlFileName: uploaded.fileName,
+        originalHtmlStoragePath: uploaded.path,
+        originalHtmlImportedAt: uploaded.importedAt,
+        originalHtmlSourceFolder: uploaded.sourceFolder,
+        originalHtmlChecksum: uploaded.checksum,
+      });
+      toast.success("HTML original vinculado ao cliente.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Falha ao anexar HTML.";
+      toast.error(
+        /row-level security|permission|denied|unauthor/i.test(msg)
+          ? "Você não tem permissão para anexar HTML original."
+          : msg,
+      );
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".html,text/html"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void handleFile(f);
+        }}
+      />
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 text-xs"
+        disabled={busy}
+        onClick={() => inputRef.current?.click()}
+      >
+        <Upload className="mr-1 h-3.5 w-3.5" />
+        {busy ? "Enviando…" : "Anexar HTML original"}
+      </Button>
+      <span className="text-[10px] text-muted-foreground">
+        Envie o arquivo .html exportado do Notion desse cliente.
+      </span>
     </div>
   );
 }
