@@ -29,6 +29,7 @@ import {
 } from "@/lib/list-import-ai-zip.functions";
 import { RowEditActions, RowEditPencil } from "@/components/row-edit-controls";
 import { useRowEdit } from "@/lib/use-row-edit";
+import { uploadNotionHtml } from "@/lib/notion-html-storage";
 
 type PreviewRow = HtmlImportRow & {
   ignored?: boolean;
@@ -79,6 +80,7 @@ export function ZipImportReview({ onDone }: { onDone: () => void }) {
   const addProduct = useStore((s) => s.addProduct);
   const findClientByPhone = useStore((s) => s.findClientByPhone);
   const addImportHistory = useStore((s) => s.addImportHistory);
+  const updateClient = useStore((s) => s.updateClient);
 
   async function onFile(file: File) {
     setLoading(true);
@@ -263,6 +265,8 @@ export function ZipImportReview({ onDone }: { onDone: () => void }) {
     setSaving(true);
     let clientsCreated = 0;
     let productsCreated = 0;
+    let htmlSaved = 0;
+    let htmlFailed = 0;
     try {
       for (const c of clientsState) {
         const header = c.entry.preview.clientHeader;
@@ -278,6 +282,26 @@ export function ZipImportReview({ onDone }: { onDone: () => void }) {
           });
           clientId = created.id;
           clientsCreated++;
+        }
+        // Upload do HTML original — só grava se o storage aceitar (RLS).
+        try {
+          const uploaded = await uploadNotionHtml({
+            clientId,
+            fileName: c.entry.fileName,
+            html: c.entry.rawHtml,
+            sourceFolder: c.entry.folder,
+          });
+          updateClient(clientId, {
+            originalHtmlFileName: uploaded.fileName,
+            originalHtmlStoragePath: uploaded.path,
+            originalHtmlImportedAt: uploaded.importedAt,
+            originalHtmlSourceFolder: uploaded.sourceFolder,
+            originalHtmlChecksum: uploaded.checksum,
+          });
+          htmlSaved++;
+        } catch (err) {
+          htmlFailed++;
+          console.warn("[notion-html] upload falhou", c.entry.fileName, err);
         }
         for (const r of c.rows) {
           if (r.ignored) continue;
@@ -312,6 +336,14 @@ export function ZipImportReview({ onDone }: { onDone: () => void }) {
       toast.success(
         `${clientsCreated} cliente(s) e ${productsCreated} produto(s) importados.`,
       );
+      if (htmlSaved > 0) {
+        toast.success(`${htmlSaved} HTML(s) originais salvos para auditoria.`);
+      }
+      if (htmlFailed > 0) {
+        toast.warning(
+          `${htmlFailed} HTML(s) originais não foram armazenados (sem permissão ou erro de storage).`,
+        );
+      }
       onDone();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao importar.");

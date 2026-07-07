@@ -188,6 +188,11 @@ export type Database = {
           mgmv: Json | null
           name: string
           notes: string | null
+          original_html_checksum: string | null
+          original_html_file_name: string | null
+          original_html_imported_at: string | null
+          original_html_source_folder: string | null
+          original_html_storage_path: string | null
           phone: string
           updated_at: string
         }
@@ -199,6 +204,11 @@ export type Database = {
           mgmv?: Json | null
           name: string
           notes?: string | null
+          original_html_checksum?: string | null
+          original_html_file_name?: string | null
+          original_html_imported_at?: string | null
+          original_html_source_folder?: string | null
+          original_html_storage_path?: string | null
           phone?: string
           updated_at?: string
         }
@@ -210,6 +220,11 @@ export type Database = {
           mgmv?: Json | null
           name?: string
           notes?: string | null
+          original_html_checksum?: string | null
+          original_html_file_name?: string | null
+          original_html_imported_at?: string | null
+          original_html_source_folder?: string | null
+          original_html_storage_path?: string | null
           phone?: string
           updated_at?: string
         }
@@ -837,6 +852,10 @@ export type Database = {
     }
     Functions: {
       bootstrap_first_admin: { Args: never; Returns: boolean }
+      can_access_notion_html_originals: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       can_assign_to: {
         Args: { _assignee: string; _assigner: string }
         Returns: boolean
