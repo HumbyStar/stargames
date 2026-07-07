@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tag } from "@/components/ui-bits";
-import { Trash2, Plus, RotateCcw, X, Check } from "lucide-react";
+import { Trash2, Plus, RotateCcw, X, Check, PackagePlus } from "lucide-react";
 import { toast } from "sonner";
 import {
   formatBRL,
@@ -20,6 +20,7 @@ interface Props {
   clientId: string;
   agreement: MGMVAgreement;
   products: Product[];
+  availableProducts?: Product[];
   onClose: () => void;
 }
 
@@ -40,7 +41,7 @@ function dateInputToIso(v: string): string {
  * seção MGMV. Preserva parcelas pagas e permite ajustar total, N, valor
  * mínimo, vencimentos, remover parcelas e remover produtos do acordo.
  */
-export function MgmvAgreementEditor({ clientId, agreement, products, onClose }: Props) {
+export function MgmvAgreementEditor({ clientId, agreement, products, availableProducts = [], onClose }: Props) {
   const setMGMVAgreement = useStore((s) => s.setMGMVAgreement);
   const updateProduct = useStore((s) => s.updateProduct);
 
@@ -54,6 +55,8 @@ export function MgmvAgreementEditor({ clientId, agreement, products, onClose }: 
   }, [agreement]);
   const [dueDay, setDueDay] = useState<number>(currentDueDay);
   const [confirmRemoveProduct, setConfirmRemoveProduct] = useState<string | null>(null);
+  const [showAddPicker, setShowAddPicker] = useState(false);
+  const [addSearch, setAddSearch] = useState("");
 
   const paidCount = draft.installments.filter((i) => i.paid).length;
   const paidValue = draft.installments
@@ -162,6 +165,23 @@ export function MgmvAgreementEditor({ clientId, agreement, products, onClose }: 
     setConfirmRemoveProduct(null);
     toast.success("Produto removido do acordo.");
   };
+
+  const addProductToAgreement = (productId: string) => {
+    updateProduct(productId, { financialStatus: "MGMV" });
+    setShowAddPicker(false);
+    setAddSearch("");
+    toast.success("Produto adicionado ao acordo.");
+  };
+
+  const productsTotalFull = products.reduce((s, p) => s + p.totalValue, 0);
+  const filteredAvailable = availableProducts.filter((p) => {
+    if (!addSearch.trim()) return true;
+    const q = addSearch.trim().toLowerCase();
+    return (
+      p.name.toLowerCase().includes(q) ||
+      (p.platform ?? "").toLowerCase().includes(q)
+    );
+  });
 
   const adjustTotalToProducts = () => {
     setDraft((d) => ({ ...d, totalDebt: productsRemainingTotal + paidValue + partialPaidAmount }));
@@ -344,18 +364,72 @@ export function MgmvAgreementEditor({ clientId, agreement, products, onClose }: 
         </div>
       </div>
 
-      {products.length > 0 && (
-        <div className="mt-4">
-          <div className="mb-1 flex items-center justify-between">
-            <div className="text-[10px] font-semibold uppercase text-muted-foreground">
-              Produtos incluídos ({products.length})
-            </div>
+      <div className="mt-4">
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+            Produtos incluídos ({products.length}) · Total restante:{" "}
+            <span className="tabular-nums text-foreground">{formatBRL(productsRemainingTotal)}</span>
+            {products.length > 0 && (
+              <span className="ml-2 font-normal normal-case text-muted-foreground">
+                (valor cheio: <span className="tabular-nums">{formatBRL(productsTotalFull)}</span>)
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
             {productsMismatch && (
               <Button size="sm" variant="ghost" onClick={adjustTotalToProducts}>
                 Ajustar total ({formatBRL(productsRemainingTotal + paidValue + partialPaidAmount)})
               </Button>
             )}
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setShowAddPicker((v) => !v)}
+            >
+              <PackagePlus className="mr-1 size-3" /> Adicionar item
+            </Button>
           </div>
+        </div>
+        {showAddPicker && (
+          <div className="mb-2 rounded-md border border-primary/30 bg-background p-2">
+            <Input
+              className="h-7 mb-2"
+              placeholder="Buscar produto do cliente..."
+              value={addSearch}
+              onChange={(e) => setAddSearch(e.target.value)}
+            />
+            {filteredAvailable.length === 0 ? (
+              <div className="px-1 py-2 text-[11px] text-muted-foreground">
+                Nenhum outro produto deste cliente disponível para incluir.
+              </div>
+            ) : (
+              <div className="max-h-48 space-y-1 overflow-y-auto">
+                {filteredAvailable.map((p) => {
+                  const rest = Math.max(0, p.totalValue - p.paidValue);
+                  return (
+                    <div
+                      key={p.id}
+                      className="flex items-center gap-2 rounded-md border border-border/60 bg-card px-2 py-1"
+                    >
+                      <span className="flex-1 truncate font-medium">{p.name}</span>
+                      <span className="text-muted-foreground">{p.platform}</span>
+                      <span className="w-20 text-right tabular-nums">{formatBRL(rest)}</span>
+                      <button
+                        type="button"
+                        onClick={() => addProductToAgreement(p.id)}
+                        className="rounded-md p-1 text-primary hover:bg-primary/10"
+                        aria-label="Adicionar ao acordo"
+                      >
+                        <Plus className="size-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+        {products.length > 0 && (
           <div className="space-y-1">
             {products.map((p) => {
               const rest = Math.max(0, p.totalValue - p.paidValue);
@@ -402,8 +476,13 @@ export function MgmvAgreementEditor({ clientId, agreement, products, onClose }: 
               );
             })}
           </div>
-        </div>
-      )}
+        )}
+        {products.length === 0 && !showAddPicker && (
+          <div className="rounded-md border border-dashed border-border/60 px-2 py-3 text-center text-[11px] text-muted-foreground">
+            Nenhum produto incluído neste acordo.
+          </div>
+        )}
+      </div>
 
       <div className="mt-4 flex items-center justify-end gap-2">
         <Button size="sm" variant="outline" onClick={onClose}>
