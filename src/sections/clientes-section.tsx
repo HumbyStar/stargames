@@ -38,7 +38,7 @@ import {
   type PartialPaymentResult,
 } from "@/lib/store";
 import { toast } from "sonner";
-import { NotionHtmlActions } from "@/components/notion-html-actions";
+import { NotionHtmlActions, NotionHtmlAttachButton } from "@/components/notion-html-actions";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
 import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
