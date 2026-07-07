@@ -892,20 +892,15 @@ export function MGMVSection({
                                         {formatDateBR(i.dueDate)}
                                       </span>
                                       <span>
-                                        {i.paid ? (
-                                          <Tag variant="success">Paga</Tag>
-                                        ) : (i.paidAmount ?? 0) > 0 ? (
-                                          <Tag variant="primary">Paga Parcialmente</Tag>
-                                        ) : isLate ? (
-                                          <Tag variant="danger">Vencida</Tag>
-                                        ) : (
-                                          <Tag variant="neutral">Pendente</Tag>
-                                        )}
-                                        {!i.paid && (i.paidAmount ?? 0) > 0 && (
-                                          <span className="ml-1 text-[10px] text-warning">
-                                            (parcial {formatBRL(i.paidAmount!)})
-                                          </span>
-                                        )}
+                                         {i.paid ? (
+                                           <Tag variant="success">Paga</Tag>
+                                         ) : (i.paidAmount ?? 0) > 0 ? (
+                                           <Tag variant="primary">Parcial {formatBRL(i.paidAmount!)}</Tag>
+                                         ) : isLate ? (
+                                           <Tag variant="danger">Vencida</Tag>
+                                         ) : (
+                                           <Tag variant="neutral">Pendente</Tag>
+                                         )}
                                       </span>
                                       {!i.paid && (
                                         <div className="flex items-center gap-1">
