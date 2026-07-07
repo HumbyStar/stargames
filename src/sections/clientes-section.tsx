@@ -1348,14 +1348,14 @@ function ClientDrawer({
               <tbody>
                 {client.mgmv?.installments.map((i) => {
                   const overdue = !i.paid && isOverdue(i.dueDate);
-                  const isPartial = !i.paid && (i.paidAmount ?? 0) > 0;
-                  const label = i.paid
-                    ? "Pago"
-                    : isPartial
-                      ? "Paga Parcialmente"
-                      : overdue
-                        ? "Vencido"
-                        : "Pendente";
+                   const isPartial = !i.paid && (i.paidAmount ?? 0) > 0;
+                   const label = i.paid
+                     ? "Pago"
+                     : isPartial
+                       ? `Parcial ${formatBRL(i.paidAmount ?? 0)}`
+                       : overdue
+                         ? "Vencido"
+                         : "Pendente";
                   const variant: "success" | "primary" | "danger" | "warning" = i.paid
                     ? "success"
                     : isPartial
