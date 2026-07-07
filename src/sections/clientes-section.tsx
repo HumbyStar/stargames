@@ -719,7 +719,21 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                           " pr-3 transition-[padding] duration-300 text-muted-foreground"
                         }
                       >
-                        {r.last ? highlight(formatDateBR(r.last), search) : "—"}
+                        {clientEdit.isEditing(r.client.id) ? (
+                          <input
+                            type="date"
+                            className="w-[140px] rounded-md border border-input bg-background px-2 py-1 text-sm"
+                            value={clientEdit.draftValues?.lastPurchase ?? ""}
+                            onChange={(e) =>
+                              clientEdit.setField("lastPurchase", e.target.value)
+                            }
+                            aria-label="Editar data da última compra"
+                          />
+                        ) : r.last ? (
+                          highlight(formatDateBR(r.last), search)
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       {!compact && (
                         <td className="py-3 pr-3 max-w-[220px] text-muted-foreground">
