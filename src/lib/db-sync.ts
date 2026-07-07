@@ -343,7 +343,19 @@ function scheduleProductFlush() {
   if (productFlushTimer) return;
   productFlushTimer = setTimeout(() => {
     productFlushTimer = null;
-    void flushPendingProductUpserts();
+    // Clients must be persisted before products (FK products.client_id → clients.id).
+    // Await any pending client flush before pushing products to avoid FK violations
+    // during bulk imports where a new client and its products are queued together.
+    void (async () => {
+      if (pendingClientUpserts.size > 0 || clientFlushTimer) {
+        if (clientFlushTimer) {
+          clearTimeout(clientFlushTimer);
+          clientFlushTimer = null;
+        }
+        await flushPendingClientUpserts();
+      }
+      await flushPendingProductUpserts();
+    })();
   }, FLUSH_DELAY_MS);
 }
 
@@ -388,7 +400,9 @@ export async function flushAllPendingUpserts(): Promise<void> {
     clearTimeout(clientFlushTimer);
     clientFlushTimer = null;
   }
-  await Promise.all([flushPendingProductUpserts(), flushPendingClientUpserts()]);
+  // Clients first (FK dependency), then products.
+  await flushPendingClientUpserts();
+  await flushPendingProductUpserts();
 }
 
 if (typeof window !== "undefined") {
