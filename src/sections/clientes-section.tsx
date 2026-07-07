@@ -876,15 +876,9 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                                     sourceFolder={r.client.originalHtmlSourceFolder}
                                   />
                                 ) : (
-                                  <div className="space-y-1">
-                                    <p className="text-[11px] italic text-muted-foreground">
-                                      HTML original ainda não vinculado a este cliente.
-                                    </p>
-                                    <NotionHtmlAttachButton
-                                      clientId={r.client.id}
-                                      sourceFolder={r.client.folder}
-                                    />
-                                  </div>
+                                  <p className="text-[11px] italic text-muted-foreground">
+                                    HTML original ainda não vinculado. Use "Vincular HTMLs originais" no topo para importar em lote.
+                                  </p>
                                 )}
                               </div>
                             </div>
