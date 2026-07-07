@@ -24,7 +24,7 @@ import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
 import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
 import { useUiStore } from "@/lib/ui-store";
-import { NotionHtmlActions } from "@/components/notion-html-actions";
+import { NotionHtmlActions, NotionHtmlAttachButton } from "@/components/notion-html-actions";
 
 type MgmvChip =
   | "todos"
@@ -982,9 +982,15 @@ export function MGMVSection({
                                     sourceFolder={r.client.originalHtmlSourceFolder}
                                   />
                                 ) : (
-                                  <p className="text-[11px] italic text-muted-foreground">
-                                    HTML original não disponível para este cliente.
-                                  </p>
+                                  <div className="space-y-2">
+                                    <p className="text-[11px] italic text-muted-foreground">
+                                      HTML original ainda não vinculado a este cliente.
+                                    </p>
+                                    <NotionHtmlAttachButton
+                                      clientId={r.client.id}
+                                      sourceFolder={r.client.folder}
+                                    />
+                                  </div>
                                 )}
                               </div>
                             </div>

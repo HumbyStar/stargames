@@ -38,7 +38,7 @@ import {
   type PartialPaymentResult,
 } from "@/lib/store";
 import { toast } from "sonner";
-import { NotionHtmlActions } from "@/components/notion-html-actions";
+import { NotionHtmlActions, NotionHtmlAttachButton } from "@/components/notion-html-actions";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
 import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
@@ -874,9 +874,15 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                                     sourceFolder={r.client.originalHtmlSourceFolder}
                                   />
                                 ) : (
-                                  <p className="text-[11px] italic text-muted-foreground">
-                                    HTML original não disponível para este cliente.
-                                  </p>
+                                  <div className="space-y-1">
+                                    <p className="text-[11px] italic text-muted-foreground">
+                                      HTML original ainda não vinculado a este cliente.
+                                    </p>
+                                    <NotionHtmlAttachButton
+                                      clientId={r.client.id}
+                                      sourceFolder={r.client.folder}
+                                    />
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -1211,9 +1217,15 @@ function ClientDrawer({
             sourceFolder={client.originalHtmlSourceFolder}
           />
         ) : (
-          <p className="text-[11px] italic text-muted-foreground">
-            HTML original não disponível para este cliente.
-          </p>
+          <div className="space-y-2">
+            <p className="text-[11px] italic text-muted-foreground">
+              HTML original ainda não vinculado a este cliente.
+            </p>
+            <NotionHtmlAttachButton
+              clientId={client.id}
+              sourceFolder={client.folder}
+            />
+          </div>
         )}
       </div>
 
