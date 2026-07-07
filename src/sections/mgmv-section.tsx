@@ -24,7 +24,7 @@ import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
 import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
 import { useUiStore } from "@/lib/ui-store";
-import { NotionHtmlActions } from "@/components/notion-html-actions";
+import { NotionHtmlActions, NotionHtmlAttachButton } from "@/components/notion-html-actions";
 
 type MgmvChip =
   | "todos"
