@@ -1217,9 +1217,15 @@ function ClientDrawer({
             sourceFolder={client.originalHtmlSourceFolder}
           />
         ) : (
-          <p className="text-[11px] italic text-muted-foreground">
-            HTML original não disponível para este cliente.
-          </p>
+          <div className="space-y-2">
+            <p className="text-[11px] italic text-muted-foreground">
+              HTML original ainda não vinculado a este cliente.
+            </p>
+            <NotionHtmlAttachButton
+              clientId={client.id}
+              sourceFolder={client.folder}
+            />
+          </div>
         )}
       </div>
 
