@@ -1,0 +1,1 @@
+ALTER TABLE public.mgmv_installments ADD COLUMN IF NOT EXISTS manual_partial boolean NOT NULL DEFAULT false;
