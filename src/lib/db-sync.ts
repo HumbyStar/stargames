@@ -712,6 +712,7 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
           : i.paid
             ? i.value
             : 0,
+      manual_partial: !!i.manualPartial,
     }));
     const CHUNK = 200;
     for (let i = 0; i < rows.length; i += CHUNK) {
