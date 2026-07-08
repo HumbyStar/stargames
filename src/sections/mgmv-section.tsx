@@ -902,7 +902,7 @@ export function MGMVSection({
                                            <Tag variant="neutral">Pendente</Tag>
                                          )}
                                       </span>
-                                      {!i.paid && (
+                                       {!i.paid && !i.manualPartial && (
                                         <div className="flex items-center gap-1">
                                           <Button
                                             size="sm"
