@@ -88,6 +88,7 @@ export function applySuggestionToAgreement(
           : hasDiscount
             ? discountValue
             : prior?.paidAmount,
+      manualPartial: isPartial || hasDiscount ? true : prior?.manualPartial,
     };
   });
 
