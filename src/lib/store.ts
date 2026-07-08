@@ -681,6 +681,7 @@ export const useStore = create<State>()((set, get) => ({
                         ...i,
                         paidAmount: paidPartialTargetNew,
                         paidAt: nowIso,
+                        manualPartial: true,
                       };
                     }
                     const cents =
@@ -690,7 +691,12 @@ export const useStore = create<State>()((set, get) => ({
                 } else {
                   installments = installments.map((i) =>
                     i.number === installmentNumber
-                      ? { ...i, paidAmount: paidPartialTargetNew, paidAt: nowIso }
+                      ? {
+                          ...i,
+                          paidAmount: paidPartialTargetNew,
+                          paidAt: nowIso,
+                          manualPartial: true,
+                        }
                       : i,
                   );
                 }
