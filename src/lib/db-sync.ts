@@ -244,6 +244,7 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
     paid_at: string | null;
     status: string;
     paid_amount?: number | string | null;
+    manual_partial?: boolean | null;
   }>) {
     const list = installmentsByAgreement.get(row.agreement_id) ?? [];
     list.push({
@@ -257,6 +258,7 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
         row.paid_amount == null
           ? undefined
           : Number(row.paid_amount) || 0,
+      manualPartial: !!row.manual_partial,
     });
     installmentsByAgreement.set(row.agreement_id, list);
   }
