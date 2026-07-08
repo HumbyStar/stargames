@@ -67,6 +67,13 @@ export interface MGMVInstallment {
    * pendente até a soma atingir `value`).
    */
   paidAmount?: number;
+  /**
+   * Marcado como `true` somente quando o pagamento parcial foi registrado
+   * manualmente pelo botão "Pagamento parcial" (popover). Não é setado
+   * quando o parcial vem da revisão da IA. Usado para ocultar os botões
+   * de ação da parcela nesse caso específico.
+   */
+  manualPartial?: boolean;
 }
 
 export interface MGMVAgreement {
