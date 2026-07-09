@@ -16,6 +16,7 @@ import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { usePaginatedList } from "@/hooks/use-paginated-list";
 import { extractMGMVAgreementFromNotes } from "@/sections/import-section";
+import { reprocessMGMVFromNotes } from "@/lib/mgmv-reprocess";
 import { rebalanceAgreement } from "@/lib/mgmv-schedule";
 import { toast } from "sonner";
 import { X } from "lucide-react";
@@ -273,45 +274,9 @@ export function MGMVSection({
 
   const reprocessFromNotes = () => {
     setReprocessing(true);
-    const updatedIds: string[] = [];
-    let unchanged = 0;
-    for (const c of clients) {
-      if (!c.notes) continue;
-      const parsed = extractMGMVAgreementFromNotes(c.notes);
-      if (!parsed) continue;
-      // Preserva startDate original quando já houver acordo
-      const next: MGMVAgreement = {
-        ...parsed,
-        startDate: c.mgmv?.startDate ?? parsed.startDate,
-      };
-      // Mescla: se a parcela existente já estava paga e o parser não capturou
-      // data, mantém a data de pagamento anterior.
-      if (c.mgmv) {
-        next.installments = next.installments.map((ni) => {
-          const prev = c.mgmv!.installments.find((p) => p.number === ni.number);
-          if (!prev) return ni;
-          if (prev.paid && !ni.paid) {
-            return { ...ni, paid: true, paidAt: prev.paidAt };
-          }
-          if (ni.paid && !ni.paidAt && prev.paidAt) {
-            return { ...ni, paidAt: prev.paidAt };
-          }
-          return ni;
-        });
-      }
-      // Só marca como atualizado se o acordo mudou de fato em relação ao
-      // que já estava salvo. Comparação estrutural via JSON garante que
-      // reprocessos sucessivos não inflem a contagem.
-      const isSame =
-        c.mgmv != null &&
-        JSON.stringify(c.mgmv) === JSON.stringify(next);
-      if (isSame) {
-        unchanged++;
-        continue;
-      }
-      setMGMVAgreement(c.id, next);
-      updatedIds.push(c.id);
-    }
+    const eligible = clients.filter((c) => !!c.notes);
+    const updatedIds = reprocessMGMVFromNotes();
+    const unchanged = Math.max(0, eligible.length - updatedIds.length);
     setReprocessing(false);
     setLastUpdatedIds(updatedIds);
     toast.success(

@@ -2088,6 +2088,19 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     toast.success(
       `ZIP importado: ${stats.createdClients} novo(s) • ${stats.updatedClients} atualizado(s) • ${stats.createdProducts} produto(s) • ${stats.createdAgreements} MGMV novo(s)${stats.replacedAgreements ? ` • ${stats.replacedAgreements} MGMV substituído(s)` : ""} • ${stats.ignoredDuplicates} duplicata(s) ignorada(s)${stats.skippedAfterCorrection > 0 ? ` • ${stats.skippedAfterCorrection} pulado(s) por correção` : ""}`,
     );
+    // Reprocessa acordos MGMV a partir das observações automaticamente,
+    // para que o usuário não precise clicar em "Reprocessar MGMV por
+    // observações" após cada importação. Dynamic import evita ciclo com
+    // src/sections/import-section.tsx.
+    try {
+      const { reprocessMGMVFromNotes } = await import("@/lib/mgmv-reprocess");
+      const updated = reprocessMGMVFromNotes();
+      if (updated.length > 0) {
+        toast.success(`MGMV reprocessado automaticamente: ${updated.length} acordo(s) atualizado(s).`);
+      }
+    } catch (err) {
+      console.warn("Reprocesso automático de MGMV falhou:", err);
+    }
     setZipData(null);
   };
 
@@ -2306,6 +2319,18 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         `${ready.length} registro(s) importados • ${createdClients} cliente(s) novos • ${addedToExisting} produto(s) adicionados a clientes existentes${promotedMgmv ? ` • ${promotedMgmv} promovido(s) a MGMV` : ""} • ${rows.length - ready.length} erro(s) ignorados`,
         { id: toastId },
       );
+      // Reprocesso automático de MGMV a partir das observações — evita
+      // que o usuário precise clicar em "Reprocessar MGMV por observações"
+      // após confirmar uma importação de lista/CSV/Excel.
+      try {
+        const { reprocessMGMVFromNotes } = await import("@/lib/mgmv-reprocess");
+        const updated = reprocessMGMVFromNotes();
+        if (updated.length > 0) {
+          toast.success(`MGMV reprocessado automaticamente: ${updated.length} acordo(s) atualizado(s).`);
+        }
+      } catch (err) {
+        console.warn("Reprocesso automático de MGMV falhou:", err);
+      }
       setRows(null);
       setText("");
       onScrollTo("clientes");
@@ -2391,6 +2416,17 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     toast.success(
       `${usableClients.length} cliente(s) • ${totalProducts} produto(s) • ${createdAgreements} acordo(s) MGMV • ${createdClients} novo(s)`,
     );
+    // Reprocessa MGMV automaticamente após confirmar a importação Notion,
+    // eliminando o passo manual do botão "Reprocessar MGMV por observações".
+    try {
+      const { reprocessMGMVFromNotes } = await import("@/lib/mgmv-reprocess");
+      const updated = reprocessMGMVFromNotes();
+      if (updated.length > 0) {
+        toast.success(`MGMV reprocessado automaticamente: ${updated.length} acordo(s) atualizado(s).`);
+      }
+    } catch (err) {
+      console.warn("Reprocesso automático de MGMV falhou:", err);
+    }
     setNotion(null);
     setHtmlText("");
     if (usableClients.length === 1 && firstClientId) openClient(firstClientId);
