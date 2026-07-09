@@ -138,7 +138,12 @@ totalAgreementValue = installmentsCount × installmentValue
 paidValue = paidInstallments × installmentValue + (partialPaidAmount || 0) + (nextInstallmentDiscount || 0)
 remainingValue = totalAgreementValue - paidValue
 
-Se as contas não fecharem, mantenha os valores conforme o texto e adicione um warning explicando a divergência.
+Regra de arredondamento (IMPORTANTE):
+- Quando o texto trouxer um total "redondo" (ex.: 3.450) mas installmentsCount × installmentValue der um número ligeiramente diferente (ex.: 16 × 215,62 = 3.449,92) por causa de arredondamento em 2 casas — diferença absoluta ≤ installmentsCount centavos (≤ N × 0,01) — MANTENHA o total declarado no texto (3.450) como totalAgreementValue e considere-o verdade. Isso NÃO é divergência e NÃO deve gerar warning.
+- Calcule remainingValue SEMPRE como totalAgreementValue − paidValue usando o total escolhido acima (ex.: 3.450 − 250 = 3.200, não 3.199,92). Nunca devolva um saldo "quebrado" por conta de centavo de arredondamento.
+- Só emita warning de divergência quando a diferença for maior que installmentsCount centavos (indício de conta real errada, não arredondamento).
+
+Se as contas não fecharem além do gap de arredondamento acima, mantenha os valores conforme o texto e adicione um warning explicando a divergência real.
 
 Retorne apenas o objeto JSON.`;
 

@@ -119,6 +119,45 @@ export function MgmvAgreementEditor({ clientId, agreement, products, availablePr
     }));
   };
 
+  const togglePaid = (num: number) => {
+    setDraft((d) => ({
+      ...d,
+      installments: d.installments.map((i) => {
+        if (i.number !== num) return i;
+        if (i.paid) {
+          return { ...i, paid: false, paidAt: undefined, paidAmount: undefined };
+        }
+        return {
+          ...i,
+          paid: true,
+          paidAt: i.paidAt ?? new Date().toISOString(),
+          paidAmount: i.paidAmount ?? i.value,
+        };
+      }),
+    }));
+  };
+
+  const setInstallmentPaidAt = (num: number, iso: string) => {
+    setDraft((d) => ({
+      ...d,
+      installments: d.installments.map((i) =>
+        i.number === num ? { ...i, paidAt: iso } : i,
+      ),
+    }));
+  };
+
+  const setInstallmentPaidAmount = (num: number, v: number) => {
+    if (!Number.isFinite(v) || v < 0) return;
+    setDraft((d) => ({
+      ...d,
+      installments: d.installments.map((i) =>
+        i.number === num
+          ? { ...i, paidAmount: Math.round(v * 100) / 100 }
+          : i,
+      ),
+    }));
+  };
+
   const removeInstallment = (num: number) => {
     setDraft((d) => {
       const kept = d.installments.filter((i) => i.number !== num);
@@ -312,10 +351,35 @@ export function MgmvAgreementEditor({ clientId, agreement, products, availablePr
                 </span>
                 {i.paid ? (
                   <>
-                    <span className="w-24 tabular-nums">{formatBRL(i.value)}</span>
-                    <span className="w-28 text-muted-foreground">
-                      {formatDateBR(i.dueDate)}
-                    </span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      className="h-7 w-24 tabular-nums"
+                      value={i.value}
+                      onChange={(e) =>
+                        setInstallmentValue(i.number, Number(e.target.value))
+                      }
+                      aria-label={`Valor parcela ${i.number}`}
+                    />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      className="h-7 w-24 tabular-nums"
+                      value={i.paidAmount ?? i.value}
+                      onChange={(e) =>
+                        setInstallmentPaidAmount(i.number, Number(e.target.value))
+                      }
+                      aria-label={`Valor pago parcela ${i.number}`}
+                    />
+                    <Input
+                      type="date"
+                      className="h-7 w-36"
+                      value={isoToDateInput(i.paidAt ?? i.dueDate)}
+                      onChange={(e) =>
+                        setInstallmentPaidAt(i.number, dateInputToIso(e.target.value))
+                      }
+                      aria-label={`Data pagamento parcela ${i.number}`}
+                    />
                     <Tag variant="success">Paga</Tag>
                   </>
                 ) : (
@@ -347,6 +411,14 @@ export function MgmvAgreementEditor({ clientId, agreement, products, availablePr
                   </>
                 )}
                 <span className="ml-auto flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => togglePaid(i.number)}
+                    className="rounded-md border border-border/70 px-2 py-0.5 text-[10px] hover:bg-accent"
+                    aria-label={i.paid ? "Marcar como pendente" : "Marcar como paga"}
+                  >
+                    {i.paid ? "Desmarcar" : "Marcar paga"}
+                  </button>
                   {!i.paid && (
                     <button
                       type="button"

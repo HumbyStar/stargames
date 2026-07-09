@@ -16,6 +16,7 @@ import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { usePaginatedList } from "@/hooks/use-paginated-list";
 import { extractMGMVAgreementFromNotes } from "@/sections/import-section";
+import { rebalanceAgreement } from "@/lib/mgmv-schedule";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { Eye, EyeOff } from "lucide-react";
@@ -253,7 +254,12 @@ export function MGMVSection({
   // `reviewStatus` cai para "review_required" automaticamente via `buildRow`
   // — o próprio Confirmar marca isso explicitamente também para forçar o
   // recálculo na próxima render.
-  const mgmvEdit = useRowEdit<{ totalDebt: number; installmentValue: number }>();
+  const mgmvEdit = useRowEdit<{
+    totalDebt: number;
+    installmentValue: number;
+    installmentsCount: number;
+    paidInstallments: number;
+  }>();
 
   /**
    * Aplica filtro a partir do clique em um card de resumo, mantendo o
@@ -686,7 +692,21 @@ export function MGMVSection({
                       <td className="px-3 py-2">
                         {editing ? (
                           <span className="inline-flex items-center gap-1">
-                            <span className="text-muted-foreground">{r.total}×</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={60}
+                              className="h-8 w-14 rounded-md border border-input bg-background px-1 text-sm tabular-nums"
+                              value={draft?.installmentsCount ?? r.total}
+                              onChange={(e) =>
+                                mgmvEdit.setField(
+                                  "installmentsCount",
+                                  Math.max(1, Math.min(60, Number(e.target.value) || 1)),
+                                )
+                              }
+                              aria-label="Editar nº de parcelas"
+                            />
+                            <span className="text-muted-foreground">×</span>
                             <input
                               type="number"
                               step="0.01"
@@ -703,16 +723,44 @@ export function MGMVSection({
                         )}
                       </td>
                       <td className="px-3 py-2">
-                        <div className="flex flex-col leading-tight">
-                          <span>
-                            {r.paidCount}/{r.total}
-                          </span>
-                          {r.partialPaidAmount > 0 && (
-                            <span className="text-[10px] text-warning">
-                              + {formatBRL(r.partialPaidAmount)} parcial
+                        {editing ? (
+                          <span className="inline-flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={0}
+                              max={draft?.installmentsCount ?? r.total}
+                              className="h-8 w-14 rounded-md border border-input bg-background px-1 text-sm tabular-nums"
+                              value={draft?.paidInstallments ?? r.paidCount}
+                              onChange={(e) =>
+                                mgmvEdit.setField(
+                                  "paidInstallments",
+                                  Math.max(
+                                    0,
+                                    Math.min(
+                                      draft?.installmentsCount ?? r.total,
+                                      Number(e.target.value) || 0,
+                                    ),
+                                  ),
+                                )
+                              }
+                              aria-label="Editar parcelas pagas"
+                            />
+                            <span className="text-muted-foreground">
+                              /{draft?.installmentsCount ?? r.total}
                             </span>
-                          )}
-                        </div>
+                          </span>
+                        ) : (
+                          <div className="flex flex-col leading-tight">
+                            <span>
+                              {r.paidCount}/{r.total}
+                            </span>
+                            {r.partialPaidAmount > 0 && (
+                              <span className="text-[10px] text-warning">
+                                + {formatBRL(r.partialPaidAmount)} parcial
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-2 font-semibold">
                         {formatBRL(r.remainingValue)}
@@ -747,28 +795,55 @@ export function MGMVSection({
                               onConfirm={() =>
                                 mgmvEdit.confirm(
                                   (d) => {
-                                    // Aplica no acordo: atualiza totalDebt e o
-                                    // valor de cada parcela (mantendo estrutura
-                                    // de datas / status). Se a soma das parcelas
-                                    // não bater com totalDebt, `buildRow` marca
-                                    // "review_required" no próximo render; aqui
-                                    // ainda gravamos explicitamente para forçar
-                                    // a badge de revisão a aparecer.
-                                    const nextInstallments = r.agreement.installments.map((i) => ({
-                                      ...i,
-                                      value: d.installmentValue,
-                                    }));
+                                    // 1) Ajusta N via rebalance mantendo pagas.
+                                    const rebalanced = rebalanceAgreement(
+                                      { ...r.agreement, totalDebt: d.totalDebt },
+                                      {
+                                        targetInstallmentsCount: d.installmentsCount,
+                                        newTotalDebt: d.totalDebt,
+                                      },
+                                    ).agreement;
+                                    // 2) Aplica valor uniforme desejado nas parcelas pendentes.
+                                    let nextInstallments = rebalanced.installments.map((i) =>
+                                      i.paid
+                                        ? i
+                                        : { ...i, value: d.installmentValue },
+                                    );
+                                    // 3) Ajusta quantidade de parcelas pagas (marca/desmarca do início).
+                                    const targetPaid = Math.max(
+                                      0,
+                                      Math.min(d.paidInstallments, nextInstallments.length),
+                                    );
+                                    nextInstallments = nextInstallments.map((i, idx) => {
+                                      const shouldBePaid = idx < targetPaid;
+                                      if (shouldBePaid && !i.paid) {
+                                        return {
+                                          ...i,
+                                          paid: true,
+                                          paidAt: i.paidAt ?? new Date().toISOString(),
+                                          paidAmount: i.paidAmount ?? i.value,
+                                        };
+                                      }
+                                      if (!shouldBePaid && i.paid) {
+                                        return {
+                                          ...i,
+                                          paid: false,
+                                          paidAt: undefined,
+                                          paidAmount: undefined,
+                                        };
+                                      }
+                                      return i;
+                                    });
                                     const sum = nextInstallments.reduce((s, i) => s + i.value, 0);
-                                    const inconsistent = Math.abs(sum - d.totalDebt) > 0.01;
+                                    const inconsistent =
+                                      Math.abs(sum - d.totalDebt) > d.installmentsCount * 0.01;
                                     setMGMVAgreement(r.client.id, {
                                       ...r.agreement,
                                       totalDebt: d.totalDebt,
                                       installments: nextInstallments,
                                       reviewStatus: inconsistent
                                         ? "review_required"
-                                        : r.agreement.reviewStatus === "review_required"
-                                          ? "none"
-                                          : r.agreement.reviewStatus,
+                                        : "manually_reviewed",
                                     });
                                     if (inconsistent) {
                                       toast.warning(
@@ -787,6 +862,18 @@ export function MGMVSection({
                                         d.installmentValue <= 0
                                       )
                                         return "Valor da parcela inválido.";
+                                      if (
+                                        !Number.isFinite(d.installmentsCount) ||
+                                        d.installmentsCount < 1 ||
+                                        d.installmentsCount > 60
+                                      )
+                                        return "Nº de parcelas inválido (1–60).";
+                                      if (
+                                        !Number.isFinite(d.paidInstallments) ||
+                                        d.paidInstallments < 0 ||
+                                        d.paidInstallments > d.installmentsCount
+                                      )
+                                        return "Parcelas pagas inválidas.";
                                       return null;
                                     },
                                   },
@@ -802,6 +889,8 @@ export function MGMVSection({
                                   totalDebt: r.agreement.totalDebt,
                                   installmentValue:
                                     r.agreement.installments[0]?.value ?? 0,
+                                  installmentsCount: r.agreement.installments.length,
+                                  paidInstallments: r.paidCount,
                                 })
                               }
                             />

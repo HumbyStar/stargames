@@ -1,40 +1,69 @@
-## Bug
+## Problema
 
-No card **Saldo Restante** aparece **R$ 3.165,54**, mas a soma real das parcelas da lista é:
+Na Revisão IA do exemplo (16× R$ 215,62 e total declarado R$ 3.450), a IA sugere corretamente **Saldo R$ 3.200** (= 3.450 − 250 pago). Porém:
 
-- Parcela 2/16 pendente: R$ 181,24 − R$ 34,38 parcial = R$ 146,86
-- Parcelas 3–16 pendentes: 14 × R$ 215,62 = R$ 3.018,68
-- **Total pendente real: R$ 3.165,54** ✅
-
-Espera aí — na verdade nesse caso o card bate. Relendo o PDF do usuário: o card diz **R$ 3.165,54** e o esperado (soma das pendentes menos parcial) também é R$ 3.165,54. Então o número exibido está certo, mas o usuário reclama que **diverge da soma das parcelas pendentes exibidas na listagem**.
-
-A causa é que o cálculo hoje usa `agreement.aiReviewRawResult.remainingValue` (valor congelado pela IA no momento da revisão). Isso é frágil:
-
-- Se depois da revisão o usuário editar uma parcela, marcar/desmarcar pagamento, ou adicionar/remover parcial, o card continua mostrando o número antigo da IA em vez de recalcular pela lista.
-- Em acordos com desconto aplicado (parcela já com `value` reduzido) + `paidAmount` parcial, o número da IA pode divergir do que a lista mostra na tela.
-
-O usuário pediu: **"O Saldo Restante deve ser calculado com base nas parcelas exibidas na lista, considerando parcelas pagas, parciais e pendentes."**
+- O validador matemático do modal reclama porque 16 × 215,62 = **3.449,92 ≠ 3.450** (diferença de 8 centavos — apenas arredondamento).
+- Ao aplicar a sugestão, o card do cliente recalcula o Saldo Restante somando as parcelas pendentes: 15 × 215,62 − 0 = **3.199,92** — divergência visual do valor **R$ 3.200** que a IA mostrou na terceira coluna.
+- Além disso, o usuário quer poder editar **todos** os campos manualmente (linha da tabela MGMV, modal do acordo, produtos comuns) para corrigir divergências à mão.
 
 ## Correção
 
-Em `src/sections/mgmv-section.tsx`, dentro de `buildRow`, remover o ramo que lê `aiReviewRawResult.remainingValue` e passar a calcular **sempre** a partir das parcelas efetivamente exibidas na tabela:
+### 1. IA devolve números coerentes (arredondamento consciente)
 
-```
-remainingValue = soma, para cada parcela NÃO paga, de:
-    max(0, installment.value − (installment.paidAmount ?? 0))
-```
+`src/lib/mgmv-ai-review.functions.ts` — atualizar `SYSTEM_PROMPT`:
 
-Isso é exatamente a soma da coluna "Valor" das linhas pendentes descontando o parcial já pago — o que o usuário vê na lista.
+- Reconciliação obrigatória antes de retornar: se `installmentsCount × installmentValue` diferir do total declarado no texto por até `installmentsCount` centavos (mero arredondamento em 2 casas), **manter o total declarado** e considerá-lo verdade.
+- `remainingValue = totalAgreementValue − paidValue` sempre coerente com o total escolhido acima (no exemplo: 3.450 − 250 = **3.200**, não 3.199,92).
+- `paidValue = paidInstallments × installmentValue + (partialPaidAmount || 0) + (nextInstallmentDiscount || 0)`; se `nextInstallmentDiscount` existir, considerar que a parcela `discountAppliedToInstallment` terá valor efetivo `installmentValue − discount`.
+- Nenhum `warning` sobre "3450 diverge de 3449.92" quando o gap for ≤ N centavos — a IA deve tratar isso como arredondamento normal e explicar apenas quando o gap for real.
 
-O `paidValue` continua calculado como hoje (soma de `paidAmount ?? value` das pagas). A validação matemática (`hasMismatch`), o `reviewStatus`, o `next`, e todas as outras métricas ficam inalterados.
+### 2. Validador matemático do modal tolera arredondamento de centavos
+
+`src/components/mgmv-ai-review-modal.tsx` (`validateMath`):
+
+- Trocar `eps = 0.01` fixo por `eps = Math.max(0.01, N × 0.01)` nas comparações que envolvem `N × V vs T` e `T − PV vs R`.
+- Efeito: um gap de 8 centavos em 16 parcelas não abre mais o bloco "A sugestão da IA possui divergência matemática". Divergências reais (ex.: 30 reais) continuam sinalizadas normalmente.
+
+### 3. Aplicar a sugestão preservando exatamente os números do card da IA
+
+`src/lib/mgmv-ai-apply.ts` (`applySuggestionToAgreement`):
+
+- Depois de construir as `installments`, calcular `sumInstallments = soma(value)` incluindo o `effectiveValue` da parcela com desconto.
+- Se `|sumInstallments − totalAgreementValue| > 0` e ≤ `N × 0.01`, aplicar o delta na ÚLTIMA parcela pendente (ajuste em centavos) para que a soma bata exatamente com o `totalAgreementValue`.
+- Consequência: `buildRow` do card do cliente, que soma `installments.value − paidAmount` das pendentes, passa a devolver **R$ 3.200** — idêntico ao card "Sugestão da IA".
+- Guardar `agreement.aiReviewRawResult = suggestion` (já existe hoje) para auditoria; o cálculo do card continua vindo das parcelas (fonte da verdade).
+
+### 4. Edição manual completa de todos os campos (linha + modais)
+
+O usuário quer controle total pós-revisão. Ampliar o que hoje é editável.
+
+**Linha da tabela MGMV** (`src/sections/mgmv-section.tsx`):
+
+- Expandir `mgmvEdit` de `{ totalDebt, installmentValue }` para incluir também: `installmentsCount`, `paidInstallments`, `paidValue`, `remainingValue`, `nextDue`, `status`, `reviewStatus`.
+- Ao confirmar, aplicar mudanças através de um helper que rebalanceia parcelas via `rebalanceAgreement` (para N/valor/total) e marca/desmarca `paid` conforme `paidInstallments` novo. `remainingValue` e `paidValue` editados sobrescrevem o `totalDebt` correspondente quando fizer sentido.
+- Renderizar cada célula da linha como `Input` durante o modo edição (padrão já usado para `totalDebt`), com o `RowEditPencil`/`RowEditActions` já existentes.
+
+**Modal do acordo MGMV** (`src/components/mgmv-agreement-editor.tsx`):
+
+- Permitir edição das parcelas **pagas** também (hoje são read-only): valor, data (`paidAt`), toggle "Paga/Não paga", `paidAmount` (parcial).
+- Adicionar campos editáveis para `Valor pago` e `Saldo restante` no bloco de resumo — ao editar um, distribuir a diferença nas parcelas pendentes automaticamente (mesma mecânica do `rebalanceAgreement`).
+- Botão "Salvar" continua marcando `reviewStatus = manually_reviewed` quando o usuário ajusta manualmente após uma divergência.
+
+**Produtos comuns (linha + modal)** (`src/sections/clientes-section.tsx`):
+
+- `productEdit` e `clientEdit`: incluir todos os campos hoje só-leitura na linha (nome, plataforma, valor total, valor pago, valor restante, status financeiro, data, observações). Confirmar via `updateProduct`/`updateClient`.
+- No modal de detalhes do cliente (mesmo arquivo), transformar os campos exibidos em `Input`s controlados ao entrar em modo edição, e persistir tudo no store ao clicar em Salvar.
 
 ## Detalhes técnicos
 
-- Arquivo único: `src/sections/mgmv-section.tsx`, função `buildRow` (linhas ~82–101).
-- Remove o bloco `aiRemaining` e simplifica `remainingValue` para a soma acima.
-- Não altera `mgmv-ai-apply.ts`, o modal de revisão IA, nem qualquer outra tela — o valor sugerido pela IA continua sendo aplicado nas parcelas (que é a fonte da verdade), o card apenas deixa de ler o cache do resultado bruto da IA.
-- Sem migração de banco. Sem mudança de schema.
+- Nada muda no parser por regra nem em outras seções (importação, cobrança, dashboard).
+- Nenhuma migração de banco.
+- `applySuggestionToAgreement` continua pura e testável — o ajuste de centavos vira o último passo antes do `return`.
+- O helper de rebalanceamento das linhas MGMV editadas reaproveita `rebalanceAgreement` já existente em `src/lib/mgmv-schedule.ts`.
+- `RowEditPencil` / `RowEditActions` / `useRowEdit` já suportam objetos com N campos — só precisamos passar mais chaves.
 
 ## Fora do escopo
 
-Não mexer no parser, na regravação de parcelas pela IA, nos botões de pagamento parcial, ou em qualquer outra seção.
+- Não mexer no parser por regra, no botão de pagamento parcial, na importação, nem no dashboard de cobrança.
+- Não alterar schema do banco.
+- Não alterar seções de equipe, notificações, integridade ou concierge.

@@ -1121,6 +1121,10 @@ function ClientDrawer({
     totalValue: number;
     paidValue: number;
     financialStatus: FinancialStatus;
+    situation: Situation;
+    registerDate: string;
+    dueDate: string;
+    notes: string;
   }>();
   const mgmv = getMGMVDisplay(client);
   const mgmvProducts = products.filter((p) => p.financialStatus === "MGMV");
@@ -1682,13 +1686,71 @@ function ClientDrawer({
                       </Tag>
                     </td>
                     <td className="py-2 pr-3">
-                      <Tag>{displaySituation(p.situation)}</Tag>
+                      {editing ? (
+                        <select
+                          className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                          value={draft?.situation ?? p.situation}
+                          onChange={(e) =>
+                            productEdit.setField("situation", e.target.value as Situation)
+                          }
+                          aria-label="Editar situação"
+                        >
+                          {(
+                            [
+                              "Em Aberto",
+                              "Enviado",
+                              "Retirado",
+                              "Retirar",
+                              "Removido",
+                              "Desistiu",
+                              "Abandonou",
+                              "Resolvido",
+                            ] as Situation[]
+                          ).map((s) => (
+                            <option key={s} value={s}>
+                              {displaySituation(s)}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <Tag>{displaySituation(p.situation)}</Tag>
+                      )}
                     </td>
                     <td className="py-2 pr-3 text-muted-foreground">
-                      {formatDateBR(p.registerDate)}
+                      {editing ? (
+                        <input
+                          type="date"
+                          className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                          value={(draft?.registerDate ?? p.registerDate).slice(0, 10)}
+                          onChange={(e) =>
+                            productEdit.setField(
+                              "registerDate",
+                              new Date(`${e.target.value}T12:00:00`).toISOString(),
+                            )
+                          }
+                          aria-label="Editar data de cadastro"
+                        />
+                      ) : (
+                        formatDateBR(p.registerDate)
+                      )}
                     </td>
                     <td className="py-2 pr-3 text-muted-foreground">
-                      {getProductDisplayDueDate(p)}
+                      {editing ? (
+                        <input
+                          type="date"
+                          className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                          value={(draft?.dueDate ?? p.dueDate).slice(0, 10)}
+                          onChange={(e) =>
+                            productEdit.setField(
+                              "dueDate",
+                              new Date(`${e.target.value}T12:00:00`).toISOString(),
+                            )
+                          }
+                          aria-label="Editar limite"
+                        />
+                      ) : (
+                        getProductDisplayDueDate(p)
+                      )}
                     </td>
                     <td className="py-2 pr-3">
                       <div className="flex flex-wrap gap-1">
@@ -1709,6 +1771,10 @@ function ClientDrawer({
                                     totalValue: total,
                                     paidValue: paid,
                                     financialStatus: nextStatus,
+                                    situation: d.situation,
+                                    registerDate: d.registerDate,
+                                    dueDate: d.dueDate,
+                                    notes: d.notes,
                                   });
                                   toast.success("Produto atualizado");
                                 },
@@ -1738,6 +1804,10 @@ function ClientDrawer({
                                 totalValue: p.totalValue,
                                 paidValue: p.paidValue,
                                 financialStatus: p.financialStatus,
+                                situation: p.situation,
+                                registerDate: p.registerDate,
+                                dueDate: p.dueDate,
+                                notes: p.notes ?? "",
                               })
                             }
                           />

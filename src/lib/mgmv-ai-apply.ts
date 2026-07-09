@@ -131,6 +131,30 @@ export function applySuggestionToAgreement(
       }
     }
   }
+
+  // Ajuste final de arredondamento: quando N × V é diferente de T em até
+  // N centavos (arredondamento em 2 casas), aplica o delta na ÚLTIMA
+  // parcela pendente para que a soma das parcelas bata EXATAMENTE com o
+  // totalAgreementValue sugerido pela IA. Assim o card do cliente (que
+  // soma parcelas pendentes) passa a exibir o mesmo Saldo Restante que a
+  // terceira coluna do modal de revisão.
+  const sumInstallments = installments.reduce((s, i) => s + (i.value || 0), 0);
+  const totalDelta = Math.round((T - sumInstallments) * 100) / 100;
+  if (totalDelta !== 0 && Math.abs(totalDelta) <= N * 0.01 + 0.001) {
+    // Prioriza última parcela PENDENTE; se não houver, cai para a última.
+    let targetIdx = -1;
+    for (let i = installments.length - 1; i >= 0; i--) {
+      if (!installments[i].paid) { targetIdx = i; break; }
+    }
+    if (targetIdx === -1) targetIdx = installments.length - 1;
+    const target = installments[targetIdx];
+    const adjusted = Math.round((target.value + totalDelta) * 100) / 100;
+    installments[targetIdx] = {
+      ...target,
+      value: Math.max(0, adjusted),
+    };
+  }
+
   return agreementBeforeRecalc;
 }
 
