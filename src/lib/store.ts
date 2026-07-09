@@ -1103,6 +1103,94 @@ export function isOpenSituation(p: Pick<Product, "situation" | "financialStatus"
   return !isResolvedSituation(p);
 }
 
+export interface ClientFinancialSummary {
+  totalPurchased: number;
+  totalPaid: number;
+  totalRemaining: number;
+  overdueValue: number;
+  overdueCount: number;
+  productsTotal: number;
+  productsPaid: number;
+  productsRemaining: number;
+  mgmvTotal: number;
+  mgmvPaid: number;
+  mgmvRemaining: number;
+}
+
+function installmentPaidAmount(i: MGMVInstallment): number {
+  return Math.max(0, i.paidAmount ?? (i.paid ? i.value : 0));
+}
+
+/**
+ * Fonte única dos números financeiros exibidos no cliente e em Finanças.
+ * Produtos consolidados em MGMV não entram duas vezes: o total oficial passa
+ * a ser o acordo MGMV + produtos individuais fora do acordo.
+ */
+export function calculateClientFinancialSummary(
+  client: Client,
+  products: readonly Product[],
+): ClientFinancialSummary {
+  const clientProducts = products.filter((p) => p.clientId === client.id);
+  const summary: ClientFinancialSummary = {
+    totalPurchased: 0,
+    totalPaid: 0,
+    totalRemaining: 0,
+    overdueValue: 0,
+    overdueCount: 0,
+    productsTotal: 0,
+    productsPaid: 0,
+    productsRemaining: 0,
+    mgmvTotal: 0,
+    mgmvPaid: 0,
+    mgmvRemaining: 0,
+  };
+
+  for (const p of clientProducts) {
+    if (client.mgmv && p.financialStatus === "MGMV") continue;
+
+    const total = Math.max(0, p.totalValue || 0);
+    const paid = Math.max(0, p.paidValue || 0);
+    const remaining = Math.max(0, total - paid);
+
+    summary.productsTotal += total;
+    summary.productsPaid += paid;
+    summary.totalPurchased += total;
+    summary.totalPaid += paid;
+
+    if (remaining > 0 && p.financialStatus !== "Pago" && isOpenSituation(p)) {
+      summary.productsRemaining += remaining;
+      summary.totalRemaining += remaining;
+      if (isOverdue(p.dueDate)) {
+        summary.overdueValue += remaining;
+        summary.overdueCount += 1;
+      }
+    }
+  }
+
+  if (client.mgmv) {
+    summary.mgmvTotal = Math.max(0, client.mgmv.totalDebt || 0);
+    summary.totalPurchased += summary.mgmvTotal;
+
+    for (const inst of client.mgmv.installments) {
+      const paid = installmentPaidAmount(inst);
+      summary.mgmvPaid += paid;
+      summary.totalPaid += paid;
+
+      if (inst.paid) continue;
+      const remaining = Math.max(0, (inst.value || 0) - paid);
+      if (remaining <= 0) continue;
+      summary.mgmvRemaining += remaining;
+      summary.totalRemaining += remaining;
+      if (isOverdue(inst.dueDate)) {
+        summary.overdueValue += remaining;
+        summary.overdueCount += 1;
+      }
+    }
+  }
+
+  return summary;
+}
+
 export function productCollectionStatus(p: Product): {
   label: string;
   variant: "danger" | "warning" | "neutral";
