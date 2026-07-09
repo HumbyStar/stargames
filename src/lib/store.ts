@@ -916,6 +916,13 @@ export const useStore = create<State>()((set, get) => ({
               rules: defaultRules,
               security: defaultSecurity,
             }));
+            // Sinaliza reset global para que caches (TanStack Query) sejam
+            // invalidados no AppLayout — assim sessões e modais atualizam
+            // em tempo real sem exigir reload.
+            bumpResetVersion();
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("app:reset"));
+            }
             return;
           default:
             return;
