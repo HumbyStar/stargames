@@ -753,28 +753,55 @@ export function MGMVSection({
                               onConfirm={() =>
                                 mgmvEdit.confirm(
                                   (d) => {
-                                    // Aplica no acordo: atualiza totalDebt e o
-                                    // valor de cada parcela (mantendo estrutura
-                                    // de datas / status). Se a soma das parcelas
-                                    // não bater com totalDebt, `buildRow` marca
-                                    // "review_required" no próximo render; aqui
-                                    // ainda gravamos explicitamente para forçar
-                                    // a badge de revisão a aparecer.
-                                    const nextInstallments = r.agreement.installments.map((i) => ({
-                                      ...i,
-                                      value: d.installmentValue,
-                                    }));
+                                    // 1) Ajusta N via rebalance mantendo pagas.
+                                    const rebalanced = rebalanceAgreement(
+                                      { ...r.agreement, totalDebt: d.totalDebt },
+                                      {
+                                        targetInstallmentsCount: d.installmentsCount,
+                                        newTotalDebt: d.totalDebt,
+                                      },
+                                    ).agreement;
+                                    // 2) Aplica valor uniforme desejado nas parcelas pendentes.
+                                    let nextInstallments = rebalanced.installments.map((i) =>
+                                      i.paid
+                                        ? i
+                                        : { ...i, value: d.installmentValue },
+                                    );
+                                    // 3) Ajusta quantidade de parcelas pagas (marca/desmarca do início).
+                                    const targetPaid = Math.max(
+                                      0,
+                                      Math.min(d.paidInstallments, nextInstallments.length),
+                                    );
+                                    nextInstallments = nextInstallments.map((i, idx) => {
+                                      const shouldBePaid = idx < targetPaid;
+                                      if (shouldBePaid && !i.paid) {
+                                        return {
+                                          ...i,
+                                          paid: true,
+                                          paidAt: i.paidAt ?? new Date().toISOString(),
+                                          paidAmount: i.paidAmount ?? i.value,
+                                        };
+                                      }
+                                      if (!shouldBePaid && i.paid) {
+                                        return {
+                                          ...i,
+                                          paid: false,
+                                          paidAt: undefined,
+                                          paidAmount: undefined,
+                                        };
+                                      }
+                                      return i;
+                                    });
                                     const sum = nextInstallments.reduce((s, i) => s + i.value, 0);
-                                    const inconsistent = Math.abs(sum - d.totalDebt) > 0.01;
+                                    const inconsistent =
+                                      Math.abs(sum - d.totalDebt) > d.installmentsCount * 0.01;
                                     setMGMVAgreement(r.client.id, {
                                       ...r.agreement,
                                       totalDebt: d.totalDebt,
                                       installments: nextInstallments,
                                       reviewStatus: inconsistent
                                         ? "review_required"
-                                        : r.agreement.reviewStatus === "review_required"
-                                          ? "none"
-                                          : r.agreement.reviewStatus,
+                                        : "manually_reviewed",
                                     });
                                     if (inconsistent) {
                                       toast.warning(
@@ -793,6 +820,18 @@ export function MGMVSection({
                                         d.installmentValue <= 0
                                       )
                                         return "Valor da parcela inválido.";
+                                      if (
+                                        !Number.isFinite(d.installmentsCount) ||
+                                        d.installmentsCount < 1 ||
+                                        d.installmentsCount > 60
+                                      )
+                                        return "Nº de parcelas inválido (1–60).";
+                                      if (
+                                        !Number.isFinite(d.paidInstallments) ||
+                                        d.paidInstallments < 0 ||
+                                        d.paidInstallments > d.installmentsCount
+                                      )
+                                        return "Parcelas pagas inválidas.";
                                       return null;
                                     },
                                   },
@@ -808,6 +847,8 @@ export function MGMVSection({
                                   totalDebt: r.agreement.totalDebt,
                                   installmentValue:
                                     r.agreement.installments[0]?.value ?? 0,
+                                  installmentsCount: r.agreement.installments.length,
+                                  paidInstallments: r.paidCount,
                                 })
                               }
                             />
