@@ -1121,6 +1121,10 @@ function ClientDrawer({
     totalValue: number;
     paidValue: number;
     financialStatus: FinancialStatus;
+    situation: Situation;
+    registerDate: string;
+    dueDate: string;
+    notes: string;
   }>();
   const mgmv = getMGMVDisplay(client);
   const mgmvProducts = products.filter((p) => p.financialStatus === "MGMV");
