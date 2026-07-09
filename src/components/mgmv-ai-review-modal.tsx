@@ -39,7 +39,6 @@ interface MathCheck {
 
 function validateMath(s: MgmvAiReviewSuggestion): MathCheck {
   const msgs: string[] = [];
-  const eps = 0.01;
   const {
     totalAgreementValue: T,
     installmentsCount: N,
@@ -49,6 +48,11 @@ function validateMath(s: MgmvAiReviewSuggestion): MathCheck {
     remainingValue: R,
     pendingInstallments: PE,
   } = s;
+  // Tolerância proporcional ao número de parcelas: arredondar cada parcela
+  // em centavos pode acumular até N × 0,01 de diferença sem que isso seja
+  // uma divergência real. Ex.: 16 × 215,62 = 3.449,92 vs total declarado
+  // 3.450 é apenas arredondamento, não erro do usuário.
+  const eps = Math.max(0.01, (N ?? 1) * 0.01);
 
   if (N != null && V != null && T != null) {
     if (Math.abs(N * V - T) > eps)
