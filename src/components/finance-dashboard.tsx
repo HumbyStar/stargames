@@ -199,21 +199,6 @@ function buildTimeline(
   return buckets;
 }
 
-function computeClientDebt(client: Client, products: readonly Product[]): number {
-  return calculateClientFinancialSummary(client, products).totalRemaining;
-}
-
-/**
- * Inadimplência real por cliente: soma apenas o que está VENCIDO e em aberto.
- * Alinhado com computeClientDebt — assim os KPIs "A Receber" e
- * "Inadimplência" batem com o saldo exibido no card do cliente e no
- * "Top devedores", em vez de contar produtos MGMV (cujo vencimento
- * original é histórico e já foi substituído pelas parcelas do acordo).
- */
-function computeClientOverdue(client: Client, products: readonly Product[]): number {
-  return calculateClientFinancialSummary(client, products).overdueValue;
-}
-
 function computeClientBuyerScore(
   client: Client,
   products: readonly Product[],
@@ -319,16 +304,27 @@ export function FinanceDashboard() {
       client: c,
       summary: calculateClientFinancialSummary(c, products),
     }));
+    const clientById = new Map(clients.map((c) => [c.id, c]));
+    const financeProducts = products.filter((p) => {
+      const owner = clientById.get(p.clientId);
+      return !(owner?.mgmv && p.financialStatus === "MGMV");
+    });
     const total = summaries.reduce((s, r) => s + r.summary.totalPurchased, 0);
     const received = summaries.reduce((s, r) => s + r.summary.totalPaid, 0);
 
-    const byStatus = products.reduce<Record<string, { count: number; value: number }>>((acc, p) => {
+    const byStatus = financeProducts.reduce<Record<string, { count: number; value: number }>>((acc, p) => {
       const k = p.financialStatus || "Pendente";
       if (!acc[k]) acc[k] = { count: 0, value: 0 };
       acc[k].count += 1;
       acc[k].value += p.totalValue || 0;
       return acc;
     }, {});
+    for (const c of clients) {
+      if (!c.mgmv) continue;
+      if (!byStatus.MGMV) byStatus.MGMV = { count: 0, value: 0 };
+      byStatus.MGMV.count += 1;
+      byStatus.MGMV.value += c.mgmv.totalDebt || 0;
+    }
     const statusData = Object.entries(byStatus).map(([name, v]) => ({
       name,
       value: v.value,
@@ -336,19 +332,21 @@ export function FinanceDashboard() {
     }));
 
     // Top 5 platforms
-    const byPlatform = products.reduce<Record<string, number>>((acc, p) => {
+    const byPlatform = financeProducts.reduce<Record<string, number>>((acc, p) => {
       const k = p.platform || "Outros";
       acc[k] = (acc[k] || 0) + (p.totalValue || 0);
       return acc;
     }, {});
+    const agreementPlatformTotal = summaries.reduce((s, r) => s + r.summary.mgmvTotal, 0);
+    if (agreementPlatformTotal > 0) byPlatform.MGMV = (byPlatform.MGMV || 0) + agreementPlatformTotal;
     const platforms = Object.entries(byPlatform)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
 
     // Top devedores — inclui parcelas MGMV em aberto + produtos fora do acordo
-    const topDebtors = clients
-      .map((c) => ({ client: c, debt: computeClientDebt(c, products) }))
+    const topDebtors = summaries
+      .map((r) => ({ client: r.client, debt: r.summary.totalRemaining }))
       .filter((r) => r.debt > 0)
       .sort((a, b) => b.debt - a.debt)
       .slice(0, 6);
