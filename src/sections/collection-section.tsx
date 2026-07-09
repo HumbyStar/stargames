@@ -136,7 +136,9 @@ export function CollectionSection({
     return clients
       .map((c) => {
         const d = getMGMVDisplay(c);
-        if (!d || !d.active || !d.hasOverdue) return null;
+        // Todos os acordos MGMV ativos aparecem na cobrança.
+        // O filtro "mgmv_vencido" restringe às parcelas vencidas.
+        if (!d || !d.active) return null;
         return { client: c, display: d };
       })
       .filter(Boolean) as { client: Client; display: MGMVDisplay }[];
@@ -168,6 +170,8 @@ export function CollectionSection({
         if (row.kind !== "product" || row.product.financialStatus !== "Pendente") return false;
       if (filter === "mgmv" || filter === "mgmv_vencido")
         if (row.kind !== "mgmv") return false;
+      if (filter === "mgmv_vencido")
+        if (row.kind !== "mgmv" || !row.display.hasOverdue) return false;
       if (filter === "em_aberto")
         if (row.kind === "product" && !isOpenSituation(row.product)) return false;
 
