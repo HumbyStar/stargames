@@ -206,6 +206,7 @@ interface State {
   importHistory: ImportHistoryEntry[];
   hydrated: boolean;
   hydrate: () => Promise<void>;
+  refreshFromDb: () => Promise<void>;
   reset: () => void;
   openClient: (id: string | null) => void;
   addClient: (c: Omit<Client, "id">) => Client;
