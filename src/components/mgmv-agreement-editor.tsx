@@ -119,6 +119,45 @@ export function MgmvAgreementEditor({ clientId, agreement, products, availablePr
     }));
   };
 
+  const togglePaid = (num: number) => {
+    setDraft((d) => ({
+      ...d,
+      installments: d.installments.map((i) => {
+        if (i.number !== num) return i;
+        if (i.paid) {
+          return { ...i, paid: false, paidAt: undefined, paidAmount: undefined };
+        }
+        return {
+          ...i,
+          paid: true,
+          paidAt: i.paidAt ?? new Date().toISOString(),
+          paidAmount: i.paidAmount ?? i.value,
+        };
+      }),
+    }));
+  };
+
+  const setInstallmentPaidAt = (num: number, iso: string) => {
+    setDraft((d) => ({
+      ...d,
+      installments: d.installments.map((i) =>
+        i.number === num ? { ...i, paidAt: iso } : i,
+      ),
+    }));
+  };
+
+  const setInstallmentPaidAmount = (num: number, v: number) => {
+    if (!Number.isFinite(v) || v < 0) return;
+    setDraft((d) => ({
+      ...d,
+      installments: d.installments.map((i) =>
+        i.number === num
+          ? { ...i, paidAmount: Math.round(v * 100) / 100 }
+          : i,
+      ),
+    }));
+  };
+
   const removeInstallment = (num: number) => {
     setDraft((d) => {
       const kept = d.installments.filter((i) => i.number !== num);
