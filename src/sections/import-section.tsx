@@ -2088,6 +2088,19 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     toast.success(
       `ZIP importado: ${stats.createdClients} novo(s) • ${stats.updatedClients} atualizado(s) • ${stats.createdProducts} produto(s) • ${stats.createdAgreements} MGMV novo(s)${stats.replacedAgreements ? ` • ${stats.replacedAgreements} MGMV substituído(s)` : ""} • ${stats.ignoredDuplicates} duplicata(s) ignorada(s)${stats.skippedAfterCorrection > 0 ? ` • ${stats.skippedAfterCorrection} pulado(s) por correção` : ""}`,
     );
+    // Reprocessa acordos MGMV a partir das observações automaticamente,
+    // para que o usuário não precise clicar em "Reprocessar MGMV por
+    // observações" após cada importação. Dynamic import evita ciclo com
+    // src/sections/import-section.tsx.
+    try {
+      const { reprocessMGMVFromNotes } = await import("@/lib/mgmv-reprocess");
+      const updated = reprocessMGMVFromNotes();
+      if (updated.length > 0) {
+        toast.success(`MGMV reprocessado automaticamente: ${updated.length} acordo(s) atualizado(s).`);
+      }
+    } catch (err) {
+      console.warn("Reprocesso automático de MGMV falhou:", err);
+    }
     setZipData(null);
   };
 
