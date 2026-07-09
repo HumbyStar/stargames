@@ -664,23 +664,57 @@ export const getClientDetail = createServerFn({ method: "POST" })
     const rows = productsRes.data ?? [];
     let totalPurchased = 0;
     let totalPaid = 0;
+    let totalOpen = 0;
     let reservas = 0;
     let pagoAgEnvio = 0;
     let pendencias = 0;
     let enviados = 0;
     // Agregados usando TODA a coleção do cliente (sem paginação) — chamada leve.
-    const { data: allRows, error: allErr } = await context.supabase
-      .from("products")
-      .select("total_value,paid_value,financial_status,situation")
-      .eq("client_id", data.clientId);
+    const [{ data: allRows, error: allErr }, agreementRes, installmentsRes] = await Promise.all([
+      context.supabase
+        .from("products")
+        .select("total_value,paid_value,financial_status,situation,included_in_mgmv")
+        .eq("client_id", data.clientId),
+      context.supabase
+        .from("mgmv_agreements")
+        .select("id,total_agreement_value")
+        .eq("client_id", data.clientId)
+        .maybeSingle(),
+      context.supabase
+        .from("mgmv_installments")
+        .select("amount,paid_amount,status,due_date,mgmv_agreements!inner(client_id)")
+        .eq("mgmv_agreements.client_id", data.clientId),
+    ]);
     if (allErr) throw new Error(`getClientDetail:aggregates: ${allErr.message}`);
+    if (agreementRes.error) throw new Error(`getClientDetail:agreement: ${agreementRes.error.message}`);
+    if (installmentsRes.error) throw new Error(`getClientDetail:installments: ${installmentsRes.error.message}`);
     for (const r of allRows ?? []) {
+      if (r.included_in_mgmv || r.financial_status === "MGMV") continue;
       totalPurchased += Number(r.total_value) || 0;
       totalPaid += Number(r.paid_value) || 0;
+      if (r.situation === "Em Aberto" && r.financial_status !== "Pago") {
+        totalOpen += Math.max(0, (Number(r.total_value) || 0) - (Number(r.paid_value) || 0));
+      }
       if (r.financial_status === "Reserva" && r.situation === "Em Aberto") reservas++;
       if (r.financial_status === "Pago" && r.situation === "Em Aberto") pagoAgEnvio++;
       if (r.financial_status === "Pendente" && r.situation === "Em Aberto") pendencias++;
       if (r.situation === "Enviado") enviados++;
+    }
+    if (agreementRes.data) {
+      totalPurchased += Number(agreementRes.data.total_agreement_value) || 0;
+      for (const inst of installmentsRes.data ?? []) {
+        const amount = Number(inst.amount) || 0;
+        const paidAmount = Math.max(
+          0,
+          inst.paid_amount == null
+            ? inst.status === "Paga"
+              ? amount
+              : 0
+            : Number(inst.paid_amount) || 0,
+        );
+        totalPaid += paidAmount;
+        if (inst.status !== "Paga") totalOpen += Math.max(0, amount - paidAmount);
+      }
     }
 
     return {
@@ -696,7 +730,7 @@ export const getClientDetail = createServerFn({ method: "POST" })
         totalProducts: allRows?.length ?? 0,
         totalPurchased,
         totalPaid,
-        totalOpen: totalPurchased - totalPaid,
+        totalOpen,
         reservas,
         pagoAgEnvio,
         pendencias,

@@ -1,69 +1,36 @@
-## Escopo
+Plano de correção:
 
-Todas as mudanças ficam em `src/components/finance-dashboard.tsx` (mais um util local). Nenhuma mudança em store/DB/backend — os dados já estão disponíveis (`clients`, `products`, `client.mgmv.installments`).
+1. Criar uma regra única de cálculo financeiro por cliente
+- Centralizar em um helper reutilizável os valores oficiais:
+  - Total comprado
+  - Valor pago
+  - Valor restante / a receber
+  - Inadimplência real
+- Para cliente comum: somar produtos do cliente.
+- Para cliente MGMV: somar o total do acordo MGMV uma única vez, sem duplicar os produtos já incluídos no acordo, e somar também produtos fora do acordo quando existirem.
+- Pagamentos parciais de parcelas MGMV serão descontados corretamente do restante.
 
-## 1. Corrigir "Top devedores" (saldo real por cliente)
+2. Alinhar o modal do cliente com essa regra
+- O card “Total Comprado” do cliente continuará mostrando o valor oficial.
+- “Valor Pago” e “Valor Restante” usarão a mesma base matemática, sem cálculo paralelo.
 
-Hoje o cálculo é apenas `Σ(totalValue - paidValue)` dos produtos. Isso ignora dívida MGMV e mistura produtos já contemplados no acordo.
+3. Alinhar o modal de finanças com a mesma regra
+- “Faturamento Total” passará a ser a soma do total comprado oficial de todos os clientes.
+- “Recebido”, “A Receber” e “Inadimplência” serão derivados da mesma função usada no cliente.
+- “Top devedores” usará o saldo restante oficial.
+- “Top compradores” usará o total comprado oficial dos clientes sem pendência, não um valor calculado de forma diferente.
 
-Novo cálculo por cliente:
+4. Corrigir inadimplência falsa
+- Inadimplência só contará valores vencidos e realmente em aberto.
+- Não contará produto pago.
+- Não contará produto já consolidado em MGMV.
+- Não contará vencimento histórico de produto que virou acordo MGMV.
+- Cliente em dia deve mostrar R$ 0 de inadimplência.
 
-- **Se cliente tem MGMV**: dívida MGMV = soma das parcelas **não pagas** (`installment.value - (paidAmount ?? 0)` para parcelas com `paid=false`). Mais: dívida de produtos **fora do acordo** (produtos do cliente cujo `financialStatus !== "MGMV"` e `situation === "Em Aberto"`, saldo = `totalValue - paidValue`).
-- **Se cliente não tem MGMV**: soma de `totalValue - paidValue` para produtos `situation === "Em Aberto"` e `financialStatus !== "Pago"`.
+5. Garantir atualização ao vivo
+- Como a tela já reage ao estado global de clientes/produtos, ao trocar produto, pagamento, parcela ou revisão de IA, todos os cards e modais recalcularão automaticamente sem precisar recarregar a página.
+- O objetivo é remover cálculos duplicados espalhados pelo sistema, que hoje causam diferenças grandes entre as telas.
 
-Filtro: só entra no ranking quem tem saldo > 0. Continua top 6.
-
-## 2. Botão "abrir" em cada linha de Top devedores/compradores
-
-Cada linha ganha um `<Button size="icon" variant="ghost">` (ícone `ArrowUpRight` do lucide) que:
-
-1. Chama `useUiStore.getState().closeFinance()` e `setActiveSection("clientes")` (ou `"mgmv"` se o cliente for MGMV).
-2. Chama `useStore.getState().openClient(clientId)` — o drawer/modal do cliente abre automaticamente porque `clientes-section` já observa `openClientId`.
-
-Isso reaproveita o fluxo existente (nenhum modal novo).
-
-## 3. Novo card "Top compradores"
-
-Card irmão do Top devedores. Ranking por **valor total pago** do cliente, mas restrito a clientes **sem pendência**:
-
-Cliente elegível quando:
-- **Todos** os produtos do cliente têm `situation ∈ {"Em Aberto","Enviado","Retirado","Retirar","Resolvido"}` (nunca `Desistiu`/`Abandonou`/`Removido`) **E** `financialStatus ∈ {"Pago","Reserva"}` **e não está vencido** (usar `isOverdue(dueDate)` do store para reservas), **E**
-- Se tem MGMV: todas as parcelas ou estão `paid=true`, ou têm `dueDate` no futuro (nenhuma parcela vencida em aberto).
-
-Valor = `Σ paidValue` dos produtos + `Σ paidAmount (parcelas pagas)` do MGMV.
-
-Layout: grid muda para 2 colunas já existente, adiciono um 3º card em uma nova linha `grid-cols-1 lg:grid-cols-2` abaixo, ou reorganizo o bloco atual para `lg:grid-cols-3` incluindo Top plataformas + Top devedores + Top compradores. Vou pela segunda opção (mais compacto).
-
-## 4. Gráfico "Fluxo financeiro" — filtro de período + novas séries
-
-**Filtro**: `<Select>` do shadcn no header do card com opções:
-- `7 dias` (buckets diários, últimos 7 dias)
-- `30 dias` (buckets diários)
-- `6 meses` (buckets mensais — atual default)
-- `12 meses` (buckets mensais)
-- `Todos os anos` (buckets anuais desde o registro mais antigo)
-
-Estado local: `useState<"7d" | "30d" | "6m" | "12m" | "all">`.
-
-Geração dos buckets: uma função pura `buildTimeline(products, clients, mode)` que retorna `{ label, registrado, recebido, aReceber, inadimplencia }[]`:
-
-- `registrado`: soma `totalValue` de produtos cujo `registerDate` cai no bucket.
-- `recebido`: soma `paidValue` de produtos no bucket **+** parcelas MGMV com `paid=true` cujo `paidAt` cai no bucket.
-- `aReceber`: saldo aberto (`totalValue - paidValue`) de produtos ainda em aberto cujo `dueDate` cai no bucket **+** parcelas MGMV não pagas cujo `dueDate` cai no bucket.
-- `inadimplencia`: subconjunto de `aReceber` cujo `dueDate < hoje` (produtos não pagos vencidos + parcelas MGMV vencidas não pagas).
-
-Chart passa a ter 4 `<Area>`s empilháveis (mantendo cores semânticas: registrado=azul, recebido=verde, a receber=amarelo, inadimplência=vermelho — todas via tokens `oklch(...)` já usados).
-
-## Fora de escopo
-
-- Nenhuma alteração em RLS/tabelas/migrations.
-- Nenhum novo modal — reaproveita o drawer de cliente existente.
-- Nenhuma mudança nos outros KPIs, pie de status, ou top plataformas.
-- Sem exportação/CSV do gráfico.
-
-## Detalhes técnicos
-
-- `useMemo` recalcula `topDebtors`, `topBuyers` e `timeline` em função de `[clients, products, timelineMode]`.
-- `isOverdue` já é exportado de `@/lib/store`.
-- Novo helper `buildTimeline` fica no mesmo arquivo (função pura ~40 linhas). Se crescer, extraio para `src/lib/finance-timeline.ts` — decido durante implementação.
-- Botão "abrir cliente" usa `import { useUiStore } from "@/lib/ui-store"` já disponível.
+6. Validar com o cenário atual
+- Conferir o cliente único importado: o valor do modal de finanças deve bater exatamente com o “Total Comprado” do cliente.
+- Confirmar que a inadimplência fica zerada quando não houver parcela/produto vencido em aberto.

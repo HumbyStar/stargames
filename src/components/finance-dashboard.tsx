@@ -28,7 +28,14 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { useStore, isOverdue, type Client, type Product } from "@/lib/store";
+import {
+  useStore,
+  calculateClientFinancialSummary,
+  isOpenSituation,
+  isOverdue,
+  type Client,
+  type Product,
+} from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
 import { Button } from "@/components/ui/button";
 import {
@@ -85,6 +92,7 @@ function buildTimeline(
   mode: TimelineMode,
 ): TimelineBucket[] {
   const now = new Date();
+  const clientById = new Map(clients.map((c) => [c.id, c]));
   let granularity: "day" | "month" | "year";
   const buckets: TimelineBucket[] = [];
   const idx = new Map<string, number>();
@@ -128,6 +136,9 @@ function buildTimeline(
   const bucketOf = (d: Date) => idx.get(bucketKeyFor(d, granularity).key);
 
   for (const p of products) {
+    const owner = clientById.get(p.clientId);
+    if (owner?.mgmv && p.financialStatus === "MGMV") continue;
+
     const reg = new Date(p.registerDate || p.dueDate || 0);
     if (!Number.isNaN(reg.getTime())) {
       const i = bucketOf(reg);
@@ -141,7 +152,7 @@ function buildTimeline(
       saldo > 0 &&
       p.financialStatus !== "Pago" &&
       p.financialStatus !== "MGMV" &&
-      (p.situation === "Em Aberto" || p.situation === "Retirar")
+      isOpenSituation(p)
     ) {
       const due = new Date(p.dueDate || 0);
       if (!Number.isNaN(due.getTime())) {
@@ -156,6 +167,12 @@ function buildTimeline(
 
   for (const c of clients) {
     if (!c.mgmv) continue;
+    const start = new Date(c.mgmv.startDate || 0);
+    if (!Number.isNaN(start.getTime())) {
+      const i = bucketOf(start);
+      if (i !== undefined) buckets[i].registrado += c.mgmv.totalDebt || 0;
+    }
+
     for (const inst of c.mgmv.installments) {
       const paidAmt = inst.paidAmount ?? (inst.paid ? inst.value : 0);
       if (paidAmt > 0) {
@@ -182,88 +199,40 @@ function buildTimeline(
   return buckets;
 }
 
-function computeClientDebt(client: Client, products: readonly Product[]): number {
-  let debt = 0;
-  const clientProducts = products.filter((p) => p.clientId === client.id);
-  if (client.mgmv) {
-    for (const inst of client.mgmv.installments) {
-      if (inst.paid) continue;
-      debt += Math.max(0, inst.value - (inst.paidAmount ?? 0));
-    }
-  }
-  for (const p of clientProducts) {
-    if (p.financialStatus === "MGMV") continue;
-    if (p.financialStatus === "Pago") continue;
-    if (p.situation !== "Em Aberto" && p.situation !== "Retirar") continue;
-    debt += Math.max(0, (p.totalValue || 0) - (p.paidValue || 0));
-  }
-  return debt;
-}
-
-/**
- * Inadimplência real por cliente: soma apenas o que está VENCIDO e em aberto.
- * Alinhado com computeClientDebt — assim os KPIs "A Receber" e
- * "Inadimplência" batem com o saldo exibido no card do cliente e no
- * "Top devedores", em vez de contar produtos MGMV (cujo vencimento
- * original é histórico e já foi substituído pelas parcelas do acordo).
- */
-function computeClientOverdue(client: Client, products: readonly Product[]): number {
-  let overdue = 0;
-  const clientProducts = products.filter((p) => p.clientId === client.id);
-  if (client.mgmv) {
-    for (const inst of client.mgmv.installments) {
-      if (inst.paid) continue;
-      if (!isOverdue(inst.dueDate)) continue;
-      overdue += Math.max(0, inst.value - (inst.paidAmount ?? 0));
-    }
-  }
-  for (const p of clientProducts) {
-    if (p.financialStatus === "MGMV") continue;
-    if (p.financialStatus === "Pago") continue;
-    if (p.situation !== "Em Aberto" && p.situation !== "Retirar") continue;
-    if (!isOverdue(p.dueDate)) continue;
-    overdue += Math.max(0, (p.totalValue || 0) - (p.paidValue || 0));
-  }
-  return overdue;
-}
-
 function computeClientBuyerScore(
   client: Client,
   products: readonly Product[],
-): { eligible: boolean; totalPaid: number } {
+): { eligible: boolean; totalPurchased: number } {
   const clientProducts = products.filter((p) => p.clientId === client.id);
-  if (clientProducts.length === 0 && !client.mgmv) return { eligible: false, totalPaid: 0 };
+  const summary = calculateClientFinancialSummary(client, products);
+  if (clientProducts.length === 0 && !client.mgmv) return { eligible: false, totalPurchased: 0 };
+  if (summary.totalRemaining > 0 || summary.overdueValue > 0) {
+    return { eligible: false, totalPurchased: 0 };
+  }
 
   for (const p of clientProducts) {
     if (p.situation === "Desistiu" || p.situation === "Abandonou" || p.situation === "Removido") {
-      return { eligible: false, totalPaid: 0 };
+      return { eligible: false, totalPurchased: 0 };
     }
-    if (p.financialStatus === "Pendente") return { eligible: false, totalPaid: 0 };
+    if (p.financialStatus === "Pendente") return { eligible: false, totalPurchased: 0 };
     if (
       p.financialStatus === "Reserva" &&
-      p.situation === "Em Aberto" &&
+      isOpenSituation(p) &&
       isOverdue(p.dueDate)
     ) {
-      return { eligible: false, totalPaid: 0 };
+      return { eligible: false, totalPurchased: 0 };
     }
   }
 
   if (client.mgmv) {
     for (const inst of client.mgmv.installments) {
       if (!inst.paid && isOverdue(inst.dueDate)) {
-        return { eligible: false, totalPaid: 0 };
+        return { eligible: false, totalPurchased: 0 };
       }
     }
   }
 
-  let totalPaid = 0;
-  for (const p of clientProducts) totalPaid += p.paidValue || 0;
-  if (client.mgmv) {
-    for (const inst of client.mgmv.installments) {
-      totalPaid += inst.paidAmount ?? (inst.paid ? inst.value : 0);
-    }
-  }
-  return { eligible: totalPaid > 0, totalPaid };
+  return { eligible: summary.totalPurchased > 0, totalPurchased: summary.totalPurchased };
 }
 
 function Kpi({
@@ -331,16 +300,31 @@ export function FinanceDashboard() {
   };
 
   const data = useMemo(() => {
-    const total = products.reduce((s, p) => s + (p.totalValue || 0), 0);
-    const received = products.reduce((s, p) => s + (p.paidValue || 0), 0);
+    const summaries = clients.map((c) => ({
+      client: c,
+      summary: calculateClientFinancialSummary(c, products),
+    }));
+    const clientById = new Map(clients.map((c) => [c.id, c]));
+    const financeProducts = products.filter((p) => {
+      const owner = clientById.get(p.clientId);
+      return !(owner?.mgmv && p.financialStatus === "MGMV");
+    });
+    const total = summaries.reduce((s, r) => s + r.summary.totalPurchased, 0);
+    const received = summaries.reduce((s, r) => s + r.summary.totalPaid, 0);
 
-    const byStatus = products.reduce<Record<string, { count: number; value: number }>>((acc, p) => {
+    const byStatus = financeProducts.reduce<Record<string, { count: number; value: number }>>((acc, p) => {
       const k = p.financialStatus || "Pendente";
       if (!acc[k]) acc[k] = { count: 0, value: 0 };
       acc[k].count += 1;
       acc[k].value += p.totalValue || 0;
       return acc;
     }, {});
+    for (const c of clients) {
+      if (!c.mgmv) continue;
+      if (!byStatus.MGMV) byStatus.MGMV = { count: 0, value: 0 };
+      byStatus.MGMV.count += 1;
+      byStatus.MGMV.value += c.mgmv.totalDebt || 0;
+    }
     const statusData = Object.entries(byStatus).map(([name, v]) => ({
       name,
       value: v.value,
@@ -348,19 +332,21 @@ export function FinanceDashboard() {
     }));
 
     // Top 5 platforms
-    const byPlatform = products.reduce<Record<string, number>>((acc, p) => {
+    const byPlatform = financeProducts.reduce<Record<string, number>>((acc, p) => {
       const k = p.platform || "Outros";
       acc[k] = (acc[k] || 0) + (p.totalValue || 0);
       return acc;
     }, {});
+    const agreementPlatformTotal = summaries.reduce((s, r) => s + r.summary.mgmvTotal, 0);
+    if (agreementPlatformTotal > 0) byPlatform.MGMV = (byPlatform.MGMV || 0) + agreementPlatformTotal;
     const platforms = Object.entries(byPlatform)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
 
     // Top devedores — inclui parcelas MGMV em aberto + produtos fora do acordo
-    const topDebtors = clients
-      .map((c) => ({ client: c, debt: computeClientDebt(c, products) }))
+    const topDebtors = summaries
+      .map((r) => ({ client: r.client, debt: r.summary.totalRemaining }))
       .filter((r) => r.debt > 0)
       .sort((a, b) => b.debt - a.debt)
       .slice(0, 6);
@@ -369,40 +355,24 @@ export function FinanceDashboard() {
     const topBuyers = clients
       .map((c) => {
         const s = computeClientBuyerScore(c, products);
-        return { client: c, totalPaid: s.totalPaid, eligible: s.eligible };
+        return { client: c, totalPurchased: s.totalPurchased, eligible: s.eligible };
       })
       .filter((r) => r.eligible)
-      .sort((a, b) => b.totalPaid - a.totalPaid)
+      .sort((a, b) => b.totalPurchased - a.totalPurchased)
       .slice(0, 6);
 
     // MGMV totals
     const mgmvClients = clients.filter((c) => c.mgmv);
     const mgmvTotal = mgmvClients.reduce((s, c) => s + (c.mgmv?.totalDebt || 0), 0);
-    const mgmvPaid = mgmvClients.reduce(
-      (s, c) =>
-        s + (c.mgmv?.installments.filter((i) => i.paid).reduce((ss, i) => ss + i.value, 0) || 0),
-      0,
-    );
+    const mgmvPaid = summaries.reduce((s, r) => s + r.summary.mgmvPaid, 0);
     // "A Receber" e "Inadimplência" precisam usar as mesmas regras do saldo
     // por cliente (computeClientDebt), senão produtos MGMV (que têm dueDate
     // histórico do produto original) inflam o valor mesmo quando o acordo
     // está em dia. Um cliente sem parcelas vencidas nem produtos em aberto
     // vencidos passa a mostrar R$ 0 de inadimplência.
-    const openTotal = clients.reduce((s, c) => s + computeClientDebt(c, products), 0);
-    const overdueValue = clients.reduce((s, c) => s + computeClientOverdue(c, products), 0);
-    let overdueCount = 0;
-    for (const c of clients) {
-      if (c.mgmv) {
-        for (const inst of c.mgmv.installments) {
-          if (!inst.paid && isOverdue(inst.dueDate)) overdueCount++;
-        }
-      }
-    }
-    for (const p of products) {
-      if (p.financialStatus === "MGMV" || p.financialStatus === "Pago") continue;
-      if (p.situation !== "Em Aberto" && p.situation !== "Retirar") continue;
-      if (isOverdue(p.dueDate)) overdueCount++;
-    }
+    const openTotal = summaries.reduce((s, r) => s + r.summary.totalRemaining, 0);
+    const overdueValue = summaries.reduce((s, r) => s + r.summary.overdueValue, 0);
+    const overdueCount = summaries.reduce((s, r) => s + r.summary.overdueCount, 0);
     const receivedPct = total > 0 ? (received / total) * 100 : 0;
     const ticket = products.length > 0 ? total / products.length : 0;
     return {
@@ -663,7 +633,7 @@ export function FinanceDashboard() {
                   <p className="truncate text-sm font-medium">{d.client.name}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold text-success">{fmt(d.totalPaid)}</p>
+                  <p className="text-sm font-semibold text-success">{fmt(d.totalPurchased)}</p>
                   <Button
                     size="icon"
                     variant="ghost"
