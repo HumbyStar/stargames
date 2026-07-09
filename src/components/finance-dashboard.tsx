@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -10,6 +10,8 @@ import {
   PiggyBank,
   ArrowUpRight,
   ArrowDownRight,
+  ExternalLink,
+  Trophy,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -26,7 +28,16 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { useStore } from "@/lib/store";
+import { useStore, isOverdue, type Client, type Product } from "@/lib/store";
+import { useUiStore } from "@/lib/ui-store";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 const fmt = (n: number) =>
