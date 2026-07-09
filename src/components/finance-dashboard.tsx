@@ -292,6 +292,16 @@ function Kpi({
 export function FinanceDashboard() {
   const clients = useStore((s) => s.clients);
   const products = useStore((s) => s.products);
+  const openClient = useStore((s) => s.openClient);
+  const closeFinance = useUiStore((s) => s.closeFinance);
+  const setActiveSection = useUiStore((s) => s.setActiveSection);
+  const [timelineMode, setTimelineMode] = useState<TimelineMode>("6m");
+
+  const handleOpenClient = (client: Client) => {
+    closeFinance();
+    setActiveSection(client.mgmv ? "mgmv" : "clientes");
+    openClient(client.id);
+  };
 
   const data = useMemo(() => {
     const total = products.reduce((s, p) => s + (p.totalValue || 0), 0);
@@ -311,30 +321,6 @@ export function FinanceDashboard() {
       count: v.count,
     }));
 
-    // Monthly registered/received over last 6 months
-    const months: { key: string; label: string; registrado: number; recebido: number }[] = [];
-    const now = new Date();
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      months.push({
-        key,
-        label: d.toLocaleString("pt-BR", { month: "short" }).replace(".", ""),
-        registrado: 0,
-        recebido: 0,
-      });
-    }
-    const idx = new Map(months.map((m, i) => [m.key, i]));
-    for (const p of products) {
-      const d = new Date(p.registerDate || p.dueDate || Date.now());
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const i = idx.get(key);
-      if (i !== undefined) {
-        months[i].registrado += p.totalValue || 0;
-        months[i].recebido += p.paidValue || 0;
-      }
-    }
-
     // Top 5 platforms
     const byPlatform = products.reduce<Record<string, number>>((acc, p) => {
       const k = p.platform || "Outros";
@@ -346,18 +332,21 @@ export function FinanceDashboard() {
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
 
-    // Top devedores
-    const debtByClient = new Map<string, number>();
-    for (const p of products) {
-      const debt = Math.max(0, (p.totalValue || 0) - (p.paidValue || 0));
-      if (debt > 0) debtByClient.set(p.clientId, (debtByClient.get(p.clientId) || 0) + debt);
-    }
-    const topDebtors = [...debtByClient.entries()]
-      .map(([clientId, debt]) => {
-        const c = clients.find((cl) => cl.id === clientId);
-        return { name: c?.name ?? "Cliente removido", debt };
-      })
+    // Top devedores — inclui parcelas MGMV em aberto + produtos fora do acordo
+    const topDebtors = clients
+      .map((c) => ({ client: c, debt: computeClientDebt(c, products) }))
+      .filter((r) => r.debt > 0)
       .sort((a, b) => b.debt - a.debt)
+      .slice(0, 6);
+
+    // Top compradores — apenas clientes sem pendência
+    const topBuyers = clients
+      .map((c) => {
+        const s = computeClientBuyerScore(c, products);
+        return { client: c, totalPaid: s.totalPaid, eligible: s.eligible };
+      })
+      .filter((r) => r.eligible)
+      .sort((a, b) => b.totalPaid - a.totalPaid)
       .slice(0, 6);
 
     // MGMV totals
@@ -386,9 +375,9 @@ export function FinanceDashboard() {
       open,
       receivedPct,
       statusData,
-      months,
       platforms,
       topDebtors,
+      topBuyers,
       mgmvTotal,
       mgmvPaid,
       overdueValue,
@@ -397,6 +386,11 @@ export function FinanceDashboard() {
       activeClients: clients.length,
     };
   }, [clients, products]);
+
+  const timeline = useMemo(
+    () => buildTimeline(products, clients, timelineMode),
+    [products, clients, timelineMode],
+  );
 
   return (
     <div className="space-y-6">
