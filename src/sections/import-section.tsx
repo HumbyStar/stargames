@@ -2319,6 +2319,18 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         `${ready.length} registro(s) importados • ${createdClients} cliente(s) novos • ${addedToExisting} produto(s) adicionados a clientes existentes${promotedMgmv ? ` • ${promotedMgmv} promovido(s) a MGMV` : ""} • ${rows.length - ready.length} erro(s) ignorados`,
         { id: toastId },
       );
+      // Reprocesso automático de MGMV a partir das observações — evita
+      // que o usuário precise clicar em "Reprocessar MGMV por observações"
+      // após confirmar uma importação de lista/CSV/Excel.
+      try {
+        const { reprocessMGMVFromNotes } = await import("@/lib/mgmv-reprocess");
+        const updated = reprocessMGMVFromNotes();
+        if (updated.length > 0) {
+          toast.success(`MGMV reprocessado automaticamente: ${updated.length} acordo(s) atualizado(s).`);
+        }
+      } catch (err) {
+        console.warn("Reprocesso automático de MGMV falhou:", err);
+      }
       setRows(null);
       setText("");
       onScrollTo("clientes");
