@@ -31,6 +31,7 @@ import {
 } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
 import { setUiValue, subscribeRealtimeSnapshot } from "@/lib/db-sync";
+import { useQueryClient } from "@tanstack/react-query";
 import { HydrationSplash, useHydrationUserName } from "@/components/hydration-splash";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -1288,6 +1289,7 @@ function _FloatingNavbarImpl() {
 export function AppLayout({ children }: { children?: ReactNode }) {
   const hydrated = useStore((s) => s.hydrated);
   const hydrate = useStore((s) => s.hydrate);
+  const queryClient = useQueryClient();
   const userName = useHydrationUserName();
   const [warm, setWarm] = useState(false);
   useEffect(() => {
@@ -1303,6 +1305,17 @@ export function AppLayout({ children }: { children?: ReactNode }) {
     });
     return unsubscribe;
   }, [hydrated]);
+  // Reset global (excluir clientes/produtos/histórico/reset completo):
+  // invalida todos os caches TanStack Query e força um refresh do snapshot,
+  // para que sessões e modais reflitam os dados apagados sem reload.
+  useEffect(() => {
+    const onReset = () => {
+      queryClient.invalidateQueries();
+      void useStore.getState().refreshFromDb();
+    };
+    window.addEventListener("app:reset", onReset);
+    return () => window.removeEventListener("app:reset", onReset);
+  }, [queryClient]);
   // Pré-aquece os chunks lazy das seções e modais em paralelo à
   // hidratação. O splash só desmonta quando `hydrated && warm`, então ao
   // chegar na one-page as seções montam instantaneamente (sem placeholder
