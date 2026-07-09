@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -10,6 +10,8 @@ import {
   PiggyBank,
   ArrowUpRight,
   ArrowDownRight,
+  ExternalLink,
+  Trophy,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -26,7 +28,16 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { useStore } from "@/lib/store";
+import { useStore, isOverdue, type Client, type Product } from "@/lib/store";
+import { useUiStore } from "@/lib/ui-store";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 const fmt = (n: number) =>
@@ -38,6 +49,195 @@ const STATUS_COLORS: Record<string, string> = {
   Reserva: "oklch(0.65 0.2 260)",
   MGMV: "oklch(0.6 0.22 25)",
 };
+
+type TimelineMode = "7d" | "30d" | "6m" | "12m" | "all";
+
+interface TimelineBucket {
+  key: string;
+  label: string;
+  registrado: number;
+  recebido: number;
+  aReceber: number;
+  inadimplencia: number;
+}
+
+function bucketKeyFor(
+  date: Date,
+  granularity: "day" | "month" | "year",
+): { key: string; label: string } {
+  if (granularity === "day") {
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    const label = date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    return { key, label };
+  }
+  if (granularity === "month") {
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const label = date.toLocaleString("pt-BR", { month: "short" }).replace(".", "");
+    return { key, label };
+  }
+  const key = String(date.getFullYear());
+  return { key, label: key };
+}
+
+function buildTimeline(
+  products: readonly Product[],
+  clients: readonly Client[],
+  mode: TimelineMode,
+): TimelineBucket[] {
+  const now = new Date();
+  let granularity: "day" | "month" | "year";
+  const buckets: TimelineBucket[] = [];
+  const idx = new Map<string, number>();
+
+  const push = (d: Date) => {
+    const { key, label } = bucketKeyFor(d, granularity);
+    if (idx.has(key)) return;
+    idx.set(key, buckets.length);
+    buckets.push({ key, label, registrado: 0, recebido: 0, aReceber: 0, inadimplencia: 0 });
+  };
+
+  if (mode === "7d" || mode === "30d") {
+    granularity = "day";
+    const days = mode === "7d" ? 7 : 30;
+    for (let i = days - 1; i >= 0; i--) {
+      push(new Date(now.getFullYear(), now.getMonth(), now.getDate() - i));
+    }
+  } else if (mode === "6m" || mode === "12m") {
+    granularity = "month";
+    const months = mode === "6m" ? 6 : 12;
+    for (let i = months - 1; i >= 0; i--) {
+      push(new Date(now.getFullYear(), now.getMonth() - i, 1));
+    }
+  } else {
+    granularity = "year";
+    let earliest = now.getFullYear();
+    for (const p of products) {
+      const d = new Date(p.registerDate || p.dueDate || now);
+      if (!Number.isNaN(d.getTime())) earliest = Math.min(earliest, d.getFullYear());
+    }
+    for (const c of clients) {
+      if (!c.mgmv) continue;
+      const d = new Date(c.mgmv.startDate || now);
+      if (!Number.isNaN(d.getTime())) earliest = Math.min(earliest, d.getFullYear());
+    }
+    for (let y = earliest; y <= now.getFullYear(); y++) {
+      push(new Date(y, 0, 1));
+    }
+  }
+
+  const bucketOf = (d: Date) => idx.get(bucketKeyFor(d, granularity).key);
+
+  for (const p of products) {
+    const reg = new Date(p.registerDate || p.dueDate || 0);
+    if (!Number.isNaN(reg.getTime())) {
+      const i = bucketOf(reg);
+      if (i !== undefined) {
+        buckets[i].registrado += p.totalValue || 0;
+        buckets[i].recebido += p.paidValue || 0;
+      }
+    }
+    const saldo = Math.max(0, (p.totalValue || 0) - (p.paidValue || 0));
+    if (
+      saldo > 0 &&
+      p.financialStatus !== "Pago" &&
+      p.financialStatus !== "MGMV" &&
+      (p.situation === "Em Aberto" || p.situation === "Retirar")
+    ) {
+      const due = new Date(p.dueDate || 0);
+      if (!Number.isNaN(due.getTime())) {
+        const i = bucketOf(due);
+        if (i !== undefined) {
+          buckets[i].aReceber += saldo;
+          if (isOverdue(p.dueDate)) buckets[i].inadimplencia += saldo;
+        }
+      }
+    }
+  }
+
+  for (const c of clients) {
+    if (!c.mgmv) continue;
+    for (const inst of c.mgmv.installments) {
+      const paidAmt = inst.paidAmount ?? (inst.paid ? inst.value : 0);
+      if (paidAmt > 0) {
+        const pd = new Date(inst.paidAt || inst.dueDate || 0);
+        if (!Number.isNaN(pd.getTime())) {
+          const i = bucketOf(pd);
+          if (i !== undefined) buckets[i].recebido += paidAmt;
+        }
+      }
+      const rem = Math.max(0, inst.value - paidAmt);
+      if (!inst.paid && rem > 0) {
+        const due = new Date(inst.dueDate || 0);
+        if (!Number.isNaN(due.getTime())) {
+          const i = bucketOf(due);
+          if (i !== undefined) {
+            buckets[i].aReceber += rem;
+            if (isOverdue(inst.dueDate)) buckets[i].inadimplencia += rem;
+          }
+        }
+      }
+    }
+  }
+
+  return buckets;
+}
+
+function computeClientDebt(client: Client, products: readonly Product[]): number {
+  let debt = 0;
+  const clientProducts = products.filter((p) => p.clientId === client.id);
+  if (client.mgmv) {
+    for (const inst of client.mgmv.installments) {
+      if (inst.paid) continue;
+      debt += Math.max(0, inst.value - (inst.paidAmount ?? 0));
+    }
+  }
+  for (const p of clientProducts) {
+    if (p.financialStatus === "MGMV") continue;
+    if (p.financialStatus === "Pago") continue;
+    if (p.situation !== "Em Aberto" && p.situation !== "Retirar") continue;
+    debt += Math.max(0, (p.totalValue || 0) - (p.paidValue || 0));
+  }
+  return debt;
+}
+
+function computeClientBuyerScore(
+  client: Client,
+  products: readonly Product[],
+): { eligible: boolean; totalPaid: number } {
+  const clientProducts = products.filter((p) => p.clientId === client.id);
+  if (clientProducts.length === 0 && !client.mgmv) return { eligible: false, totalPaid: 0 };
+
+  for (const p of clientProducts) {
+    if (p.situation === "Desistiu" || p.situation === "Abandonou" || p.situation === "Removido") {
+      return { eligible: false, totalPaid: 0 };
+    }
+    if (p.financialStatus === "Pendente") return { eligible: false, totalPaid: 0 };
+    if (
+      p.financialStatus === "Reserva" &&
+      p.situation === "Em Aberto" &&
+      isOverdue(p.dueDate)
+    ) {
+      return { eligible: false, totalPaid: 0 };
+    }
+  }
+
+  if (client.mgmv) {
+    for (const inst of client.mgmv.installments) {
+      if (!inst.paid && isOverdue(inst.dueDate)) {
+        return { eligible: false, totalPaid: 0 };
+      }
+    }
+  }
+
+  let totalPaid = 0;
+  for (const p of clientProducts) totalPaid += p.paidValue || 0;
+  if (client.mgmv) {
+    for (const inst of client.mgmv.installments) {
+      totalPaid += inst.paidAmount ?? (inst.paid ? inst.value : 0);
+    }
+  }
+  return { eligible: totalPaid > 0, totalPaid };
+}
 
 function Kpi({
   label,
@@ -92,6 +292,16 @@ function Kpi({
 export function FinanceDashboard() {
   const clients = useStore((s) => s.clients);
   const products = useStore((s) => s.products);
+  const openClient = useStore((s) => s.openClient);
+  const closeFinance = useUiStore((s) => s.closeFinance);
+  const setActiveSection = useUiStore((s) => s.setActiveSection);
+  const [timelineMode, setTimelineMode] = useState<TimelineMode>("6m");
+
+  const handleOpenClient = (client: Client) => {
+    closeFinance();
+    setActiveSection(client.mgmv ? "mgmv" : "clientes");
+    openClient(client.id);
+  };
 
   const data = useMemo(() => {
     const total = products.reduce((s, p) => s + (p.totalValue || 0), 0);
@@ -111,30 +321,6 @@ export function FinanceDashboard() {
       count: v.count,
     }));
 
-    // Monthly registered/received over last 6 months
-    const months: { key: string; label: string; registrado: number; recebido: number }[] = [];
-    const now = new Date();
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      months.push({
-        key,
-        label: d.toLocaleString("pt-BR", { month: "short" }).replace(".", ""),
-        registrado: 0,
-        recebido: 0,
-      });
-    }
-    const idx = new Map(months.map((m, i) => [m.key, i]));
-    for (const p of products) {
-      const d = new Date(p.registerDate || p.dueDate || Date.now());
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const i = idx.get(key);
-      if (i !== undefined) {
-        months[i].registrado += p.totalValue || 0;
-        months[i].recebido += p.paidValue || 0;
-      }
-    }
-
     // Top 5 platforms
     const byPlatform = products.reduce<Record<string, number>>((acc, p) => {
       const k = p.platform || "Outros";
@@ -146,18 +332,21 @@ export function FinanceDashboard() {
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
 
-    // Top devedores
-    const debtByClient = new Map<string, number>();
-    for (const p of products) {
-      const debt = Math.max(0, (p.totalValue || 0) - (p.paidValue || 0));
-      if (debt > 0) debtByClient.set(p.clientId, (debtByClient.get(p.clientId) || 0) + debt);
-    }
-    const topDebtors = [...debtByClient.entries()]
-      .map(([clientId, debt]) => {
-        const c = clients.find((cl) => cl.id === clientId);
-        return { name: c?.name ?? "Cliente removido", debt };
-      })
+    // Top devedores — inclui parcelas MGMV em aberto + produtos fora do acordo
+    const topDebtors = clients
+      .map((c) => ({ client: c, debt: computeClientDebt(c, products) }))
+      .filter((r) => r.debt > 0)
       .sort((a, b) => b.debt - a.debt)
+      .slice(0, 6);
+
+    // Top compradores — apenas clientes sem pendência
+    const topBuyers = clients
+      .map((c) => {
+        const s = computeClientBuyerScore(c, products);
+        return { client: c, totalPaid: s.totalPaid, eligible: s.eligible };
+      })
+      .filter((r) => r.eligible)
+      .sort((a, b) => b.totalPaid - a.totalPaid)
       .slice(0, 6);
 
     // MGMV totals
@@ -186,9 +375,9 @@ export function FinanceDashboard() {
       open,
       receivedPct,
       statusData,
-      months,
       platforms,
       topDebtors,
+      topBuyers,
       mgmvTotal,
       mgmvPaid,
       overdueValue,
@@ -197,6 +386,11 @@ export function FinanceDashboard() {
       activeClients: clients.length,
     };
   }, [clients, products]);
+
+  const timeline = useMemo(
+    () => buildTimeline(products, clients, timelineMode),
+    [products, clients, timelineMode],
+  );
 
   return (
     <div className="space-y-6">
@@ -243,14 +437,28 @@ export function FinanceDashboard() {
         <div className="rounded-2xl border border-border bg-card/60 p-4 shadow-sm lg:col-span-2">
           <div className="mb-3 flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold">Fluxo financeiro (6 meses)</p>
-              <p className="text-xs text-muted-foreground">Registrado vs Recebido</p>
+              <p className="text-sm font-semibold">Fluxo financeiro</p>
+              <p className="text-xs text-muted-foreground">Registrado, Recebido, A Receber e Inadimplência</p>
             </div>
-            <TrendingUp className="size-4 text-primary" />
+            <div className="flex items-center gap-2">
+              <Select value={timelineMode} onValueChange={(v) => setTimelineMode(v as TimelineMode)}>
+                <SelectTrigger className="h-8 w-[150px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                  <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                  <SelectItem value="6m">Últimos 6 meses</SelectItem>
+                  <SelectItem value="12m">Últimos 12 meses</SelectItem>
+                  <SelectItem value="all">Todos os anos</SelectItem>
+                </SelectContent>
+              </Select>
+              <TrendingUp className="size-4 text-primary" />
+            </div>
           </div>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data.months}>
+              <AreaChart data={timeline}>
                 <defs>
                   <linearGradient id="grad-reg" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="oklch(0.65 0.2 260)" stopOpacity={0.45} />
@@ -259,6 +467,14 @@ export function FinanceDashboard() {
                   <linearGradient id="grad-rec" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="oklch(0.65 0.16 150)" stopOpacity={0.45} />
                     <stop offset="100%" stopColor="oklch(0.65 0.16 150)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="grad-arec" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="oklch(0.78 0.15 75)" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="oklch(0.78 0.15 75)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="grad-inad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="oklch(0.6 0.22 25)" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="oklch(0.6 0.22 25)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.5 0 0 / 0.15)" />
@@ -272,8 +488,11 @@ export function FinanceDashboard() {
                     borderRadius: 12,
                   }}
                 />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Area type="monotone" dataKey="registrado" name="Registrado" stroke="oklch(0.55 0.2 260)" fill="url(#grad-reg)" strokeWidth={2} />
                 <Area type="monotone" dataKey="recebido" name="Recebido" stroke="oklch(0.65 0.16 150)" fill="url(#grad-rec)" strokeWidth={2} />
+                <Area type="monotone" dataKey="aReceber" name="A Receber" stroke="oklch(0.78 0.15 75)" fill="url(#grad-arec)" strokeWidth={2} />
+                <Area type="monotone" dataKey="inadimplencia" name="Inadimplência" stroke="oklch(0.6 0.22 25)" fill="url(#grad-inad)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -317,7 +536,7 @@ export function FinanceDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="rounded-2xl border border-border bg-card/60 p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
             <div>
@@ -361,14 +580,64 @@ export function FinanceDashboard() {
               </li>
             )}
             {data.topDebtors.map((d, i) => (
-              <li key={i} className="flex items-center justify-between gap-3 py-2.5">
+              <li key={d.client.id} className="flex items-center justify-between gap-3 py-2.5">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="grid size-8 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                     {i + 1}
                   </span>
-                  <p className="truncate text-sm font-medium">{d.name}</p>
+                  <p className="truncate text-sm font-medium">{d.client.name}</p>
                 </div>
-                <p className="text-sm font-semibold text-destructive">{fmt(d.debt)}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-destructive">{fmt(d.debt)}</p>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-7"
+                    onClick={() => handleOpenClient(d.client)}
+                    aria-label={`Abrir ${d.client.name}`}
+                  >
+                    <ExternalLink className="size-4" />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card/60 p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold">Top compradores</p>
+              <p className="text-xs text-muted-foreground">Clientes em dia, sem pendência</p>
+            </div>
+            <Trophy className="size-4 text-success" />
+          </div>
+          <ul className="divide-y divide-border">
+            {data.topBuyers.length === 0 && (
+              <li className="py-6 text-center text-sm text-muted-foreground">
+                Nenhum cliente elegível.
+              </li>
+            )}
+            {data.topBuyers.map((d, i) => (
+              <li key={d.client.id} className="flex items-center justify-between gap-3 py-2.5">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="grid size-8 place-items-center rounded-full bg-success/10 text-xs font-semibold text-success">
+                    {i + 1}
+                  </span>
+                  <p className="truncate text-sm font-medium">{d.client.name}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-success">{fmt(d.totalPaid)}</p>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-7"
+                    onClick={() => handleOpenClient(d.client)}
+                    aria-label={`Abrir ${d.client.name}`}
+                  >
+                    <ExternalLink className="size-4" />
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>
