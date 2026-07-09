@@ -2404,6 +2404,17 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     toast.success(
       `${usableClients.length} cliente(s) • ${totalProducts} produto(s) • ${createdAgreements} acordo(s) MGMV • ${createdClients} novo(s)`,
     );
+    // Reprocessa MGMV automaticamente após confirmar a importação Notion,
+    // eliminando o passo manual do botão "Reprocessar MGMV por observações".
+    try {
+      const { reprocessMGMVFromNotes } = await import("@/lib/mgmv-reprocess");
+      const updated = reprocessMGMVFromNotes();
+      if (updated.length > 0) {
+        toast.success(`MGMV reprocessado automaticamente: ${updated.length} acordo(s) atualizado(s).`);
+      }
+    } catch (err) {
+      console.warn("Reprocesso automático de MGMV falhou:", err);
+    }
     setNotion(null);
     setHtmlText("");
     if (usableClients.length === 1 && firstClientId) openClient(firstClientId);
