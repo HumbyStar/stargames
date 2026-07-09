@@ -1113,3 +1113,31 @@ export function setUiValue(key: string, value: unknown) {
   if (subs) for (const fn of subs) fn();
   scheduleFlush();
 }
+
+/**
+ * Assina eventos Realtime nas tabelas de negócio (clients/products/MGMV) e
+ * dispara `onRefresh` com debounce curto quando qualquer linha muda. Usado
+ * pelo AppLayout para manter o store espelhado com o banco em tempo real —
+ * o modal Finanças e demais telas re-renderizam automaticamente.
+ */
+export function subscribeRealtimeSnapshot(onRefresh: () => void): () => void {
+  let timer: number | null = null;
+  const schedule = () => {
+    if (timer) window.clearTimeout(timer);
+    timer = window.setTimeout(() => {
+      timer = null;
+      onRefresh();
+    }, 600);
+  };
+  const channel = supabase
+    .channel("realtime-store")
+    .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, schedule)
+    .on("postgres_changes", { event: "*", schema: "public", table: "products" }, schedule)
+    .on("postgres_changes", { event: "*", schema: "public", table: "mgmv_agreements" }, schedule)
+    .on("postgres_changes", { event: "*", schema: "public", table: "mgmv_installments" }, schedule)
+    .subscribe();
+  return () => {
+    if (timer) window.clearTimeout(timer);
+    supabase.removeChannel(channel);
+  };
+}

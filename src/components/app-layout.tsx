@@ -30,7 +30,7 @@ import {
   type Product,
 } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
-import { setUiValue } from "@/lib/db-sync";
+import { setUiValue, subscribeRealtimeSnapshot } from "@/lib/db-sync";
 import { HydrationSplash, useHydrationUserName } from "@/components/hydration-splash";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -1293,6 +1293,16 @@ export function AppLayout({ children }: { children?: ReactNode }) {
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+  // Sincronização Realtime: após a primeira hidratação, assina os canais
+  // do Supabase para refletir mudanças de clients/products/MGMV vindas de
+  // outras abas, dispositivos ou reconciliações do backend.
+  useEffect(() => {
+    if (!hydrated) return;
+    const unsubscribe = subscribeRealtimeSnapshot(() => {
+      void useStore.getState().refreshFromDb();
+    });
+    return unsubscribe;
+  }, [hydrated]);
   // Pré-aquece os chunks lazy das seções e modais em paralelo à
   // hidratação. O splash só desmonta quando `hydrated && warm`, então ao
   // chegar na one-page as seções montam instantaneamente (sem placeholder
