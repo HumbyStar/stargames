@@ -384,22 +384,32 @@ export function FinanceDashboard() {
         s + (c.mgmv?.installments.filter((i) => i.paid).reduce((ss, i) => ss + i.value, 0) || 0),
       0,
     );
-    const overdueProducts = products.filter(
-      (p) =>
-        p.financialStatus !== "Pago" &&
-        p.dueDate &&
-        new Date(p.dueDate).getTime() < Date.now(),
-    );
-    const overdueValue = overdueProducts.reduce(
-      (s, p) => s + Math.max(0, (p.totalValue || 0) - (p.paidValue || 0)),
-      0,
-    );
+    // "A Receber" e "Inadimplência" precisam usar as mesmas regras do saldo
+    // por cliente (computeClientDebt), senão produtos MGMV (que têm dueDate
+    // histórico do produto original) inflam o valor mesmo quando o acordo
+    // está em dia. Um cliente sem parcelas vencidas nem produtos em aberto
+    // vencidos passa a mostrar R$ 0 de inadimplência.
+    const openTotal = clients.reduce((s, c) => s + computeClientDebt(c, products), 0);
+    const overdueValue = clients.reduce((s, c) => s + computeClientOverdue(c, products), 0);
+    let overdueCount = 0;
+    for (const c of clients) {
+      if (c.mgmv) {
+        for (const inst of c.mgmv.installments) {
+          if (!inst.paid && isOverdue(inst.dueDate)) overdueCount++;
+        }
+      }
+    }
+    for (const p of products) {
+      if (p.financialStatus === "MGMV" || p.financialStatus === "Pago") continue;
+      if (p.situation !== "Em Aberto" && p.situation !== "Retirar") continue;
+      if (isOverdue(p.dueDate)) overdueCount++;
+    }
     const receivedPct = total > 0 ? (received / total) * 100 : 0;
     const ticket = products.length > 0 ? total / products.length : 0;
     return {
       total,
       received,
-      open,
+      open: openTotal,
       receivedPct,
       statusData,
       platforms,
@@ -408,7 +418,7 @@ export function FinanceDashboard() {
       mgmvTotal,
       mgmvPaid,
       overdueValue,
-      overdueCount: overdueProducts.length,
+      overdueCount,
       ticket,
       activeClients: clients.length,
     };
