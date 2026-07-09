@@ -875,11 +875,17 @@ export const useStore = create<State>()((set, get) => ({
         bumpResetVersion();
         await flushUiStateNow();
 
+        const notifyReset = () => {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("app:reset"));
+          }
+        };
         switch (action) {
           case "deleteImportedData":
             await dbDeleteAllImportProgressAsync();
             await dbDeleteHistoryAllAsync();
             set((s) => ({ ...s, importHistory: [] }));
+            notifyReset();
             return;
           case "deleteAllClients":
             await dbDeleteAllImportProgressAsync();
@@ -887,12 +893,14 @@ export const useStore = create<State>()((set, get) => ({
             await dbDeleteAllProductsAsync();
             await dbDeleteAllClientsAsync();
             set((s) => ({ ...s, clients: [], products: [], openClientId: null }));
+            notifyReset();
             return;
           case "deleteAllProducts":
             await dbDeleteAllImportProgressAsync();
             await dbDeleteAllMGMVAsync();
             await dbDeleteAllProductsAsync();
             set((s) => ({ ...s, products: [] }));
+            notifyReset();
             return;
           case "resetSystem":
             await dbDeleteAllImportProgressAsync();
@@ -916,6 +924,7 @@ export const useStore = create<State>()((set, get) => ({
               rules: defaultRules,
               security: defaultSecurity,
             }));
+            notifyReset();
             return;
           default:
             return;
