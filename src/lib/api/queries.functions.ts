@@ -664,6 +664,7 @@ export const getClientDetail = createServerFn({ method: "POST" })
     const rows = productsRes.data ?? [];
     let totalPurchased = 0;
     let totalPaid = 0;
+    let totalOpen = 0;
     let reservas = 0;
     let pagoAgEnvio = 0;
     let pendencias = 0;
@@ -671,12 +672,16 @@ export const getClientDetail = createServerFn({ method: "POST" })
     // Agregados usando TODA a coleção do cliente (sem paginação) — chamada leve.
     const { data: allRows, error: allErr } = await context.supabase
       .from("products")
-      .select("total_value,paid_value,financial_status,situation")
+      .select("total_value,paid_value,financial_status,situation,included_in_mgmv")
       .eq("client_id", data.clientId);
     if (allErr) throw new Error(`getClientDetail:aggregates: ${allErr.message}`);
     for (const r of allRows ?? []) {
+      if (r.included_in_mgmv || r.financial_status === "MGMV") continue;
       totalPurchased += Number(r.total_value) || 0;
       totalPaid += Number(r.paid_value) || 0;
+      if (r.situation === "Em Aberto" && r.financial_status !== "Pago") {
+        totalOpen += Math.max(0, (Number(r.total_value) || 0) - (Number(r.paid_value) || 0));
+      }
       if (r.financial_status === "Reserva" && r.situation === "Em Aberto") reservas++;
       if (r.financial_status === "Pago" && r.situation === "Em Aberto") pagoAgEnvio++;
       if (r.financial_status === "Pendente" && r.situation === "Em Aberto") pendencias++;
@@ -696,7 +701,7 @@ export const getClientDetail = createServerFn({ method: "POST" })
         totalProducts: allRows?.length ?? 0,
         totalPurchased,
         totalPaid,
-        totalOpen: totalPurchased - totalPaid,
+        totalOpen,
         reservas,
         pagoAgEnvio,
         pendencias,
