@@ -1,73 +1,69 @@
-## Problema
+## Escopo
 
-O `FinanceDashboard` (aberto pelo botão "Finanças" na navbar) lê `clients` e `products` direto do `useStore`, então já reage a mutações locais. Porém o store é hidratado **uma única vez** via `loadSnapshot()` no `hydrate()` de `src/lib/store.ts` (linha 424). Não há assinatura Realtime do Supabase — mudanças feitas em outra aba, dispositivo, ou reconciliações do backend não aparecem até um reload manual. Por isso o modal exibe números que não batem com o único cliente atual.
+Todas as mudanças ficam em `src/components/finance-dashboard.tsx` (mais um util local). Nenhuma mudança em store/DB/backend — os dados já estão disponíveis (`clients`, `products`, `client.mgmv.installments`).
 
-## Solução
+## 1. Corrigir "Top devedores" (saldo real por cliente)
 
-Adicionar sincronização Realtime das tabelas `clients`, `products`, `mgmv_agreements` e `mgmv_installments`. Ao receber qualquer evento (`INSERT`/`UPDATE`/`DELETE`), refazer o snapshot (debounced) e atualizar o store — isso propaga automaticamente para o `FinanceDashboard` (e todas as demais telas que lêem do store).
+Hoje o cálculo é apenas `Σ(totalValue - paidValue)` dos produtos. Isso ignora dívida MGMV e mistura produtos já contemplados no acordo.
 
-### Passo 1 — Habilitar Realtime nas tabelas (migração)
+Novo cálculo por cliente:
 
-Nova migração adicionando as tabelas à publicação `supabase_realtime` (idempotente):
+- **Se cliente tem MGMV**: dívida MGMV = soma das parcelas **não pagas** (`installment.value - (paidAmount ?? 0)` para parcelas com `paid=false`). Mais: dívida de produtos **fora do acordo** (produtos do cliente cujo `financialStatus !== "MGMV"` e `situation === "Em Aberto"`, saldo = `totalValue - paidValue`).
+- **Se cliente não tem MGMV**: soma de `totalValue - paidValue` para produtos `situation === "Em Aberto"` e `financialStatus !== "Pago"`.
 
-```sql
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE public.clients;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE public.products;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE public.mgmv_agreements;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE public.mgmv_installments;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-```
+Filtro: só entra no ranking quem tem saldo > 0. Continua top 6.
 
-RLS existente das tabelas já protege quem recebe eventos.
+## 2. Botão "abrir" em cada linha de Top devedores/compradores
 
-### Passo 2 — Nova função `subscribeRealtimeSnapshot` em `src/lib/db-sync.ts`
+Cada linha ganha um `<Button size="icon" variant="ghost">` (ícone `ArrowUpRight` do lucide) que:
 
-Exporta uma função que abre um canal Supabase com `on('postgres_changes', ...)` para as 4 tabelas, e agenda uma re-hidratação debounced (~600ms) via callback. Retorna cleanup.
+1. Chama `useUiStore.getState().closeFinance()` e `setActiveSection("clientes")` (ou `"mgmv"` se o cliente for MGMV).
+2. Chama `useStore.getState().openClient(clientId)` — o drawer/modal do cliente abre automaticamente porque `clientes-section` já observa `openClientId`.
 
-```ts
-export function subscribeRealtimeSnapshot(onRefresh: () => void): () => void {
-  let timer: number | null = null;
-  const schedule = () => {
-    if (timer) window.clearTimeout(timer);
-    timer = window.setTimeout(onRefresh, 600);
-  };
-  const channel = supabase
-    .channel("realtime-store")
-    .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, schedule)
-    .on("postgres_changes", { event: "*", schema: "public", table: "products" }, schedule)
-    .on("postgres_changes", { event: "*", schema: "public", table: "mgmv_agreements" }, schedule)
-    .on("postgres_changes", { event: "*", schema: "public", table: "mgmv_installments" }, schedule)
-    .subscribe();
-  return () => {
-    if (timer) window.clearTimeout(timer);
-    supabase.removeChannel(channel);
-  };
-}
-```
+Isso reaproveita o fluxo existente (nenhum modal novo).
 
-### Passo 3 — Nova ação `refreshFromDb` no store (`src/lib/store.ts`)
+## 3. Novo card "Top compradores"
 
-Adiciona `refreshFromDb: () => Promise<void>` que chama `loadSnapshot()` e faz `set({ clients, products, importHistory })` — sem tocar em preferences/rules/security (o usuário pode ter mudanças locais em UI-only). Aplica o mesmo fix retroativo de situation em MGMV que o `hydrate` já faz.
+Card irmão do Top devedores. Ranking por **valor total pago** do cliente, mas restrito a clientes **sem pendência**:
 
-### Passo 4 — Wire-up no bootstrap de auth
+Cliente elegível quando:
+- **Todos** os produtos do cliente têm `situation ∈ {"Em Aberto","Enviado","Retirado","Retirar","Resolvido"}` (nunca `Desistiu`/`Abandonou`/`Removido`) **E** `financialStatus ∈ {"Pago","Reserva"}` **e não está vencido** (usar `isOverdue(dueDate)` do store para reservas), **E**
+- Se tem MGMV: todas as parcelas ou estão `paid=true`, ou têm `dueDate` no futuro (nenhuma parcela vencida em aberto).
 
-Em `src/routes/__root.tsx` (ou onde `hydrate()` já é chamado após login), depois do primeiro hidrate bem-sucedido, chamar `subscribeRealtimeSnapshot(() => useStore.getState().refreshFromDb())` e guardar o cleanup no `useEffect` return.
+Valor = `Σ paidValue` dos produtos + `Σ paidAmount (parcelas pagas)` do MGMV.
 
-Vou identificar o ponto exato lendo `__root.tsx` no momento da implementação — o hook deve rodar apenas do lado cliente e apenas quando houver sessão autenticada (para evitar assinatura sem RLS válido).
+Layout: grid muda para 2 colunas já existente, adiciono um 3º card em uma nova linha `grid-cols-1 lg:grid-cols-2` abaixo, ou reorganizo o bloco atual para `lg:grid-cols-3` incluindo Top plataformas + Top devedores + Top compradores. Vou pela segunda opção (mais compacto).
+
+## 4. Gráfico "Fluxo financeiro" — filtro de período + novas séries
+
+**Filtro**: `<Select>` do shadcn no header do card com opções:
+- `7 dias` (buckets diários, últimos 7 dias)
+- `30 dias` (buckets diários)
+- `6 meses` (buckets mensais — atual default)
+- `12 meses` (buckets mensais)
+- `Todos os anos` (buckets anuais desde o registro mais antigo)
+
+Estado local: `useState<"7d" | "30d" | "6m" | "12m" | "all">`.
+
+Geração dos buckets: uma função pura `buildTimeline(products, clients, mode)` que retorna `{ label, registrado, recebido, aReceber, inadimplencia }[]`:
+
+- `registrado`: soma `totalValue` de produtos cujo `registerDate` cai no bucket.
+- `recebido`: soma `paidValue` de produtos no bucket **+** parcelas MGMV com `paid=true` cujo `paidAt` cai no bucket.
+- `aReceber`: saldo aberto (`totalValue - paidValue`) de produtos ainda em aberto cujo `dueDate` cai no bucket **+** parcelas MGMV não pagas cujo `dueDate` cai no bucket.
+- `inadimplencia`: subconjunto de `aReceber` cujo `dueDate < hoje` (produtos não pagos vencidos + parcelas MGMV vencidas não pagas).
+
+Chart passa a ter 4 `<Area>`s empilháveis (mantendo cores semânticas: registrado=azul, recebido=verde, a receber=amarelo, inadimplência=vermelho — todas via tokens `oklch(...)` já usados).
 
 ## Fora de escopo
 
-- Nenhuma mudança visual no modal Finanças.
-- Não altero a lógica de cálculo dos KPIs — se após real-time os números continuarem "errados", isso vira uma investigação separada de fórmula.
-- Não adiciono realtime para `team_tasks`, `import_history`, `audit_log` etc.
+- Nenhuma alteração em RLS/tabelas/migrations.
+- Nenhum novo modal — reaproveita o drawer de cliente existente.
+- Nenhuma mudança nos outros KPIs, pie de status, ou top plataformas.
+- Sem exportação/CSV do gráfico.
+
+## Detalhes técnicos
+
+- `useMemo` recalcula `topDebtors`, `topBuyers` e `timeline` em função de `[clients, products, timelineMode]`.
+- `isOverdue` já é exportado de `@/lib/store`.
+- Novo helper `buildTimeline` fica no mesmo arquivo (função pura ~40 linhas). Se crescer, extraio para `src/lib/finance-timeline.ts` — decido durante implementação.
+- Botão "abrir cliente" usa `import { useUiStore } from "@/lib/ui-store"` já disponível.
