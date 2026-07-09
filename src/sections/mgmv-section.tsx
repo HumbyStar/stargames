@@ -692,7 +692,21 @@ export function MGMVSection({
                       <td className="px-3 py-2">
                         {editing ? (
                           <span className="inline-flex items-center gap-1">
-                            <span className="text-muted-foreground">{r.total}×</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={60}
+                              className="h-8 w-14 rounded-md border border-input bg-background px-1 text-sm tabular-nums"
+                              value={draft?.installmentsCount ?? r.total}
+                              onChange={(e) =>
+                                mgmvEdit.setField(
+                                  "installmentsCount",
+                                  Math.max(1, Math.min(60, Number(e.target.value) || 1)),
+                                )
+                              }
+                              aria-label="Editar nº de parcelas"
+                            />
+                            <span className="text-muted-foreground">×</span>
                             <input
                               type="number"
                               step="0.01"
@@ -709,16 +723,44 @@ export function MGMVSection({
                         )}
                       </td>
                       <td className="px-3 py-2">
-                        <div className="flex flex-col leading-tight">
-                          <span>
-                            {r.paidCount}/{r.total}
-                          </span>
-                          {r.partialPaidAmount > 0 && (
-                            <span className="text-[10px] text-warning">
-                              + {formatBRL(r.partialPaidAmount)} parcial
+                        {editing ? (
+                          <span className="inline-flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={0}
+                              max={draft?.installmentsCount ?? r.total}
+                              className="h-8 w-14 rounded-md border border-input bg-background px-1 text-sm tabular-nums"
+                              value={draft?.paidInstallments ?? r.paidCount}
+                              onChange={(e) =>
+                                mgmvEdit.setField(
+                                  "paidInstallments",
+                                  Math.max(
+                                    0,
+                                    Math.min(
+                                      draft?.installmentsCount ?? r.total,
+                                      Number(e.target.value) || 0,
+                                    ),
+                                  ),
+                                )
+                              }
+                              aria-label="Editar parcelas pagas"
+                            />
+                            <span className="text-muted-foreground">
+                              /{draft?.installmentsCount ?? r.total}
                             </span>
-                          )}
-                        </div>
+                          </span>
+                        ) : (
+                          <div className="flex flex-col leading-tight">
+                            <span>
+                              {r.paidCount}/{r.total}
+                            </span>
+                            {r.partialPaidAmount > 0 && (
+                              <span className="text-[10px] text-warning">
+                                + {formatBRL(r.partialPaidAmount)} parcial
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-2 font-semibold">
                         {formatBRL(r.remainingValue)}
