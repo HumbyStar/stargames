@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   calculateFinancialStatus,
+  calculateClientFinancialSummary,
   displaySituation,
   isProductArchived,
   formatBRL,
@@ -189,16 +190,20 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
       })
       .map((c) => {
         const ps = productsByClient.get(c.id) ?? [];
-        let totalPurchased = 0;
-        let totalOpen = 0;
+        const financial = calculateClientFinancialSummary(c, ps);
         let last: string | undefined;
         for (const p of ps) {
-          totalPurchased += p.totalValue;
-          if (isOpenSituation(p)) totalOpen += p.totalValue - p.paidValue;
           if (!last || p.registerDate > last) last = p.registerDate;
         }
         const status = generalStatus(c, ps);
-        return { client: c, products: ps, totalPurchased, totalOpen, last, status };
+        return {
+          client: c,
+          products: ps,
+          totalPurchased: financial.totalPurchased,
+          totalOpen: financial.totalRemaining,
+          last,
+          status,
+        };
       });
   }, [clients, products]);
 
@@ -1209,18 +1214,10 @@ function ClientDrawer({
     toast.success(`${targets.length} produto(s) adicionado(s) ao acordo MGMV`);
     clearSelection();
   };
-  // Evita double-counting: produtos MGMV são consolidados no acordo.
-  // Total comprado = soma dos produtos individuais + valor total do acordo MGMV.
-  const individualBought = individualAll.reduce((a, p) => a + p.totalValue, 0);
-  const individualPaid = individualAll.reduce((a, p) => a + p.paidValue, 0);
-  const individualRest = individualAll
-    .filter((p) => p.situation === "Em Aberto")
-    .reduce((a, p) => a + (p.totalValue - p.paidValue), 0);
-  const mgmvPaid = mgmv ? mgmv.installmentValue * mgmv.installmentsPaid : 0;
-  const mgmvRest = mgmv ? mgmv.remainingBalance : 0;
-  const totalBought = individualBought + (mgmv?.totalDebt ?? 0);
-  const totalPaid = individualPaid + mgmvPaid;
-  const totalRest = individualRest + mgmvRest;
+  const financialSummary = calculateClientFinancialSummary(client, products);
+  const totalBought = financialSummary.totalPurchased;
+  const totalPaid = financialSummary.totalPaid;
+  const totalRest = financialSummary.totalRemaining;
   const pctPaid =
     mgmv && mgmv.installmentsTotal > 0
       ? Math.round((mgmv.installmentsPaid / mgmv.installmentsTotal) * 100)
@@ -1228,23 +1225,7 @@ function ClientDrawer({
   const mgmvPendingCount = client.mgmv
     ? client.mgmv.installments.filter((i) => !i.paid).length
     : 0;
-  const mgmvPaidValue = client.mgmv
-    ? client.mgmv.installments
-        .filter((i) => i.paid)
-        .reduce((s, i) => s + (i.paidAmount ?? i.value ?? 0), 0)
-    : 0;
-  const mgmvPartialPaidAmount = client.mgmv
-    ? client.mgmv.installments
-        .filter((i) => !i.paid)
-        .reduce(
-          (s, i) => s + Math.max(0, Math.min(i.value, i.paidAmount ?? 0)),
-          0,
-        )
-    : 0;
-  const mgmvAgreementRemaining = Math.max(
-    0,
-    (client.mgmv?.totalDebt ?? 0) - mgmvPaidValue - mgmvPartialPaidAmount,
-  );
+  const mgmvAgreementRemaining = financialSummary.mgmvRemaining;
 
   return (
     <div className="space-y-6">
