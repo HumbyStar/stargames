@@ -50,6 +50,195 @@ const STATUS_COLORS: Record<string, string> = {
   MGMV: "oklch(0.6 0.22 25)",
 };
 
+type TimelineMode = "7d" | "30d" | "6m" | "12m" | "all";
+
+interface TimelineBucket {
+  key: string;
+  label: string;
+  registrado: number;
+  recebido: number;
+  aReceber: number;
+  inadimplencia: number;
+}
+
+function bucketKeyFor(
+  date: Date,
+  granularity: "day" | "month" | "year",
+): { key: string; label: string } {
+  if (granularity === "day") {
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    const label = date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    return { key, label };
+  }
+  if (granularity === "month") {
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const label = date.toLocaleString("pt-BR", { month: "short" }).replace(".", "");
+    return { key, label };
+  }
+  const key = String(date.getFullYear());
+  return { key, label: key };
+}
+
+function buildTimeline(
+  products: readonly Product[],
+  clients: readonly Client[],
+  mode: TimelineMode,
+): TimelineBucket[] {
+  const now = new Date();
+  let granularity: "day" | "month" | "year";
+  const buckets: TimelineBucket[] = [];
+  const idx = new Map<string, number>();
+
+  const push = (d: Date) => {
+    const { key, label } = bucketKeyFor(d, granularity);
+    if (idx.has(key)) return;
+    idx.set(key, buckets.length);
+    buckets.push({ key, label, registrado: 0, recebido: 0, aReceber: 0, inadimplencia: 0 });
+  };
+
+  if (mode === "7d" || mode === "30d") {
+    granularity = "day";
+    const days = mode === "7d" ? 7 : 30;
+    for (let i = days - 1; i >= 0; i--) {
+      push(new Date(now.getFullYear(), now.getMonth(), now.getDate() - i));
+    }
+  } else if (mode === "6m" || mode === "12m") {
+    granularity = "month";
+    const months = mode === "6m" ? 6 : 12;
+    for (let i = months - 1; i >= 0; i--) {
+      push(new Date(now.getFullYear(), now.getMonth() - i, 1));
+    }
+  } else {
+    granularity = "year";
+    let earliest = now.getFullYear();
+    for (const p of products) {
+      const d = new Date(p.registerDate || p.dueDate || now);
+      if (!Number.isNaN(d.getTime())) earliest = Math.min(earliest, d.getFullYear());
+    }
+    for (const c of clients) {
+      if (!c.mgmv) continue;
+      const d = new Date(c.mgmv.startDate || now);
+      if (!Number.isNaN(d.getTime())) earliest = Math.min(earliest, d.getFullYear());
+    }
+    for (let y = earliest; y <= now.getFullYear(); y++) {
+      push(new Date(y, 0, 1));
+    }
+  }
+
+  const bucketOf = (d: Date) => idx.get(bucketKeyFor(d, granularity).key);
+
+  for (const p of products) {
+    const reg = new Date(p.registerDate || p.dueDate || 0);
+    if (!Number.isNaN(reg.getTime())) {
+      const i = bucketOf(reg);
+      if (i !== undefined) {
+        buckets[i].registrado += p.totalValue || 0;
+        buckets[i].recebido += p.paidValue || 0;
+      }
+    }
+    const saldo = Math.max(0, (p.totalValue || 0) - (p.paidValue || 0));
+    if (
+      saldo > 0 &&
+      p.financialStatus !== "Pago" &&
+      p.financialStatus !== "MGMV" &&
+      (p.situation === "Em Aberto" || p.situation === "Retirar")
+    ) {
+      const due = new Date(p.dueDate || 0);
+      if (!Number.isNaN(due.getTime())) {
+        const i = bucketOf(due);
+        if (i !== undefined) {
+          buckets[i].aReceber += saldo;
+          if (isOverdue(p.dueDate)) buckets[i].inadimplencia += saldo;
+        }
+      }
+    }
+  }
+
+  for (const c of clients) {
+    if (!c.mgmv) continue;
+    for (const inst of c.mgmv.installments) {
+      const paidAmt = inst.paidAmount ?? (inst.paid ? inst.value : 0);
+      if (paidAmt > 0) {
+        const pd = new Date(inst.paidAt || inst.dueDate || 0);
+        if (!Number.isNaN(pd.getTime())) {
+          const i = bucketOf(pd);
+          if (i !== undefined) buckets[i].recebido += paidAmt;
+        }
+      }
+      const rem = Math.max(0, inst.value - paidAmt);
+      if (!inst.paid && rem > 0) {
+        const due = new Date(inst.dueDate || 0);
+        if (!Number.isNaN(due.getTime())) {
+          const i = bucketOf(due);
+          if (i !== undefined) {
+            buckets[i].aReceber += rem;
+            if (isOverdue(inst.dueDate)) buckets[i].inadimplencia += rem;
+          }
+        }
+      }
+    }
+  }
+
+  return buckets;
+}
+
+function computeClientDebt(client: Client, products: readonly Product[]): number {
+  let debt = 0;
+  const clientProducts = products.filter((p) => p.clientId === client.id);
+  if (client.mgmv) {
+    for (const inst of client.mgmv.installments) {
+      if (inst.paid) continue;
+      debt += Math.max(0, inst.value - (inst.paidAmount ?? 0));
+    }
+  }
+  for (const p of clientProducts) {
+    if (p.financialStatus === "MGMV") continue;
+    if (p.financialStatus === "Pago") continue;
+    if (p.situation !== "Em Aberto" && p.situation !== "Retirar") continue;
+    debt += Math.max(0, (p.totalValue || 0) - (p.paidValue || 0));
+  }
+  return debt;
+}
+
+function computeClientBuyerScore(
+  client: Client,
+  products: readonly Product[],
+): { eligible: boolean; totalPaid: number } {
+  const clientProducts = products.filter((p) => p.clientId === client.id);
+  if (clientProducts.length === 0 && !client.mgmv) return { eligible: false, totalPaid: 0 };
+
+  for (const p of clientProducts) {
+    if (p.situation === "Desistiu" || p.situation === "Abandonou" || p.situation === "Removido") {
+      return { eligible: false, totalPaid: 0 };
+    }
+    if (p.financialStatus === "Pendente") return { eligible: false, totalPaid: 0 };
+    if (
+      p.financialStatus === "Reserva" &&
+      p.situation === "Em Aberto" &&
+      isOverdue(p.dueDate)
+    ) {
+      return { eligible: false, totalPaid: 0 };
+    }
+  }
+
+  if (client.mgmv) {
+    for (const inst of client.mgmv.installments) {
+      if (!inst.paid && isOverdue(inst.dueDate)) {
+        return { eligible: false, totalPaid: 0 };
+      }
+    }
+  }
+
+  let totalPaid = 0;
+  for (const p of clientProducts) totalPaid += p.paidValue || 0;
+  if (client.mgmv) {
+    for (const inst of client.mgmv.installments) {
+      totalPaid += inst.paidAmount ?? (inst.paid ? inst.value : 0);
+    }
+  }
+  return { eligible: totalPaid > 0, totalPaid };
+}
+
 function Kpi({
   label,
   value,
