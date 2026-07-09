@@ -181,7 +181,11 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     return clients
       .filter((c) => {
         const isMgmv = c.clientType === "mgmv" || (!!c.mgmv && c.mgmv.installments.length > 0);
-        return !isMgmv;
+        if (!isMgmv) return true;
+        // Cliente MGMV só aparece em Clientes se também tiver produtos
+        // fora do acordo MGMV (comuns). MGMV puro fica só na seção MGMV.
+        const ps = productsByClient.get(c.id) ?? [];
+        return ps.some((p) => p.financialStatus !== "MGMV");
       })
       .map((c) => {
         const ps = productsByClient.get(c.id) ?? [];
