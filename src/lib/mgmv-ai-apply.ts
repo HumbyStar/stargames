@@ -86,7 +86,12 @@ export function applySuggestionToAgreement(
         : isPartial
           ? (s.partialPaidAmount as number)
           : hasDiscount
-            ? discountValue
+            // O desconto já reduziu `effectiveValue` da parcela pendente;
+            // NÃO registramos discountValue como paidAmount aqui, senão
+            // o card do cliente conta o desconto duas vezes ao computar
+            // `partialPaidAmount` e o Saldo restante fica menor que o
+            // sugerido pela IA.
+            ? undefined
             : prior?.paidAmount,
       manualPartial: isPartial || hasDiscount ? true : prior?.manualPartial,
     };
