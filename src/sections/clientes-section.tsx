@@ -1713,6 +1713,10 @@ function ClientDrawer({
                                     totalValue: total,
                                     paidValue: paid,
                                     financialStatus: nextStatus,
+                                    situation: d.situation,
+                                    registerDate: d.registerDate,
+                                    dueDate: d.dueDate,
+                                    notes: d.notes,
                                   });
                                   toast.success("Produto atualizado");
                                 },
@@ -1742,6 +1746,10 @@ function ClientDrawer({
                                 totalValue: p.totalValue,
                                 paidValue: p.paidValue,
                                 financialStatus: p.financialStatus,
+                                situation: p.situation,
+                                registerDate: p.registerDate,
+                                dueDate: p.dueDate,
+                                notes: p.notes ?? "",
                               })
                             }
                           />
