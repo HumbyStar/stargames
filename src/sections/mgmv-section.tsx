@@ -16,6 +16,7 @@ import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { usePaginatedList } from "@/hooks/use-paginated-list";
 import { extractMGMVAgreementFromNotes } from "@/sections/import-section";
+import { reprocessMGMVFromNotes } from "@/lib/mgmv-reprocess";
 import { rebalanceAgreement } from "@/lib/mgmv-schedule";
 import { toast } from "sonner";
 import { X } from "lucide-react";
