@@ -79,26 +79,16 @@ function buildRow(client: Client, agreement: MGMVAgreement): MgmvRow {
       (s, i) => s + Math.max(0, Math.min(i.value, i.paidAmount ?? 0)),
       0,
     );
-  // Quando o acordo foi revisado pela IA, o saldo restante exibido no card
-  // deve refletir exatamente o valor sugerido/confirmado — que já considera
-  // descontos, pagamentos parciais e overpayments de forma consistente com
-  // as demais métricas do modal de revisão. Sem isso, o card recalcula a
-  // partir das parcelas e pode divergir aleatoriamente do saldo aprovado.
-  const aiRemaining =
-    agreement.aiReviewed &&
-    agreement.aiReviewRawResult &&
-    typeof (agreement.aiReviewRawResult as { remainingValue?: unknown })
-      .remainingValue === "number"
-      ? ((agreement.aiReviewRawResult as { remainingValue: number })
-          .remainingValue as number)
-      : null;
-  const remainingValue =
-    aiRemaining != null && Number.isFinite(aiRemaining) && aiRemaining >= 0
-      ? aiRemaining
-      : Math.max(
-          0,
-          (agreement.totalDebt || 0) - paidValue - partialPaidAmount,
-        );
+  // Saldo Restante = soma exata das parcelas pendentes exibidas na lista,
+  // descontando o valor já pago parcialmente em cada uma. Isso garante que
+  // o card sempre reflete o que o usuário vê na tabela, mesmo após edições
+  // posteriores à revisão da IA.
+  const remainingValue = agreement.installments
+    .filter((i) => !i.paid)
+    .reduce(
+      (s, i) => s + Math.max(0, (i.value || 0) - (i.paidAmount ?? 0)),
+      0,
+    );
   const next = agreement.installments
     .filter((i) => !i.paid)
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];

@@ -1,35 +1,40 @@
-## Bug: importação por Lista/CSV não usa a data marcada no cabeçalho
+## Bug
 
-### Causa raiz
-`ParsedRow.registerDate`/`dueDate` são tipados como **`YYYY-MM-DD`** e o parser do Notion respeita isso (via `normalizeDateBR`). Mas os parsers de lista fazem o contrário e devolvem **ISO completo**:
+No card **Saldo Restante** aparece **R$ 3.165,54**, mas a soma real das parcelas da lista é:
 
-- `src/sections/import-section.tsx` linha 1091 (`parseTextList`): `registerDate: headerDate ? brDateToISO(headerDate) : null` — `brDateToISO` retorna `new Date(...).toISOString()` (ex.: `2026-06-25T15:00:00.000Z`).
-- Linha 1127/1128 (`parseTabular`): `registerDate: toISO(reg)`, `dueDate: toISO(due)` — mesma coisa.
+- Parcela 2/16 pendente: R$ 181,24 − R$ 34,38 parcial = R$ 146,86
+- Parcelas 3–16 pendentes: 14 × R$ 215,62 = R$ 3.018,68
+- **Total pendente real: R$ 3.165,54** ✅
 
-No commit da importação (linhas ~1868–1875, 1924–1944, 2329) todo o código assume `YYYY-MM-DD` e concatena `T12:00:00`:
+Espera aí — na verdade nesse caso o card bate. Relendo o PDF do usuário: o card diz **R$ 3.165,54** e o esperado (soma das pendentes menos parcial) também é R$ 3.165,54. Então o número exibido está certo, mas o usuário reclama que **diverge da soma das parcelas pendentes exibidas na listagem**.
+
+A causa é que o cálculo hoje usa `agreement.aiReviewRawResult.remainingValue` (valor congelado pela IA no momento da revisão). Isso é frágil:
+
+- Se depois da revisão o usuário editar uma parcela, marcar/desmarcar pagamento, ou adicionar/remover parcial, o card continua mostrando o número antigo da IA em vez de recalcular pela lista.
+- Em acordos com desconto aplicado (parcela já com `value` reduzido) + `paidAmount` parcial, o número da IA pode divergir do que a lista mostra na tela.
+
+O usuário pediu: **"O Saldo Restante deve ser calculado com base nas parcelas exibidas na lista, considerando parcelas pagas, parciais e pendentes."**
+
+## Correção
+
+Em `src/sections/mgmv-section.tsx`, dentro de `buildRow`, remover o ramo que lê `aiReviewRawResult.remainingValue` e passar a calcular **sempre** a partir das parcelas efetivamente exibidas na tabela:
 
 ```
-new Date(`${p.registerDate}T12:00:00`).toISOString()
+remainingValue = soma, para cada parcela NÃO paga, de:
+    max(0, installment.value − (installment.paidAmount ?? 0))
 ```
 
-Com um ISO completo isso vira `"2026-06-25T15:00:00.000ZT12:00:00"` → `Invalid Date` → `toISOString()` lança `RangeError`, o `addProduct` nunca é chamado com a data correta e o produto **não aparece na data marcada** (cai em hoje ou quebra a linha).
+Isso é exatamente a soma da coluna "Valor" das linhas pendentes descontando o parcial já pago — o que o usuário vê na lista.
 
-### Correção
-Padronizar os parsers de lista/tabular para devolver **`YYYY-MM-DD`** em `registerDate`/`dueDate`, igual ao parser do Notion.
+O `paidValue` continua calculado como hoje (soma de `paidAmount ?? value` das pagas). A validação matemática (`hasMismatch`), o `reviewStatus`, o `next`, e todas as outras métricas ficam inalterados.
 
-1. `parseTextList` (linha 1050): trocar `brDateToISO(headerDate)` por `normalizeDateBR(headerDate)`; manter `date: headerDate` (BR) para a UI de preview.
-2. `parseTabular` (linha 1108): trocar `toISO(reg)`/`toISO(due)` por um `toYMD(v)` local que:
-   - Aceita `YYYY-MM-DD` (retorna igual).
-   - Aceita `DD/MM/AAAA` via `normalizeDateBR`.
-   - Aceita ISO completo → devolve `slice(0,10)` do UTC.
-   - Caso contrário devolve `null`.
-3. `parseHTMLList` já delega para `parseTextList`, então fica coberto.
+## Detalhes técnicos
 
-### Verificação
-- Colar no textarea de importação por lista uma primeira linha com data (ex.: `25/06/2026` ou `Itens 25/06/2026`) seguida de linhas de produtos e clicar em **Validar aqui / Importação Assistida**.
-- No preview a coluna Data deve mostrar `2026-06-25` (não um ISO completo) e o item precisa ser confirmado no commit sem `RangeError` no console.
-- Após confirmar, o produto deve aparecer agrupado/filtrado pela data marcada, e não pela data de hoje.
-- Rodar `bun tsgo --noEmit` para confirmar tipos.
+- Arquivo único: `src/sections/mgmv-section.tsx`, função `buildRow` (linhas ~82–101).
+- Remove o bloco `aiRemaining` e simplifica `remainingValue` para a soma acima.
+- Não altera `mgmv-ai-apply.ts`, o modal de revisão IA, nem qualquer outra tela — o valor sugerido pela IA continua sendo aplicado nas parcelas (que é a fonte da verdade), o card apenas deixa de ler o cache do resultado bruto da IA.
+- Sem migração de banco. Sem mudança de schema.
 
-### Arquivos afetados
-- `src/sections/import-section.tsx` (apenas `parseTextList` e `parseTabular`; nenhuma mudança em store, DB ou UI).
+## Fora do escopo
+
+Não mexer no parser, na regravação de parcelas pela IA, nos botões de pagamento parcial, ou em qualquer outra seção.
