@@ -333,7 +333,6 @@ export function FinanceDashboard() {
   const data = useMemo(() => {
     const total = products.reduce((s, p) => s + (p.totalValue || 0), 0);
     const received = products.reduce((s, p) => s + (p.paidValue || 0), 0);
-    const open = Math.max(0, total - received);
 
     const byStatus = products.reduce<Record<string, { count: number; value: number }>>((acc, p) => {
       const k = p.financialStatus || "Pendente";
