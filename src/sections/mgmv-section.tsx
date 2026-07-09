@@ -16,6 +16,7 @@ import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { usePaginatedList } from "@/hooks/use-paginated-list";
 import { extractMGMVAgreementFromNotes } from "@/sections/import-section";
+import { rebalanceAgreement } from "@/lib/mgmv-schedule";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { Eye, EyeOff } from "lucide-react";
@@ -253,7 +254,12 @@ export function MGMVSection({
   // `reviewStatus` cai para "review_required" automaticamente via `buildRow`
   // — o próprio Confirmar marca isso explicitamente também para forçar o
   // recálculo na próxima render.
-  const mgmvEdit = useRowEdit<{ totalDebt: number; installmentValue: number }>();
+  const mgmvEdit = useRowEdit<{
+    totalDebt: number;
+    installmentValue: number;
+    installmentsCount: number;
+    paidInstallments: number;
+  }>();
 
   /**
    * Aplica filtro a partir do clique em um card de resumo, mantendo o
