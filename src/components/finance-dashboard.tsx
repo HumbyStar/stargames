@@ -437,14 +437,28 @@ export function FinanceDashboard() {
         <div className="rounded-2xl border border-border bg-card/60 p-4 shadow-sm lg:col-span-2">
           <div className="mb-3 flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold">Fluxo financeiro (6 meses)</p>
-              <p className="text-xs text-muted-foreground">Registrado vs Recebido</p>
+              <p className="text-sm font-semibold">Fluxo financeiro</p>
+              <p className="text-xs text-muted-foreground">Registrado, Recebido, A Receber e Inadimplência</p>
             </div>
-            <TrendingUp className="size-4 text-primary" />
+            <div className="flex items-center gap-2">
+              <Select value={timelineMode} onValueChange={(v) => setTimelineMode(v as TimelineMode)}>
+                <SelectTrigger className="h-8 w-[150px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                  <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                  <SelectItem value="6m">Últimos 6 meses</SelectItem>
+                  <SelectItem value="12m">Últimos 12 meses</SelectItem>
+                  <SelectItem value="all">Todos os anos</SelectItem>
+                </SelectContent>
+              </Select>
+              <TrendingUp className="size-4 text-primary" />
+            </div>
           </div>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data.months}>
+              <AreaChart data={timeline}>
                 <defs>
                   <linearGradient id="grad-reg" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="oklch(0.65 0.2 260)" stopOpacity={0.45} />
@@ -453,6 +467,14 @@ export function FinanceDashboard() {
                   <linearGradient id="grad-rec" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="oklch(0.65 0.16 150)" stopOpacity={0.45} />
                     <stop offset="100%" stopColor="oklch(0.65 0.16 150)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="grad-arec" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="oklch(0.78 0.15 75)" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="oklch(0.78 0.15 75)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="grad-inad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="oklch(0.6 0.22 25)" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="oklch(0.6 0.22 25)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.5 0 0 / 0.15)" />
@@ -466,8 +488,11 @@ export function FinanceDashboard() {
                     borderRadius: 12,
                   }}
                 />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Area type="monotone" dataKey="registrado" name="Registrado" stroke="oklch(0.55 0.2 260)" fill="url(#grad-reg)" strokeWidth={2} />
                 <Area type="monotone" dataKey="recebido" name="Recebido" stroke="oklch(0.65 0.16 150)" fill="url(#grad-rec)" strokeWidth={2} />
+                <Area type="monotone" dataKey="aReceber" name="A Receber" stroke="oklch(0.78 0.15 75)" fill="url(#grad-arec)" strokeWidth={2} />
+                <Area type="monotone" dataKey="inadimplencia" name="Inadimplência" stroke="oklch(0.6 0.22 25)" fill="url(#grad-inad)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -511,7 +536,7 @@ export function FinanceDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="rounded-2xl border border-border bg-card/60 p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
             <div>
@@ -555,14 +580,64 @@ export function FinanceDashboard() {
               </li>
             )}
             {data.topDebtors.map((d, i) => (
-              <li key={i} className="flex items-center justify-between gap-3 py-2.5">
+              <li key={d.client.id} className="flex items-center justify-between gap-3 py-2.5">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="grid size-8 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                     {i + 1}
                   </span>
-                  <p className="truncate text-sm font-medium">{d.name}</p>
+                  <p className="truncate text-sm font-medium">{d.client.name}</p>
                 </div>
-                <p className="text-sm font-semibold text-destructive">{fmt(d.debt)}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-destructive">{fmt(d.debt)}</p>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-7"
+                    onClick={() => handleOpenClient(d.client)}
+                    aria-label={`Abrir ${d.client.name}`}
+                  >
+                    <ExternalLink className="size-4" />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card/60 p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold">Top compradores</p>
+              <p className="text-xs text-muted-foreground">Clientes em dia, sem pendência</p>
+            </div>
+            <Trophy className="size-4 text-success" />
+          </div>
+          <ul className="divide-y divide-border">
+            {data.topBuyers.length === 0 && (
+              <li className="py-6 text-center text-sm text-muted-foreground">
+                Nenhum cliente elegível.
+              </li>
+            )}
+            {data.topBuyers.map((d, i) => (
+              <li key={d.client.id} className="flex items-center justify-between gap-3 py-2.5">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="grid size-8 place-items-center rounded-full bg-success/10 text-xs font-semibold text-success">
+                    {i + 1}
+                  </span>
+                  <p className="truncate text-sm font-medium">{d.client.name}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-success">{fmt(d.totalPaid)}</p>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-7"
+                    onClick={() => handleOpenClient(d.client)}
+                    aria-label={`Abrir ${d.client.name}`}
+                  >
+                    <ExternalLink className="size-4" />
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>
