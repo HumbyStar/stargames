@@ -685,27 +685,33 @@ export const useStore = create<State>()((set, get) => ({
                 // Assim: saldo do acordo = falta_da_alvo + soma_das_outras
                 //                        = (value - paidPartial) + rateio
                 //                        = saldoAnterior - amount. ✅
-                const totalDebt = c.mgmv.totalDebt || 0;
-                const paidClosed = installments
-                  .filter((i) => i.paid)
-                  .reduce((s2, i) => s2 + (i.paidAmount ?? i.value ?? 0), 0);
-                const remaining = Math.max(
+                // Cálculo em centavos inteiros para preservar precisão total.
+                // Fonte da verdade: saldo restante EXIBIDO antes do pagamento
+                // (soma real das parcelas pendentes - parciais já aplicados),
+                // NÃO o `totalDebt` armazenado (que pode estar arredondado).
+                const prevRemainingCents = Math.round(agreementRemaining * 100);
+                const amountCents = Math.round(amount * 100);
+                const newRemainingCents = Math.max(
                   0,
-                  totalDebt - paidClosed - paidPartialTargetNew,
+                  prevRemainingCents - amountCents,
                 );
-                const remainingOnTarget = Math.max(
-                  0,
-                  target.value - paidPartialTargetNew,
+                const targetValueCents = Math.round(target.value * 100);
+                const paidPartialTargetNewCents = Math.round(
+                  paidPartialTargetNew * 100,
                 );
-                const distributeAcrossOthers = Math.max(
+                const remainingOnTargetCents = Math.max(
                   0,
-                  remaining - remainingOnTarget,
+                  targetValueCents - paidPartialTargetNewCents,
+                );
+                const distributeAcrossOthersCents = Math.max(
+                  0,
+                  newRemainingCents - remainingOnTargetCents,
                 );
                 const otherPending = installments.filter(
                   (i) => !i.paid && i.number !== installmentNumber,
                 );
                 if (otherPending.length > 0) {
-                  const totalCents = Math.round(distributeAcrossOthers * 100);
+                  const totalCents = distributeAcrossOthersCents;
                   const base = Math.floor(totalCents / otherPending.length);
                   const rest = totalCents - base * otherPending.length;
                   const lastOtherNumber =
