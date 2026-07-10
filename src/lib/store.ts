@@ -674,6 +674,17 @@ export const useStore = create<State>()((set, get) => ({
                 }
               } else {
                 // Rateia o saldo apenas nas OUTRAS pendentes.
+                //
+                // IMPORTANTE: para pagamento parcial INFERIOR ao valor da
+                // parcela alvo, o abatimento no saldo do acordo deve ser
+                // exatamente `amount` — não o valor total da parcela. A
+                // parcela alvo permanece com `value` original e passa a ter
+                // `paidAmount` acumulado (falta = value - paidAmount).
+                // Portanto, o que deve ser rateado nas OUTRAS pendentes é:
+                //   novoSaldoRestante - (value - paidAmountAcumulado)
+                // Assim: saldo do acordo = falta_da_alvo + soma_das_outras
+                //                        = (value - paidPartial) + rateio
+                //                        = saldoAnterior - amount. ✅
                 const totalDebt = c.mgmv.totalDebt || 0;
                 const paidClosed = installments
                   .filter((i) => i.paid)
@@ -682,11 +693,19 @@ export const useStore = create<State>()((set, get) => ({
                   0,
                   totalDebt - paidClosed - paidPartialTargetNew,
                 );
+                const remainingOnTarget = Math.max(
+                  0,
+                  target.value - paidPartialTargetNew,
+                );
+                const distributeAcrossOthers = Math.max(
+                  0,
+                  remaining - remainingOnTarget,
+                );
                 const otherPending = installments.filter(
                   (i) => !i.paid && i.number !== installmentNumber,
                 );
                 if (otherPending.length > 0) {
-                  const totalCents = Math.round(remaining * 100);
+                  const totalCents = Math.round(distributeAcrossOthers * 100);
                   const base = Math.floor(totalCents / otherPending.length);
                   const rest = totalCents - base * otherPending.length;
                   const lastOtherNumber =
