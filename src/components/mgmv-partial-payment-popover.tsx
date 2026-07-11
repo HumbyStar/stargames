@@ -90,14 +90,23 @@ export function MgmvPartialPaymentPopover({
       };
     }
     // Pagamento parcial: o valor é absorvido no saldo do acordo e as
-    // parcelas ainda pendentes são recalculadas (mesma quantidade, mesmas
-    // datas). Prevê o novo valor rateado por parcela pendente.
+    // DEMAIS parcelas pendentes são recalculadas — a parcela alvo mantém
+    // seu valor original exibido e passa a mostrar apenas o parcial pago.
     const nextRemaining = Math.max(0, agreementRemaining - parsed);
-    const nextPerInstallment =
-      pendingCount > 0 ? nextRemaining / pendingCount : 0;
+    const targetRemaining = Math.max(
+      0,
+      installmentValue - (currentPartial + parsed),
+    );
+    const othersCount = Math.max(0, pendingCount - 1);
+    const othersRemaining = Math.max(0, nextRemaining - targetRemaining);
+    const nextPerOther = othersCount > 0 ? othersRemaining / othersCount : 0;
+    const message =
+      othersCount > 0
+        ? `Pagamento parcial de ${formatBRL(parsed)} registrado · parcela atual mantém ${formatBRL(installmentValue)} · restante ${formatBRL(othersRemaining)} redistribuído em ${othersCount}× ${formatBRL(nextPerOther)}.`
+        : `Pagamento parcial de ${formatBRL(parsed)} registrado · parcela atual mantém ${formatBRL(installmentValue)}.`;
     return {
       kind: "partial" as const,
-      message: `Pagamento parcial de ${formatBRL(parsed)} absorvido · restante do acordo ${formatBRL(nextRemaining)} redistribuído em ${pendingCount}× ${formatBRL(nextPerInstallment)}.`,
+      message,
     };
   })();
 
