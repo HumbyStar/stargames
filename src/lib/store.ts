@@ -211,6 +211,7 @@ interface State {
   openClient: (id: string | null) => void;
   addClient: (c: Omit<Client, "id">) => Client;
   updateClient: (id: string, patch: Partial<Omit<Client, "id">>) => void;
+  deleteClient: (id: string) => Promise<void>;
   findClientByPhone: (phone: string) => Client | undefined;
   addProduct: (p: Omit<Product, "id">) => void;
   updateProduct: (id: string, patch: Partial<Omit<Product, "id">>) => void;
@@ -495,6 +496,22 @@ export const useStore = create<State>()((set, get) => ({
           if (updated) queueClientUpsert(updated);
           return { clients };
         }),
+      deleteClient: async (id) => {
+        // Remove do estado local imediatamente: cliente, produtos vinculados,
+        // acordo MGMV e a referência aberta. O banco cascateia produtos e
+        // mgmv_agreements via FK ON DELETE CASCADE.
+        set((s) => ({
+          clients: s.clients.filter((c) => c.id !== id),
+          products: s.products.filter((p) => p.clientId !== id),
+          openClientId: s.openClientId === id ? null : s.openClientId,
+        }));
+        try {
+          await dbDeleteClientsByIdsAsync([id]);
+        } catch (err) {
+          console.error("deleteClient failed", err);
+          throw err;
+        }
+      },
       findClientByPhone: (phone) =>
         get().clients.find((c) => c.phone.replace(/\D/g, "") === phone.replace(/\D/g, "")),
       addProduct: (p) =>

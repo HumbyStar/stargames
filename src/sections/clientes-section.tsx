@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Folder, Filter, Pencil, Eye, EyeOff } from "lucide-react";
+import { Folder, Filter, Pencil, Eye, EyeOff, AlertTriangle, Trash2 } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { Button } from "@/components/ui/button";
@@ -91,6 +91,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const openClient = useStore((s) => s.openClient);
   const addClient = useStore((s) => s.addClient);
   const updateClient = useStore((s) => s.updateClient);
+  const deleteClient = useStore((s) => s.deleteClient);
   const addProduct = useStore((s) => s.addProduct);
   const updateProduct = useStore((s) => s.updateProduct);
   const registerPayment = useStore((s) => s.registerPayment);
@@ -980,6 +981,16 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               products={products.filter((p) => p.clientId === drawerClient.id)}
               onEdit={() => setClientModal({ open: true, client: drawerClient })}
               onAddProduct={() => setProductModal({ open: true, clientId: drawerClient.id })}
+              onDeleteClient={async () => {
+                const name = drawerClient.name;
+                try {
+                  await deleteClient(drawerClient.id);
+                  setDrawerClientId(null);
+                  toast.success(`Cliente "${name}" excluído.`);
+                } catch {
+                  toast.error("Falha ao excluir cliente. Tente novamente.");
+                }
+              }}
               onSaveNotes={(notes) => {
                 updateClient(drawerClient.id, { notes });
                 toast.success("Observação salva");
@@ -1091,6 +1102,7 @@ function ClientDrawer({
   products,
   onEdit,
   onAddProduct,
+  onDeleteClient,
   onSaveNotes,
   onRegisterPayment,
   onChangeSituation,
@@ -1103,6 +1115,7 @@ function ClientDrawer({
   products: Product[];
   onEdit: () => void;
   onAddProduct: () => void;
+  onDeleteClient: () => void | Promise<void>;
   onSaveNotes: (notes: string) => void;
   onRegisterPayment: (productId: string, remaining: number) => void;
   onChangeSituation: (productId: string, s: Situation) => void;
@@ -1117,6 +1130,9 @@ function ClientDrawer({
   const [notes, setNotes] = useState(client.notes ?? "");
   const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
   const [mgmvEditOpen, setMgmvEditOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
   // Seleção múltipla de produtos individuais para ações em lote (Pago /
   // Enviado / Retirar / Removido). Só o clique nos botões da barra aplica;
   // marcar o checkbox nunca altera status sozinho.
@@ -1843,6 +1859,101 @@ function ClientDrawer({
           </ul>
         </Card>
       )}
+
+      <Card className="border-destructive/40 bg-destructive/5 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h4 className="flex items-center gap-2 text-sm font-semibold text-destructive">
+              <AlertTriangle className="size-4" />
+              Zona de perigo
+            </h4>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Excluir o cliente remove seus produtos, acordo MGMV e histórico
+              vinculado. Ação irreversível.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => {
+              setDeleteConfirmText("");
+              setDeleteConfirmOpen(true);
+            }}
+          >
+            <Trash2 className="mr-1 size-4" />
+            Excluir cliente
+          </Button>
+        </div>
+      </Card>
+
+      <Dialog
+        open={deleteConfirmOpen}
+        onOpenChange={(v) => {
+          if (!v) {
+            setDeleteConfirmOpen(false);
+            setDeleteConfirmText("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="size-5" />
+              Excluir cliente
+            </DialogTitle>
+            <DialogDescription>
+              Você vai excluir permanentemente <strong>{client.name}</strong> e
+              todos os produtos, acordo MGMV e histórico vinculado. Essa ação
+              não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="delete-client-confirm-input">
+              Digite{" "}
+              <span className="font-mono font-semibold text-destructive">
+                EXCLUIR
+              </span>{" "}
+              para confirmar.
+            </Label>
+            <Input
+              id="delete-client-confirm-input"
+              autoFocus
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="EXCLUIR"
+              maxLength={20}
+              disabled={deleting}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirmOpen(false)}
+              disabled={deleting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteConfirmText !== "EXCLUIR" || deleting}
+              onClick={async () => {
+                setDeleting(true);
+                try {
+                  await onDeleteClient();
+                  setDeleteConfirmOpen(false);
+                  setDeleteConfirmText("");
+                } finally {
+                  setDeleting(false);
+                }
+              }}
+            >
+              {deleting ? "Excluindo…" : "Confirmar exclusão"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
