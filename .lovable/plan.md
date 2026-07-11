@@ -1,36 +1,51 @@
-Plano de correção:
+## Objetivo
 
-1. Criar uma regra única de cálculo financeiro por cliente
-- Centralizar em um helper reutilizável os valores oficiais:
-  - Total comprado
-  - Valor pago
-  - Valor restante / a receber
-  - Inadimplência real
-- Para cliente comum: somar produtos do cliente.
-- Para cliente MGMV: somar o total do acordo MGMV uma única vez, sem duplicar os produtos já incluídos no acordo, e somar também produtos fora do acordo quando existirem.
-- Pagamentos parciais de parcelas MGMV serão descontados corretamente do restante.
+Ajustar pagamento parcial MGMV para:
 
-2. Alinhar o modal do cliente com essa regra
-- O card “Total Comprado” do cliente continuará mostrando o valor oficial.
-- “Valor Pago” e “Valor Restante” usarão a mesma base matemática, sem cálculo paralelo.
+1. Esconder os botões "Marcar como paga" e "Pagamento parcial" quando a parcela já estiver com status **Parcial** (no modal do cliente, alinhando com a seção MGMV que já faz isso).
+2. Redistribuir corretamente o valor "faltante" da parcela alvo entre as demais parcelas pendentes, marcando a parcela alvo com valor = valor pago (aparece como Parcial, mas "fechada").
 
-3. Alinhar o modal de finanças com a mesma regra
-- “Faturamento Total” passará a ser a soma do total comprado oficial de todos os clientes.
-- “Recebido”, “A Receber” e “Inadimplência” serão derivados da mesma função usada no cliente.
-- “Top devedores” usará o saldo restante oficial.
-- “Top compradores” usará o total comprado oficial dos clientes sem pendência, não um valor calculado de forma diferente.
+## Alterações
 
-4. Corrigir inadimplência falsa
-- Inadimplência só contará valores vencidos e realmente em aberto.
-- Não contará produto pago.
-- Não contará produto já consolidado em MGMV.
-- Não contará vencimento histórico de produto que virou acordo MGMV.
-- Cliente em dia deve mostrar R$ 0 de inadimplência.
+### 1) `src/sections/clientes-section.tsx` (linhas ~1409–1432)
 
-5. Garantir atualização ao vivo
-- Como a tela já reage ao estado global de clientes/produtos, ao trocar produto, pagamento, parcela ou revisão de IA, todos os cards e modais recalcularão automaticamente sem precisar recarregar a página.
-- O objetivo é remover cálculos duplicados espalhados pelo sistema, que hoje causam diferenças grandes entre as telas.
+Trocar a condição de renderização das ações:
 
-6. Validar com o cenário atual
-- Conferir o cliente único importado: o valor do modal de finanças deve bater exatamente com o “Total Comprado” do cliente.
-- Confirmar que a inadimplência fica zerada quando não houver parcela/produto vencido em aberto.
+```text
+antes: {!i.paid && ( ...botões... {!isPartial && <Popover/>} )}
+depois: {!i.paid && !isPartial && ( ...botões... <Popover/> )}
+```
+
+Assim, quando `isPartial = true`, nenhum dos dois botões aparece.
+
+### 2) `src/lib/store.ts` — `registerMGMVPartialPayment` (linhas ~664–716, ramo "pagamento parcial inferior ao valor da parcela")
+
+Mudar a semântica da parcela alvo e a redistribuição:
+
+- Parcela alvo: `value = paidAmount` (o valor pago); `paidAmount = amount acumulado`; `paid = false`; `manualPartial = true`; `paidAt = now`. Visualmente aparece como Parcial com valor R$ 100.
+- Redistribuir o restante do saldo do acordo (`newRemainingCents`) entre as OUTRAS parcelas pendentes, uniformemente e ajustando centavos no último item (mesmo esquema base/rest já usado).
+- Preservar a regra: soma total (pagas + parcelas pendentes recalculadas + valor da alvo) = `totalDebt` exato em centavos, e soma das pendentes = saldo restante.
+- Se não houver outras pendentes: manter a parcela alvo como Parcial sem redistribuir (comportamento atual).
+
+Exemplo com 10 × R$ 200 (saldo 2.000), pagamento parcial R$ 100 na parcela #1:
+
+```text
+Antes: #1 permanece 200 (paid 100), #2..#10 = 200 cada. Saldo 1.900. ✅ mat., mas confuso visualmente.
+Depois: #1 vira 100 (Parcial, "fechada"). #2..#10 = 211,11 cada (com centavo ajustado no último). Saldo 1.900. ✅
+```
+
+### 3) Regra de fluxo — `Marcar como paga` em parcela Parcial
+
+Como o botão fica escondido quando `isPartial`, o usuário não consegue mais quitar a parcela em uma segunda etapa por esta UI. Isso é intencional segundo a resposta da pergunta 2 (esconder ambos). O reprocessamento total continua disponível via edição do acordo / MGMV.
+
+## Validação
+
+- Ajustar `src/lib/store.test.ts` (se houver casos cobrindo o ramo parcial) para refletir o novo shape: `value` da alvo == amount pago, e soma das outras pendentes == `saldoAnterior - amount`.
+- Rodar `bunx vitest run` focado em `store.test.ts` e `mgmv-schedule.test.ts`.
+- Checagem manual: cliente com 10 × 200, pagar R$ 100 em #1 → #1 aparece R$ 100 Parcial, #2..#10 R$ 211,11 (com ajuste de centavo), saldo restante R$ 1.900,00.
+
+## Fora de escopo
+
+- Regra de pagamento ≥ valor da parcela (ramo `targetFullyPaid`) permanece inalterada.
+- Componente `MgmvPartialPaymentPopover` e sua prévia continuam corretos, pois já mostram `nextRemaining / pendingCount` como valor por parcela.
+- Nenhuma alteração em finanças, importação ou reprocessamento MGMV.
