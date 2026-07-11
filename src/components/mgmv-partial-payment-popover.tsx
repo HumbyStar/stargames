@@ -73,12 +73,20 @@ export function MgmvPartialPaymentPopover({
     if (!valid) return null;
     if (parsed >= installmentValue) {
       const surplus = parsed - installmentValue;
+      const nextRemaining = Math.max(0, agreementRemaining - parsed);
+      const othersCount = Math.max(0, pendingCount - 1);
+      const nextPerOther = othersCount > 0 ? nextRemaining / othersCount : 0;
+      let message: string;
+      if (othersCount === 0) {
+        message = "Parcela marcada como paga · acordo quitado.";
+      } else if (surplus > 0) {
+        message = `Parcela marcada como paga · excedente ${formatBRL(surplus)} redistribuído · restante do acordo ${formatBRL(nextRemaining)} em ${othersCount}× ${formatBRL(nextPerOther)}.`;
+      } else {
+        message = `Parcela marcada como paga · restante do acordo ${formatBRL(nextRemaining)} em ${othersCount}× ${formatBRL(nextPerOther)}.`;
+      }
       return {
         kind: "full" as const,
-        message:
-          surplus > 0
-            ? `Parcela marcada como paga · excedente ${formatBRL(surplus)} abatido da próxima parcela.`
-            : "Parcela marcada como paga integralmente.",
+        message,
       };
     }
     // Pagamento parcial: o valor é absorvido no saldo do acordo e as
