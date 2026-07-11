@@ -1,41 +1,28 @@
-## Problema
+## Objetivo
 
-Quando o usuário digita um valor **maior que a parcela** (mas ≤ saldo), o store já quita a parcela e redistribui o excedente entre TODAS as parcelas pendentes restantes (não apenas a próxima) — a lógica em `src/lib/store.ts` linhas 656-680 usa `otherPending` (todas menos a alvo) e rateia `newRemainingCents` uniformemente com ajuste de centavo no último.
+Ao registrar um pagamento parcial (valor menor que o da parcela) em uma parcela MGMV, **não alterar o `value` original da parcela alvo**. Apenas as demais parcelas pendentes devem ter seus valores recalculados. A parcela alvo mantém o valor original exibido e passa a mostrar apenas o "pago parcial" (`paidAmount`) — evitando a confusão de ver o valor da parcela mudar bem embaixo da ação que o usuário acabou de tomar.
 
-O que está errado é apenas a **mensagem de prévia** no popover, que ainda diz:
+O comportamento do pagamento total/excedente (parcela quitada) já está correto e não muda.
 
-> "Parcela marcada como paga · excedente R$ 18,76 abatido da próxima parcela."
+## Mudança em `src/lib/store.ts` (branch `else`, ~linhas 682–733)
 
-Isso contradiz o comportamento real e o padrão já usado no ramo parcial (`< valor da parcela`), que mostra a redistribuição em N× R$ Y.
+Regra nova para o pagamento parcial (`amount < target.value`):
 
-## Alteração
+- `target.value` permanece **inalterado** (valor original).
+- `target.paidAmount = paidPartialTargetNew` (acumula o parcial pago).
+- `target.manualPartial = true`, `target.paidAt = nowIso`.
+- Saldo remanescente do acordo continua sendo `newRemainingCents` (o que a UI já usa para calcular "restante do acordo").
+- A contribuição da alvo para esse saldo passa a ser `target.value - paidPartialTargetNew` (a "falta" da própria alvo, que ela ainda deve).
+- O restante — `distributeAcrossOthersCents = newRemainingCents − (target.value − paidPartialTargetNew)*100` — é rateado igualmente entre as **outras** parcelas pendentes (mesma lógica de `base`/`rest` já usada), preservando arredondamento por centavos.
+- Se não houver outras pendentes, apenas grava o `paidAmount` na alvo (sem mexer no `value`).
 
-### `src/components/mgmv-partial-payment-popover.tsx` — bloco `preview` (kind `"full"`)
+## Efeitos colaterais / verificações
 
-Alinhar a mensagem ao ramo `"partial"`, calculando:
+- `installmentPaidAmount`, `productCollectionStatus`, `mgmvSummary` e o popover de prévia continuam corretos: eles já somam `paidAmount` das pendentes ao calcular restante; como o novo `value` da alvo agora é o original, `value - paidAmount` reflete corretamente o que ainda falta na alvo.
+- A prévia no `mgmv-partial-payment-popover.tsx` (`nextPerInstallment = nextRemaining / pendingCount`) fica **aproximada** (média incluindo a alvo). Ajuste opcional para bater com a realidade: mostrar rateio apenas entre as `othersCount = pendingCount - 1` pendentes restantes, exibindo a alvo separadamente ("parcela atual mantém {valor original}, restante em N× ..."). Incluído no plano.
+- Sem mudanças em migrações, testes existentes de `store.test.ts` (não cobrem esta branch) e sem mudanças em UI de listagem — a tabela de parcelas já lê `value`/`paidAmount` de cada linha.
 
-- `nextRemaining = max(0, agreementRemaining - parsed)`
-- `othersCount = max(0, pendingCount - 1)` (exclui a parcela alvo, que ficará paga)
-- `nextPerOther = othersCount > 0 ? nextRemaining / othersCount : 0`
+## Fora do escopo
 
-Mensagens:
-
-- `othersCount === 0` (era a última pendente) → `"Parcela marcada como paga · acordo quitado."`
-- `othersCount > 0` e `surplus === 0` (pagamento exato) → `"Parcela marcada como paga · restante do acordo ${nextRemaining} em ${othersCount}× ${nextPerOther}."`
-- `othersCount > 0` e `surplus > 0` → `"Parcela marcada como paga · excedente ${surplus} redistribuído · restante do acordo ${nextRemaining} em ${othersCount}× ${nextPerOther}."`
-
-Nenhuma mudança em `src/lib/store.ts` (comportamento já correto) nem no `clientes-section.tsx`/`mgmv-section.tsx`.
-
-## Validação
-
-- Cenário do print (parcela R$ 181,24, pago R$ 200, 15 pendentes, saldo ~R$ 3.199,90):
-  - surplus = R$ 18,76
-  - nextRemaining = R$ 2.999,90
-  - othersCount = 14 → nextPerOther ≈ R$ 214,28
-  - Prévia: "Parcela marcada como paga · excedente R$ 18,76 redistribuído · restante do acordo R$ 2.999,90 em 14× R$ 214,28."
-- `bunx tsgo --noEmit` deve continuar passando.
-
-## Fora de escopo
-
-- Lógica de redistribuição em `store.ts` (já correta).
-- Ramo parcial (`< valor da parcela`), botões Marcar/Parcial e demais telas.
+- Comportamento quando `amount >= target.value` (parcela quitada + excedente redistribuído) fica como está.
+- Nenhuma alteração de schema, RLS ou server functions.

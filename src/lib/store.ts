@@ -680,23 +680,27 @@ export const useStore = create<State>()((set, get) => ({
               }
             } else {
               // Pagamento parcial inferior ao valor da parcela alvo.
-              // Regra: a parcela alvo passa a exibir o valor pago (value =
-              // paidAmount), fica marcada como Parcial e "fechada" para novos
-              // aportes. A "falta" original (value - paidAmount) é
-              // redistribuída entre as DEMAIS parcelas pendentes, que
-              // aumentam proporcionalmente. O saldo total do acordo cai
-              // exatamente `amount`.
+              // Regra: o `value` original da parcela alvo NÃO muda (evita
+              // confundir o usuário vendo o valor mudar embaixo da ação
+              // que ele acabou de tomar). Grava-se apenas `paidAmount` na
+              // alvo, marcando-a como Parcial. O saldo restante do acordo
+              // é redistribuído apenas entre as DEMAIS parcelas pendentes;
+              // a contribuição da alvo para esse saldo continua sendo
+              // `value - paidAmount` (o que ainda falta na própria alvo).
               const otherPending = installments.filter(
                 (i) => !i.paid && i.number !== installmentNumber,
               );
+              // Contribuição da alvo para o saldo restante = value - paidAmount.
+              const targetValueCents = Math.round(target.value * 100);
               const paidTargetCents = Math.round(paidPartialTargetNew * 100);
-              // Novo valor da alvo em centavos = quanto foi pago nela.
-              const targetNewValueCents = paidTargetCents;
-              // Saldo restante do acordo em centavos = newRemainingCents.
-              // Como a alvo agora "vale" o que foi pago (e está Parcial,
-              // não paga), sua contribuição para o saldo é 0. Todo o
-              // newRemainingCents fica com as outras pendentes.
-              const distributeAcrossOthersCents = newRemainingCents;
+              const targetRemainingCents = Math.max(
+                0,
+                targetValueCents - paidTargetCents,
+              );
+              const distributeAcrossOthersCents = Math.max(
+                0,
+                newRemainingCents - targetRemainingCents,
+              );
               if (otherPending.length > 0) {
                 const totalCents = distributeAcrossOthersCents;
                 const base = Math.floor(totalCents / otherPending.length);
@@ -708,7 +712,6 @@ export const useStore = create<State>()((set, get) => ({
                   if (i.number === installmentNumber) {
                     return {
                       ...i,
-                      value: Math.max(0, targetNewValueCents / 100),
                       paidAmount: paidPartialTargetNew,
                       paidAt: nowIso,
                       manualPartial: true,
@@ -723,7 +726,6 @@ export const useStore = create<State>()((set, get) => ({
                   i.number === installmentNumber
                     ? {
                         ...i,
-                        value: Math.max(0, targetNewValueCents / 100),
                         paidAmount: paidPartialTargetNew,
                         paidAt: nowIso,
                         manualPartial: true,
