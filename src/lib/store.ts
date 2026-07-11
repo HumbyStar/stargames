@@ -623,125 +623,96 @@ export const useStore = create<State>()((set, get) => ({
             if (!target || target.paid) return c;
             const nowIso = new Date().toISOString();
             let installments = c.mgmv.installments.slice();
-            if (amount >= target.value) {
-              // Paga integralmente e aplica excedente como desconto na próxima
-              // parcela pendente (mesma regra usada pela revisão da IA).
-              const surplus = amount - target.value;
+            // Cálculo em centavos inteiros — fonte da verdade é o saldo
+            // restante EXIBIDO (soma real das parcelas pendentes - parciais
+            // já aplicados), NÃO `totalDebt` (que pode estar arredondado).
+            const prevRemainingCents = Math.round(agreementRemaining * 100);
+            const amountCents = Math.round(amount * 100);
+            const newRemainingCents = Math.max(
+              0,
+              prevRemainingCents - amountCents,
+            );
+            const prevPaid = target.paidAmount ?? 0;
+            const paidPartialTargetNew = prevPaid + amount;
+            const targetFullyPaid =
+              paidPartialTargetNew >= target.value - 0.005;
+            if (targetFullyPaid) {
+              // Parcela quitada. Excedente (amount - value) NÃO vai só para
+              // a próxima parcela: é absorvido no novo saldo do acordo e
+              // redistribuído entre todas as OUTRAS parcelas pendentes.
               installments = installments.map((i) =>
                 i.number === installmentNumber
                   ? { ...i, paid: true, paidAt: nowIso, paidAmount: target.value }
                   : i,
               );
-              if (surplus > 0) {
-                const nextPending = installments.find(
-                  (i) => !i.paid && i.number > installmentNumber,
-                );
-                if (nextPending) {
-                  installments = installments.map((i) =>
-                    i.number === nextPending.number
-                      ? { ...i, value: Math.max(0, i.value - surplus) }
-                      : i,
-                  );
-                }
+              const otherPending = installments.filter(
+                (i) => !i.paid && i.number !== installmentNumber,
+              );
+              if (otherPending.length > 0) {
+                const totalCents = newRemainingCents;
+                const base = Math.floor(totalCents / otherPending.length);
+                const rest = totalCents - base * otherPending.length;
+                const lastOtherNumber =
+                  otherPending[otherPending.length - 1].number;
+                installments = installments.map((i) => {
+                  if (i.paid) return i;
+                  const cents =
+                    i.number === lastOtherNumber ? base + rest : base;
+                  return { ...i, value: Math.max(0, cents / 100) };
+                });
               }
             } else {
-              // Pagamento parcial: a parcela alvo é marcada como "Paga
-              // Parcialmente" (paid=false, paidAmount acumulado, value
-              // preservado). O saldo restante do acordo é redistribuído
-              // igualmente entre as DEMAIS parcelas pendentes (não a alvo).
-              const prevPaid = target.paidAmount ?? 0;
-              const paidPartialTargetNew = prevPaid + amount;
-              // Se o parcial acumulado atinge o valor original, promove a
-              // parcela a "Paga" e aplica excedente na próxima pendente.
-              if (paidPartialTargetNew >= target.value - 0.005) {
-                const surplus = paidPartialTargetNew - target.value;
+              // Pagamento parcial inferior ao valor da parcela alvo.
+              // A parcela alvo permanece pendente com `paidAmount`
+              // acumulado (falta = value - paidAmount). O que sobra do
+              // novo saldo é rateado entre as DEMAIS parcelas pendentes.
+              // Assim: saldo = falta_da_alvo + soma_das_outras = saldoAnterior - amount. ✅
+              const targetValueCents = Math.round(target.value * 100);
+              const paidPartialTargetNewCents = Math.round(
+                paidPartialTargetNew * 100,
+              );
+              const remainingOnTargetCents = Math.max(
+                0,
+                targetValueCents - paidPartialTargetNewCents,
+              );
+              const distributeAcrossOthersCents = Math.max(
+                0,
+                newRemainingCents - remainingOnTargetCents,
+              );
+              const otherPending = installments.filter(
+                (i) => !i.paid && i.number !== installmentNumber,
+              );
+              if (otherPending.length > 0) {
+                const totalCents = distributeAcrossOthersCents;
+                const base = Math.floor(totalCents / otherPending.length);
+                const rest = totalCents - base * otherPending.length;
+                const lastOtherNumber =
+                  otherPending[otherPending.length - 1].number;
+                installments = installments.map((i) => {
+                  if (i.paid) return i;
+                  if (i.number === installmentNumber) {
+                    return {
+                      ...i,
+                      paidAmount: paidPartialTargetNew,
+                      paidAt: nowIso,
+                      manualPartial: true,
+                    };
+                  }
+                  const cents =
+                    i.number === lastOtherNumber ? base + rest : base;
+                  return { ...i, value: Math.max(0, cents / 100) };
+                });
+              } else {
                 installments = installments.map((i) =>
                   i.number === installmentNumber
-                    ? { ...i, paid: true, paidAt: nowIso, paidAmount: target.value }
-                    : i,
-                );
-                if (surplus > 0.005) {
-                  const nextPending = installments.find(
-                    (i) => !i.paid && i.number > installmentNumber,
-                  );
-                  if (nextPending) {
-                    installments = installments.map((i) =>
-                      i.number === nextPending.number
-                        ? { ...i, value: Math.max(0, i.value - surplus) }
-                        : i,
-                    );
-                  }
-                }
-              } else {
-                // Rateia o saldo apenas nas OUTRAS pendentes.
-                //
-                // IMPORTANTE: para pagamento parcial INFERIOR ao valor da
-                // parcela alvo, o abatimento no saldo do acordo deve ser
-                // exatamente `amount` — não o valor total da parcela. A
-                // parcela alvo permanece com `value` original e passa a ter
-                // `paidAmount` acumulado (falta = value - paidAmount).
-                // Portanto, o que deve ser rateado nas OUTRAS pendentes é:
-                //   novoSaldoRestante - (value - paidAmountAcumulado)
-                // Assim: saldo do acordo = falta_da_alvo + soma_das_outras
-                //                        = (value - paidPartial) + rateio
-                //                        = saldoAnterior - amount. ✅
-                // Cálculo em centavos inteiros para preservar precisão total.
-                // Fonte da verdade: saldo restante EXIBIDO antes do pagamento
-                // (soma real das parcelas pendentes - parciais já aplicados),
-                // NÃO o `totalDebt` armazenado (que pode estar arredondado).
-                const prevRemainingCents = Math.round(agreementRemaining * 100);
-                const amountCents = Math.round(amount * 100);
-                const newRemainingCents = Math.max(
-                  0,
-                  prevRemainingCents - amountCents,
-                );
-                const targetValueCents = Math.round(target.value * 100);
-                const paidPartialTargetNewCents = Math.round(
-                  paidPartialTargetNew * 100,
-                );
-                const remainingOnTargetCents = Math.max(
-                  0,
-                  targetValueCents - paidPartialTargetNewCents,
-                );
-                const distributeAcrossOthersCents = Math.max(
-                  0,
-                  newRemainingCents - remainingOnTargetCents,
-                );
-                const otherPending = installments.filter(
-                  (i) => !i.paid && i.number !== installmentNumber,
-                );
-                if (otherPending.length > 0) {
-                  const totalCents = distributeAcrossOthersCents;
-                  const base = Math.floor(totalCents / otherPending.length);
-                  const rest = totalCents - base * otherPending.length;
-                  const lastOtherNumber =
-                    otherPending[otherPending.length - 1].number;
-                  installments = installments.map((i) => {
-                    if (i.paid) return i;
-                    if (i.number === installmentNumber) {
-                      return {
+                    ? {
                         ...i,
                         paidAmount: paidPartialTargetNew,
                         paidAt: nowIso,
                         manualPartial: true,
-                      };
-                    }
-                    const cents =
-                      i.number === lastOtherNumber ? base + rest : base;
-                    return { ...i, value: Math.max(0, cents / 100) };
-                  });
-                } else {
-                  installments = installments.map((i) =>
-                    i.number === installmentNumber
-                      ? {
-                          ...i,
-                          paidAmount: paidPartialTargetNew,
-                          paidAt: nowIso,
-                          manualPartial: true,
-                        }
-                      : i,
-                  );
-                }
+                      }
+                    : i,
+                );
               }
             }
             const nextAgreement = recalcPendingDueDates({
