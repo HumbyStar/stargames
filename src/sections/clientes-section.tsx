@@ -1152,8 +1152,13 @@ function ClientDrawer({
     notes: string;
   }>();
   const mgmv = getMGMVDisplay(client);
-  const mgmvProducts = products.filter((p) => p.financialStatus === "MGMV");
-  const individualAll = products.filter((p) => p.financialStatus !== "MGMV");
+  // Ordena produtos do mais recente para o mais antigo (por data de
+  // cadastro), tanto individuais quanto os incluídos no acordo MGMV.
+  const byRegisterDateDesc = (a: Product, b: Product) =>
+    (b.registerDate ?? "").localeCompare(a.registerDate ?? "");
+  const sortedProducts = [...products].sort(byRegisterDateDesc);
+  const mgmvProducts = sortedProducts.filter((p) => p.financialStatus === "MGMV");
+  const individualAll = sortedProducts.filter((p) => p.financialStatus !== "MGMV");
   // Retirado = arquivado: sai da lista ativa e migra para o histórico do
   // cliente. Mantido nas somas totais para não perder o histórico financeiro.
   const individualProducts = individualAll.filter((p) => !isProductArchived(p));
