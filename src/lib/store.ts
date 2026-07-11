@@ -757,139 +757,41 @@ export const useStore = create<State>()((set, get) => ({
           return { clients };
         }),
       registerMGMVPartialPayment: (clientId, installmentNumber, amount) => {
-        // Validações — devolvem erros legíveis para o caller exibir em toast.
-        if (!Number.isFinite(amount)) {
-          return { ok: false, error: "Informe um valor numérico válido." };
-        }
-        if (amount <= 0) {
-          return { ok: false, error: "Informe um valor maior que zero." };
-        }
         const state = get();
         const client = state.clients.find((c) => c.id === clientId);
         if (!client || !client.mgmv) {
           return { ok: false, error: "Acordo MGMV não encontrado para este cliente." };
         }
-        const target = client.mgmv.installments.find(
-          (i) => i.number === installmentNumber,
-        );
-        if (!target) {
-          return { ok: false, error: `Parcela ${installmentNumber} não encontrada.` };
-        }
-        if (target.paid) {
-          return { ok: false, error: `Parcela ${installmentNumber} já está paga.` };
-        }
-        // Saldo restante do acordo (antes deste pagamento).
         const display = getMGMVDisplay(client);
         const agreementRemaining = display?.remainingBalance ?? 0;
-        // Tolerância de 1 centavo para não travar quando o valor foi digitado
-        // com o mesmo formato exibido no popover.
-        if (amount > agreementRemaining + 0.01) {
-          return {
-            ok: false,
-            error: `Valor excede o restante do acordo (${formatBRL(agreementRemaining)}).`,
-          };
+        // Executa validação + distribuição de forma pura antes de tocar o estado.
+        const dry = applyMGMVPartialPayment(
+          client.mgmv.installments,
+          installmentNumber,
+          amount,
+          agreementRemaining,
+        );
+        if (!dry.ok) {
+          return { ok: false, error: dry.error };
         }
         let becameQuitado = false;
         set((s) => {
           const clients = s.clients.map((c) => {
             if (c.id !== clientId || !c.mgmv) return c;
-            const target = c.mgmv.installments.find(
-              (i) => i.number === installmentNumber,
+            // Recalcula a partir do estado atual do cliente (não do snapshot
+            // capturado antes do `set`) para respeitar atualizações concorrentes.
+            const applied = applyMGMVPartialPayment(
+              c.mgmv.installments,
+              installmentNumber,
+              amount,
+              agreementRemaining,
             );
-            if (!target || target.paid) return c;
-            const nowIso = new Date().toISOString();
-            let installments = c.mgmv.installments.slice();
-            // Cálculo em centavos inteiros — fonte da verdade é o saldo
-            // restante EXIBIDO (soma real das parcelas pendentes - parciais
-            // já aplicados), NÃO `totalDebt` (que pode estar arredondado).
-            const prevRemainingCents = Math.round(agreementRemaining * 100);
-            const amountCents = Math.round(amount * 100);
-            const newRemainingCents = Math.max(
-              0,
-              prevRemainingCents - amountCents,
-            );
-            const prevPaid = target.paidAmount ?? 0;
-            const paidPartialTargetNew = prevPaid + amount;
-            const targetFullyPaid =
-              paidPartialTargetNew >= target.value - 0.005;
-            if (targetFullyPaid) {
-              // Parcela quitada. Excedente (amount - value) NÃO vai só para
-              // a próxima parcela: é absorvido no novo saldo do acordo e
-              // redistribuído entre todas as OUTRAS parcelas pendentes.
-              installments = installments.map((i) =>
-                i.number === installmentNumber
-                  ? { ...i, paid: true, paidAt: nowIso, paidAmount: target.value }
-                  : i,
-              );
-              const otherPending = installments.filter(
-                (i) => !i.paid && i.number !== installmentNumber,
-              );
-              if (otherPending.length > 0) {
-                const totalCents = newRemainingCents;
-                const base = Math.floor(totalCents / otherPending.length);
-                const rest = totalCents - base * otherPending.length;
-                const lastOtherNumber =
-                  otherPending[otherPending.length - 1].number;
-                installments = installments.map((i) => {
-                  if (i.paid) return i;
-                  const cents =
-                    i.number === lastOtherNumber ? base + rest : base;
-                  return { ...i, value: Math.max(0, cents / 100) };
-                });
-              }
-            } else {
-              // Pagamento parcial inferior ao valor da parcela alvo.
-              // Regra: o `value` original da parcela alvo NÃO muda (evita
-              // confundir o usuário vendo o valor mudar embaixo da ação
-              // que ele acabou de tomar). Grava-se apenas `paidAmount` na
-              // alvo, marcando-a como Parcial. O NOVO saldo restante do
-              // acordo é redistribuído entre as DEMAIS parcelas pendentes
-              // — mesmo comportamento do pagamento total, para que qualquer
-              // pagamento (parcial ou cheio) reduza igualmente as outras
-              // parcelas em vez de "sobrar" preso na alvo.
-              const otherPending = installments.filter(
-                (i) => !i.paid && i.number !== installmentNumber,
-              );
-              if (otherPending.length > 0) {
-                const totalCents = newRemainingCents;
-                const base = Math.floor(totalCents / otherPending.length);
-                const rest = totalCents - base * otherPending.length;
-                const lastOtherNumber =
-                  otherPending[otherPending.length - 1].number;
-                installments = installments.map((i) => {
-                  if (i.paid) return i;
-                  if (i.number === installmentNumber) {
-                    return {
-                      ...i,
-                      paidAmount: paidPartialTargetNew,
-                      paidAt: nowIso,
-                      manualPartial: true,
-                    };
-                  }
-                  const cents =
-                    i.number === lastOtherNumber ? base + rest : base;
-                  return { ...i, value: Math.max(0, cents / 100) };
-                });
-              } else {
-                installments = installments.map((i) =>
-                  i.number === installmentNumber
-                    ? {
-                        ...i,
-                        paidAmount: paidPartialTargetNew,
-                        paidAt: nowIso,
-                        manualPartial: true,
-                      }
-                    : i,
-                );
-              }
-            }
+            if (!applied.ok) return c;
             const nextAgreement = recalcPendingDueDates({
               ...c.mgmv,
-              installments,
+              installments: applied.installments,
             });
-            // Se todas as parcelas ficaram pagas, o acordo está quitado.
-            const allPaid = nextAgreement.installments.every((i) => i.paid);
-            if (allPaid) becameQuitado = true;
+            if (applied.becameQuitado) becameQuitado = true;
             return { ...c, mgmv: nextAgreement };
           });
           // Se o acordo virou Quitado, refletir na lista: produtos vinculados
