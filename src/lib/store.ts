@@ -43,6 +43,157 @@ export type PartialPaymentResult =
   | { ok: true; becameQuitado: boolean }
   | { ok: false; error: string };
 
+/**
+ * Resultado da distribuição pura de um pagamento parcial sobre uma lista de
+ * parcelas. Não faz side effects — usado tanto pelo store quanto pelos testes.
+ */
+export type ApplyPartialPaymentResult =
+  | {
+      ok: true;
+      installments: MGMVInstallment[];
+      becameQuitado: boolean;
+      targetFullyPaid: boolean;
+      /** Números das parcelas cujo `value` foi recalculado (redistribuído). */
+      recalculatedNumbers: number[];
+    }
+  | { ok: false; error: string };
+
+/**
+ * Aplica um pagamento parcial a uma parcela do acordo MGMV, redistribuindo
+ * o restante entre as outras parcelas pendentes. Regras:
+ *
+ * - Valida `amount` (finito, > 0) e que não exceda o saldo restante do acordo
+ *   (tolerância de 1 centavo para arredondamentos de exibição).
+ * - `value` da parcela alvo NUNCA é alterado — apenas seu `paidAmount` /
+ *   `paidAt` / `manualPartial`.
+ * - Se o pagamento zera a alvo (>= `value`), ela vira `paid=true` e o
+ *   `newRemaining` é rateado entre as demais pendentes. Se o pagamento é
+ *   menor, o `newRemaining` também é rateado entre as demais pendentes.
+ * - Nenhuma parcela redistribuída pode ficar com `value` menor que seu
+ *   `paidAmount` já registrado (evita saldo negativo em parcial pré-existente).
+ *   Se isso aconteceria, o `value` é preservado no piso `paidAmount`.
+ * - Marca `recalculatedAt` em toda parcela pendente cujo `value` mudou.
+ */
+export function applyMGMVPartialPayment(
+  installments: MGMVInstallment[],
+  installmentNumber: number,
+  amount: number,
+  agreementRemaining: number,
+  nowIso: string = new Date().toISOString(),
+): ApplyPartialPaymentResult {
+  if (!Number.isFinite(amount)) {
+    return { ok: false, error: "Informe um valor numérico válido." };
+  }
+  if (amount <= 0) {
+    return { ok: false, error: "Informe um valor maior que zero." };
+  }
+  const target = installments.find((i) => i.number === installmentNumber);
+  if (!target) {
+    return { ok: false, error: `Parcela ${installmentNumber} não encontrada.` };
+  }
+  if (target.paid) {
+    return { ok: false, error: `Parcela ${installmentNumber} já está paga.` };
+  }
+  if (!Number.isFinite(agreementRemaining) || agreementRemaining < 0) {
+    return { ok: false, error: "Saldo restante do acordo inválido." };
+  }
+  if (amount > agreementRemaining + 0.01) {
+    return {
+      ok: false,
+      error: `Valor excede o restante do acordo (${formatBRL(agreementRemaining)}).`,
+    };
+  }
+
+  const prevRemainingCents = Math.round(agreementRemaining * 100);
+  const amountCents = Math.round(amount * 100);
+  const newRemainingCents = Math.max(0, prevRemainingCents - amountCents);
+  const prevPaid = target.paidAmount ?? 0;
+  const paidPartialTargetNew = prevPaid + amount;
+  const targetFullyPaid = paidPartialTargetNew >= target.value - 0.005;
+
+  const recalculated: number[] = [];
+  let next: MGMVInstallment[];
+
+  if (targetFullyPaid) {
+    next = installments.map((i) =>
+      i.number === installmentNumber
+        ? { ...i, paid: true, paidAt: nowIso, paidAmount: target.value }
+        : i,
+    );
+    const otherPending = next.filter(
+      (i) => !i.paid && i.number !== installmentNumber,
+    );
+    if (otherPending.length > 0) {
+      const base = Math.floor(newRemainingCents / otherPending.length);
+      const rest = newRemainingCents - base * otherPending.length;
+      const lastOtherNumber = otherPending[otherPending.length - 1].number;
+      next = next.map((i) => {
+        if (i.paid) return i;
+        if (i.number === installmentNumber) return i;
+        const cents = i.number === lastOtherNumber ? base + rest : base;
+        const rawValue = Math.max(0, cents / 100);
+        // Nunca deixar `value` abaixo do parcial já pago da própria parcela.
+        const floorPaid = Math.max(0, i.paidAmount ?? 0);
+        const newValue = Math.max(rawValue, floorPaid);
+        if (Math.abs(newValue - i.value) > 0.005) {
+          recalculated.push(i.number);
+          return { ...i, value: newValue, recalculatedAt: nowIso };
+        }
+        return i;
+      });
+    }
+  } else {
+    const otherPending = installments.filter(
+      (i) => !i.paid && i.number !== installmentNumber,
+    );
+    if (otherPending.length > 0) {
+      const base = Math.floor(newRemainingCents / otherPending.length);
+      const rest = newRemainingCents - base * otherPending.length;
+      const lastOtherNumber = otherPending[otherPending.length - 1].number;
+      next = installments.map((i) => {
+        if (i.paid) return i;
+        if (i.number === installmentNumber) {
+          return {
+            ...i,
+            paidAmount: paidPartialTargetNew,
+            paidAt: nowIso,
+            manualPartial: true,
+          };
+        }
+        const cents = i.number === lastOtherNumber ? base + rest : base;
+        const rawValue = Math.max(0, cents / 100);
+        const floorPaid = Math.max(0, i.paidAmount ?? 0);
+        const newValue = Math.max(rawValue, floorPaid);
+        if (Math.abs(newValue - i.value) > 0.005) {
+          recalculated.push(i.number);
+          return { ...i, value: newValue, recalculatedAt: nowIso };
+        }
+        return i;
+      });
+    } else {
+      next = installments.map((i) =>
+        i.number === installmentNumber
+          ? {
+              ...i,
+              paidAmount: paidPartialTargetNew,
+              paidAt: nowIso,
+              manualPartial: true,
+            }
+          : i,
+      );
+    }
+  }
+
+  const becameQuitado = next.every((i) => i.paid);
+  return {
+    ok: true,
+    installments: next,
+    becameQuitado,
+    targetFullyPaid,
+    recalculatedNumbers: recalculated,
+  };
+}
+
 export type Situation =
   | "Em Aberto"
   | "Enviado"
