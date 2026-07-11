@@ -93,16 +93,11 @@ export function MgmvPartialPaymentPopover({
     // DEMAIS parcelas pendentes são recalculadas — a parcela alvo mantém
     // seu valor original exibido e passa a mostrar apenas o parcial pago.
     const nextRemaining = Math.max(0, agreementRemaining - parsed);
-    const targetRemaining = Math.max(
-      0,
-      installmentValue - (currentPartial + parsed),
-    );
     const othersCount = Math.max(0, pendingCount - 1);
-    const othersRemaining = Math.max(0, nextRemaining - targetRemaining);
-    const nextPerOther = othersCount > 0 ? othersRemaining / othersCount : 0;
+    const nextPerOther = othersCount > 0 ? nextRemaining / othersCount : 0;
     const message =
       othersCount > 0
-        ? `Pagamento parcial de ${formatBRL(parsed)} registrado · parcela atual mantém ${formatBRL(installmentValue)} · restante ${formatBRL(othersRemaining)} redistribuído em ${othersCount}× ${formatBRL(nextPerOther)}.`
+        ? `Pagamento parcial de ${formatBRL(parsed)} registrado · parcela atual mantém ${formatBRL(installmentValue)} · restante ${formatBRL(nextRemaining)} redistribuído em ${othersCount}× ${formatBRL(nextPerOther)}.`
         : `Pagamento parcial de ${formatBRL(parsed)} registrado · parcela atual mantém ${formatBRL(installmentValue)}.`;
     return {
       kind: "partial" as const,

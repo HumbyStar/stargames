@@ -683,26 +683,16 @@ export const useStore = create<State>()((set, get) => ({
               // Regra: o `value` original da parcela alvo NÃO muda (evita
               // confundir o usuário vendo o valor mudar embaixo da ação
               // que ele acabou de tomar). Grava-se apenas `paidAmount` na
-              // alvo, marcando-a como Parcial. O saldo restante do acordo
-              // é redistribuído apenas entre as DEMAIS parcelas pendentes;
-              // a contribuição da alvo para esse saldo continua sendo
-              // `value - paidAmount` (o que ainda falta na própria alvo).
+              // alvo, marcando-a como Parcial. O NOVO saldo restante do
+              // acordo é redistribuído entre as DEMAIS parcelas pendentes
+              // — mesmo comportamento do pagamento total, para que qualquer
+              // pagamento (parcial ou cheio) reduza igualmente as outras
+              // parcelas em vez de "sobrar" preso na alvo.
               const otherPending = installments.filter(
                 (i) => !i.paid && i.number !== installmentNumber,
               );
-              // Contribuição da alvo para o saldo restante = value - paidAmount.
-              const targetValueCents = Math.round(target.value * 100);
-              const paidTargetCents = Math.round(paidPartialTargetNew * 100);
-              const targetRemainingCents = Math.max(
-                0,
-                targetValueCents - paidTargetCents,
-              );
-              const distributeAcrossOthersCents = Math.max(
-                0,
-                newRemainingCents - targetRemainingCents,
-              );
               if (otherPending.length > 0) {
-                const totalCents = distributeAcrossOthersCents;
+                const totalCents = newRemainingCents;
                 const base = Math.floor(totalCents / otherPending.length);
                 const rest = totalCents - base * otherPending.length;
                 const lastOtherNumber =
