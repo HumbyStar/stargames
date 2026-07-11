@@ -97,7 +97,7 @@ export function MgmvPartialPaymentPopover({
     const nextPerOther = othersCount > 0 ? nextRemaining / othersCount : 0;
     const message =
       othersCount > 0
-        ? `Pagamento parcial de ${formatBRL(parsed)} registrado · parcela atual mantém ${formatBRL(installmentValue)} · restante ${formatBRL(nextRemaining)} redistribuído em ${othersCount}× ${formatBRL(nextPerOther)}.`
+        ? `Pagamento parcial de ${formatBRL(parsed)} registrado. Parcela atual mantém ${formatBRL(installmentValue)} (valor original preservado) — o saldo restante de ${formatBRL(nextRemaining)} é descontado das outras ${othersCount} parcelas pendentes, ficando ${othersCount}× ${formatBRL(nextPerOther)}.`
         : `Pagamento parcial de ${formatBRL(parsed)} registrado · parcela atual mantém ${formatBRL(installmentValue)}.`;
     return {
       kind: "partial" as const,

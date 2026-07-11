@@ -964,6 +964,14 @@ export function MGMVSection({
                                          ) : (
                                            <Tag variant="neutral">Pendente</Tag>
                                          )}
+                                         {!i.paid && i.recalculatedAt && (
+                                           <span
+                                             className="ml-1 inline-flex items-center rounded-md border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning"
+                                             title={`Valor recalculado após redistribuição de um pagamento parcial em ${formatDateBR(i.recalculatedAt)}.`}
+                                           >
+                                             Recalculada
+                                           </span>
+                                         )}
                                       </span>
                                         {!i.paid && !i.manualPartial && !((i.paidAmount ?? 0) > 0) && (
                                         <div className="flex items-center gap-1">
