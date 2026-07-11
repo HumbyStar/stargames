@@ -612,9 +612,12 @@ export function MGMVSection({
               )}
               {pagedRows.map((r) => {
                 const isOpen = expanded === r.client.id;
-                const productsOfClient = products.filter(
-                  (p) => p.clientId === r.client.id,
-                );
+                const productsOfClient = products
+                  .filter((p) => p.clientId === r.client.id)
+                  .slice()
+                  .sort((a, b) =>
+                    (b.registerDate ?? "").localeCompare(a.registerDate ?? ""),
+                  );
                 const editing = mgmvEdit.isEditing(r.client.id);
                 const draft = mgmvEdit.draftValues;
                 const tagVariant: "danger" | "warning" | "success" | "primary" | "neutral" =
@@ -1076,9 +1079,12 @@ export function MGMVSection({
         if (!aiTarget) return null;
         const row = rows.find((r) => r.client.id === aiTarget);
         if (!row) return null;
-        const productsOfClient = products.filter(
-          (p) => p.clientId === row.client.id,
-        );
+        const productsOfClient = products
+          .filter((p) => p.clientId === row.client.id)
+          .slice()
+          .sort((a, b) =>
+            (b.registerDate ?? "").localeCompare(a.registerDate ?? ""),
+          );
         return (
           <MgmvAiReviewModal
             open={true}
