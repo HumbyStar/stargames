@@ -981,6 +981,16 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               products={products.filter((p) => p.clientId === drawerClient.id)}
               onEdit={() => setClientModal({ open: true, client: drawerClient })}
               onAddProduct={() => setProductModal({ open: true, clientId: drawerClient.id })}
+              onDeleteClient={async () => {
+                const name = drawerClient.name;
+                try {
+                  await deleteClient(drawerClient.id);
+                  setDrawerClientId(null);
+                  toast.success(`Cliente "${name}" excluído.`);
+                } catch {
+                  toast.error("Falha ao excluir cliente. Tente novamente.");
+                }
+              }}
               onSaveNotes={(notes) => {
                 updateClient(drawerClient.id, { notes });
                 toast.success("Observação salva");
