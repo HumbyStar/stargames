@@ -74,6 +74,14 @@ export interface MGMVInstallment {
    * de ação da parcela nesse caso específico.
    */
   manualPartial?: boolean;
+  /**
+   * ISO da última vez em que o `value` desta parcela foi recalculado por
+   * redistribuição — ou seja, alterado como consequência de um pagamento
+   * (parcial ou total) em OUTRA parcela do mesmo acordo. Serve apenas para
+   * exibir uma marcação visual ("Recalculada") na tabela de parcelas, sem
+   * afetar cálculos financeiros.
+   */
+  recalculatedAt?: string;
 }
 
 export interface MGMVAgreement {
