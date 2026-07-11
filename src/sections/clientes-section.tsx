@@ -1423,6 +1423,14 @@ function ClientDrawer({
                       <td className="py-2 pr-3 tabular-nums">{formatBRL(i.value)}</td>
                       <td className="py-2 pr-3">
                         <Tag variant={variant}>{label}</Tag>
+                        {!i.paid && i.recalculatedAt && (
+                          <span
+                            className="ml-1 inline-flex items-center rounded-md border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning"
+                            title={`Valor recalculado após redistribuição de um pagamento parcial em ${formatDateBR(i.recalculatedAt)}.`}
+                          >
+                            Recalculada
+                          </span>
+                        )}
                       </td>
                       <td className="py-2 pr-3 text-muted-foreground">
                         {i.paidAt ? formatDateBR(i.paidAt) : "—"}
