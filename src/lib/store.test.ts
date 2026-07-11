@@ -3,6 +3,8 @@ import {
   calculateFinancialStatus,
   migrateStoreV3,
   productCollectionStatus,
+  applyMGMVPartialPayment,
+  type MGMVInstallment,
   type Product,
 } from "./store";
 
@@ -127,5 +129,104 @@ describe("productCollectionStatus", () => {
     for (const p of migrated.products) {
       expect(productCollectionStatus(p).label).not.toBe("Pendente vencido");
     }
+  });
+});
+
+describe("applyMGMVPartialPayment", () => {
+  const NOW = "2026-01-01T00:00:00.000Z";
+  const mkInstallments = (values: number[]): MGMVInstallment[] =>
+    values.map((v, idx) => ({
+      number: idx + 1,
+      total: values.length,
+      dueDate: new Date(2026, 0, 10 + idx).toISOString(),
+      value: v,
+      paid: false,
+    }));
+
+  it("pagamento parcial MENOR que o valor da parcela: alvo mantém o valor original, restante é rateado nas OUTRAS pendentes", () => {
+    const ins = mkInstallments([100, 100, 100, 100]);
+    const res = applyMGMVPartialPayment(ins, 2, 40, 400, NOW);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const target = res.installments.find((i) => i.number === 2)!;
+    // Valor original preservado
+    expect(target.value).toBe(100);
+    expect(target.paid).toBe(false);
+    expect(target.paidAmount).toBeCloseTo(40, 5);
+    expect(target.manualPartial).toBe(true);
+    // Outras 3 pendentes absorvem os R$ 40: 360/3 = 120 cada
+    const others = res.installments.filter((i) => i.number !== 2);
+    expect(others.every((i) => i.value === 120)).toBe(true);
+    expect(others.every((i) => i.recalculatedAt === NOW)).toBe(true);
+    expect(res.targetFullyPaid).toBe(false);
+    expect(res.becameQuitado).toBe(false);
+  });
+
+  it("pagamento IGUAL ao valor da parcela: alvo vira paga, sem excedente para redistribuir; demais pendentes ficam iguais", () => {
+    const ins = mkInstallments([100, 100, 100, 100]);
+    const res = applyMGMVPartialPayment(ins, 1, 100, 400, NOW);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const target = res.installments.find((i) => i.number === 1)!;
+    expect(target.paid).toBe(true);
+    expect(target.paidAmount).toBe(100);
+    // Outras mantêm valor original — nada foi recalculado (300/3 = 100)
+    const others = res.installments.filter((i) => i.number !== 1);
+    expect(others.every((i) => i.value === 100)).toBe(true);
+    expect(others.every((i) => !i.recalculatedAt)).toBe(true);
+    expect(res.targetFullyPaid).toBe(true);
+  });
+
+  it("pagamento MAIOR que o valor da parcela: alvo vira paga e excedente reduz as outras pendentes igualmente", () => {
+    const ins = mkInstallments([100, 100, 100, 100]);
+    const res = applyMGMVPartialPayment(ins, 1, 130, 400, NOW);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const target = res.installments.find((i) => i.number === 1)!;
+    expect(target.paid).toBe(true);
+    // Restante: 400 - 130 = 270, dividido em 3 = 90 cada
+    const others = res.installments.filter((i) => i.number !== 1);
+    expect(others.map((i) => i.value)).toEqual([90, 90, 90]);
+    expect(others.every((i) => i.recalculatedAt === NOW)).toBe(true);
+  });
+
+  it("pagamento que quita todo o acordo marca becameQuitado", () => {
+    const ins = mkInstallments([50, 50]);
+    ins[0].paid = true;
+    ins[0].paidAmount = 50;
+    const res = applyMGMVPartialPayment(ins, 2, 50, 50, NOW);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.becameQuitado).toBe(true);
+  });
+
+  it("rejeita valor não numérico, zero, negativo e acima do saldo restante", () => {
+    const ins = mkInstallments([100, 100]);
+    expect(applyMGMVPartialPayment(ins, 1, Number.NaN, 200).ok).toBe(false);
+    expect(applyMGMVPartialPayment(ins, 1, 0, 200).ok).toBe(false);
+    expect(applyMGMVPartialPayment(ins, 1, -10, 200).ok).toBe(false);
+    expect(applyMGMVPartialPayment(ins, 1, 500, 200).ok).toBe(false);
+  });
+
+  it("rejeita parcela inexistente ou já paga", () => {
+    const ins = mkInstallments([100, 100]);
+    ins[0].paid = true;
+    expect(applyMGMVPartialPayment(ins, 99, 10, 100).ok).toBe(false);
+    expect(applyMGMVPartialPayment(ins, 1, 10, 100).ok).toBe(false);
+  });
+
+  it("não deixa value da parcela redistribuída ficar abaixo do paidAmount já existente (sem saldo negativo)", () => {
+    // Parcela 2 já tem um parcial de 80. Depois um pagamento parcial na 1
+    // deveria reduzir a 2 abaixo de 80 — deve ser piso 80.
+    const ins = mkInstallments([100, 100]);
+    ins[1].paidAmount = 80;
+    // saldo restante = (100 + 100) - 80 = 120
+    const res = applyMGMVPartialPayment(ins, 1, 60, 120, NOW);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const other = res.installments.find((i) => i.number === 2)!;
+    // Piso = paidAmount (80). Sem o piso ficaria 60 (rateio).
+    expect(other.value).toBeGreaterThanOrEqual(80);
+    expect(other.value).toBe(80);
   });
 });
