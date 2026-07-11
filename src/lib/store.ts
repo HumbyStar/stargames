@@ -211,6 +211,7 @@ interface State {
   openClient: (id: string | null) => void;
   addClient: (c: Omit<Client, "id">) => Client;
   updateClient: (id: string, patch: Partial<Omit<Client, "id">>) => void;
+  deleteClient: (id: string) => Promise<void>;
   findClientByPhone: (phone: string) => Client | undefined;
   addProduct: (p: Omit<Product, "id">) => void;
   updateProduct: (id: string, patch: Partial<Omit<Product, "id">>) => void;
