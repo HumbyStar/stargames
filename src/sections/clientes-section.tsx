@@ -1407,7 +1407,7 @@ function ClientDrawer({
                         {i.paidAt ? formatDateBR(i.paidAt) : "—"}
                       </td>
                       <td className="py-2 pr-3">
-                        {!i.paid && (
+                        {!i.paid && !isPartial && (
                           <div className="flex items-center gap-1">
                             <Button
                               size="sm"
@@ -1415,7 +1415,6 @@ function ClientDrawer({
                             >
                               Marcar como paga
                             </Button>
-                            {!isPartial && (
                             <MgmvPartialPaymentPopover
                               clientId={client.id}
                               installmentNumber={i.number}
@@ -1427,7 +1426,6 @@ function ClientDrawer({
                                 onRegisterMGMVPartialPayment(i.number, amount)
                               }
                             />
-                            )}
                           </div>
                         )}
                       </td>
