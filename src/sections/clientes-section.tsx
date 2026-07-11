@@ -1102,6 +1102,7 @@ function ClientDrawer({
   products,
   onEdit,
   onAddProduct,
+  onDeleteClient,
   onSaveNotes,
   onRegisterPayment,
   onChangeSituation,
@@ -1114,6 +1115,7 @@ function ClientDrawer({
   products: Product[];
   onEdit: () => void;
   onAddProduct: () => void;
+  onDeleteClient: () => void | Promise<void>;
   onSaveNotes: (notes: string) => void;
   onRegisterPayment: (productId: string, remaining: number) => void;
   onChangeSituation: (productId: string, s: Situation) => void;
@@ -1128,6 +1130,9 @@ function ClientDrawer({
   const [notes, setNotes] = useState(client.notes ?? "");
   const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
   const [mgmvEditOpen, setMgmvEditOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
   // Seleção múltipla de produtos individuais para ações em lote (Pago /
   // Enviado / Retirar / Removido). Só o clique nos botões da barra aplica;
   // marcar o checkbox nunca altera status sozinho.
