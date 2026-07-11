@@ -91,6 +91,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const openClient = useStore((s) => s.openClient);
   const addClient = useStore((s) => s.addClient);
   const updateClient = useStore((s) => s.updateClient);
+  const deleteClient = useStore((s) => s.deleteClient);
   const addProduct = useStore((s) => s.addProduct);
   const updateProduct = useStore((s) => s.updateProduct);
   const registerPayment = useStore((s) => s.registerPayment);
