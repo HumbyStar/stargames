@@ -1415,6 +1415,7 @@ function ClientDrawer({
                             >
                               Marcar como paga
                             </Button>
+                            {!isPartial && (
                             <MgmvPartialPaymentPopover
                               clientId={client.id}
                               installmentNumber={i.number}
@@ -1426,6 +1427,7 @@ function ClientDrawer({
                                 onRegisterMGMVPartialPayment(i.number, amount)
                               }
                             />
+                            )}
                           </div>
                         )}
                       </td>
