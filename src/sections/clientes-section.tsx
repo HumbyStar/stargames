@@ -1431,6 +1431,14 @@ function ClientDrawer({
                             Recalculada
                           </span>
                         )}
+                        {i.paid && i.shortPaid && (
+                          <span
+                            className="ml-1 inline-flex items-center rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning"
+                            title={`Parcela quitada com valor inferior (${formatBRL(i.paidAmount ?? 0)} de ${formatBRL(i.value)}). O restante foi somado às outras parcelas pendentes.`}
+                          >
+                            Paga (parcial curto)
+                          </span>
+                        )}
                       </td>
                       <td className="py-2 pr-3 text-muted-foreground">
                         {i.paidAt ? formatDateBR(i.paidAt) : "—"}
