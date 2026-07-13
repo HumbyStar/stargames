@@ -936,6 +936,9 @@ export function MGMVSection({
                               <div className="space-y-1">
                                 {r.agreement.installments.map((i) => {
                                   const isLate = !i.paid && isOverdue(i.dueDate);
+                                  const pagoNaParcela = i.paid
+                                    ? (i.paidAmount ?? i.value)
+                                    : (i.paidAmount ?? 0);
                                   return (
                                     <div
                                       key={i.number}
@@ -979,6 +982,16 @@ export function MGMVSection({
                                           >
                                             Paga (parcial curto)
                                           </span>
+                                        )}
+                                      </span>
+                                      <span
+                                        className="tabular-nums text-xs"
+                                        title="Valor efetivamente pago nesta parcela"
+                                      >
+                                        {pagoNaParcela > 0 ? (
+                                          formatBRL(pagoNaParcela)
+                                        ) : (
+                                          <span className="text-muted-foreground">—</span>
                                         )}
                                       </span>
                                         {!i.paid && !i.manualPartial && !((i.paidAmount ?? 0) > 0) && (
