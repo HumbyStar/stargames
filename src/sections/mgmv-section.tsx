@@ -972,6 +972,14 @@ export function MGMVSection({
                                              Recalculada
                                            </span>
                                          )}
+                                        {i.paid && i.shortPaid && (
+                                          <span
+                                            className="ml-1 inline-flex items-center rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning"
+                                            title={`Parcela quitada com valor inferior (${formatBRL(i.paidAmount ?? 0)} de ${formatBRL(i.value)}). O restante foi somado às outras parcelas pendentes.`}
+                                          >
+                                            Paga (parcial curto)
+                                          </span>
+                                        )}
                                       </span>
                                         {!i.paid && !i.manualPartial && !((i.paidAmount ?? 0) > 0) && (
                                         <div className="flex items-center gap-1">

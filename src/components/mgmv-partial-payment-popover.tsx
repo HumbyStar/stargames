@@ -89,16 +89,16 @@ export function MgmvPartialPaymentPopover({
         message,
       };
     }
-    // Pagamento parcial: o valor é absorvido no saldo do acordo e as
-    // DEMAIS parcelas pendentes são recalculadas — a parcela alvo mantém
-    // seu valor original exibido e passa a mostrar apenas o parcial pago.
-    const nextRemaining = Math.max(0, agreementRemaining - parsed);
+    // Pagamento parcial CURTO: a parcela alvo é quitada com o valor recebido
+    // (paga parcial curta) e o "que sobrou" (value − amount) é SOMADO nas
+    // outras parcelas pendentes, aumentando-as (nunca gera desconto).
+    const shortfall = Math.max(0, installmentValue - parsed);
     const othersCount = Math.max(0, pendingCount - 1);
-    const nextPerOther = othersCount > 0 ? nextRemaining / othersCount : 0;
+    const addPerOther = othersCount > 0 ? shortfall / othersCount : 0;
     const message =
       othersCount > 0
-        ? `Pagamento parcial de ${formatBRL(parsed)} registrado. Parcela atual mantém ${formatBRL(installmentValue)} (valor original preservado) — o saldo restante de ${formatBRL(nextRemaining)} é descontado das outras ${othersCount} parcelas pendentes, ficando ${othersCount}× ${formatBRL(nextPerOther)}.`
-        : `Pagamento parcial de ${formatBRL(parsed)} registrado · parcela atual mantém ${formatBRL(installmentValue)}.`;
+        ? `Pagamento parcial de ${formatBRL(parsed)} registrado. Parcela #${installmentNumber} marcada como paga (quitação curta de ${formatBRL(parsed)} sobre ${formatBRL(installmentValue)}). O restante ${formatBRL(shortfall)} é somado às outras ${othersCount} parcelas pendentes (+${formatBRL(addPerOther)} cada).`
+        : `Pagamento parcial de ${formatBRL(parsed)} registrado · parcela #${installmentNumber} quitada curta (${formatBRL(parsed)} de ${formatBRL(installmentValue)}).`;
     return {
       kind: "partial" as const,
       message,

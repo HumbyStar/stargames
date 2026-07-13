@@ -143,23 +143,54 @@ describe("applyMGMVPartialPayment", () => {
       paid: false,
     }));
 
-  it("pagamento parcial MENOR que o valor da parcela: alvo mantém o valor original, restante é rateado nas OUTRAS pendentes", () => {
+  it("pagamento parcial MENOR que o valor da parcela: alvo vira paga curta, restante é SOMADO nas OUTRAS pendentes (nunca desconta)", () => {
     const ins = mkInstallments([100, 100, 100, 100]);
     const res = applyMGMVPartialPayment(ins, 2, 40, 400, NOW);
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     const target = res.installments.find((i) => i.number === 2)!;
-    // Valor original preservado
+    // Valor original preservado, mas alvo agora paga (quitação curta)
     expect(target.value).toBe(100);
-    expect(target.paid).toBe(false);
+    expect(target.paid).toBe(true);
     expect(target.paidAmount).toBeCloseTo(40, 5);
     expect(target.manualPartial).toBe(true);
-    // Outras 3 pendentes absorvem os R$ 40: 360/3 = 120 cada
+    expect(target.shortPaid).toBe(true);
+    // Shortfall = 100 − 40 = 60. Somado em 3 outras = +20 cada → 120 cada.
     const others = res.installments.filter((i) => i.number !== 2);
     expect(others.every((i) => i.value === 120)).toBe(true);
     expect(others.every((i) => i.recalculatedAt === NOW)).toBe(true);
     expect(res.targetFullyPaid).toBe(false);
     expect(res.becameQuitado).toBe(false);
+  });
+
+  it("sequência de parciais inferiores nunca gera desconto — outras sempre crescem", () => {
+    // Estado inicial: 4× 100, saldo 400.
+    const ins = mkInstallments([100, 100, 100, 100]);
+    const r1 = applyMGMVPartialPayment(ins, 2, 40, 400, NOW);
+    expect(r1.ok).toBe(true);
+    if (!r1.ok) return;
+    // Após 1º parcial: #2 paga curta, #1/#3/#4 = 120.
+    const afterFirst = r1.installments;
+    expect(afterFirst.find((i) => i.number === 1)!.value).toBe(120);
+    expect(afterFirst.find((i) => i.number === 3)!.value).toBe(120);
+    expect(afterFirst.find((i) => i.number === 4)!.value).toBe(120);
+
+    // Novo saldo do acordo = 400 − 40 = 360. Pagar 30 na #3 (value 120).
+    const r2 = applyMGMVPartialPayment(afterFirst, 3, 30, 360, NOW);
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    const t3 = r2.installments.find((i) => i.number === 3)!;
+    expect(t3.paid).toBe(true);
+    expect(t3.shortPaid).toBe(true);
+    expect(t3.paidAmount).toBe(30);
+    // Shortfall = 120 − 30 = 90. Somado em 2 outras pendentes (#1 e #4).
+    // +45 cada → 165 cada. NUNCA menor que o valor anterior (120).
+    const n1 = r2.installments.find((i) => i.number === 1)!;
+    const n4 = r2.installments.find((i) => i.number === 4)!;
+    expect(n1.value).toBe(165);
+    expect(n4.value).toBe(165);
+    expect(n1.value).toBeGreaterThanOrEqual(120);
+    expect(n4.value).toBeGreaterThanOrEqual(120);
   });
 
   it("pagamento IGUAL ao valor da parcela: alvo vira paga, sem excedente para redistribuir; demais pendentes ficam iguais", () => {
@@ -216,16 +247,16 @@ describe("applyMGMVPartialPayment", () => {
   });
 
   it("não deixa value da parcela redistribuída ficar abaixo do paidAmount já existente (sem saldo negativo)", () => {
-    // Parcela 2 já tem um parcial de 80. Depois um pagamento parcial na 1
-    // deveria reduzir a 2 abaixo de 80 — deve ser piso 80.
+    // Parcela 2 já tem um parcial de 80. Um pagamento IGUAL na #1 rateia
+    // o novo saldo do acordo entre as outras — deve respeitar piso 80.
     const ins = mkInstallments([100, 100]);
     ins[1].paidAmount = 80;
     // saldo restante = (100 + 100) - 80 = 120
-    const res = applyMGMVPartialPayment(ins, 1, 60, 120, NOW);
+    const res = applyMGMVPartialPayment(ins, 1, 100, 120, NOW);
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     const other = res.installments.find((i) => i.number === 2)!;
-    // Piso = paidAmount (80). Sem o piso ficaria 60 (rateio).
+    // Novo saldo = 120 − 100 = 20, rateado em 1 outra = 20. Piso = 80.
     expect(other.value).toBeGreaterThanOrEqual(80);
     expect(other.value).toBe(80);
   });

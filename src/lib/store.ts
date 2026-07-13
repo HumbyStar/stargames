@@ -60,15 +60,18 @@ export type ApplyPartialPaymentResult =
 
 /**
  * Aplica um pagamento parcial a uma parcela do acordo MGMV, redistribuindo
- * o restante entre as outras parcelas pendentes. Regras:
+ * o excedente/faltante entre as outras parcelas pendentes. Regras:
  *
  * - Valida `amount` (finito, > 0) e que não exceda o saldo restante do acordo
  *   (tolerância de 1 centavo para arredondamentos de exibição).
- * - `value` da parcela alvo NUNCA é alterado — apenas seu `paidAmount` /
- *   `paidAt` / `manualPartial`.
- * - Se o pagamento zera a alvo (>= `value`), ela vira `paid=true` e o
- *   `newRemaining` é rateado entre as demais pendentes. Se o pagamento é
- *   menor, o `newRemaining` também é rateado entre as demais pendentes.
+ * - `value` da parcela alvo NUNCA é alterado — preservado como histórico.
+ * - Se o pagamento é >= `value`, ela vira `paid=true` e o `newRemaining`
+ *   (saldo do acordo) é RATEADO entre as demais pendentes (pode reduzir
+ *   quando há excedente).
+ * - Se o pagamento é MENOR que `value` (quitação curta), a alvo vira
+ *   `paid=true` com `paidAmount=amount` e `shortPaid=true`. O restante
+ *   `value − amount` é SOMADO (acréscimo) igualmente entre as demais
+ *   pendentes — nunca gera desconto.
  * - Nenhuma parcela redistribuída pode ficar com `value` menor que seu
  *   `paidAmount` já registrado (evita saldo negativo em parcial pré-existente).
  *   Se isso aconteceria, o `value` é preservado no piso `paidAmount`.
@@ -143,25 +146,34 @@ export function applyMGMVPartialPayment(
       });
     }
   } else {
+    // Pagamento parcial CURTO: alvo é quitada com o valor recebido,
+    // e o "que sobrou" da parcela (value − amount) é SOMADO nas outras
+    // pendentes de forma igual (nunca desconta).
+    const targetValueCents = Math.round(target.value * 100);
+    const shortfallCents = Math.max(0, targetValueCents - amountCents);
     const otherPending = installments.filter(
       (i) => !i.paid && i.number !== installmentNumber,
     );
-    if (otherPending.length > 0) {
-      const base = Math.floor(newRemainingCents / otherPending.length);
-      const rest = newRemainingCents - base * otherPending.length;
+    if (otherPending.length > 0 && shortfallCents > 0) {
+      const addBase = Math.floor(shortfallCents / otherPending.length);
+      const addRest = shortfallCents - addBase * otherPending.length;
       const lastOtherNumber = otherPending[otherPending.length - 1].number;
       next = installments.map((i) => {
         if (i.paid) return i;
         if (i.number === installmentNumber) {
           return {
             ...i,
-            paidAmount: paidPartialTargetNew,
+            paid: true,
             paidAt: nowIso,
+            paidAmount: amount,
             manualPartial: true,
+            shortPaid: true,
           };
         }
-        const cents = i.number === lastOtherNumber ? base + rest : base;
-        const rawValue = Math.max(0, cents / 100);
+        const addCents = i.number === lastOtherNumber ? addBase + addRest : addBase;
+        const currentCents = Math.round(i.value * 100);
+        const newCents = currentCents + addCents;
+        const rawValue = Math.max(0, newCents / 100);
         const floorPaid = Math.max(0, i.paidAmount ?? 0);
         const newValue = Math.max(rawValue, floorPaid);
         if (Math.abs(newValue - i.value) > 0.005) {
@@ -171,13 +183,16 @@ export function applyMGMVPartialPayment(
         return i;
       });
     } else {
+      // Sem outras pendentes (ou sem shortfall): alvo vira paga curta.
       next = installments.map((i) =>
         i.number === installmentNumber
           ? {
               ...i,
-              paidAmount: paidPartialTargetNew,
+              paid: true,
               paidAt: nowIso,
+              paidAmount: amount,
               manualPartial: true,
+              shortPaid: shortfallCents > 0,
             }
           : i,
       );
@@ -233,6 +248,13 @@ export interface MGMVInstallment {
    * afetar cálculos financeiros.
    */
   recalculatedAt?: string;
+  /**
+   * Marcado como `true` quando a parcela foi encerrada com pagamento parcial
+   * INFERIOR ao seu valor (quitação curta): `paid=true`, `paidAmount < value`.
+   * O restante (`value − paidAmount`) foi somado às outras parcelas pendentes
+   * na hora do registro. Serve apenas para a UI indicar "Paga (parcial curto)".
+   */
+  shortPaid?: boolean;
 }
 
 export interface MGMVAgreement {
