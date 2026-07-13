@@ -204,7 +204,7 @@ export function applyMGMVPartialPayment(
     ok: true,
     installments: next,
     becameQuitado,
-    targetFullyPaid: targetFullyPaid || !targetFullyPaid, // alvo sempre encerra
+    targetFullyPaid,
     recalculatedNumbers: recalculated,
   };
 }
