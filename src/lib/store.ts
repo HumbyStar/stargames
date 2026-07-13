@@ -233,6 +233,13 @@ export interface MGMVInstallment {
    * afetar cálculos financeiros.
    */
   recalculatedAt?: string;
+  /**
+   * Marcado como `true` quando a parcela foi encerrada com pagamento parcial
+   * INFERIOR ao seu valor (quitação curta): `paid=true`, `paidAmount < value`.
+   * O restante (`value − paidAmount`) foi somado às outras parcelas pendentes
+   * na hora do registro. Serve apenas para a UI indicar "Paga (parcial curto)".
+   */
+  shortPaid?: boolean;
 }
 
 export interface MGMVAgreement {
