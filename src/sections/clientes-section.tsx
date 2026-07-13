@@ -1392,6 +1392,7 @@ function ClientDrawer({
                   <th className="py-2 pr-3 font-medium">Vencimento</th>
                   <th className="py-2 pr-3 font-medium">Valor</th>
                   <th className="py-2 pr-3 font-medium">Status</th>
+                  <th className="py-2 pr-3 font-medium">Valor pago</th>
                   <th className="py-2 pr-3 font-medium">Pagamento</th>
                   <th className="py-2 pr-3 font-medium">Ações</th>
                 </tr>
@@ -1400,6 +1401,9 @@ function ClientDrawer({
                 {client.mgmv?.installments.map((i) => {
                   const overdue = !i.paid && isOverdue(i.dueDate);
                    const isPartial = !i.paid && (i.paidAmount ?? 0) > 0;
+                   const pagoNaParcela = i.paid
+                     ? (i.paidAmount ?? i.value)
+                     : (i.paidAmount ?? 0);
                    const label = i.paid
                      ? "Pago"
                      : isPartial
@@ -1438,6 +1442,13 @@ function ClientDrawer({
                           >
                             Paga (parcial curto)
                           </span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-3 tabular-nums">
+                        {pagoNaParcela > 0 ? (
+                          formatBRL(pagoNaParcela)
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
                         )}
                       </td>
                       <td className="py-2 pr-3 text-muted-foreground">
