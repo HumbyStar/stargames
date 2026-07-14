@@ -63,6 +63,15 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
 
     async function ping() {
       if (cancelled) return;
+      // Se não há sessão Supabase ativa, não chame server fns protegidas —
+      // elas exigem bearer token e falhariam com 401/500 (ex.: durante logout
+      // ou quando o intervalo dispara após navegação para /auth).
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) return;
+      } catch {
+        return;
+      }
       let sessionId: string | null = null;
       try {
         sessionId = localStorage.getItem(SESSION_ID_KEY);
