@@ -13,8 +13,7 @@ import {
 import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
 import { MgmvAiReviewModal } from "@/components/mgmv-ai-review-modal";
 import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
-import { LoadMoreButton } from "@/components/load-more-button";
-import { usePaginatedList } from "@/hooks/use-paginated-list";
+// paginação client-side removida — mostrar todos os acordos MGMV de uma vez
 import { extractMGMVAgreementFromNotes } from "@/sections/import-section";
 import { reprocessMGMVFromNotes } from "@/lib/mgmv-reprocess";
 import { rebalanceAgreement } from "@/lib/mgmv-schedule";
@@ -407,12 +406,7 @@ export function MGMVSection({
     });
   }, [rows, search, chip, stats.clientsWithProducts]);
 
-  const {
-    visible: pagedRows,
-    hasMore: hasMoreRows,
-    nextChunk: nextChunkRows,
-    loadMore: loadMoreRows,
-  } = usePaginatedList(filtered, { step: 10, sectionId: "mgmv" });
+  const pagedRows = filtered;
 
   const searchActive = search.trim().length > 0;
   const matchCols = useMemo(() => {
@@ -1087,13 +1081,6 @@ export function MGMVSection({
                   </Fragment>
                 );
               })}
-              {hasMoreRows && (
-                <tr>
-                  <td colSpan={9} className="py-3">
-                    <LoadMoreButton count={nextChunkRows} onClick={loadMoreRows} />
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
       </div>
