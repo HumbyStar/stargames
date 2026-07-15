@@ -26,8 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { usePersistedState } from "@/lib/use-persisted-state";
-import { LoadMoreButton } from "@/components/load-more-button";
-import { usePaginatedList } from "@/hooks/use-paginated-list";
+// paginação client-side removida — mostrar todas as cobranças de uma vez
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
 import {
@@ -269,12 +268,7 @@ export function CollectionSection({
     });
   }, [allRows, filter, period, customFrom, customTo, search, folderFilter, financialFilter, situationFilter, clients]);
 
-  const {
-    visible,
-    hasMore: hasMoreCollection,
-    nextChunk: nextChunkCollection,
-    loadMore: loadMoreCollection,
-  } = usePaginatedList(filtered, { step: 10, sectionId: "collection" });
+  const visible = filtered;
 
   const searchActive = search.trim().length > 0;
   const matchCols = useMemo(() => {
@@ -1035,16 +1029,6 @@ export function CollectionSection({
                     {activeFilterCount > 0 || search
                       ? "Nenhuma cobrança encontrada para os filtros selecionados."
                       : "Nenhuma cobrança encontrada."}
-                  </td>
-                </tr>
-              )}
-              {hasMoreCollection && (
-                <tr>
-                  <td colSpan={12} className="py-3">
-                    <LoadMoreButton
-                      count={nextChunkCollection}
-                      onClick={loadMoreCollection}
-                    />
                   </td>
                 </tr>
               )}
