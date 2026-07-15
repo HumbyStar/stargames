@@ -892,7 +892,6 @@ export function MGMVSection({
                             variant="outline"
                             onClick={() => {
                               openClient(r.client.id);
-                              onScrollTo("clientes");
                             }}
                           >
                             Abrir
