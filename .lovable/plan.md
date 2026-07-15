@@ -1,32 +1,34 @@
+# Corrigir salto de sessão ao abrir/fechar modais
+
 ## Problema
+Ao clicar em ações que abrem um modal (drawer do cliente, pagamento parcial, revisão IA, etc.) a partir das sessões **MGMV** e **Cobranças**, a página é rolada para a sessão **Clientes**. Ao fechar o modal, o usuário fica preso em Clientes — parecendo que o fechamento mudou de sessão.
 
-Nas seções da one-page (Clientes, MGMV, Cobranças), o filtro "Todos" mostra só 10 registros porque cada lista usa `usePaginatedList(..., { step: 10 })` com botão "Carregar mais". Com 490 clientes, o usuário vê 10 e precisa clicar várias vezes — ele considera isso bug e quer que todos os registros apareçam.
+## Causa
+Nas sessões MGMV e Cobranças, os botões que abrem o drawer/modal do cliente chamam explicitamente `onScrollTo("clientes")` logo após `openClient(...)`. Como o drawer é um Radix Dialog renderizado via portal (nível `body`), ele já aparece sobre qualquer sessão — a rolagem para Clientes é desnecessária e causa o bug relatado.
 
-## Correção
+Ocorrências encontradas:
+- `src/sections/mgmv-section.tsx` — botão "Abrir" (linhas ~893-895).
+- `src/sections/collection-section.tsx` — dois pontos (linhas ~832-833 e ~993-994).
 
-Remover a paginação client-side em passos de 10 nas três seções e renderizar a lista filtrada inteira de uma vez. As seções já são montadas de forma lazy (`LazySection`) e a expansão da lista já é controlada por `useListExpansionStore`, então não há regressão de performance no carregamento inicial da página.
+## Alterações
 
-### Arquivos alterados
+1. **`src/sections/mgmv-section.tsx`**
+   - Remover a chamada `onScrollTo("clientes")` dentro do `onClick` do botão "Abrir". Manter apenas `openClient(r.client.id)`.
 
-1. **`src/sections/clientes-section.tsx`**
-   - Remover `usePaginatedList` e `LoadMoreButton` do fluxo de renderização.
-   - Iterar direto sobre `rows` (lista filtrada completa) no `<TableBody>`.
-   - Remover o bloco `{hasMore && <LoadMoreButton ... />}`.
+2. **`src/sections/collection-section.tsx`**
+   - Remover as duas chamadas `onScrollTo("clientes")` que acompanham `openClient(...)` nas ações de abrir o drawer do cliente.
 
-2. **`src/sections/mgmv-section.tsx`**
-   - Mesma mudança: usar `filtered` diretamente em vez de `visible`; remover `LoadMoreButton` e destructuring de `usePaginatedList`.
+3. **Auditoria rápida das demais sessões**
+   - Verificar `clientes-section.tsx` (o botão que vai para `collection` — linha 888 — permanece, pois é um "ver na cobrança" explícito, não um modal).
+   - Verificar `dashboard-drilldown-modal.tsx` (`openClientAt` já rola para clientes, mas isso é intencional: é um card do dashboard, não um modal aberto de dentro de uma sessão). Não alterar.
+   - Manter `onScrollTo` na assinatura das seções — outras ações legítimas (ex.: "Ver na cobrança") continuam usando.
 
-3. **`src/sections/collection-section.tsx`**
-   - Idem: usar `filtered` diretamente; remover `LoadMoreButton` e `usePaginatedList`.
+## Fora de escopo
+- Não alterar `scroll-to-section.ts`, o store, nem o comportamento de foco do Radix Dialog.
+- Não mexer em lógica de negócio, filtros, paginação ou dados.
+- Não alterar o modal de drilldown do dashboard.
 
-Imports não usados (`usePaginatedList`, `LoadMoreButton`) removidos em cada arquivo.
-
-### Fora do escopo
-
-- `HistoryModal` mantém paginação (é um modal secundário, não a one-page principal).
-- Nenhuma mudança em lógica de negócio, filtros, ordenação ou store.
-- Nenhuma mudança no backend/queries.
-
-### Verificação
-
-Após a mudança, com filtro "Todos" na seção Clientes os 490 registros devem renderizar todos; idem para MGMV e Cobranças.
+## Verificação
+- Abrir cada modal a partir de MGMV e Cobranças; confirmar que a sessão ativa permanece a mesma antes/depois de fechar.
+- Confirmar que o drawer do cliente ainda abre e fecha normalmente (o portal do Dialog independe da sessão visível).
+- `tsgo --noEmit` deve continuar limpo (nenhuma remoção de tipo/prop).
