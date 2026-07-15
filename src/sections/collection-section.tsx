@@ -830,7 +830,6 @@ export function CollectionSection({
                             variant="outline"
                             onClick={() => {
                               openClient(client.id);
-                              onScrollTo("clientes");
                             }}
                           >
                             Abrir
@@ -991,7 +990,6 @@ export function CollectionSection({
                           variant="outline"
                           onClick={() => {
                             openClient(p.clientId);
-                            onScrollTo("clientes");
                           }}
                         >
                           Abrir
