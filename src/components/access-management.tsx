@@ -167,7 +167,7 @@ export function AccessManagementDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const { access, hasRole, refresh: refreshPerms } = usePermissions();
-  const isAdmin = hasRole("admin");
+  const isAdmin = hasRole("admin") || hasRole("admin_master");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
