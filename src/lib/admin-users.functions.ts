@@ -13,12 +13,15 @@ const roleSchema = z.enum([
 ]);
 
 async function assertAdmin(ctx: { supabase: any; userId: string }) {
-  const { data, error } = await ctx.supabase.rpc("has_role", {
-    _user_id: ctx.userId,
-    _role: "admin",
-  });
+  const { data, error } = await ctx.supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", ctx.userId)
+    .in("role", ["admin", "admin_master"]);
   if (error) throw new Error(error.message);
-  if (!data) throw new Error("Forbidden: admin only");
+  if (!data || data.length === 0) {
+    throw new Error("Forbidden: admin only");
+  }
 }
 
 export interface AdminUserRow {
