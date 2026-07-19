@@ -274,12 +274,18 @@ export function MGMVSection({
   const reprocessFromNotes = () => {
     setReprocessing(true);
     const eligible = clients.filter((c) => !!c.notes);
-    const updatedIds = reprocessMGMVFromNotes();
-    const unchanged = Math.max(0, eligible.length - updatedIds.length);
+    const { updatedIds, skippedIds } = reprocessMGMVFromNotes();
+    const unchanged = Math.max(
+      0,
+      eligible.length - updatedIds.length - skippedIds.length,
+    );
     setReprocessing(false);
     setLastUpdatedIds(updatedIds);
     toast.success(
       `Reprocessamento concluído: ${updatedIds.length} acordo(s) atualizado(s).` +
+        (skippedIds.length > 0
+          ? ` ${skippedIds.length} preservado(s) (edição manual / IA).`
+          : "") +
         (unchanged > 0 ? ` ${unchanged} sem mudanças.` : ""),
     );
   };
