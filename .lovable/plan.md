@@ -1,34 +1,49 @@
-# Corrigir salto de sessão ao abrir/fechar modais
-
 ## Problema
-Ao clicar em ações que abrem um modal (drawer do cliente, pagamento parcial, revisão IA, etc.) a partir das sessões **MGMV** e **Cobranças**, a página é rolada para a sessão **Clientes**. Ao fechar o modal, o usuário fica preso em Clientes — parecendo que o fechamento mudou de sessão.
 
-## Causa
-Nas sessões MGMV e Cobranças, os botões que abrem o drawer/modal do cliente chamam explicitamente `onScrollTo("clientes")` logo após `openClient(...)`. Como o drawer é um Radix Dialog renderizado via portal (nível `body`), ele já aparece sobre qualquer sessão — a rolagem para Clientes é desnecessária e causa o bug relatado.
+`reprocessMGMVFromNotes` (usado pelo botão "Reprocessar MGMV por observações" e chamado automaticamente após imports) re-extrai o acordo direto das `notes` do cliente e sobrescreve `c.mgmv`. Ele só preserva `paid`/`paidAt` das parcelas — qualquer edição manual (valor da parcela, vencimento, número de parcelas, `totalDebt`, `paidAmount`, redistribuição por pagamento parcial, ajustes da IA) é perdida, porque as `notes` continuam com os dados antigos da importação. Resultado: alguns clientes "voltam ao estado anterior" ao reprocessar.
 
-Ocorrências encontradas:
-- `src/sections/mgmv-section.tsx` — botão "Abrir" (linhas ~893-895).
-- `src/sections/collection-section.tsx` — dois pontos (linhas ~832-833 e ~993-994).
+O tipo `MGMVAgreement` já tem `reviewStatus` (`"manually_reviewed" | "ai_reviewed" | "review_required" | "none"`) e `aiReviewed`, mas o reprocessador ignora esses sinais.
 
-## Alterações
+## Solução
 
-1. **`src/sections/mgmv-section.tsx`**
-   - Remover a chamada `onScrollTo("clientes")` dentro do `onClick` do botão "Abrir". Manter apenas `openClient(r.client.id)`.
+Fazer o reprocess respeitar acordos que já foram tocados pelo usuário / IA, e nunca destruir edições manuais.
 
-2. **`src/sections/collection-section.tsx`**
-   - Remover as duas chamadas `onScrollTo("clientes")` que acompanham `openClient(...)` nas ações de abrir o drawer do cliente.
+### 1. `src/lib/mgmv-reprocess.ts` — pular acordos "bloqueados"
 
-3. **Auditoria rápida das demais sessões**
-   - Verificar `clientes-section.tsx` (o botão que vai para `collection` — linha 888 — permanece, pois é um "ver na cobrança" explícito, não um modal).
-   - Verificar `dashboard-drilldown-modal.tsx` (`openClientAt` já rola para clientes, mas isso é intencional: é um card do dashboard, não um modal aberto de dentro de uma sessão). Não alterar.
-   - Manter `onScrollTo` na assinatura das seções — outras ações legítimas (ex.: "Ver na cobrança") continuam usando.
+Considerar um acordo bloqueado (skip total, sem chamar `setMGMVAgreement`) quando qualquer uma for verdadeira:
 
-## Fora de escopo
-- Não alterar `scroll-to-section.ts`, o store, nem o comportamento de foco do Radix Dialog.
-- Não mexer em lógica de negócio, filtros, paginação ou dados.
-- Não alterar o modal de drilldown do dashboard.
+- `c.mgmv.reviewStatus === "manually_reviewed"`
+- `c.mgmv.reviewStatus === "ai_reviewed"` ou `c.mgmv.aiReviewed === true`
+- `c.mgmv` tem qualquer parcela com sinal de edição/pagamento manual: `paid`, `paidAmount != null`, `manualPartial`, `shortPaid`, `recalculatedAt`
+- `totalDebt` do acordo atual difere do `parsed.totalDebt` (indica ajuste manual do total)
+- número de parcelas difere de `parsed.installments.length`
 
-## Verificação
-- Abrir cada modal a partir de MGMV e Cobranças; confirmar que a sessão ativa permanece a mesma antes/depois de fechar.
-- Confirmar que o drawer do cliente ainda abre e fecha normalmente (o portal do Dialog independe da sessão visível).
-- `tsgo --noEmit` deve continuar limpo (nenhuma remoção de tipo/prop).
+Nesses casos: `continue` sem tocar no acordo.
+
+Para acordos não bloqueados, manter o merge atual de `paid`/`paidAt` (proteção mínima) — comportamento inalterado para clientes recém-importados sem edição.
+
+### 2. Marcar edições manuais como `manually_reviewed`
+
+Auditar os pontos onde o usuário edita o acordo diretamente na UI e garantir que gravem `reviewStatus: "manually_reviewed"` no `setMGMVAgreement`:
+
+- `src/sections/clientes-section.tsx` e `src/sections/mgmv-section.tsx`: edição inline de parcela (valor, vencimento, marcar/desmarcar paga, pagamento parcial), edição de `installmentsCount`, `paidInstallments`, `totalDebt`.
+- `src/components/mgmv-agreement-editor.tsx` (se editar campos do acordo).
+- `applyMGMVPartialPayment` em `src/lib/store.ts` já muta parcelas — garantir que o wrapper que grava no store também setar `reviewStatus: "manually_reviewed"`.
+
+Isso torna o "bloqueio" acima confiável para edições futuras, além dos heurísticos por parcela.
+
+### 3. UI: aviso opcional no botão
+
+No botão "Reprocessar MGMV por observações" (seção MGMV), após rodar, mostrar toast com contagem: "X acordos atualizados, Y ignorados (edição manual / IA preservada)". Sem modal novo — apenas melhorar a mensagem existente.
+
+## Fora do escopo
+
+- Não alterar o parser `extractMGMVAgreementFromNotes`.
+- Não mexer no fluxo de import em si (auto-reprocess continua rodando; só passa a respeitar bloqueio).
+- Não adicionar opção "forçar reprocesso" agora — se quiser depois, adicionamos um segundo botão "Reprocessar forçado" que ignora o bloqueio.
+
+## Arquivos afetados
+
+- `src/lib/mgmv-reprocess.ts` (lógica principal + retorno com `{updated, skipped}`)
+- `src/sections/mgmv-section.tsx` (toast do botão)
+- `src/sections/clientes-section.tsx`, `src/sections/mgmv-section.tsx`, `src/components/mgmv-agreement-editor.tsx`, `src/lib/store.ts` (marcar `manually_reviewed` nas edições)
