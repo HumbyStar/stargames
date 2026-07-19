@@ -766,6 +766,10 @@ export const useStore = create<State>()((set, get) => ({
                   ? { ...i, paid: true, paidAt: new Date().toISOString() }
                   : i,
               ),
+              reviewStatus:
+                c.mgmv.reviewStatus === "ai_reviewed"
+                  ? c.mgmv.reviewStatus
+                  : ("manually_reviewed" as MGMVAgreement["reviewStatus"]),
             };
             // Recalcula os vencimentos das parcelas pendentes com base na
             // última parcela paga (data de pagamento + 1 mês por parcela).
