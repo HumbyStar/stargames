@@ -816,6 +816,10 @@ export const useStore = create<State>()((set, get) => ({
             const nextAgreement = recalcPendingDueDates({
               ...c.mgmv,
               installments: applied.installments,
+              reviewStatus:
+                c.mgmv.reviewStatus === "ai_reviewed"
+                  ? c.mgmv.reviewStatus
+                  : ("manually_reviewed" as MGMVAgreement["reviewStatus"]),
             });
             if (applied.becameQuitado) becameQuitado = true;
             return { ...c, mgmv: nextAgreement };
