@@ -2094,7 +2094,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     // src/sections/import-section.tsx.
     try {
       const { reprocessMGMVFromNotes } = await import("@/lib/mgmv-reprocess");
-      const updated = reprocessMGMVFromNotes();
+      const { updatedIds: updated } = reprocessMGMVFromNotes();
       if (updated.length > 0) {
         toast.success(`MGMV reprocessado automaticamente: ${updated.length} acordo(s) atualizado(s).`);
       }
@@ -2324,7 +2324,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       // após confirmar uma importação de lista/CSV/Excel.
       try {
         const { reprocessMGMVFromNotes } = await import("@/lib/mgmv-reprocess");
-        const updated = reprocessMGMVFromNotes();
+        const { updatedIds: updated } = reprocessMGMVFromNotes();
         if (updated.length > 0) {
           toast.success(`MGMV reprocessado automaticamente: ${updated.length} acordo(s) atualizado(s).`);
         }
@@ -2420,7 +2420,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     // eliminando o passo manual do botão "Reprocessar MGMV por observações".
     try {
       const { reprocessMGMVFromNotes } = await import("@/lib/mgmv-reprocess");
-      const updated = reprocessMGMVFromNotes();
+      const { updatedIds: updated } = reprocessMGMVFromNotes();
       if (updated.length > 0) {
         toast.success(`MGMV reprocessado automaticamente: ${updated.length} acordo(s) atualizado(s).`);
       }
