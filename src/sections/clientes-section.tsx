@@ -1208,6 +1208,7 @@ function ClientDrawer({
     if (targets.length === 0) {
       toast.info("Nenhum produto individual selecionado para adicionar ao acordo.");
       return;
+
     }
     if (
       !window.confirm(
