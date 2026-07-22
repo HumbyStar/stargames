@@ -1,49 +1,37 @@
-## Problema
+## Análise das imagens
 
-`reprocessMGMVFromNotes` (usado pelo botão "Reprocessar MGMV por observações" e chamado automaticamente após imports) re-extrai o acordo direto das `notes` do cliente e sobrescreve `c.mgmv`. Ele só preserva `paid`/`paidAt` das parcelas — qualquer edição manual (valor da parcela, vencimento, número de parcelas, `totalDebt`, `paidAmount`, redistribuição por pagamento parcial, ajustes da IA) é perdida, porque as `notes` continuam com os dados antigos da importação. Resultado: alguns clientes "voltam ao estado anterior" ao reprocessar.
+Nos três prints, o "Histórico de Produtos" do cliente mostra `CADASTRO` e `LIMITE` **com a mesma data** (ex.: 17/07/2026 e 17/07/2026, ou 27/06/2026 e 27/06/2026). Como a data limite é igual à data de cadastro, qualquer reserva já nasce vencida — daí o badge vermelho "Reserva vencida" mesmo em itens recém-importados. Também dá pra ver que essas linhas vieram do fluxo "Importar em lista" (rodapé com os grupos colados: "Nathanael - 87 9164-4200 - Star Wars Battlefront II...", "katlheen - 85 9680-8742 - Hulkbuster...", "Bruno Ribeiro - 21 97629-1177 - Nami (One Piece)... - reserva(20)"), não do CSV/Excel.
 
-O tipo `MGMVAgreement` já tem `reviewStatus` (`"manually_reviewed" | "ai_reviewed" | "review_required" | "none"`) e `aiReviewed`, mas o reprocessador ignora esses sinais.
+## Causa
 
-## Solução
+Em `src/components/list-import-modal.tsx` (linha 489), a confirmação da importação em lista grava:
 
-Fazer o reprocess respeitar acordos que já foram tocados pelo usuário / IA, e nunca destruir edições manuais.
+```
+registerDate: now,
+dueDate: now,
+```
 
-### 1. `src/lib/mgmv-reprocess.ts` — pular acordos "bloqueados"
+Ou seja, o `dueDate` é copiado do `registerDate` sem considerar o status. Para comparação, o caminho de CSV/Excel/Texto em `src/sections/import-section.tsx` já soma `+30d` para Reserva (e `+7d` caso contrário) via `calculateDueDate`. O caminho de lista simplesmente ignorou essa regra.
 
-Considerar um acordo bloqueado (skip total, sem chamar `setMGMVAgreement`) quando qualquer uma for verdadeira:
+## Correção
 
-- `c.mgmv.reviewStatus === "manually_reviewed"`
-- `c.mgmv.reviewStatus === "ai_reviewed"` ou `c.mgmv.aiReviewed === true`
-- `c.mgmv` tem qualquer parcela com sinal de edição/pagamento manual: `paid`, `paidAmount != null`, `manualPartial`, `shortPaid`, `recalculatedAt`
-- `totalDebt` do acordo atual difere do `parsed.totalDebt` (indica ajuste manual do total)
-- número de parcelas difere de `parsed.installments.length`
+Aplicar a mesma regra do CSV no commit da lista colada / HTML de cliente. Em `src/components/list-import-modal.tsx`, ao montar o `addProduct`, calcular `dueDate` a partir de `registerDate` de acordo com o status financeiro resolvido:
 
-Nesses casos: `continue` sem tocar no acordo.
+- `Reserva` → `registerDate + 30 dias`
+- demais status (`Pago`, `Pendente`, `Revisão necessária`) → mantém `registerDate` (mesmo comportamento neutro atual, sem gerar "vencida" precoce)
 
-Para acordos não bloqueados, manter o merge atual de `paid`/`paidAt` (proteção mínima) — comportamento inalterado para clientes recém-importados sem edição.
+Implementação:
 
-### 2. Marcar edições manuais como `manually_reviewed`
+1. Extrair um helper local (ou reusar/portar `calculateDueDate` de `import-section.tsx`) que receba `(financialStatusFinal, registerDateISO)` e devolva o ISO de vencimento.
+2. Substituir `dueDate: now` por `dueDate: computeDueISO(financialStatusFinal, now)`, usando o mesmo `financialStatusFinal` já passado para `addProduct`.
+3. Não mexer em nada mais — parser, preview, MGMV, tudo intacto. Nenhum item já importado é retroativamente alterado.
 
-Auditar os pontos onde o usuário edita o acordo diretamente na UI e garantir que gravem `reviewStatus: "manually_reviewed"` no `setMGMVAgreement`:
+## Verificação
 
-- `src/sections/clientes-section.tsx` e `src/sections/mgmv-section.tsx`: edição inline de parcela (valor, vencimento, marcar/desmarcar paga, pagamento parcial), edição de `installmentsCount`, `paidInstallments`, `totalDebt`.
-- `src/components/mgmv-agreement-editor.tsx` (se editar campos do acordo).
-- `applyMGMVPartialPayment` em `src/lib/store.ts` já muta parcelas — garantir que o wrapper que grava no store também setar `reviewStatus: "manually_reviewed"`.
-
-Isso torna o "bloqueio" acima confiável para edições futuras, além dos heurísticos por parcela.
-
-### 3. UI: aviso opcional no botão
-
-No botão "Reprocessar MGMV por observações" (seção MGMV), após rodar, mostrar toast com contagem: "X acordos atualizados, Y ignorados (edição manual / IA preservada)". Sem modal novo — apenas melhorar a mensagem existente.
+- Importar em lista uma linha "... - 100 reais - reserva" com data de cadastro 17/07/2026 → card do cliente deve mostrar Cadastro 17/07/2026 e Limite 17/08/2026, sem badge "Reserva vencida".
+- Importar linha "pago" → Limite permanece igual ao Cadastro (sem regressão).
 
 ## Fora do escopo
 
-- Não alterar o parser `extractMGMVAgreementFromNotes`.
-- Não mexer no fluxo de import em si (auto-reprocess continua rodando; só passa a respeitar bloqueio).
-- Não adicionar opção "forçar reprocesso" agora — se quiser depois, adicionamos um segundo botão "Reprocessar forçado" que ignora o bloqueio.
-
-## Arquivos afetados
-
-- `src/lib/mgmv-reprocess.ts` (lógica principal + retorno com `{updated, skipped}`)
-- `src/sections/mgmv-section.tsx` (toast do botão)
-- `src/sections/clientes-section.tsx`, `src/sections/mgmv-section.tsx`, `src/components/mgmv-agreement-editor.tsx`, `src/lib/store.ts` (marcar `manually_reviewed` nas edições)
+- Recalcular retroativamente `dueDate` dos produtos já importados. Se quiser depois, dá pra adicionar um botão "Recalcular limite das reservas" — só avise.
+- Alterar a regra dos 30 dias (é o que o CSV já usa).

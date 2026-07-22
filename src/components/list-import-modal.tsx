@@ -477,16 +477,21 @@ export function ListImportModal({
           cache.set(r.phone, clientId);
         }
         const now = headerISO ?? new Date().toISOString();
+        const financialStatusFinal = statusToFinancial(r.financialStatus);
+        const dueISO =
+          financialStatusFinal === "Reserva"
+            ? new Date(new Date(now).getTime() + 30 * 86400000).toISOString()
+            : now;
         addProduct({
           clientId,
           name: r.productName || "(sem nome)",
           platform: r.platformOrCategory || "(sem plataforma)",
           totalValue: r.totalValue ?? 0,
           paidValue: r.paidValue ?? 0,
-          financialStatus: statusToFinancial(r.financialStatus),
+          financialStatus: financialStatusFinal,
           situation: resolveSituation(r as RowWithSituation),
           registerDate: now,
-          dueDate: now,
+          dueDate: dueISO,
           notes:
             mode === "html"
               ? `Importado por HTML de cliente • Grupo: ${r.sourceGroup}`
