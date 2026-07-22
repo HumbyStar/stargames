@@ -1200,8 +1200,6 @@ function ClientDrawer({
     clearSelection();
   };
   const bulkAddToMgmv = () => {
-    // placeholder
-  };
     if (!client.mgmv) {
       toast.error("Este cliente não possui acordo MGMV ativo.");
       return;
@@ -1220,6 +1218,19 @@ function ClientDrawer({
     targets.forEach((p) => updateProduct(p.id, { financialStatus: "MGMV" }));
     toast.success(`${targets.length} produto(s) adicionado(s) ao acordo MGMV`);
     clearSelection();
+  };
+  const bulkCopy = async () => {
+    const targets = selectedProducts();
+    if (targets.length === 0) return;
+    const text = targets
+      .map((p) => `${p.name} - ${p.platform} - ${formatBRL(p.totalValue)}`)
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${targets.length} produto(s) copiado(s)`);
+    } catch {
+      toast.error("Não foi possível copiar para a área de transferência");
+    }
   };
   const financialSummary = calculateClientFinancialSummary(client, products);
   const totalBought = financialSummary.totalPurchased;
