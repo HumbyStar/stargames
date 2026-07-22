@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Folder, Filter, Pencil, Eye, EyeOff, AlertTriangle, Trash2 } from "lucide-react";
+import { Folder, Filter, Pencil, Eye, EyeOff, AlertTriangle, Trash2, Copy } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { Button } from "@/components/ui/button";
@@ -1219,6 +1219,19 @@ function ClientDrawer({
     toast.success(`${targets.length} produto(s) adicionado(s) ao acordo MGMV`);
     clearSelection();
   };
+  const bulkCopy = async () => {
+    const targets = selectedProducts();
+    if (targets.length === 0) return;
+    const text = targets
+      .map((p) => `${p.name} - ${p.platform} - ${formatBRL(p.totalValue)}`)
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${targets.length} produto(s) copiado(s)`);
+    } catch {
+      toast.error("Não foi possível copiar para a área de transferência");
+    }
+  };
   const financialSummary = calculateClientFinancialSummary(client, products);
   const totalBought = financialSummary.totalPurchased;
   const totalPaid = financialSummary.totalPaid;
@@ -1528,6 +1541,15 @@ function ClientDrawer({
               {selectedCount} selecionado(s)
             </span>
             <div className="ml-auto flex flex-wrap gap-1.5">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={bulkCopy}
+                title="Copiar produto - plataforma - total"
+              >
+                <Copy className="mr-1 h-3.5 w-3.5" />
+                Copiar
+              </Button>
               <Button size="sm" variant="outline" onClick={bulkMarkPaid}>
                 Pago
               </Button>
