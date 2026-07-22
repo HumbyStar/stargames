@@ -1541,6 +1541,15 @@ function ClientDrawer({
               {selectedCount} selecionado(s)
             </span>
             <div className="ml-auto flex flex-wrap gap-1.5">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={bulkCopy}
+                title="Copiar produto - plataforma - total"
+              >
+                <Copy className="mr-1 h-3.5 w-3.5" />
+                Copiar
+              </Button>
               <Button size="sm" variant="outline" onClick={bulkMarkPaid}>
                 Pago
               </Button>
