@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Folder, Filter, Pencil, Eye, EyeOff, AlertTriangle, Trash2 } from "lucide-react";
+import { Folder, Filter, Pencil, Eye, EyeOff, AlertTriangle, Trash2, Copy } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { Button } from "@/components/ui/button";
@@ -1200,6 +1200,8 @@ function ClientDrawer({
     clearSelection();
   };
   const bulkAddToMgmv = () => {
+    // placeholder
+  };
     if (!client.mgmv) {
       toast.error("Este cliente não possui acordo MGMV ativo.");
       return;
