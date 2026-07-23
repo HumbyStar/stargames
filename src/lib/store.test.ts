@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   calculateFinancialStatus,
+  calculateReservaDueDate,
   migrateStoreV3,
+  normalizeProductDueDateForCreate,
   productCollectionStatus,
   applyMGMVPartialPayment,
   type MGMVInstallment,
@@ -20,6 +22,23 @@ const baseProduct = (overrides: Partial<Product>): Product => ({
   registerDate: new Date().toISOString(),
   dueDate: new Date().toISOString(),
   ...overrides,
+});
+
+describe("reserva due date", () => {
+  it("força limite de Reserva para um mês após o cadastro", () => {
+    expect(calculateReservaDueDate("2026-07-17").slice(0, 10)).toBe("2026-08-17");
+  });
+
+  it("corrige Reserva criada com limite igual ao cadastro", () => {
+    const normalized = normalizeProductDueDateForCreate(
+      baseProduct({
+        financialStatus: "Reserva",
+        registerDate: "2026-07-17T12:00:00.000Z",
+        dueDate: "2026-07-17T12:00:00.000Z",
+      }),
+    );
+    expect(normalized.dueDate.slice(0, 10)).toBe("2026-08-17");
+  });
 });
 
 describe("calculateFinancialStatus", () => {

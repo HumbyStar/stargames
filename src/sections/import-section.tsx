@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   calculateFinancialStatus,
+  calculateReservaDueDate,
   formatBRL,
   useStore,
   getResetVersion,
@@ -223,11 +224,7 @@ const normalizeDateBR = (s: string): string | null => {
 const calculateDueDate = (status: FinancialStatus, registerDate: string | null) => {
   if (!registerDate) return null;
   if (status === "Reserva") {
-    const d = new Date(`${registerDate}T12:00:00`);
-    if (Number.isNaN(d.getTime())) return registerDate;
-    d.setDate(d.getDate() + 30);
-    if (Number.isNaN(d.getTime())) return registerDate;
-    return d.toISOString().split("T")[0];
+    return calculateReservaDueDate(registerDate).split("T")[0];
   }
   return registerDate;
 };
@@ -1882,9 +1879,11 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           ? new Date(`${p.registerDate}T12:00:00`).toISOString()
           : todayISO;
         const dueISO = p.dueDate
-          ? new Date(`${p.dueDate}T12:00:00`).toISOString()
+          ? effectiveStatus === "Reserva"
+            ? calculateReservaDueDate(regISO)
+            : new Date(`${p.dueDate}T12:00:00`).toISOString()
           : effectiveStatus === "Reserva"
-            ? new Date(new Date(regISO).getTime() + 30 * 86400000).toISOString()
+            ? calculateReservaDueDate(regISO)
             : regISO;
         addProduct({
           clientId: client!.id,
@@ -2267,16 +2266,15 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       affectedClientIds.add(client.id);
       const total = r.totalValue ?? 0;
       const regISO = r.registerDate ?? new Date().toISOString();
-      const dueISO =
-        r.dueDate ??
-        (r.financialStatus === "Reserva"
-          ? new Date(new Date(regISO).getTime() + 30 * 86400000).toISOString()
-          : new Date(new Date(regISO).getTime() + 7 * 86400000).toISOString());
       const paid = r.paidValue ?? (r.financialStatus === "Pago" ? total : 0);
       const finalStatus: FinancialStatus =
         r.financialStatus === "MGMV"
           ? "MGMV"
           : calculateFinancialStatus(total, paid);
+      const dueISO =
+        finalStatus === "Reserva"
+          ? calculateReservaDueDate(regISO)
+          : r.dueDate ?? new Date(new Date(regISO).getTime() + 7 * 86400000).toISOString();
       addProduct({
         clientId: client.id,
         name: r.product,
@@ -2366,9 +2364,11 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       validProducts.forEach((p) => {
         const regISO = p.registerDate ? new Date(`${p.registerDate}T12:00:00`).toISOString() : todayISO;
         const dueISO = p.dueDate
-          ? new Date(`${p.dueDate}T12:00:00`).toISOString()
+          ? p.financialStatus === "Reserva"
+            ? calculateReservaDueDate(regISO)
+            : new Date(`${p.dueDate}T12:00:00`).toISOString()
           : p.financialStatus === "Reserva"
-            ? new Date(new Date(regISO).getTime() + 30 * 86400000).toISOString()
+            ? calculateReservaDueDate(regISO)
             : regISO;
         addProduct({
           clientId: client!.id,
