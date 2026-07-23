@@ -295,8 +295,6 @@ export interface Product {
   notes?: string;
 }
 
-const DAY_MS = 86400000;
-
 function parseDateOnlyTime(value: string): number | null {
   const raw = String(value || "").trim();
   if (!raw) return null;
@@ -309,24 +307,22 @@ function parseDateOnlyTime(value: string): number | null {
 
 export function calculateReservaDueDate(registerDate: string): string {
   const registerTime = parseDateOnlyTime(registerDate) ?? Date.now();
-  return new Date(registerTime + 30 * DAY_MS).toISOString();
+  const register = new Date(registerTime);
+  const due = new Date(register);
+  const originalDay = register.getDate();
+  due.setMonth(due.getMonth() + 1);
+  if (due.getDate() !== originalDay) {
+    due.setDate(0);
+  }
+  return due.toISOString();
 }
 
 export function normalizeProductDueDateForCreate(
   product: Omit<Product, "id">,
 ): Omit<Product, "id"> {
   if (product.financialStatus !== "Reserva") return product;
-
-  const registerTime = parseDateOnlyTime(product.registerDate);
-  const dueTime = parseDateOnlyTime(product.dueDate);
   const expectedDueDate = calculateReservaDueDate(product.registerDate);
-  const expectedTime = parseDateOnlyTime(expectedDueDate);
-
-  if (registerTime === null || dueTime === null || expectedTime === null || dueTime <= registerTime) {
-    return { ...product, dueDate: expectedDueDate };
-  }
-
-  return product;
+  return { ...product, dueDate: expectedDueDate };
 }
 
 export interface Client {
