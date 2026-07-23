@@ -45,7 +45,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { formatBRL, useStore, type FinancialStatus, type Situation } from "@/lib/store";
+import { calculateReservaDueDate, formatBRL, useStore, type FinancialStatus, type Situation } from "@/lib/store";
 import {
   buildClientGroups,
   computeTotals,
@@ -480,7 +480,7 @@ export function ListImportModal({
         const financialStatusFinal = statusToFinancial(r.financialStatus);
         const dueISO =
           financialStatusFinal === "Reserva"
-            ? new Date(new Date(now).getTime() + 30 * 86400000).toISOString()
+            ? calculateReservaDueDate(now)
             : now;
         addProduct({
           clientId,

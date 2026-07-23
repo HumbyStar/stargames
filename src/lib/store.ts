@@ -295,6 +295,36 @@ export interface Product {
   notes?: string;
 }
 
+function parseDateOnlyTime(value: string): number | null {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const parsed = dateOnly
+    ? new Date(`${dateOnly[1]}-${dateOnly[2]}-${dateOnly[3]}T12:00:00`).getTime()
+    : new Date(raw).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function calculateReservaDueDate(registerDate: string): string {
+  const registerTime = parseDateOnlyTime(registerDate) ?? Date.now();
+  const register = new Date(registerTime);
+  const due = new Date(register);
+  const originalDay = register.getDate();
+  due.setMonth(due.getMonth() + 1);
+  if (due.getDate() !== originalDay) {
+    due.setDate(0);
+  }
+  return due.toISOString();
+}
+
+export function normalizeProductDueDateForCreate(
+  product: Omit<Product, "id">,
+): Omit<Product, "id"> {
+  if (product.financialStatus !== "Reserva") return product;
+  const expectedDueDate = calculateReservaDueDate(product.registerDate);
+  return { ...product, dueDate: expectedDueDate };
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -697,7 +727,7 @@ export const useStore = create<State>()((set, get) => ({
         get().clients.find((c) => c.phone.replace(/\D/g, "") === phone.replace(/\D/g, "")),
       addProduct: (p) =>
         set((s) => {
-          const prod = { ...p, id: uid() };
+          const prod = { ...normalizeProductDueDateForCreate(p), id: uid() };
           queueProductUpsert(prod);
           return { products: [...s.products, prod] };
         }),
