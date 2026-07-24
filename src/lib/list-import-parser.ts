@@ -80,6 +80,13 @@ export interface ListImportPreview {
    * de importação para gravar `registerDate` do produto na data marcada.
    */
   headerDate?: string;
+  /**
+   * Data limite (YYYY-MM-DD) informada no cabeçalho como
+   * "Data Limite: DD/MM/AA". Aplicada apenas a itens "Reserva" durante
+   * a confirmação; se ausente ou inválida (<= headerDate), o modal cai
+   * de volta em `calculateReservaDueDate(registerDate)`.
+   */
+  headerDueDate?: string;
   totals: {
     lines: number;
     validRows: number;
