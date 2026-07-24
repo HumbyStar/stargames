@@ -80,6 +80,13 @@ export interface ListImportPreview {
    * de importação para gravar `registerDate` do produto na data marcada.
    */
   headerDate?: string;
+  /**
+   * Data limite (YYYY-MM-DD) informada no cabeçalho como
+   * "Data Limite: DD/MM/AA". Aplicada apenas a itens "Reserva" durante
+   * a confirmação; se ausente ou inválida (<= headerDate), o modal cai
+   * de volta em `calculateReservaDueDate(registerDate)`.
+   */
+  headerDueDate?: string;
   totals: {
     lines: number;
     validRows: number;
@@ -367,31 +374,60 @@ export function parseListText(raw: string): ListImportPreview {
   let currentGroup = "(sem grupo)";
 
   const lines = (raw || "").split(/\r?\n/);
-  // Detecta uma data BR (DD/MM/AAAA) no cabeçalho — precisa aparecer nas
+  // Detecta datas BR (DD/MM/AA[AA]) no cabeçalho — precisa aparecer nas
   // primeiras linhas não vazias antes de qualquer registro de produto/grupo,
   // caso contrário poderíamos confundir com valores dentro das linhas.
+  //
+  // Formatos suportados:
+  //   - "23/07/2026" ou "Itens 23/07/2026"       → headerDate
+  //   - "Data de Entrada: 23/07/26"              → headerDate
+  //   - "Data Limite: 23/08/26"                  → headerDueDate
+  //
+  // IMPORTANTE: usar \d{4} antes de \d{2} — alternação em regex é
+  // avaliada da esquerda p/ a direita, então (\d{2}|\d{4}) casaria "20"
+  // em "2026" e transformaria o ano em 2020.
+  const DATE_RE = /(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})(?!\d)/;
+  const toISO = (m: RegExpMatchArray): string | undefined => {
+    const day = Number(m[1]);
+    const month = Number(m[2]);
+    let year = Number(m[3]);
+    if (m[3].length === 2) year = 2000 + year;
+    if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1900) return undefined;
+    const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    return Number.isNaN(new Date(`${iso}T12:00:00`).getTime()) ? undefined : iso;
+  };
   let headerDate: string | undefined;
+  let headerDueDate: string | undefined;
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (!line) continue;
     if (GROUP_HEADER_RE.test(line) || /\s-\s/.test(line)) break;
-    // IMPORTANTE: usar \d{4} antes de \d{2} — alternação em regex é
-    // avaliada da esquerda p/ a direita, então (\d{2}|\d{4}) casaria "20"
-    // em "2026" e transformaria o ano em 2020.
-    const m = line.match(/(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})(?!\d)/);
-    if (m) {
-      const day = Number(m[1]);
-      const month = Number(m[2]);
-      let year = Number(m[3]);
-      if (m[3].length === 2) year = 2000 + year;
-      if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900) {
-        const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-        if (!Number.isNaN(new Date(`${iso}T12:00:00`).getTime())) {
-          headerDate = iso;
-          break;
-        }
+    const m = line.match(DATE_RE);
+    if (!m) continue;
+    const iso = toISO(m);
+    if (!iso) continue;
+    const lower = line.toLowerCase();
+    const isLimite = /data\s*limite/.test(lower) || /\blimite\b/.test(lower);
+    const isEntrada =
+      /data\s*de\s*entrada/.test(lower) || /\bentrada\b/.test(lower) || /\bcadastro\b/.test(lower);
+    if (isLimite && !headerDueDate) {
+      headerDueDate = iso;
+      continue;
+    }
+    if (!headerDate) {
+      headerDate = iso;
+      if (!isEntrada && !headerDueDate) {
+        // Data solta (sem rótulo) e sem par "Data Limite" — mantém o
+        // comportamento antigo de parar no primeiro achado.
+        // Continua o loop caso venha "Data Limite" abaixo.
       }
     }
+    if (headerDate && headerDueDate) break;
+  }
+  // Se "Data Limite" veio antes ou igual à "Data de Entrada", ignora — a
+  // regra de negócio exige que Reserva seja cobrada depois do cadastro.
+  if (headerDate && headerDueDate && headerDueDate <= headerDate) {
+    headerDueDate = undefined;
   }
   lines.forEach((rawLine, idx) => {
     const line = rawLine.trim();
@@ -413,6 +449,7 @@ export function parseListText(raw: string): ListImportPreview {
     groups: Array.from(groupsSeen),
     clients,
     headerDate,
+    headerDueDate,
     totals: computeTotals(rows, clients),
   };
 }
