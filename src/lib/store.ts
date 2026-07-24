@@ -321,8 +321,16 @@ export function normalizeProductDueDateForCreate(
   product: Omit<Product, "id">,
 ): Omit<Product, "id"> {
   if (product.financialStatus !== "Reserva") return product;
-  const expectedDueDate = calculateReservaDueDate(product.registerDate);
-  return { ...product, dueDate: expectedDueDate };
+  // Regra: Reserva NUNCA pode nascer com dueDate <= registerDate. Se o
+  // chamador informou um dueDate estritamente maior que o cadastro
+  // (ex.: "Data Limite" do cabeçalho da lista colada), preservamos esse
+  // valor. Caso contrário, força cadastro + 1 mês.
+  const registerTime = parseDateOnlyTime(product.registerDate);
+  const providedTime = product.dueDate ? parseDateOnlyTime(product.dueDate) : null;
+  if (registerTime !== null && providedTime !== null && providedTime > registerTime) {
+    return product;
+  }
+  return { ...product, dueDate: calculateReservaDueDate(product.registerDate) };
 }
 
 export interface Client {
