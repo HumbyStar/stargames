@@ -403,6 +403,12 @@ export function ListImportModal({
     const headerISO = preview?.headerDate
       ? new Date(`${preview.headerDate}T12:00:00`).toISOString()
       : null;
+    // "Data Limite: DD/MM/AA" no cabeçalho vira dueDate das Reservas do lote.
+    // Se ausente ou <= registerDate, addProduct/normalizeProductDueDateForCreate
+    // reescreve para cadastro + 1 mês.
+    const headerDueISO = preview?.headerDueDate
+      ? new Date(`${preview.headerDueDate}T12:00:00`).toISOString()
+      : null;
     // Agrupar por "pasta" (grupo da lista) para reaproveitar a mesma esteira
     // visual dos imports de ZIP/Notion.
     const folders: string[] = Array.from(
@@ -480,7 +486,7 @@ export function ListImportModal({
         const financialStatusFinal = statusToFinancial(r.financialStatus);
         const dueISO =
           financialStatusFinal === "Reserva"
-            ? calculateReservaDueDate(now)
+            ? (headerDueISO ?? calculateReservaDueDate(now))
             : now;
         addProduct({
           clientId,
