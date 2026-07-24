@@ -87,4 +87,24 @@ Bruno - 11 91194-7693 - B - Y - 60 reais - PAGO`);
     expect(normalizePhone("11 9194-7693").valid).toBe(true);
     expect(normalizePhone("12345").valid).toBe(false);
   });
+
+  it("lê 'Data de Entrada' e 'Data Limite' do cabeçalho", () => {
+    const out = parseListText(`Data de Entrada: 23/07/26
+Data Limite: 23/08/26
+
+Grupo 1:
+Breno - 11 91194-7693 - Fire Emblem - Switch - 60 reais - RESERVA (30)`);
+    expect(out.headerDate).toBe("2026-07-23");
+    expect(out.headerDueDate).toBe("2026-08-23");
+  });
+
+  it("ignora 'Data Limite' <= 'Data de Entrada'", () => {
+    const out = parseListText(`Data de Entrada: 23/07/26
+Data Limite: 20/07/26
+
+Grupo 1:
+Breno - 11 91194-7693 - Fire Emblem - Switch - 60 reais - RESERVA (30)`);
+    expect(out.headerDate).toBe("2026-07-23");
+    expect(out.headerDueDate).toBeUndefined();
+  });
 });
