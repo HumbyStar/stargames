@@ -39,6 +39,17 @@ describe("reserva due date", () => {
     );
     expect(normalized.dueDate.slice(0, 10)).toBe("2026-08-17");
   });
+
+  it("preserva dueDate explícito quando maior que o cadastro (ex.: 'Data Limite' do cabeçalho)", () => {
+    const normalized = normalizeProductDueDateForCreate(
+      baseProduct({
+        financialStatus: "Reserva",
+        registerDate: "2026-07-23T12:00:00.000Z",
+        dueDate: "2026-08-23T12:00:00.000Z",
+      }),
+    );
+    expect(normalized.dueDate.slice(0, 10)).toBe("2026-08-23");
+  });
 });
 
 describe("calculateFinancialStatus", () => {
