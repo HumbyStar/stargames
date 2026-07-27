@@ -147,6 +147,10 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     open: boolean;
     productId?: string;
   }>({ open: false });
+  const [customerDataModal, setCustomerDataModal] = useState<{
+    open: boolean;
+    client?: Client | null;
+  }>({ open: false });
 
   const drawerClient = clients.find((c) => c.id === drawerClientId) ?? null;
 
