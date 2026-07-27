@@ -1025,6 +1025,20 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
         </DialogContent>
       </Dialog>
 
+      {/* Modal dados completos do cliente */}
+      {customerDataModal.client && (
+        <CustomerDataModal
+          open={customerDataModal.open}
+          onClose={() => setCustomerDataModal({ open: false })}
+          clientName={customerDataModal.client.name}
+          initialData={customerDataModal.client.customerData}
+          onSave={(customerData) => {
+            updateClient(customerDataModal.client!.id, { customerData });
+            toast.success("Dados do cliente salvos");
+          }}
+        />
+      )}
+
       {/* Modal cliente */}
       <ClientModal
         state={clientModal}
