@@ -984,6 +984,9 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                 updateClient(drawerClient.id, { notes });
                 toast.success("Observação salva");
               }}
+              onCustomerData={() =>
+                setCustomerDataModal({ open: true, client: drawerClient })
+              }
               onRegisterPayment={(productId, remaining) => {
                 const raw = window.prompt("Valor recebido (R$):", remaining.toFixed(2));
                 if (!raw) return;
