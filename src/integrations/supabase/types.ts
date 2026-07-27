@@ -183,6 +183,7 @@ export type Database = {
         Row: {
           client_type: string
           created_at: string
+          customer_data: string | null
           folder: string | null
           id: string
           mgmv: Json | null
@@ -199,6 +200,7 @@ export type Database = {
         Insert: {
           client_type?: string
           created_at?: string
+          customer_data?: string | null
           folder?: string | null
           id?: string
           mgmv?: Json | null
@@ -215,6 +217,7 @@ export type Database = {
         Update: {
           client_type?: string
           created_at?: string
+          customer_data?: string | null
           folder?: string | null
           id?: string
           mgmv?: Json | null

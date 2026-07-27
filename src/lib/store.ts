@@ -338,6 +338,8 @@ export interface Client {
   name: string;
   phone: string;
   notes?: string;
+  /** Dados completos do cliente em texto livre (CPF, endereço, etc.). */
+  customerData?: string;
   mgmv?: MGMVAgreement;
   /** Pasta de origem (ex.: Notion ZIP) — usada para filtro/agrupamento. */
   folder?: string;

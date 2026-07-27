@@ -43,6 +43,7 @@ import { MgmvCreateModal } from "@/components/mgmv-create-modal";
 import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
+import { CustomerDataModal } from "@/components/customer-data-modal";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
 import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
@@ -145,6 +146,10 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const [retiradoModal, setRetiradoModal] = useState<{
     open: boolean;
     productId?: string;
+  }>({ open: false });
+  const [customerDataModal, setCustomerDataModal] = useState<{
+    open: boolean;
+    client?: Client | null;
   }>({ open: false });
 
   const drawerClient = clients.find((c) => c.id === drawerClientId) ?? null;
@@ -979,6 +984,9 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                 updateClient(drawerClient.id, { notes });
                 toast.success("Observação salva");
               }}
+              onCustomerData={() =>
+                setCustomerDataModal({ open: true, client: drawerClient })
+              }
               onRegisterPayment={(productId, remaining) => {
                 const raw = window.prompt("Valor recebido (R$):", remaining.toFixed(2));
                 if (!raw) return;
@@ -1016,6 +1024,20 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Modal dados completos do cliente */}
+      {customerDataModal.client && (
+        <CustomerDataModal
+          open={customerDataModal.open}
+          onClose={() => setCustomerDataModal({ open: false })}
+          clientName={customerDataModal.client.name}
+          initialData={customerDataModal.client.customerData}
+          onSave={(customerData) => {
+            updateClient(customerDataModal.client!.id, { customerData });
+            toast.success("Dados do cliente salvos");
+          }}
+        />
+      )}
 
       {/* Modal cliente */}
       <ClientModal
@@ -1088,6 +1110,7 @@ function ClientDrawer({
   onAddProduct,
   onDeleteClient,
   onSaveNotes,
+  onCustomerData,
   onRegisterPayment,
   onChangeSituation,
   onRequestRetirado,
@@ -1101,6 +1124,7 @@ function ClientDrawer({
   onAddProduct: () => void;
   onDeleteClient: () => void | Promise<void>;
   onSaveNotes: (notes: string) => void;
+  onCustomerData: () => void;
   onRegisterPayment: (productId: string, remaining: number) => void;
   onChangeSituation: (productId: string, s: Situation) => void;
   onRequestRetirado: (productId: string) => void;
@@ -1258,6 +1282,9 @@ function ClientDrawer({
         </Button>
         <Button size="sm" onClick={onAddProduct}>
           Adicionar Produto
+        </Button>
+        <Button size="sm" variant="outline" onClick={onCustomerData}>
+          Preencher Dados do Cliente
         </Button>
         {!client.mgmv && products.length > 0 && (
           <Button size="sm" variant="secondary" onClick={() => setMgmvCreateOpen(true)}>

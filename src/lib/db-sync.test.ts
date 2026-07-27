@@ -27,7 +27,7 @@ vi.mock("@/integrations/supabase/client", () => {
   };
 });
 
-import { fetchAllRows } from "./db-sync";
+import { fetchAllRows, rowToClient, clientToRow } from "./db-sync";
 
 function makeRows(n: number, prefix = "r") {
   return Array.from({ length: n }, (_, i) => ({ id: `${prefix}-${i}` }));
@@ -91,5 +91,38 @@ describe("fetchAllRows (anti-truncamento PostgREST)", () => {
     expect(res.data).toBeNull();
     expect(res.error).toEqual({ message: "boom" });
     (mod.supabase as unknown as { from: unknown }).from = original;
+  });
+});
+
+describe("rowToClient / clientToRow", () => {
+  it("preserva customer_data entre DB e Client", () => {
+    const dbRow = {
+      id: "c-1",
+      name: "João",
+      phone: "11911947693",
+      notes: null,
+      customer_data: "CPF: 123.456.789-00\nEndereço: Rua A, 123",
+      folder: null,
+      mgmv: null,
+      client_type: "common",
+    };
+    const client = rowToClient(dbRow as unknown as Parameters<typeof rowToClient>[0]);
+    expect(client.customerData).toBe("CPF: 123.456.789-00\nEndereço: Rua A, 123");
+
+    const row = clientToRow(client);
+    expect(row.customer_data).toBe("CPF: 123.456.789-00\nEndereço: Rua A, 123");
+  });
+
+  it("trata customer_data nulo/indefinido como undefined no Client", () => {
+    const client = rowToClient({
+      id: "c-2",
+      name: "Maria",
+      phone: "11911947694",
+      notes: null,
+      customer_data: null,
+      folder: null,
+      mgmv: null,
+    } as unknown as Parameters<typeof rowToClient>[0]);
+    expect(client.customerData).toBeUndefined();
   });
 });
