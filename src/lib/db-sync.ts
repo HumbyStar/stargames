@@ -23,6 +23,7 @@ export interface DbClientRow {
   name: string;
   phone: string;
   notes: string | null;
+  customer_data?: string | null;
   folder: string | null;
   mgmv: Json;
   client_type?: string;
