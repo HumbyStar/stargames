@@ -1093,6 +1093,7 @@ function ClientDrawer({
   onAddProduct,
   onDeleteClient,
   onSaveNotes,
+  onCustomerData,
   onRegisterPayment,
   onChangeSituation,
   onRequestRetirado,
@@ -1106,6 +1107,7 @@ function ClientDrawer({
   onAddProduct: () => void;
   onDeleteClient: () => void | Promise<void>;
   onSaveNotes: (notes: string) => void;
+  onCustomerData: () => void;
   onRegisterPayment: (productId: string, remaining: number) => void;
   onChangeSituation: (productId: string, s: Situation) => void;
   onRequestRetirado: (productId: string) => void;
