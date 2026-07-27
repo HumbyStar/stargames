@@ -27,7 +27,7 @@ vi.mock("@/integrations/supabase/client", () => {
   };
 });
 
-import { fetchAllRows } from "./db-sync";
+import { fetchAllRows, rowToClient, clientToRow } from "./db-sync";
 
 function makeRows(n: number, prefix = "r") {
   return Array.from({ length: n }, (_, i) => ({ id: `${prefix}-${i}` }));
