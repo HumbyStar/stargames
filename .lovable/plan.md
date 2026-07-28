@@ -1,60 +1,61 @@
-## Feature II — Gerador de Formato para Nota Fiscal
+## Ficha do Cliente — modo estruturado + edição manual
 
-Adicionar ação **"Gerar Formato NF"** na barra do card **Histórico de Produtos** do drawer do cliente, que classifica os produtos selecionados por NCM via IA, agrupa por lote e gera um texto pronto para enviar ao contador.
+Transformar o modal "Preencher Dados do Cliente" em duas experiências no mesmo componente, sem quebrar a Feature II (Gerar Formato NF):
 
-## Fluxo
+1. **Modo textarea (ficha vazia)** — igual hoje: cola texto livre + botão "Analisar com IA" → preview → "Salvar".
+2. **Modo ficha estruturada (ficha preenchida)** — formulário com um input por campo, todos editáveis manualmente.
 
-1. Usuário seleciona 1+ produtos no Histórico de Produtos.
-2. Clica em **Gerar Formato NF** (novo botão na mesma barra dos botões Copiar / Pago / Enviado / etc.).
-3. Sistema valida cadastro fiscal do cliente (usa a IA já existente `analyzeCustomerData` sobre `client.customerData` — se faltar Nome, CPF, Endereço, Número, Bairro, Cidade, UF, CEP, mostra toast pedindo para completar via "Preencher Dados do Cliente" e aborta).
-4. Envia cada produto individual à IA (gateway Lovable, `google/gemini-3.6-flash`) para classificar Categoria + NCM.
-5. Agrupa produtos por NCM (nunca mistura NCMs distintos), ordena por categoria.
-6. Calcula subtotais por lote (soma de `totalValue`) e total geral.
-7. Abre modal com o texto formatado + botão **Copiar**.
+## Formato canônico
+
+Ao salvar em qualquer modo, `client.customerData` passa a ser gravado sempre neste template (ordem fixa, uma linha por campo, campos vazios omitidos):
+
+```
+Nome: ...
+CPF: ...
+Estado: ...
+Cidade: ...
+Bairro: ...
+Rua: ...
+Número: ...
+CEP: ...
+Complemento: ...
+Telefone: ...  (pré-preenchido com client.phone se ausente)
+E-mail: ...
+Obs: ...
+```
+
+Isso garante que a Feature II continua funcionando: `analyzeCustomerData` já re-extrai qualquer texto para `CustomerFiscalData` — o novo formato é ainda mais fácil de parsear que o texto colado.
+
+## Detecção de "ficha preenchida"
+
+Um novo helper puro `parseFichaFromText(text): Partial<CustomerFiscalData>` em `src/lib/ficha-parse.ts` faz um parse determinístico linha-a-linha (regex `^(Nome|CPF|Estado|Cidade|Bairro|Rua|Número|CEP|Complemento|Telefone|E-mail|Obs)\s*:\s*(.+)$`). Considera "preenchido" quando `Nome`, `CPF` e `CEP` estão presentes. Zero chamada de IA — instantâneo, offline e testável.
 
 ## Alterações
 
-### 1. Server function (nova)
-**`src/lib/nf-format.functions.ts`** — `createServerFn` protegido:
-- Input: `{ products: Array<{ id, name, platform, totalValue }> }`.
-- Chama a Lovable AI Gateway (`google/gemini-3.6-flash`, `response_format: json_object`) com prompt fiscal BR pedindo `{ ncm: "8523.49.90", category: "Jogos de videogame mídia física" }` para cada produto (batch em 1 chamada com lista numerada, para economizar créditos).
-- Retorna `Array<{ id, ncm, category }>`.
-- Trata 429/402 igual ao `customer-data-ai.functions.ts`.
+### 1. `src/lib/ficha-parse.ts` (novo)
+- `parseFichaFromText(text) → Partial<CustomerFiscalData>` (regex determinístico).
+- `isFichaComplete(text) → boolean` (Nome + CPF + CEP presentes).
+- `renderFichaText(f, phoneFallback) → string` (formato canônico acima; telefone cai para `client.phone` quando vazio).
+- Testes em `src/lib/ficha-parse.test.ts` cobrindo: parse do próprio output (round-trip), texto vazio, texto livre não-estruturado, campos parciais.
 
-### 2. Utilitário puro (novo, testável)
-**`src/lib/nf-format.ts`**:
-- `buildFiscalHeader(client, fiscal)` → linhas com Nome, CPF, Endereço, CEP.
-- `groupByNcm(products, classifications)` → `Array<{ ncm, category, items, subtotal }>` ordenado por categoria.
-- `renderNfText(header, groups, total)` → string final no formato do PDF (usando `formatBRL`, "Lote N – Categoria", Quantidade, NCM, Subtotal, VALOR TOTAL DA NOTA).
-- Testes em `src/lib/nf-format.test.ts` cobrindo agrupamento, ordenação e formatação.
+### 2. `src/components/customer-data-modal.tsx` (refatorado)
+- Ao abrir: detecta modo via `isFichaComplete(initialData)`.
+- **Modo textarea** (atual): mantido idêntico; ao "Analisar com IA", ao clicar "Salvar" grava usando `renderFichaText(fiscal, client.phone)` para já normalizar. Botão extra "Preencher manualmente" pula direto para o modo ficha com o telefone pré-carregado.
+- **Modo ficha**: título "Ficha do Cliente", grid 2 colunas com um `Input` por campo (Nome, CPF, Estado [UF, `maxLength=2`], Cidade, Bairro, Rua, Número, CEP, Complemento, Telefone, E-mail, Obs [Textarea pequena]). Todos editáveis. Botão secundário "Editar como texto livre" volta ao modo textarea preservando o conteúdo atual serializado.
+- Salvar em qualquer modo: chama `onSave(renderFichaText(...))`.
 
-### 3. Modal (novo)
-**`src/components/nf-format-modal.tsx`**:
-- Props: `open`, `onClose`, `client`, `selectedProducts`.
-- Ao abrir: estado `loading` → chama `analyzeCustomerData` (se `customerData` presente) para obter campos fiscais; valida obrigatórios; se OK, chama `classifyProductsForNf`.
-- Renderiza pré-visualização (lotes + total) e um `<pre>` com o texto final + botão **Copiar** (usa `navigator.clipboard.writeText`, toast de sucesso).
-- Em erro: mostra mensagem clara ("Complete o cadastro fiscal", "IA indisponível", etc.) e botão Fechar.
+### 3. `src/sections/clientes-section.tsx` (botão do drawer)
+- Onde hoje aparece "Preencher Dados do Cliente": trocar o label dinamicamente por `isFichaComplete(client.customerData) ? "Abrir Ficha do Cliente" : "Preencher Dados do Cliente"`. Mesma ação (abre o modal).
 
-### 4. Integração no drawer
-Em **`src/sections/clientes-section.tsx`** (barra de ações do Histórico de Produtos, ~linha 1570):
-- Novo botão `Gerar Formato NF` (habilitado somente com `selectedCount > 0`).
-- Estado local `nfModalOpen` + render do `<NfFormatModal />` no final do drawer.
-- Passa apenas os produtos individuais selecionados (ignora itens MGMV, consistente com o card existente).
+### 4. Sem alterações em
+- Banco (`customer_data` já existe).
+- `src/lib/customer-data-ai.functions.ts` (a IA continua extraindo do texto — o novo formato é mais fácil ainda de parsear).
+- `src/lib/nf-format.ts` / `nf-format-modal.tsx` / `nf-format.functions.ts` — a validação fiscal continua rodando `analyzeCustomerData` sobre `customerData`, e o novo formato canônico é 100% compatível.
 
-### 5. Sem alterações em
-- Banco (usa `customer_data` já existente).
-- Store / cálculos financeiros / MGMV.
-- Outras seções.
+## Compatibilidade com Feature II (NF)
 
-## Detalhes técnicos
-
-- IA em uma única requisição batch para reduzir custo; se algum item vier sem NCM, agrupa em lote "Sem classificação (revisar)" no fim, sem quebrar a saída.
-- NCM sempre exibido no formato mascarado `XXXX.XX.XX` (helper `formatNcm`).
-- Valores em pt-BR via `formatBRL` já existente.
-- Não persiste NCM no banco nesta feature — é gerado sob demanda (evita migration e mantém escopo enxuto). Se quiser cache depois, é incremento futuro.
+O modal NF chama `analyzeCustomerData(client.customerData)` e valida com `missingFiscalFields`. Como o formato canônico usa labels em português direto (`Nome:`, `CPF:`, `CEP:`, etc.), a extração da IA fica trivial e determinística. Nada muda no fluxo NF — só melhora a taxa de extração.
 
 ## Verificação
-
-- `bunx vitest run src/lib/nf-format.test.ts`.
-- Preview: selecionar 2+ produtos → clicar em Gerar Formato NF → validar texto no modal e cópia para clipboard.
-- Caso cadastro fiscal incompleto: garantir toast "Complete o cadastro fiscal em Preencher Dados do Cliente" e modal não abrir com resultado.
+- `bunx vitest run src/lib/ficha-parse.test.ts`
+- Preview: (a) cliente sem ficha → botão "Preencher Dados do Cliente", modo textarea + IA; (b) após salvar → botão vira "Abrir Ficha do Cliente", modal abre com formulário estruturado editável, telefone pré-preenchido; (c) editar um campo e salvar → refletido no drawer; (d) abrir "Gerar Formato NF" → cabeçalho fiscal aparece corretamente.
