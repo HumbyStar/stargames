@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Folder, Filter, Pencil, Eye, EyeOff, AlertTriangle, Trash2, Copy } from "lucide-react";
+import { Folder, Filter, Pencil, Eye, EyeOff, AlertTriangle, Trash2, Copy, Sparkles } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,7 @@ import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-pop
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { CustomerDataModal } from "@/components/customer-data-modal";
+import { NfFormatModal } from "@/components/nf-format-modal";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
 import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
@@ -1145,6 +1146,8 @@ function ClientDrawer({
   // Enviado / Retirar / Removido). Só o clique nos botões da barra aplica;
   // marcar o checkbox nunca altera status sozinho.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [nfModalOpen, setNfModalOpen] = useState(false);
+  const [nfProducts, setNfProducts] = useState<Product[]>([]);
   const updateProduct = useStore((s) => s.updateProduct);
   // Edição por lápis dos produtos do cliente. Apenas Confirmar persiste;
   // Fechar descarta. Blur / click-outside são ignorados pelo hook.
@@ -1632,6 +1635,23 @@ function ClientDrawer({
               <Button size="sm" variant="ghost" onClick={clearSelection}>
                 Limpar
               </Button>
+              <Button
+                size="sm"
+                variant="default"
+                onClick={() => {
+                  const sel = selectedProducts();
+                  if (sel.length === 0) {
+                    toast.info("Selecione ao menos 1 produto");
+                    return;
+                  }
+                  setNfProducts(sel);
+                  setNfModalOpen(true);
+                }}
+                title="Classifica NCM via IA e gera texto pronto para o contador"
+              >
+                <Sparkles className="mr-1 h-3.5 w-3.5" />
+                Gerar Formato NF
+              </Button>
             </div>
           </div>
         )}
@@ -2019,6 +2039,18 @@ function ClientDrawer({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <NfFormatModal
+        open={nfModalOpen}
+        onClose={() => setNfModalOpen(false)}
+        client={client}
+        products={nfProducts.map((p) => ({
+          id: p.id,
+          name: p.name,
+          platform: p.platform ?? "",
+          totalValue: p.totalValue,
+        }))}
+      />
     </div>
   );
 }
