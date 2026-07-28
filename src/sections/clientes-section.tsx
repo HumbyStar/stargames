@@ -44,6 +44,7 @@ import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-pop
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { CustomerDataModal } from "@/components/customer-data-modal";
+import { NfFormatModal } from "@/components/nf-format-modal";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
 import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
@@ -1145,6 +1146,8 @@ function ClientDrawer({
   // Enviado / Retirar / Removido). Só o clique nos botões da barra aplica;
   // marcar o checkbox nunca altera status sozinho.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [nfModalOpen, setNfModalOpen] = useState(false);
+  const [nfProducts, setNfProducts] = useState<Product[]>([]);
   const updateProduct = useStore((s) => s.updateProduct);
   // Edição por lápis dos produtos do cliente. Apenas Confirmar persiste;
   // Fechar descarta. Blur / click-outside são ignorados pelo hook.
