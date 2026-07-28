@@ -44,6 +44,7 @@ import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-pop
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { CustomerDataModal } from "@/components/customer-data-modal";
+import { isFichaComplete } from "@/lib/ficha-parse";
 import { NfFormatModal } from "@/components/nf-format-modal";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
