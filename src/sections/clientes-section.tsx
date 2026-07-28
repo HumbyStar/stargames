@@ -1032,6 +1032,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           open={customerDataModal.open}
           onClose={() => setCustomerDataModal({ open: false })}
           clientName={customerDataModal.client.name}
+          clientPhone={customerDataModal.client.phone}
           initialData={customerDataModal.client.customerData}
           onSave={(customerData) => {
             updateClient(customerDataModal.client!.id, { customerData });
