@@ -44,6 +44,7 @@ import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-pop
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { CustomerDataModal } from "@/components/customer-data-modal";
+import { isFichaComplete } from "@/lib/ficha-parse";
 import { NfFormatModal } from "@/components/nf-format-modal";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
@@ -1032,6 +1033,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           open={customerDataModal.open}
           onClose={() => setCustomerDataModal({ open: false })}
           clientName={customerDataModal.client.name}
+          clientPhone={customerDataModal.client.phone}
           initialData={customerDataModal.client.customerData}
           onSave={(customerData) => {
             updateClient(customerDataModal.client!.id, { customerData });
@@ -1287,7 +1289,9 @@ function ClientDrawer({
           Adicionar Produto
         </Button>
         <Button size="sm" variant="outline" onClick={onCustomerData}>
-          Preencher Dados do Cliente
+          {isFichaComplete(client.customerData)
+            ? "Abrir Ficha do Cliente"
+            : "Preencher Dados do Cliente"}
         </Button>
         {!client.mgmv && products.length > 0 && (
           <Button size="sm" variant="secondary" onClick={() => setMgmvCreateOpen(true)}>
