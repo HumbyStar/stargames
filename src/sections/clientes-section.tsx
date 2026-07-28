@@ -1288,7 +1288,9 @@ function ClientDrawer({
           Adicionar Produto
         </Button>
         <Button size="sm" variant="outline" onClick={onCustomerData}>
-          Preencher Dados do Cliente
+          {isFichaComplete(client.customerData)
+            ? "Abrir Ficha do Cliente"
+            : "Preencher Dados do Cliente"}
         </Button>
         {!client.mgmv && products.length > 0 && (
           <Button size="sm" variant="secondary" onClick={() => setMgmvCreateOpen(true)}>
