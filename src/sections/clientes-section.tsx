@@ -2039,6 +2039,18 @@ function ClientDrawer({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <NfFormatModal
+        open={nfModalOpen}
+        onClose={() => setNfModalOpen(false)}
+        client={client}
+        products={nfProducts.map((p) => ({
+          id: p.id,
+          name: p.name,
+          platform: p.platform ?? "",
+          totalValue: p.totalValue,
+        }))}
+      />
     </div>
   );
 }
