@@ -21,6 +21,9 @@ const BACKUP_SCHEMA_VERSION = 2;
 // Reduzido de 20min → 5min. Se um Worker for morto no meio, a UI consegue
 // retomar/limpar rápido em vez de esperar 20 minutos.
 const STALE_BACKUP_MS = 5 * 60 * 1000;
+// Retomada só é segura quando não há nenhum sinal de vida recente. Antes disso,
+// um novo run concorrente pode sobrescrever logs de um backup que ainda está vivo.
+const RESUME_STALE_MS = 90 * 1000;
 const STORAGE_MIRROR_MAX_BYTES = 500 * 1024 * 1024;
 const STORAGE_MIRROR_MAX_FILES = 10_000;
 // Heurística: cada linha ocupa ~800 bytes em JSONL (chaves + valores).
@@ -199,6 +202,30 @@ async function persistBackupDebug(
       .eq("id", backupId);
   } catch (err) {
     console.warn("[backup] failed to persist debug log:", err);
+  }
+}
+
+async function appendBackupDebug(
+  admin: any,
+  backupId: string,
+  entries: BackupDebugEntry[],
+  patch: Record<string, unknown> = {},
+) {
+  try {
+    const { data } = await admin
+      .from("system_backups")
+      .select("debug_log")
+      .eq("id", backupId)
+      .maybeSingle();
+    const existing = Array.isArray(data?.debug_log)
+      ? (data.debug_log as BackupDebugEntry[])
+      : [];
+    await admin
+      .from("system_backups")
+      .update({ debug_log: [...existing, ...entries].slice(-120), ...patch } as any)
+      .eq("id", backupId);
+  } catch (err) {
+    console.warn("[backup] failed to append debug log:", err);
   }
 }
 
@@ -424,7 +451,11 @@ async function fetchAllRows(
 async function fetchRowsForBackup(
   admin: any,
   table: BackupTable,
-  opts: { batchSize?: number; keepRows?: boolean } = {},
+  opts: {
+    batchSize?: number;
+    keepRows?: boolean;
+    onBatch?: (rowCount: number) => Promise<void>;
+  } = {},
 ): Promise<{ rowCount: number; jsonl: string; rows?: any[] }> {
   const batchSize = opts.batchSize ?? 1000;
   const rowsToKeep: any[] | undefined = opts.keepRows ? [] : undefined;
@@ -444,6 +475,7 @@ async function fetchRowsForBackup(
     if (batchJsonl) chunks.push(rowCount === 0 ? batchJsonl : `\n${batchJsonl}`);
     if (rowsToKeep) rowsToKeep.push(...data);
     rowCount += data.length;
+    if (opts.onBatch) await opts.onBatch(rowCount);
     if (data.length < batchSize) break;
     from += batchSize;
   }
@@ -452,29 +484,37 @@ async function fetchRowsForBackup(
 
 async function cleanupStaleBackups(admin: any) {
   const cutoff = new Date(Date.now() - STALE_BACKUP_MS).toISOString();
-  await admin
+  const { data: staleRows } = await admin
     .from("system_backups")
-    .update({
+    .select("id, debug_log")
+    .in("status", ["pending", "running"])
+    .lt("updated_at", cutoff);
+  for (const row of staleRows ?? []) {
+    const entry: BackupDebugEntry = {
+      at: new Date().toISOString(),
+      level: "error",
+      phase: "timeout",
+      message: "Backup sem sinal de vida recente. Use Tentar novamente para gerar um novo arquivo.",
+      elapsedMs: STALE_BACKUP_MS,
+    };
+    const existing = Array.isArray(row.debug_log)
+      ? (row.debug_log as BackupDebugEntry[])
+      : [];
+    await admin
+      .from("system_backups")
+      .update({
       status: "failed",
-      error: "Backup interrompido por timeout/limite de execução. Gere novamente.",
+      error: "Backup sem sinal de vida recente. Use Tentar novamente para gerar um novo arquivo.",
       error_details: {
-        message: "Backup interrompido por timeout/limite de execução. Gere novamente.",
+        message: "Backup sem sinal de vida recente. Use Tentar novamente para gerar um novo arquivo.",
         phase: "timeout",
         elapsedMs: STALE_BACKUP_MS,
       },
-      debug_log: [
-        {
-          at: new Date().toISOString(),
-          level: "error",
-          phase: "timeout",
-          message: "Backup interrompido por timeout/limite de execução. Gere novamente.",
-          elapsedMs: STALE_BACKUP_MS,
-        },
-      ],
+      debug_log: [...existing, entry].slice(-120),
       finished_at: new Date().toISOString(),
     } as any)
-    .in("status", ["pending", "running"])
-    .lt("created_at", cutoff);
+      .eq("id", row.id);
+  }
 }
 
 async function mirrorBucket(
@@ -571,18 +611,32 @@ async function runBackup(opts: {
   };
 
   let backupId: string;
-  pushDebug("info", "initializing", "Backup iniciado", {
-    type: opts.type,
-    mode: opts.existing ? "resume" : "new",
-  });
   if (opts.existing) {
     backupId = opts.existing.id;
+    const { data: existingRow } = await supabaseAdmin
+      .from("system_backups")
+      .select("debug_log")
+      .eq("id", backupId)
+      .maybeSingle();
+    debugLog.push(
+      ...(Array.isArray(existingRow?.debug_log)
+        ? (existingRow.debug_log as unknown as BackupDebugEntry[])
+        : []),
+    );
+    pushDebug("info", "initializing", "Retomada do backup iniciada", {
+      type: opts.type,
+      mode: "resume",
+    });
     const { error: startErr } = await supabaseAdmin
       .from("system_backups")
       .update({ status: "running", error: null, error_details: null, debug_log: debugLog } as any)
       .eq("id", backupId);
     if (startErr) throw new Error(startErr.message);
   } else {
+    pushDebug("info", "initializing", "Backup iniciado", {
+      type: opts.type,
+      mode: "new",
+    });
     const { data: rowIns, error: insErr } = await supabaseAdmin
       .from("system_backups")
       .insert({
@@ -620,8 +674,26 @@ async function runBackup(opts: {
     for (const table of BACKUP_TABLES) {
       phase = `database:${table}`;
       if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
+      pushDebug("info", `database:${table}`, `Exportando tabela ${table}…`, {
+        started: true,
+      });
+      await persistBackupDebug(supabaseAdmin, backupId, debugLog, { row_counts: rowCounts });
       const keepRows = KEEP_FOR_SUMMARY.has(table);
-      const exported = await fetchRowsForBackup(supabaseAdmin, table, { keepRows });
+      let lastBatchLogAt = 0;
+      const exported = await fetchRowsForBackup(supabaseAdmin, table, {
+        keepRows,
+        onBatch: async (rows) => {
+          if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
+          const nowMs = Date.now();
+          if (nowMs - lastBatchLogAt < 2500) return;
+          lastBatchLogAt = nowMs;
+          pushDebug("info", `database:${table}`, `Exportando ${table}: ${rows.toLocaleString("pt-BR")} linhas lidas`, {
+            rows,
+            progress: true,
+          });
+          await persistBackupDebug(supabaseAdmin, backupId, debugLog, { row_counts: rowCounts });
+        },
+      });
       rowCounts[table] = exported.rowCount;
       zip.file(`database/data/${table}.jsonl`, exported.jsonl);
       if (keepRows) {
@@ -629,6 +701,7 @@ async function runBackup(opts: {
       }
       pushDebug("info", `database:${table}`, `Tabela ${table} exportada`, {
         rows: exported.rowCount,
+        completed: true,
         keptForSummary: keepRows,
       });
       await persistBackupDebug(supabaseAdmin, backupId, debugLog, { row_counts: rowCounts });
@@ -653,6 +726,7 @@ async function runBackup(opts: {
       );
       pushDebug("info", "storage:notion-html-originals", "Arquivos originais espelhados", {
         files: storageObjectCount,
+        completed: true,
       });
       await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
         storage_object_count: storageObjectCount,
@@ -699,11 +773,26 @@ async function runBackup(opts: {
     await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
       business_summary: businessSummary as any,
     });
-    const zipBuf = await zip.generateAsync({
-      type: "uint8array",
-      compression: "STORE",
-      streamFiles: true,
-    });
+    let lastZipProgressAt = 0;
+    const zipBuf = await zip.generateAsync(
+      {
+        type: "uint8array",
+        compression: "STORE",
+        streamFiles: true,
+      },
+      (metadata) => {
+        const nowMs = Date.now();
+        if (nowMs - lastZipProgressAt < 3000 && metadata.percent < 100) return;
+        lastZipProgressAt = nowMs;
+        pushDebug("info", "zip:generate", "Gerando conteúdo final do ZIP", {
+          percent: Math.round(metadata.percent),
+          currentFile: metadata.currentFile ?? null,
+        });
+        void persistBackupDebug(supabaseAdmin, backupId, debugLog, {
+          business_summary: businessSummary as any,
+        });
+      },
+    );
 
     pushDebug("info", "storage:upload", "Enviando ZIP para o armazenamento privado", {
       sizeBytes: zipBuf.byteLength,
@@ -826,10 +915,10 @@ export const createBackupNow = createServerFn({ method: "POST" })
     const cutoffIso = new Date(Date.now() - STALE_BACKUP_MS).toISOString();
     const { data: existingRow } = await supabaseAdmin
       .from("system_backups")
-      .select("id, storage_path, status, created_at")
+      .select("id, storage_path, status, updated_at")
       .eq("created_by", context.userId)
       .in("status", ["pending", "running"])
-      .gte("created_at", cutoffIso)
+      .gte("updated_at", cutoffIso)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -868,7 +957,7 @@ export const createBackupNow = createServerFn({ method: "POST" })
     // e a UI faz polling / retomada via resumeBackup para completar.
     const deferred = deferWithWorkerContext(started);
     if (!deferred) {
-      await persistBackupDebug(
+      await appendBackupDebug(
         supabaseAdmin,
         backupId,
         [
@@ -1050,10 +1139,20 @@ export const resumeBackup = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row) throw new Error("Backup não encontrado.");
-    if (row.status === "completed" || row.status === "failed") {
+    if (row.status === "completed" || row.status === "failed" || row.status === "cancelled") {
       return { id: row.id as string, status: row.status as string, queued: false };
     }
     if (!row.storage_path) throw new Error("Backup sem storage_path.");
+    const lastTouch = row.updated_at ? Date.parse(row.updated_at as string) : 0;
+    if (lastTouch > 0 && Date.now() - lastTouch < RESUME_STALE_MS) {
+      return {
+        id: row.id as string,
+        status: row.status as string,
+        queued: false,
+        active: true,
+        staleInMs: RESUME_STALE_MS - (Date.now() - lastTouch),
+      };
+    }
 
     const started = runBackup({
       type: "manual",
@@ -1111,6 +1210,7 @@ export const cancelBackup = createServerFn({ method: "POST" })
 export interface BackupRow {
   id: string;
   createdAt: string;
+  updatedAt: string;
   finishedAt: string | null;
   createdBy: string | null;
   type: "manual" | "scheduled";
@@ -1142,6 +1242,7 @@ export const listBackups = createServerFn({ method: "GET" })
     return (data ?? []).map((r: any) => ({
       id: r.id,
       createdAt: r.created_at,
+      updatedAt: r.updated_at,
       finishedAt: r.finished_at,
       createdBy: r.created_by,
       type: r.type,

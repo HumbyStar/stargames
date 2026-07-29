@@ -177,14 +177,20 @@ function computeBackupProgress(
     } else if (p.startsWith("database:")) {
       const tbl = p.slice("database:".length);
       const rows = Number((e.meta as any)?.rows ?? 0);
-      tablesDoneRows.set(tbl, rows);
+      const completed = Boolean((e.meta as any)?.completed);
+      if (completed) tablesDoneRows.set(tbl, rows);
       currentTable = tbl;
-      currentLabel = `Exportando ${tbl} (${rows.toLocaleString("pt-BR")} linhas)`;
+      currentLabel = completed
+        ? `Tabela ${tbl} exportada (${rows.toLocaleString("pt-BR")} linhas)`
+        : rows > 0
+          ? `Exportando ${tbl} (${rows.toLocaleString("pt-BR")} linhas lidas)`
+          : `Exportando ${tbl}…`;
       phaseLabel = "Extração do banco";
       stageIndex = 0;
     } else if (p === "storage:notion-html-originals") {
       const files = Number((e.meta as any)?.files ?? 0);
-      if (files > 0) hasMirror = true;
+      const completed = Boolean((e.meta as any)?.completed);
+      if (files > 0 || completed) hasMirror = true;
       currentLabel = "Espelhando arquivos originais";
       phaseLabel = "Espelhamento de storage";
       stageIndex = 0;
@@ -195,7 +201,9 @@ function computeBackupProgress(
       stageIndex = 3;
     } else if (p === "zip:generate") {
       hasZipGen = true;
+      const pct = Number((e.meta as any)?.percent ?? 0);
       currentLabel = "Montando ZIP final";
+      if (pct > 0 && pct < 100) currentLabel = `Montando ZIP final (${pct}%)`;
       phaseLabel = "Compactação";
       stageIndex = 1;
     } else if (p === "storage:upload") {
@@ -257,7 +265,12 @@ function computeBackupProgress(
   else if (phaseLabel === "Inicialização") phasePercent = hasInit ? 100 : 40;
   else if (phaseLabel === "Espelhamento de storage") phasePercent = hasMirror ? 100 : 40;
   else if (phaseLabel === "Resumo de negócio") phasePercent = hasSummary ? 100 : 50;
-  else if (phaseLabel === "Compactação") phasePercent = hasZipGen ? 100 : 40;
+  else if (phaseLabel === "Compactação") {
+    const zipPct = [...row.debugLog]
+      .reverse()
+      .find((e) => e.phase === "zip:generate" && Number((e.meta as any)?.percent ?? 0) > 0);
+    phasePercent = Math.max(40, Math.min(100, Number((zipPct?.meta as any)?.percent ?? 100)));
+  }
   else if (phaseLabel === "Upload do ZIP") phasePercent = hasUpload ? 60 : 20;
 
   let etaMs: number | null = null;
@@ -744,7 +757,7 @@ export function BackupsPanel() {
     if (!running || !activeBackupId) return;
     const started = Date.now();
     const MAX_MS = 20 * 60 * 1000;
-    const STALL_MS = 30 * 1000;
+    const STALL_MS = 120 * 1000;
     let lastProgressAt = Date.now();
     let lastLogSignature = "";
     let resumeAttempts = 0;
@@ -784,7 +797,7 @@ export function BackupsPanel() {
           return;
         }
         if (row) {
-          const sig = `${row.debugLog.length}:${row.debugLog.at(-1)?.at ?? ""}`;
+          const sig = `${row.status}:${row.updatedAt}:${row.debugLog.length}:${row.debugLog.at(-1)?.at ?? ""}`;
           if (sig !== lastLogSignature) {
             lastLogSignature = sig;
             lastProgressAt = Date.now();
@@ -794,12 +807,14 @@ export function BackupsPanel() {
           ) {
             resumeAttempts += 1;
             lastProgressAt = Date.now();
-            toast.loading(
-              `Retomando backup (tentativa ${resumeAttempts})…`,
-              { id: "backup-run" },
-            );
             try {
-              await resume({ data: { id: activeBackupId } });
+              const resumed = await resume({ data: { id: activeBackupId } });
+              if (resumed.queued) {
+                toast.loading(
+                  `Retomando backup (tentativa ${resumeAttempts})…`,
+                  { id: "backup-run" },
+                );
+              }
             } catch (err) {
               console.warn("[backup] resume failed:", err);
             }
@@ -961,6 +976,7 @@ export function BackupsPanel() {
       setFailureRow({
         id: "erro-imediato",
         createdAt: now,
+        updatedAt: now,
         finishedAt: now,
         createdBy: null,
         type: "manual",
