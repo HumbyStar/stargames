@@ -430,6 +430,11 @@ async function cleanupStaleBackups(admin: any) {
     .update({
       status: "failed",
       error: "Backup interrompido por timeout/limite de execução. Gere novamente.",
+      error_details: {
+        message: "Backup interrompido por timeout/limite de execução. Gere novamente.",
+        phase: "timeout",
+        elapsedMs: STALE_BACKUP_MS,
+      },
       finished_at: new Date().toISOString(),
     })
     .in("status", ["pending", "running"])
