@@ -359,6 +359,18 @@ function _formatBytesLoose(n: number): string {
   return `${(mb / 1024).toFixed(2)} GB`;
 }
 
+function formatDurationShort(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  const totalSec = Math.round(ms / 1000);
+  if (totalSec < 60) return `${totalSec}s`;
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  if (m < 60) return s ? `${m}m ${s}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return mm ? `${h}h ${mm}m` : `${h}h`;
+}
+
 function BackupPreflightModal({
   open,
   loading,
