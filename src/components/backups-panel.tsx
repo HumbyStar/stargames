@@ -823,6 +823,18 @@ export function BackupsPanel() {
             <div className="text-[11px] text-sky-700/80">
               Não feche esta janela. Tempo decorrido: {elapsed}s
             </div>
+            <div className="mt-2 space-y-1">
+              <Progress value={progress.percent} className="h-1.5" />
+              <div className="flex items-center justify-between text-[10px] text-sky-700/80 tabular-nums">
+                <span>
+                  {progress.label}
+                  {progress.tablesTotal > 0
+                    ? ` · tabelas ${progress.tablesDone}/${progress.tablesTotal}`
+                    : ""}
+                </span>
+                <span>{progress.percent}%</span>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -868,7 +880,7 @@ export function BackupsPanel() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button onClick={handleGenerate} disabled={running}>
+          <Button onClick={() => void openPreflight()} disabled={running}>
             {running ? (
               <Loader2 className="mr-2 size-4 animate-spin" />
             ) : (
@@ -1042,6 +1054,15 @@ export function BackupsPanel() {
         open={failureOpen}
         row={failureRow}
         onClose={() => setFailureOpen(false)}
+      />
+      <BackupPreflightModal
+        open={preflightOpen}
+        loading={preflightLoading}
+        estimate={preflightData}
+        error={preflightError}
+        onCancel={() => setPreflightOpen(false)}
+        onRetry={() => void openPreflight()}
+        onConfirm={() => void handleGenerate()}
       />
     </div>
   );
