@@ -177,14 +177,20 @@ function computeBackupProgress(
     } else if (p.startsWith("database:")) {
       const tbl = p.slice("database:".length);
       const rows = Number((e.meta as any)?.rows ?? 0);
-      tablesDoneRows.set(tbl, rows);
+      const completed = Boolean((e.meta as any)?.completed);
+      if (completed) tablesDoneRows.set(tbl, rows);
       currentTable = tbl;
-      currentLabel = `Exportando ${tbl} (${rows.toLocaleString("pt-BR")} linhas)`;
+      currentLabel = completed
+        ? `Tabela ${tbl} exportada (${rows.toLocaleString("pt-BR")} linhas)`
+        : rows > 0
+          ? `Exportando ${tbl} (${rows.toLocaleString("pt-BR")} linhas lidas)`
+          : `Exportando ${tbl}…`;
       phaseLabel = "Extração do banco";
       stageIndex = 0;
     } else if (p === "storage:notion-html-originals") {
       const files = Number((e.meta as any)?.files ?? 0);
-      if (files > 0) hasMirror = true;
+      const completed = Boolean((e.meta as any)?.completed);
+      if (files > 0 || completed) hasMirror = true;
       currentLabel = "Espelhando arquivos originais";
       phaseLabel = "Espelhamento de storage";
       stageIndex = 0;
@@ -195,7 +201,9 @@ function computeBackupProgress(
       stageIndex = 3;
     } else if (p === "zip:generate") {
       hasZipGen = true;
+      const pct = Number((e.meta as any)?.percent ?? 0);
       currentLabel = "Montando ZIP final";
+      if (pct > 0 && pct < 100) currentLabel = `Montando ZIP final (${pct}%)`;
       phaseLabel = "Compactação";
       stageIndex = 1;
     } else if (p === "storage:upload") {
@@ -257,7 +265,12 @@ function computeBackupProgress(
   else if (phaseLabel === "Inicialização") phasePercent = hasInit ? 100 : 40;
   else if (phaseLabel === "Espelhamento de storage") phasePercent = hasMirror ? 100 : 40;
   else if (phaseLabel === "Resumo de negócio") phasePercent = hasSummary ? 100 : 50;
-  else if (phaseLabel === "Compactação") phasePercent = hasZipGen ? 100 : 40;
+  else if (phaseLabel === "Compactação") {
+    const zipPct = [...row.debugLog]
+      .reverse()
+      .find((e) => e.phase === "zip:generate" && Number((e.meta as any)?.percent ?? 0) > 0);
+    phasePercent = Math.max(40, Math.min(100, Number((zipPct?.meta as any)?.percent ?? 100)));
+  }
   else if (phaseLabel === "Upload do ZIP") phasePercent = hasUpload ? 60 : 20;
 
   let etaMs: number | null = null;
