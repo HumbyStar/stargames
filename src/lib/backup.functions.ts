@@ -662,3 +662,330 @@ export const setBackupSchedule = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+// ---------------------------------------------------------------------------
+// Resumo do banco vivo (para comparação com backup)
+// ---------------------------------------------------------------------------
+
+export const getCurrentBusinessSummary = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<BusinessSummary> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [clients, products, agreements, installments, nfInvoices, teamTasks, punchEntries] =
+      await Promise.all([
+        fetchAllRows(supabaseAdmin, "clients"),
+        fetchAllRows(supabaseAdmin, "products"),
+        fetchAllRows(supabaseAdmin, "mgmv_agreements"),
+        fetchAllRows(supabaseAdmin, "mgmv_installments"),
+        fetchAllRows(supabaseAdmin, "nf_invoices"),
+        fetchAllRows(supabaseAdmin, "team_tasks"),
+        fetchAllRows(supabaseAdmin, "team_punch_entries"),
+      ]);
+    return computeBusinessSummaryFromRows({
+      clients,
+      products,
+      agreements,
+      installments,
+      nfInvoices,
+      teamTasks,
+      punchEntries,
+    });
+  });
+
+// ---------------------------------------------------------------------------
+// Restauração a partir de backup
+// ---------------------------------------------------------------------------
+
+// Tabelas restauráveis. Mantém a mesma ordem de dependência do backup.
+// `user_roles` e `profiles` do próprio usuário logado ficam protegidos contra
+// lockout — filtrados no handler.
+const RESTORABLE_TABLES = BACKUP_TABLES.filter(
+  (t) => t !== "audit_log" && t !== "import_progress",
+);
+
+export interface RestorePreview {
+  ok: true;
+  source: "backup" | "upload";
+  filename: string;
+  schemaVersion: number;
+  generatedAt: string | null;
+  rowCounts: Record<string, number>;
+  storageObjectCount: number;
+  businessSummary: BusinessSummary | null;
+  current: BusinessSummary;
+  availableTables: string[];
+}
+
+export interface RestoreResult {
+  ok: true;
+  mode: "merge" | "replace";
+  tablesRestored: Array<{ table: string; inserted: number; skipped: number; deleted: number }>;
+  storageFilesRestored: number;
+  durationMs: number;
+}
+
+const restorePreviewSchema = z.object({
+  backupId: z.string().uuid().optional(),
+  uploadedZipBase64: z.string().optional(),
+});
+
+const restoreApplySchema = z.object({
+  backupId: z.string().uuid().optional(),
+  uploadedZipBase64: z.string().optional(),
+  mode: z.enum(["merge", "replace"]),
+  tables: z.array(z.string()).optional(),
+  includeStorage: z.boolean().default(false),
+  confirmReplace: z.string().optional(),
+});
+
+async function loadBackupZip(
+  admin: any,
+  opts: { backupId?: string; uploadedZipBase64?: string },
+): Promise<{ zip: any; filename: string }> {
+  const JSZip = (await import("jszip")).default;
+  if (opts.backupId) {
+    const { data: row, error } = await admin
+      .from("system_backups")
+      .select("storage_path")
+      .eq("id", opts.backupId)
+      .maybeSingle();
+    if (error || !row?.storage_path) throw new Error("Backup não encontrado.");
+    const { data: blob, error: dlErr } = await admin.storage
+      .from(BACKUP_BUCKET)
+      .download(row.storage_path);
+    if (dlErr || !blob) throw new Error(dlErr?.message ?? "Falha ao baixar backup.");
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    const zip = await JSZip.loadAsync(buf);
+    return { zip, filename: row.storage_path.split("/").pop() ?? "backup.zip" };
+  }
+  if (opts.uploadedZipBase64) {
+    const raw = opts.uploadedZipBase64.includes(",")
+      ? opts.uploadedZipBase64.split(",", 2)[1]
+      : opts.uploadedZipBase64;
+    const bin = Uint8Array.from(atob(raw), (c) => c.charCodeAt(0));
+    if (bin.byteLength > 250 * 1024 * 1024) {
+      throw new Error("Arquivo maior que 250 MB.");
+    }
+    const zip = await JSZip.loadAsync(bin);
+    return { zip, filename: "upload.zip" };
+  }
+  throw new Error("Informe um backupId ou faça upload do ZIP.");
+}
+
+async function readManifest(zip: any): Promise<{
+  schemaVersion: number;
+  generatedAt: string | null;
+  rowCounts: Record<string, number>;
+  storageObjectCount: number;
+  businessSummary: BusinessSummary | null;
+}> {
+  const mf = zip.file("manifest.json");
+  if (!mf) throw new Error("manifest.json ausente — arquivo não parece um backup Star Games.");
+  const text = await mf.async("string");
+  const parsed = JSON.parse(text);
+  const version = Number(parsed.schemaVersion ?? 1);
+  if (version < 1 || version > BACKUP_SCHEMA_VERSION) {
+    throw new Error(`Versão de schema incompatível: ${version}`);
+  }
+  return {
+    schemaVersion: version,
+    generatedAt: parsed.generatedAt ?? null,
+    rowCounts: parsed.rowCounts ?? {},
+    storageObjectCount: Number(parsed.storageObjectCount ?? 0),
+    businessSummary: parsed.businessSummary ?? null,
+  };
+}
+
+async function loadTableRows(zip: any, table: string): Promise<any[]> {
+  const f = zip.file(`database/data/${table}.jsonl`);
+  if (!f) return [];
+  const text = await f.async("string");
+  if (!text.trim()) return [];
+  const rows: any[] = [];
+  for (const line of text.split("\n")) {
+    const t = line.trim();
+    if (!t) continue;
+    try {
+      rows.push(JSON.parse(t));
+    } catch {
+      // linha corrompida: ignora
+    }
+  }
+  return rows;
+}
+
+export const previewBackupRestore = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => restorePreviewSchema.parse(d))
+  .handler(async ({ data, context }): Promise<RestorePreview> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { zip, filename } = await loadBackupZip(supabaseAdmin, data);
+    const manifest = await readManifest(zip);
+
+    // Se o backup for antigo (sem businessSummary), calcula na hora a partir do ZIP.
+    let summary = manifest.businessSummary;
+    if (!summary) {
+      const [clients, products, agreements, installments, nfInvoices, teamTasks, punchEntries] =
+        await Promise.all([
+          loadTableRows(zip, "clients"),
+          loadTableRows(zip, "products"),
+          loadTableRows(zip, "mgmv_agreements"),
+          loadTableRows(zip, "mgmv_installments"),
+          loadTableRows(zip, "nf_invoices"),
+          loadTableRows(zip, "team_tasks"),
+          loadTableRows(zip, "team_punch_entries"),
+        ]);
+      summary = computeBusinessSummaryFromRows({
+        clients,
+        products,
+        agreements,
+        installments,
+        nfInvoices,
+        teamTasks,
+        punchEntries,
+      });
+    }
+
+    // Estado atual do banco vivo
+    const [clients, products, agreements, installments, nfInvoices, teamTasks, punchEntries] =
+      await Promise.all([
+        fetchAllRows(supabaseAdmin, "clients"),
+        fetchAllRows(supabaseAdmin, "products"),
+        fetchAllRows(supabaseAdmin, "mgmv_agreements"),
+        fetchAllRows(supabaseAdmin, "mgmv_installments"),
+        fetchAllRows(supabaseAdmin, "nf_invoices"),
+        fetchAllRows(supabaseAdmin, "team_tasks"),
+        fetchAllRows(supabaseAdmin, "team_punch_entries"),
+      ]);
+    const current = computeBusinessSummaryFromRows({
+      clients,
+      products,
+      agreements,
+      installments,
+      nfInvoices,
+      teamTasks,
+      punchEntries,
+    });
+
+    const availableTables = RESTORABLE_TABLES.filter((t) => Boolean(zip.file(`database/data/${t}.jsonl`)));
+
+    return {
+      ok: true,
+      source: data.backupId ? "backup" : "upload",
+      filename,
+      schemaVersion: manifest.schemaVersion,
+      generatedAt: manifest.generatedAt,
+      rowCounts: manifest.rowCounts,
+      storageObjectCount: manifest.storageObjectCount,
+      businessSummary: summary,
+      current,
+      availableTables,
+    };
+  });
+
+export const restoreBackup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => restoreApplySchema.parse(d))
+  .handler(async ({ data, context }): Promise<RestoreResult> => {
+    await assertAdmin(context);
+    if (data.mode === "replace" && data.confirmReplace !== "REPLACE") {
+      throw new Error('Para o modo "Substituir tudo" digite REPLACE para confirmar.');
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const started = Date.now();
+    const { zip } = await loadBackupZip(supabaseAdmin, data);
+    await readManifest(zip);
+
+    const requested = data.tables && data.tables.length > 0
+      ? new Set(data.tables)
+      : new Set(RESTORABLE_TABLES);
+
+    const tablesToProcess = RESTORABLE_TABLES.filter((t) => requested.has(t));
+
+    const results: RestoreResult["tablesRestored"] = [];
+
+    // REPLACE: apaga em ordem reversa (dependentes primeiro)
+    if (data.mode === "replace") {
+      for (const table of [...tablesToProcess].reverse()) {
+        let query = supabaseAdmin.from(table).delete();
+        // Protege o admin logado
+        if (table === "user_roles" || table === "profiles") {
+          query = query.neq("user_id" as any, context.userId).neq("id" as any, context.userId);
+        }
+        // .delete() do PostgREST exige um filtro; usa neq id impossível como fallback.
+        const { error } = await query.neq("id" as any, "00000000-0000-0000-0000-000000000000");
+        if (error) {
+          console.warn(`[restore] delete ${table}:`, error.message);
+        }
+      }
+    }
+
+    // Insere/upsert em ordem normal
+    for (const table of tablesToProcess) {
+      const rows = await loadTableRows(zip, table);
+      let filtered = rows;
+      if (table === "user_roles") {
+        filtered = rows.filter((r) => r.user_id !== context.userId);
+      } else if (table === "profiles") {
+        filtered = rows.filter((r) => r.id !== context.userId);
+      }
+      let inserted = 0;
+      let skipped = 0;
+      const CHUNK = 500;
+      for (let i = 0; i < filtered.length; i += CHUNK) {
+        const chunk = filtered.slice(i, i + CHUNK);
+        const { error } = await supabaseAdmin.from(table).upsert(chunk, {
+          onConflict: "id",
+          ignoreDuplicates: false,
+        } as any);
+        if (error) {
+          console.warn(`[restore] upsert ${table} (chunk ${i}):`, error.message);
+          skipped += chunk.length;
+        } else {
+          inserted += chunk.length;
+        }
+      }
+      results.push({ table, inserted, skipped, deleted: data.mode === "replace" ? rows.length : 0 });
+    }
+
+    // Storage: reenvia arquivos originais
+    let storageFilesRestored = 0;
+    if (data.includeStorage) {
+      const storageFiles = Object.values(zip.files).filter(
+        (f: any) => !f.dir && f.name.startsWith("storage/notion-html-originals/"),
+      );
+      for (const f of storageFiles as any[]) {
+        const rel = f.name.replace("storage/notion-html-originals/", "");
+        const bytes = await f.async("uint8array");
+        const { error } = await supabaseAdmin.storage
+          .from("notion-html-originals")
+          .upload(rel, bytes, { upsert: true });
+        if (!error) storageFilesRestored++;
+      }
+    }
+
+    // Registra no import_history
+    try {
+      await supabaseAdmin.from("import_history").insert({
+        date: new Date().toISOString(),
+        source: "backup-restore",
+        file: data.backupId ? `backup:${data.backupId}` : "upload.zip",
+        clients_created: 0,
+        products_added: 0,
+        errors: results.reduce((s, r) => s + r.skipped, 0),
+        status: "success",
+      } as any);
+    } catch (err) {
+      console.warn("[restore] import_history log failed:", err);
+    }
+
+    return {
+      ok: true,
+      mode: data.mode,
+      tablesRestored: results,
+      storageFilesRestored,
+      durationMs: Date.now() - started,
+    };
+  });
