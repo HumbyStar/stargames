@@ -744,7 +744,7 @@ export function BackupsPanel() {
     if (!running || !activeBackupId) return;
     const started = Date.now();
     const MAX_MS = 20 * 60 * 1000;
-    const STALL_MS = 30 * 1000;
+    const STALL_MS = 120 * 1000;
     let lastProgressAt = Date.now();
     let lastLogSignature = "";
     let resumeAttempts = 0;
@@ -784,7 +784,7 @@ export function BackupsPanel() {
           return;
         }
         if (row) {
-          const sig = `${row.debugLog.length}:${row.debugLog.at(-1)?.at ?? ""}`;
+          const sig = `${row.status}:${row.updatedAt}:${row.debugLog.length}:${row.debugLog.at(-1)?.at ?? ""}`;
           if (sig !== lastLogSignature) {
             lastLogSignature = sig;
             lastProgressAt = Date.now();
@@ -794,12 +794,14 @@ export function BackupsPanel() {
           ) {
             resumeAttempts += 1;
             lastProgressAt = Date.now();
-            toast.loading(
-              `Retomando backup (tentativa ${resumeAttempts})…`,
-              { id: "backup-run" },
-            );
             try {
-              await resume({ data: { id: activeBackupId } });
+              const resumed = await resume({ data: { id: activeBackupId } });
+              if (resumed.queued) {
+                toast.loading(
+                  `Retomando backup (tentativa ${resumeAttempts})…`,
+                  { id: "backup-run" },
+                );
+              }
             } catch (err) {
               console.warn("[backup] resume failed:", err);
             }
