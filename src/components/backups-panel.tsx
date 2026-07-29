@@ -469,6 +469,7 @@ export function BackupsPanel() {
   const list = useServerFn(listBackups);
   const create = useServerFn(createBackupNow);
   const resume = useServerFn(resumeBackup);
+  const cancel = useServerFn(cancelBackup);
   const estimate = useServerFn(estimateBackup);
   const del = useServerFn(deleteBackup);
   const getUrl = useServerFn(getBackupDownloadUrl);
