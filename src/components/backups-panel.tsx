@@ -886,6 +886,18 @@ export function BackupsPanel() {
               </div>
             </div>
           </div>
+          {activeBackupId ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive"
+              disabled={activeRow?.cancelRequested}
+              onClick={() => void handleCancel(activeBackupId)}
+            >
+              <Ban className="mr-1.5 size-3.5" />
+              {activeRow?.cancelRequested ? "Cancelando…" : "Cancelar"}
+            </Button>
+          ) : null}
         </div>
       )}
       <Card title="Backup completo">
