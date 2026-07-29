@@ -37,6 +37,7 @@ import {
   getBackupDownloadUrl,
   getBackupSchedule,
   listBackups,
+  resumeBackup,
   setBackupSchedule,
   type BackupDebugEntry,
   type BackupErrorDetails,
