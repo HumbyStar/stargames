@@ -46,6 +46,7 @@ import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { CustomerDataModal } from "@/components/customer-data-modal";
 import { isFichaComplete } from "@/lib/ficha-parse";
 import { NfFormatModal } from "@/components/nf-format-modal";
+import { NfHistoryModal } from "@/components/nf-history-modal";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
 import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
@@ -1150,6 +1151,7 @@ function ClientDrawer({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [nfModalOpen, setNfModalOpen] = useState(false);
   const [nfProducts, setNfProducts] = useState<Product[]>([]);
+  const [nfHistoryOpen, setNfHistoryOpen] = useState(false);
   const updateProduct = useStore((s) => s.updateProduct);
   // Edição por lápis dos produtos do cliente. Apenas Confirmar persiste;
   // Fechar descarta. Blur / click-outside são ignorados pelo hook.
@@ -1292,6 +1294,13 @@ function ClientDrawer({
           {isFichaComplete(client.customerData)
             ? "Abrir Ficha do Cliente"
             : "Preencher Dados do Cliente"}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setNfHistoryOpen(true)}
+        >
+          Notas Fiscais
         </Button>
         {!client.mgmv && products.length > 0 && (
           <Button size="sm" variant="secondary" onClick={() => setMgmvCreateOpen(true)}>
@@ -2054,6 +2063,12 @@ function ClientDrawer({
           platform: p.platform ?? "",
           totalValue: p.totalValue,
         }))}
+      />
+      <NfHistoryModal
+        open={nfHistoryOpen}
+        onClose={() => setNfHistoryOpen(false)}
+        clientId={client.id}
+        clientName={client.name}
       />
     </div>
   );
