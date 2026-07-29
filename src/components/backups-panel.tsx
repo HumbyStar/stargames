@@ -820,7 +820,10 @@ export function BackupsPanel() {
     () => (activeBackupId ? rows.find((r) => r.id === activeBackupId) ?? null : null),
     [rows, activeBackupId],
   );
-  const progress = useMemo(() => computeBackupProgress(activeRow), [activeRow]);
+  const progress = useMemo(
+    () => computeBackupProgress(activeRow, preflightData, elapsed * 1000),
+    [activeRow, preflightData, elapsed],
+  );
 
   const openPreflight = async () => {
     if (running) return;
