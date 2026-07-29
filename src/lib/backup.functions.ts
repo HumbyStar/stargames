@@ -23,6 +23,8 @@ const BACKUP_SCHEMA_VERSION = 2;
 const STALE_BACKUP_MS = 5 * 60 * 1000;
 const STORAGE_MIRROR_MAX_BYTES = 500 * 1024 * 1024;
 const STORAGE_MIRROR_MAX_FILES = 10_000;
+// Heurística: cada linha ocupa ~800 bytes em JSONL (chaves + valores).
+const ESTIMATED_BYTES_PER_ROW = 800;
 
 export interface BackupDebugEntry {
   at: string;
@@ -68,6 +70,8 @@ const BACKUP_TABLES = [
 ] as const;
 
 type BackupTable = (typeof BACKUP_TABLES)[number];
+
+export const BACKUP_TABLE_NAMES: readonly string[] = BACKUP_TABLES;
 
 // ---------------------------------------------------------------------------
 // Resumo de negócio
