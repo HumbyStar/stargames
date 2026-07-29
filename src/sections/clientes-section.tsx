@@ -1757,7 +1757,15 @@ function ClientDrawer({
                           aria-label="Editar nome do produto"
                         />
                       ) : (
-                        p.name
+                        <span className="inline-flex items-center">
+                          {p.name}
+                          {(() => {
+                            const info = nfProductMap.get(p.id);
+                            return info ? (
+                              <NfEmittedBadge count={info.count} lastAt={info.lastAt} />
+                            ) : null;
+                          })()}
+                        </span>
                       )}
                     </td>
                     <td className="py-2 pr-3 text-muted-foreground">
