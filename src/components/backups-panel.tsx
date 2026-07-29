@@ -307,11 +307,11 @@ export function BackupsPanel() {
             )}
             Gerar backup agora
           </Button>
-          <Button variant="outline" onClick={() => void refresh()} disabled={loading}>
+          <Button variant="outline" onClick={() => void refresh()} disabled={loading || running}>
             <RefreshCcw className={cn("mr-2 size-4", loading && "animate-spin")} />
             Atualizar
           </Button>
-          <Button variant="outline" onClick={() => setRestoreOpen(true)}>
+          <Button variant="outline" onClick={() => setRestoreOpen(true)} disabled={running}>
             <Undo2 className="mr-2 size-4" />
             Restaurar backup
           </Button>
@@ -320,7 +320,7 @@ export function BackupsPanel() {
             <Select
               value={schedule?.frequency ?? "off"}
               onValueChange={(v) => handleScheduleChange(v as "off" | "daily" | "weekly")}
-              disabled={savingSchedule}
+              disabled={savingSchedule || running}
             >
               <SelectTrigger className="h-8 w-40 text-xs">
                 <SelectValue />
