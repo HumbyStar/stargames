@@ -870,15 +870,6 @@ export const resumeBackup = createServerFn({ method: "POST" })
   });
 
 // removido: implementação original de createBackupNow substituída acima
-const _legacyRemovedCreateBackup = async () => {
-    const now = new Date();
-    const filename = formatFilename(now);
-    const storagePath = storagePathFor(now, filename);
-    void filename;
-    void storagePath;
-    return null;
-};
-void _legacyRemovedCreateBackup;
 
 export interface BackupRow {
   id: string;
