@@ -328,9 +328,15 @@ async function mirrorBucket(
   admin: any,
   bucket: string,
   onFile: (relPath: string, bytes: Uint8Array) => void,
+  opts: { maxTotalBytes?: number; maxFiles?: number } = {},
 ): Promise<number> {
   let count = 0;
+  let totalBytes = 0;
+  let stopped = false;
+  const maxBytes = opts.maxTotalBytes ?? 25 * 1024 * 1024; // 25MB
+  const maxFiles = opts.maxFiles ?? 500;
   const walk = async (prefix: string) => {
+    if (stopped) return;
     let offset = 0;
     const limit = 100;
     // eslint-disable-next-line no-constant-condition
@@ -343,6 +349,7 @@ async function mirrorBucket(
       if (error) throw new Error(`[storage/${bucket}] ${error.message}`);
       if (!data || data.length === 0) break;
       for (const item of data) {
+        if (stopped) return;
         const isFolder = !item.id && !item.metadata;
         const path = prefix ? `${prefix}/${item.name}` : item.name;
         if (isFolder) {
@@ -353,6 +360,14 @@ async function mirrorBucket(
           const buf = new Uint8Array(await blob.arrayBuffer());
           onFile(path, buf);
           count++;
+          totalBytes += buf.byteLength;
+          if (count >= maxFiles || totalBytes >= maxBytes) {
+            console.warn(
+              `[backup] storage mirror capped at ${count} files / ${totalBytes} bytes`,
+            );
+            stopped = true;
+            return;
+          }
         }
       }
       if (data.length < limit) break;
@@ -393,14 +408,27 @@ async function runBackup(opts: {
     const zip = new JSZip();
     const rowCounts: Record<string, number> = {};
     const tableRows: Record<string, any[]> = {};
+    // Somente tabelas necessárias ao resumo permanecem em memória; as
+    // demais são serializadas e descartadas para evitar estourar o
+    // limite de memória do Worker.
+    const KEEP_FOR_SUMMARY = new Set<string>([
+      "clients",
+      "products",
+      "mgmv_agreements",
+      "mgmv_installments",
+      "nf_invoices",
+      "team_tasks",
+      "team_punch_entries",
+    ]);
 
-    // Tabelas
     for (const table of BACKUP_TABLES) {
       const rows = await fetchAllRows(supabaseAdmin, table);
       rowCounts[table] = rows.length;
-      tableRows[table] = rows;
       const jsonl = rows.map((r) => JSON.stringify(r)).join("\n");
       zip.file(`database/data/${table}.jsonl`, jsonl);
+      if (KEEP_FOR_SUMMARY.has(table)) {
+        tableRows[table] = rows;
+      }
     }
 
     // Storage: notion-html-originals
@@ -412,6 +440,7 @@ async function runBackup(opts: {
         (relPath, bytes) => {
           zip.file(`storage/notion-html-originals/${relPath}`, bytes);
         },
+        { maxTotalBytes: 20 * 1024 * 1024, maxFiles: 300 },
       );
     } catch (err) {
       // Se o bucket não existir, seguimos com o resto do backup.
