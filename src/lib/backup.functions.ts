@@ -392,11 +392,13 @@ async function runBackup(opts: {
   try {
     const zip = new JSZip();
     const rowCounts: Record<string, number> = {};
+    const tableRows: Record<string, any[]> = {};
 
     // Tabelas
     for (const table of BACKUP_TABLES) {
       const rows = await fetchAllRows(supabaseAdmin, table);
       rowCounts[table] = rows.length;
+      tableRows[table] = rows;
       const jsonl = rows.map((r) => JSON.stringify(r)).join("\n");
       zip.file(`database/data/${table}.jsonl`, jsonl);
     }
@@ -416,6 +418,16 @@ async function runBackup(opts: {
       console.warn("[backup] mirror bucket failed:", err);
     }
 
+    const businessSummary = computeBusinessSummaryFromRows({
+      clients: tableRows["clients"] ?? [],
+      products: tableRows["products"] ?? [],
+      agreements: tableRows["mgmv_agreements"] ?? [],
+      installments: tableRows["mgmv_installments"] ?? [],
+      nfInvoices: tableRows["nf_invoices"] ?? [],
+      teamTasks: tableRows["team_tasks"] ?? [],
+      punchEntries: tableRows["team_punch_entries"] ?? [],
+    });
+
     const manifest = {
       schemaVersion: BACKUP_SCHEMA_VERSION,
       generatedAt: now.toISOString(),
@@ -424,8 +436,10 @@ async function runBackup(opts: {
       storageObjectCount,
       tables: BACKUP_TABLES,
       buckets: ["notion-html-originals"],
+      businessSummary,
     };
     zip.file("manifest.json", JSON.stringify(manifest, null, 2));
+    zip.file("summary.json", JSON.stringify(businessSummary, null, 2));
     zip.file("RESTORE.md", RESTORE_MD);
 
     const zipBuf = await zip.generateAsync({
@@ -452,6 +466,7 @@ async function runBackup(opts: {
         row_counts: rowCounts,
         storage_object_count: storageObjectCount,
         finished_at: new Date().toISOString(),
+        business_summary: businessSummary as any,
       })
       .eq("id", backupId);
 
