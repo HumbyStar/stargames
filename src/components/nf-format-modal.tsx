@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useServerFn } from "@tanstack/react-start";
 import { analyzeCustomerData, type CustomerFiscalData } from "@/lib/customer-data-ai.functions";
 import { classifyProductsForNf } from "@/lib/nf-format.functions";
+import { saveNfInvoice } from "@/lib/nf-history.functions";
 import {
   buildFiscalHeader,
   groupByNcm,
@@ -20,7 +21,7 @@ import {
   type NfProduct,
 } from "@/lib/nf-format";
 import { toast } from "sonner";
-import { Copy, Loader2, Sparkles, AlertCircle } from "lucide-react";
+import { CheckCircle2, Loader2, Sparkles, AlertCircle } from "lucide-react";
 import type { Client } from "@/lib/store";
 
 interface Props {
@@ -33,16 +34,20 @@ interface Props {
 export function NfFormatModal({ open, onClose, client, products }: Props) {
   const analyze = useServerFn(analyzeCustomerData);
   const classify = useServerFn(classifyProductsForNf);
+  const save = useServerFn(saveNfInvoice);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [missing, setMissing] = useState<string[]>([]);
   const [text, setText] = useState("");
+  const [totalCents, setTotalCents] = useState(0);
 
   useEffect(() => {
     if (!open || !client) return;
     setError(null);
     setMissing([]);
     setText("");
+    setTotalCents(0);
     const raw = (client.customerData ?? "").trim();
     if (!raw) {
       setError(
@@ -82,6 +87,8 @@ export function NfFormatModal({ open, onClose, client, products }: Props) {
         const header = buildFiscalHeader(fiscal);
         const groups = groupByNcm(products, classifications);
         setText(renderNfText(header, groups));
+        const total = groups.reduce((s, g) => s + g.subtotal, 0);
+        setTotalCents(Math.round(total * 100));
       } catch (e) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : "Falha ao gerar formato NF.");
@@ -94,12 +101,24 @@ export function NfFormatModal({ open, onClose, client, products }: Props) {
     };
   }, [open, client, products, analyze, classify]);
 
-  async function copyText() {
+  async function confirmNota() {
+    if (!client || !text) return;
+    setSaving(true);
     try {
-      await navigator.clipboard.writeText(text);
-      toast.success("Texto copiado para envio ao contador.");
-    } catch {
-      toast.error("Não foi possível copiar. Selecione manualmente.");
+      await save({
+        data: {
+          clientId: client.id,
+          content: text,
+          totalCents,
+          productIds: products.map((p) => p.id),
+        },
+      });
+      toast.success("Nota registrada no histórico do cliente.");
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao salvar nota.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -156,9 +175,12 @@ export function NfFormatModal({ open, onClose, client, products }: Props) {
           <Button variant="outline" onClick={onClose}>
             Fechar
           </Button>
-          <Button onClick={copyText} disabled={!text || loading}>
-            <Copy className="mr-2 h-4 w-4" />
-            Copiar
+          <Button onClick={confirmNota} disabled={!text || loading || saving}>
+            {saving ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando…</>
+            ) : (
+              <><CheckCircle2 className="mr-2 h-4 w-4" /> Confirmar Nota</>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
