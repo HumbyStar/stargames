@@ -110,7 +110,7 @@ function diagnosticsText(row: BackupRow | null): string {
           (log) =>
             `[${new Date(log.at).toLocaleString("pt-BR")}] ${log.level.toUpperCase()} ${log.phase} (${formatElapsed(log.elapsedMs)}): ${log.message}${log.meta ? ` ${JSON.stringify(log.meta)}` : ""}`,
         )
-      : ["Sem logs persistidos para este backup."],
+      : ["Sem logs persistidos para este backup."]
     ),
   ].filter(Boolean);
   return lines.join("\n");
