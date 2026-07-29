@@ -710,8 +710,10 @@ export type Database = {
           business_summary: Json
           created_at: string
           created_by: string | null
+          debug_log: Json
           duration_ms: number | null
           error: string | null
+          error_details: Json | null
           finished_at: string | null
           id: string
           row_counts: Json
@@ -726,8 +728,10 @@ export type Database = {
           business_summary?: Json
           created_at?: string
           created_by?: string | null
+          debug_log?: Json
           duration_ms?: number | null
           error?: string | null
+          error_details?: Json | null
           finished_at?: string | null
           id?: string
           row_counts?: Json
@@ -742,8 +746,10 @@ export type Database = {
           business_summary?: Json
           created_at?: string
           created_by?: string | null
+          debug_log?: Json
           duration_ms?: number | null
           error?: string | null
+          error_details?: Json | null
           finished_at?: string | null
           id?: string
           row_counts?: Json
