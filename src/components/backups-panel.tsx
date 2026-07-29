@@ -159,10 +159,11 @@ export function BackupsPanel() {
 
   return (
     <div className="space-y-4">
-      <Card
-        title="Backup completo"
-        description="Gera um único arquivo .zip com todas as tabelas do sistema, arquivos originais de importação e instruções de restauração. Ideal para portabilidade e migração."
-      >
+      <Card title="Backup completo">
+        <p className="mb-3 text-xs text-muted-foreground">
+          Gera um único arquivo .zip com todas as tabelas do sistema, arquivos originais de
+          importação e instruções de restauração. Ideal para portabilidade e migração.
+        </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-border bg-card/50 p-3">
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
