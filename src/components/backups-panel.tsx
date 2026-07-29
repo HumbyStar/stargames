@@ -336,10 +336,12 @@ function BackupFailureModal({
   row,
   open,
   onClose,
+  onRetry,
 }: {
   row: BackupRow | null;
   open: boolean;
   onClose: () => void;
+  onRetry?: () => void;
 }) {
   const details: BackupErrorDetails | null = row?.errorDetails ?? null;
   const logs: BackupDebugEntry[] = row?.debugLog ?? [];
@@ -373,6 +375,13 @@ function BackupFailureModal({
             <p className="mt-1 whitespace-pre-wrap break-words text-sm text-destructive">
               {details?.message ?? row?.error ?? "Falha desconhecida."}
             </p>
+            {onRetry ? (
+              <div className="mt-3 flex justify-end">
+                <Button size="sm" onClick={onRetry}>
+                  <RefreshCcw className="mr-2 size-3.5" /> Tentar novamente
+                </Button>
+              </div>
+            ) : null}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
@@ -1004,6 +1013,17 @@ export function BackupsPanel() {
                           >
                             <TerminalSquare className="size-3.5" />
                           </Button>
+                          {r.status === "failed" ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              title="Tentar novamente"
+                              disabled={running}
+                              onClick={() => void openPreflight()}
+                            >
+                              <RefreshCcw className="size-3.5" />
+                            </Button>
+                          ) : null}
                           {(r.status === "pending" || r.status === "running") ? (
                             <Button
                               size="sm"
@@ -1054,6 +1074,10 @@ export function BackupsPanel() {
         open={failureOpen}
         row={failureRow}
         onClose={() => setFailureOpen(false)}
+        onRetry={() => {
+          setFailureOpen(false);
+          void openPreflight();
+        }}
       />
       <BackupPreflightModal
         open={preflightOpen}
