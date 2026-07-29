@@ -9,6 +9,7 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
+  HardDrive,
   History,
   KeyRound,
   LayoutGrid,
@@ -67,6 +68,7 @@ import {
 import { useUiStore } from "@/lib/ui-store";
 import { NotificationsPrefsCard } from "@/components/notifications-prefs-card";
 import { NavbarSettingsCard } from "@/components/navbar-settings-card";
+import { BackupsPanel } from "@/components/backups-panel";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -80,6 +82,7 @@ type View =
   | "navbar"
   | "history"
   | "duplicates"
+  | "backups"
   | "danger";
 
 function DiagBox({
@@ -749,6 +752,13 @@ export function ConfiguracoesSection() {
               onOpen={() => setView("danger")}
             />
             <SecondaryCard
+              icon={HardDrive}
+              title="Backups do sistema"
+              summary="Snapshot completo (.zip) com todos os dados e arquivos, manual ou agendado."
+              status="Portabilidade total"
+              onOpen={() => setView("backups")}
+            />
+            <SecondaryCard
               icon={Brain}
               title="Treinar I.A"
               summary="Onboarding guiado + análise do sistema para gerar automações Python que reduzem o uso de IA."
@@ -1341,6 +1351,16 @@ export function ConfiguracoesSection() {
             description="Reordenar ícones, ocultar itens e ajustar animações."
           />
           <NavbarSettingsCard />
+        </>
+      )}
+
+      {view === "backups" && (
+        <>
+          <DetailHeader
+            title="Backups do sistema"
+            description="Gere e agende snapshots completos e portáveis do sistema."
+          />
+          <BackupsPanel />
         </>
       )}
 

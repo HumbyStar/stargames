@@ -705,6 +705,54 @@ export type Database = {
         }
         Relationships: []
       }
+      system_backups: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          duration_ms: number | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          row_counts: Json
+          size_bytes: number | null
+          status: string
+          storage_object_count: number
+          storage_path: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          duration_ms?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          row_counts?: Json
+          size_bytes?: number | null
+          status?: string
+          storage_object_count?: number
+          storage_path?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          duration_ms?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          row_counts?: Json
+          size_bytes?: number | null
+          status?: string
+          storage_object_count?: number
+          storage_path?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       team_punch_entries: {
         Row: {
           created_at: string
@@ -946,6 +994,14 @@ export type Database = {
         Returns: boolean
       }
       can_view_team_tasks: { Args: { _user_id: string }; Returns: boolean }
+      get_system_backup_schedule: {
+        Args: never
+        Returns: {
+          active: boolean
+          jobid: number
+          schedule: string
+        }[]
+      }
       has_any_internal_role: { Args: { _user_id: string }; Returns: boolean }
       has_permission: {
         Args: {
@@ -960,6 +1016,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      set_system_backup_schedule: {
+        Args: { _frequency: string; _job_name: string }
+        Returns: undefined
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
