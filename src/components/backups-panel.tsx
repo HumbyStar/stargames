@@ -3,17 +3,27 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
   CalendarClock,
+  AlertTriangle,
+  Copy,
   Download,
   HardDrive,
   Loader2,
   Play,
   RefreshCcw,
+  TerminalSquare,
   Trash2,
   BarChart3,
   Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui-bits";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -28,6 +38,8 @@ import {
   getBackupSchedule,
   listBackups,
   setBackupSchedule,
+  type BackupDebugEntry,
+  type BackupErrorDetails,
   type BackupRow,
   type BackupScheduleInfo,
 } from "@/lib/backup.functions";
@@ -72,6 +84,158 @@ function statusBadge(status: BackupRow["status"]) {
   );
 }
 
+function formatElapsed(ms: number | null | undefined): string {
+  if (!ms || ms < 0) return "—";
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function diagnosticsText(row: BackupRow | null): string {
+  if (!row) return "";
+  const details = row.errorDetails;
+  const lines = [
+    `Backup: ${row.id}`,
+    `Status: ${row.status}`,
+    `Criado em: ${new Date(row.createdAt).toLocaleString("pt-BR")}`,
+    `Finalizado em: ${row.finishedAt ? new Date(row.finishedAt).toLocaleString("pt-BR") : "—"}`,
+    `Fase do erro: ${details?.phase ?? "—"}`,
+    `Tempo até falhar: ${formatElapsed(details?.elapsedMs ?? row.durationMs)}`,
+    `Mensagem: ${details?.message ?? row.error ?? "—"}`,
+    details?.name ? `Tipo: ${details.name}` : null,
+    details?.stack ? `Stack:\n${details.stack}` : null,
+    "",
+    "Logs do backend:",
+    ...(row.debugLog.length > 0
+      ? row.debugLog.map(
+          (log) =>
+            `[${new Date(log.at).toLocaleString("pt-BR")}] ${log.level.toUpperCase()} ${log.phase} (${formatElapsed(log.elapsedMs)}): ${log.message}${log.meta ? ` ${JSON.stringify(log.meta)}` : ""}`,
+        )
+      : ["Sem logs persistidos para este backup."]
+    ),
+  ].filter(Boolean);
+  return lines.join("\n");
+}
+
+function BackupFailureModal({
+  row,
+  open,
+  onClose,
+}: {
+  row: BackupRow | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const details: BackupErrorDetails | null = row?.errorDetails ?? null;
+  const logs: BackupDebugEntry[] = row?.debugLog ?? [];
+  const copyDiagnostics = async () => {
+    if (!row) return;
+    try {
+      await navigator.clipboard.writeText(diagnosticsText(row));
+      toast.success("Diagnóstico copiado.");
+    } catch {
+      toast.error("Não foi possível copiar o diagnóstico.");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="size-5" /> Backup falhou
+          </DialogTitle>
+          <DialogDescription>
+            Mensagem detalhada e logs persistidos do backend para diagnóstico.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-destructive">
+              Motivo principal
+            </div>
+            <p className="mt-1 whitespace-pre-wrap break-words text-sm text-destructive">
+              {details?.message ?? row?.error ?? "Falha desconhecida."}
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-border bg-card/50 p-3">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Fase</div>
+              <div className="mt-1 text-sm font-semibold">{details?.phase ?? "—"}</div>
+            </div>
+            <div className="rounded-lg border border-border bg-card/50 p-3">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Tempo até falhar</div>
+              <div className="mt-1 text-sm font-semibold tabular-nums">
+                {formatElapsed(details?.elapsedMs ?? row?.durationMs)}
+              </div>
+            </div>
+            <div className="rounded-lg border border-border bg-card/50 p-3">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Tipo</div>
+              <div className="mt-1 text-sm font-semibold">{details?.name ?? "Erro"}</div>
+            </div>
+          </div>
+
+          {details?.stack ? (
+            <div className="rounded-lg border border-border bg-muted/30 p-3">
+              <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <TerminalSquare className="size-3.5" /> Stack do backend
+              </div>
+              <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-muted-foreground">
+                {details.stack}
+              </pre>
+            </div>
+          ) : null}
+
+          <div className="rounded-lg border border-border bg-muted/30 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <TerminalSquare className="size-3.5" /> Logs do backend
+              </div>
+              <Button size="sm" variant="outline" onClick={() => void copyDiagnostics()}>
+                <Copy className="mr-2 size-3.5" /> Copiar diagnóstico
+              </Button>
+            </div>
+            {logs.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
+                Este registro ainda não possui logs persistidos.
+              </div>
+            ) : (
+              <div className="max-h-72 overflow-auto rounded-md border border-border/60 bg-background/70">
+                {logs.map((log, idx) => (
+                  <div key={`${log.at}-${idx}`} className="border-b border-border/40 p-2 last:border-b-0">
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <span>{new Date(log.at).toLocaleString("pt-BR")}</span>
+                      <span className={cn(
+                        "rounded px-1.5 py-0.5 font-semibold",
+                        log.level === "error"
+                          ? "bg-destructive/15 text-destructive"
+                          : log.level === "warn"
+                            ? "bg-amber-500/15 text-amber-600"
+                            : "bg-sky-500/15 text-sky-600",
+                      )}>
+                        {log.level}
+                      </span>
+                      <span>{log.phase}</span>
+                      <span>{formatElapsed(log.elapsedMs)}</span>
+                    </div>
+                    <div className="mt-1 whitespace-pre-wrap break-words text-xs">{log.message}</div>
+                    {log.meta ? (
+                      <pre className="mt-1 whitespace-pre-wrap break-words text-[10px] text-muted-foreground">
+                        {JSON.stringify(log.meta, null, 2)}
+                      </pre>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function BackupsPanel() {
   const list = useServerFn(listBackups);
   const create = useServerFn(createBackupNow);
@@ -94,6 +258,8 @@ export function BackupsPanel() {
     summary: BusinessSummary | null;
   } | null>(null);
   const [restoreOpen, setRestoreOpen] = useState(false);
+  const [failureOpen, setFailureOpen] = useState(false);
+  const [failureRow, setFailureRow] = useState<BackupRow | null>(null);
   const setSettingsLocked = useUiStore((s) => s.setSettingsLocked);
 
   useEffect(() => {
@@ -150,6 +316,8 @@ export function BackupsPanel() {
         }
         if (row?.status === "failed") {
           toast.error(row.error ?? "Falha ao gerar backup.", { id: "backup-run" });
+          setFailureRow(row);
+          setFailureOpen(true);
           setRunning(false);
           setRunningSince(null);
           setActiveBackupId(null);
@@ -196,6 +364,36 @@ export function BackupsPanel() {
       }
     } catch (err: any) {
       toast.error(err?.message ?? "Falha ao gerar backup.", { id: "backup-run" });
+      const now = new Date().toISOString();
+      setFailureRow({
+        id: "erro-imediato",
+        createdAt: now,
+        finishedAt: now,
+        createdBy: null,
+        type: "manual",
+        status: "failed",
+        storagePath: null,
+        sizeBytes: null,
+        durationMs: null,
+        rowCounts: {},
+        storageObjectCount: 0,
+        error: err?.message ?? "Falha ao gerar backup.",
+        errorDetails: {
+          message: err?.message ?? "Falha ao gerar backup.",
+          name: err?.name,
+          phase: "createBackupNow",
+        },
+        debugLog: [
+          {
+            at: now,
+            level: "error",
+            phase: "createBackupNow",
+            message: err?.message ?? "Falha ao gerar backup.",
+          },
+        ],
+        businessSummary: null,
+      });
+      setFailureOpen(true);
       setRunning(false);
       setRunningSince(null);
       setActiveBackupId(null);
@@ -414,6 +612,18 @@ export function BackupsPanel() {
                           <Button
                             size="sm"
                             variant="outline"
+                            title="Ver erro e logs"
+                            disabled={r.status !== "failed" || running}
+                            onClick={() => {
+                              setFailureRow(r);
+                              setFailureOpen(true);
+                            }}
+                          >
+                            <TerminalSquare className="size-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
                             disabled={r.status !== "completed" || running}
                             onClick={() => void handleDownload(r.id)}
                           >
@@ -446,6 +656,11 @@ export function BackupsPanel() {
         filename={summaryData?.filename}
       />
       <RestoreBackupModal open={restoreOpen} onClose={() => setRestoreOpen(false)} />
+      <BackupFailureModal
+        open={failureOpen}
+        row={failureRow}
+        onClose={() => setFailureOpen(false)}
+      />
     </div>
   );
 }
