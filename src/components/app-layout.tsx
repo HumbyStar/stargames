@@ -1374,7 +1374,8 @@ function GlobalModals() {
   return (
     <>
       <Dialog open={settingsOpen} onOpenChange={(o) => (o ? null : closeSettings())}>
- <DialogContent data-tour="settings-modal">
+ <SettingsDialogContent />
+      </Dialog>
           <DialogHeader className="sr-only">
             <DialogTitle>Configurações</DialogTitle>
             <DialogDescription>Preferências, regras e zona de perigo.</DialogDescription>
