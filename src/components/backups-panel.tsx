@@ -391,6 +391,26 @@ export function BackupsPanel() {
         setRunningSince(null);
       }
     } catch (err: any) {
+      // Antes de abrir o modal de falha, ver se o backend criou uma linha
+      // pending/running mesmo com erro de resposta (Worker cortou a request
+      // mas o job continuou). Se sim, entramos em modo poll + auto-resume.
+      try {
+        const rowsRes = await list();
+        setRows(rowsRes);
+        const recent = rowsRes.find(
+          (r) => r.status === "pending" || r.status === "running",
+        );
+        if (recent) {
+          setActiveBackupId(recent.id);
+          toast.loading(
+            "Resposta interrompida pelo servidor. Retomando backup em background…",
+            { id: "backup-run" },
+          );
+          return;
+        }
+      } catch {
+        // ignore
+      }
       toast.error(err?.message ?? "Falha ao gerar backup.", { id: "backup-run" });
       const now = new Date().toISOString();
       setFailureRow({
