@@ -766,38 +766,119 @@ export const createBackupNow = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await cleanupStaleBackups(supabaseAdmin);
 
-    const now = new Date();
-    const filename = formatFilename(now);
-    const storagePath = storagePathFor(now, filename);
-    const { data: rowIns, error: insErr } = await supabaseAdmin
+    // Reutiliza uma linha pendente/em execução recente do mesmo usuário
+    // para evitar múltiplas linhas quando o cliente clica de novo.
+    const cutoffIso = new Date(Date.now() - STALE_BACKUP_MS).toISOString();
+    const { data: existingRow } = await supabaseAdmin
       .from("system_backups")
-      .insert({
-        created_by: context.userId,
-        type: "manual",
-        status: "pending",
-        storage_path: storagePath,
-      })
-      .select("id")
-      .single();
-    if (insErr || !rowIns) throw new Error(insErr?.message ?? "insert failed");
+      .select("id, storage_path, status, created_at")
+      .eq("created_by", context.userId)
+      .in("status", ["pending", "running"])
+      .gte("created_at", cutoffIso)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    let backupId: string;
+    let storagePath: string;
+    if (existingRow?.id && existingRow.storage_path) {
+      backupId = existingRow.id as string;
+      storagePath = existingRow.storage_path as string;
+    } else {
+      const now = new Date();
+      const filename = formatFilename(now);
+      storagePath = storagePathFor(now, filename);
+      const { data: rowIns, error: insErr } = await supabaseAdmin
+        .from("system_backups")
+        .insert({
+          created_by: context.userId,
+          type: "manual",
+          status: "pending",
+          storage_path: storagePath,
+        })
+        .select("id")
+        .single();
+      if (insErr || !rowIns) throw new Error(insErr?.message ?? "insert failed");
+      backupId = rowIns.id as string;
+    }
 
     const started = runBackup({
       type: "manual",
       createdBy: context.userId,
-      existing: { id: rowIns.id as string, storagePath },
+      existing: { id: backupId, storagePath },
     }).catch((err) => console.error("[backup] background run failed:", err));
 
-    if (!deferWithWorkerContext(started)) {
-      await started;
+    // Sempre devolvemos rápido. Se o runtime expõe waitUntil, o job continua
+    // depois da resposta. Caso contrário, ainda disparamos fire-and-forget
+    // e a UI faz polling / retomada via resumeBackup para completar.
+    const deferred = deferWithWorkerContext(started);
+    if (!deferred) {
+      await persistBackupDebug(
+        supabaseAdmin,
+        backupId,
+        [
+          {
+            at: new Date().toISOString(),
+            level: "warn",
+            phase: "initializing",
+            message:
+              "Runtime sem waitUntil — job disparado sem garantia de continuidade; UI pode retomar automaticamente.",
+          },
+        ],
+      );
     }
 
     return {
-      id: rowIns.id as string,
+      id: backupId,
       storagePath,
       sizeBytes: null,
       queued: true,
+      deferred,
     };
   });
+
+// Retoma um backup pending/running que ficou parado (Worker morto no meio).
+// Idempotente: se o backup já concluiu ou falhou definitivamente, apenas
+// retorna o status atual.
+export const resumeBackup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => idSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: row, error } = await supabaseAdmin
+      .from("system_backups")
+      .select("id, storage_path, status, updated_at, created_by")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!row) throw new Error("Backup não encontrado.");
+    if (row.status === "completed" || row.status === "failed") {
+      return { id: row.id as string, status: row.status as string, queued: false };
+    }
+    if (!row.storage_path) throw new Error("Backup sem storage_path.");
+
+    const started = runBackup({
+      type: "manual",
+      createdBy: (row.created_by as string | null) ?? context.userId,
+      existing: { id: row.id as string, storagePath: row.storage_path as string },
+    }).catch((err) => console.error("[backup] resume failed:", err));
+
+    const deferred = deferWithWorkerContext(started);
+    return { id: row.id as string, status: "running", queued: true, deferred };
+  });
+
+// removido: implementação original de createBackupNow substituída acima
+const _legacyRemovedCreateBackup = async () => {
+    const now = new Date();
+    const filename = formatFilename(now);
+    const storagePath = storagePathFor(now, filename);
+    void filename;
+    void storagePath;
+    return null;
+};
+void _legacyRemovedCreateBackup;
 
 export interface BackupRow {
   id: string;
