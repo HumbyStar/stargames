@@ -14,6 +14,7 @@ interface UiState {
   importOpen: boolean;
   equipeOpen: boolean;
   settingsOpen: boolean;
+  settingsLocked: boolean;
   helpOpen: boolean;
   notificationsOpen: boolean;
   conciergeOpen: boolean;
@@ -28,6 +29,7 @@ interface UiState {
   closeEquipe: () => void;
   openSettings: () => void;
   closeSettings: () => void;
+  setSettingsLocked: (v: boolean) => void;
   openHelp: () => void;
   closeHelp: () => void;
   openNotifications: () => void;
@@ -46,6 +48,7 @@ export const useUiStore = create<UiState>((set) => ({
   importOpen: false,
   equipeOpen: false,
   settingsOpen: false,
+  settingsLocked: false,
   helpOpen: false,
   notificationsOpen: false,
   conciergeOpen: false,
@@ -59,7 +62,9 @@ export const useUiStore = create<UiState>((set) => ({
   openEquipe: () => set({ equipeOpen: true }),
   closeEquipe: () => set({ equipeOpen: false }),
   openSettings: () => set({ settingsOpen: true }),
-  closeSettings: () => set({ settingsOpen: false }),
+  closeSettings: () =>
+    set((s) => (s.settingsLocked ? s : { settingsOpen: false })),
+  setSettingsLocked: (v) => set({ settingsLocked: v }),
   openHelp: () => set({ helpOpen: true }),
   closeHelp: () => set({ helpOpen: false }),
   openNotifications: () => set({ notificationsOpen: true }),
