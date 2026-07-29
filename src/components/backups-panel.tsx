@@ -336,10 +336,12 @@ function BackupFailureModal({
   row,
   open,
   onClose,
+  onRetry,
 }: {
   row: BackupRow | null;
   open: boolean;
   onClose: () => void;
+  onRetry?: () => void;
 }) {
   const details: BackupErrorDetails | null = row?.errorDetails ?? null;
   const logs: BackupDebugEntry[] = row?.debugLog ?? [];
@@ -373,6 +375,13 @@ function BackupFailureModal({
             <p className="mt-1 whitespace-pre-wrap break-words text-sm text-destructive">
               {details?.message ?? row?.error ?? "Falha desconhecida."}
             </p>
+            {onRetry ? (
+              <div className="mt-3 flex justify-end">
+                <Button size="sm" onClick={onRetry}>
+                  <RefreshCcw className="mr-2 size-3.5" /> Tentar novamente
+                </Button>
+              </div>
+            ) : null}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
