@@ -1155,6 +1155,37 @@ function ClientDrawer({
   const [nfModalOpen, setNfModalOpen] = useState(false);
   const [nfProducts, setNfProducts] = useState<Product[]>([]);
   const [nfHistoryOpen, setNfHistoryOpen] = useState(false);
+  const listInvoicesFn = useServerFn(listNfInvoices);
+  const [nfInvoices, setNfInvoices] = useState<NfInvoiceRow[]>([]);
+  const refreshNfInvoices = useMemo(
+    () => async () => {
+      try {
+        const rows = await listInvoicesFn({ data: { clientId: client.id } });
+        setNfInvoices(rows);
+      } catch {
+        /* silencioso: badge é informativo */
+      }
+    },
+    [listInvoicesFn, client.id],
+  );
+  useEffect(() => {
+    void refreshNfInvoices();
+  }, [refreshNfInvoices]);
+  const nfProductMap = useMemo(() => {
+    const map = new Map<string, { count: number; lastAt: string }>();
+    for (const inv of nfInvoices) {
+      for (const pid of inv.productIds) {
+        const cur = map.get(pid);
+        if (!cur) {
+          map.set(pid, { count: 1, lastAt: inv.createdAt });
+        } else {
+          cur.count += 1;
+          if (new Date(inv.createdAt) > new Date(cur.lastAt)) cur.lastAt = inv.createdAt;
+        }
+      }
+    }
+    return map;
+  }, [nfInvoices]);
   const updateProduct = useStore((s) => s.updateProduct);
   // Edição por lápis dos produtos do cliente. Apenas Confirmar persiste;
   // Fechar descarta. Blur / click-outside são ignorados pelo hook.
