@@ -168,7 +168,7 @@ async function persistBackupDebug(
   try {
     await admin
       .from("system_backups")
-      .update({ debug_log: debugLog.slice(-120), ...patch })
+      .update({ debug_log: debugLog.slice(-120), ...patch } as any)
       .eq("id", backupId);
   } catch (err) {
     console.warn("[backup] failed to persist debug log:", err);
@@ -436,7 +436,7 @@ async function cleanupStaleBackups(admin: any) {
         elapsedMs: STALE_BACKUP_MS,
       },
       finished_at: new Date().toISOString(),
-    })
+    } as any)
     .in("status", ["pending", "running"])
     .lt("created_at", cutoff);
 }
@@ -543,7 +543,7 @@ async function runBackup(opts: {
     backupId = opts.existing.id;
     const { error: startErr } = await supabaseAdmin
       .from("system_backups")
-      .update({ status: "running", error: null, error_details: null, debug_log: debugLog })
+      .update({ status: "running", error: null, error_details: null, debug_log: debugLog } as any)
       .eq("id", backupId);
     if (startErr) throw new Error(startErr.message);
   } else {
@@ -555,7 +555,7 @@ async function runBackup(opts: {
         status: "running",
         storage_path: storagePath,
         debug_log: debugLog,
-      })
+      } as any)
       .select("id")
       .single();
     if (insErr || !rowIns) throw new Error(insErr?.message ?? "insert failed");
@@ -695,7 +695,7 @@ async function runBackup(opts: {
         finished_at: new Date().toISOString(),
         business_summary: businessSummary as any,
         debug_log: debugLog,
-      })
+      } as any)
       .eq("id", backupId);
 
     // Retenção: mantém últimos 14 backups.
@@ -716,7 +716,7 @@ async function runBackup(opts: {
         error_details: details as any,
         debug_log: debugLog,
         finished_at: new Date().toISOString(),
-      })
+      } as any)
       .eq("id", backupId);
     throw err;
   }
