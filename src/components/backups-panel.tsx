@@ -526,6 +526,20 @@ export function BackupsPanel() {
     void refresh();
   }, [refresh]);
 
+  // Ao montar/refresh, se houver um backup em execução no backend, adota-o
+  // para o usuário retomar o acompanhamento sem perder progresso.
+  useEffect(() => {
+    if (running) return;
+    const active = rows.find((r) => r.status === "running" || r.status === "pending");
+    if (!active) return;
+    setActiveBackupId(active.id);
+    setRunning(true);
+    const startedMs = Date.parse(active.createdAt);
+    setRunningSince(Number.isFinite(startedMs) ? startedMs : Date.now());
+    setElapsed(Number.isFinite(startedMs) ? Math.floor((Date.now() - startedMs) / 1000) : 0);
+    toast.loading("Acompanhando backup em andamento…", { id: "backup-run" });
+  }, [rows, running]);
+
   // Poll while a backup is running to detect completion / failure.
   useEffect(() => {
     if (!running || !activeBackupId) return;
