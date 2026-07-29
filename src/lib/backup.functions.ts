@@ -18,7 +18,9 @@ import { z } from "zod";
 
 const BACKUP_BUCKET = "system-backups";
 const BACKUP_SCHEMA_VERSION = 2;
-const STALE_BACKUP_MS = 20 * 60 * 1000;
+// Reduzido de 20min → 5min. Se um Worker for morto no meio, a UI consegue
+// retomar/limpar rápido em vez de esperar 20 minutos.
+const STALE_BACKUP_MS = 5 * 60 * 1000;
 const STORAGE_MIRROR_MAX_BYTES = 500 * 1024 * 1024;
 const STORAGE_MIRROR_MAX_FILES = 10_000;
 
