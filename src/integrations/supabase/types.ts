@@ -705,6 +705,54 @@ export type Database = {
         }
         Relationships: []
       }
+      system_backups: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          duration_ms: number | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          row_counts: Json
+          size_bytes: number | null
+          status: string
+          storage_object_count: number
+          storage_path: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          duration_ms?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          row_counts?: Json
+          size_bytes?: number | null
+          status?: string
+          storage_object_count?: number
+          storage_path?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          duration_ms?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          row_counts?: Json
+          size_bytes?: number | null
+          status?: string
+          storage_object_count?: number
+          storage_path?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       team_punch_entries: {
         Row: {
           created_at: string
