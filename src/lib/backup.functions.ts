@@ -22,6 +22,23 @@ const STALE_BACKUP_MS = 20 * 60 * 1000;
 const STORAGE_MIRROR_MAX_BYTES = 500 * 1024 * 1024;
 const STORAGE_MIRROR_MAX_FILES = 10_000;
 
+export interface BackupDebugEntry {
+  at: string;
+  level: "info" | "warn" | "error";
+  phase: string;
+  message: string;
+  elapsedMs?: number;
+  meta?: Record<string, string | number | boolean | null>;
+}
+
+export interface BackupErrorDetails {
+  message: string;
+  name?: string;
+  phase?: string;
+  elapsedMs?: number;
+  stack?: string;
+}
+
 // Todas as tabelas do app que devem entrar no backup.
 // Ordenadas por prioridade (independentes primeiro; dependentes depois).
 const BACKUP_TABLES = [
@@ -107,6 +124,55 @@ function toCents(v: unknown): number {
 function bumpMap(map: Record<string, number>, key: string, by = 1) {
   const k = (key ?? "").toString().trim() || "—";
   map[k] = (map[k] ?? 0) + by;
+}
+
+function sanitizeDiagnostic(value: unknown): string {
+  return String(value ?? "")
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[chave-redigida]")
+    .replace(/sb_[A-Za-z0-9_-]+/g, "[chave-redigida]")
+    .replace(/https?:\/\/[^\s)]+/g, "[url-redigida]")
+    .slice(0, 5000);
+}
+
+function normalizeDebugMeta(meta?: Record<string, unknown>): BackupDebugEntry["meta"] {
+  if (!meta) return undefined;
+  return Object.fromEntries(
+    Object.entries(meta).map(([key, value]) => {
+      if (typeof value === "number" || typeof value === "boolean" || value === null) return [key, value];
+      return [key, sanitizeDiagnostic(value).slice(0, 500)];
+    }),
+  );
+}
+
+function makeErrorDetails(
+  err: unknown,
+  phase: string,
+  elapsedMs: number,
+): BackupErrorDetails {
+  const error = err instanceof Error ? err : null;
+  return {
+    message: sanitizeDiagnostic(error?.message ?? err),
+    name: error?.name ? sanitizeDiagnostic(error.name) : undefined,
+    phase,
+    elapsedMs,
+    stack: error?.stack ? sanitizeDiagnostic(error.stack) : undefined,
+  };
+}
+
+async function persistBackupDebug(
+  admin: any,
+  backupId: string,
+  debugLog: BackupDebugEntry[],
+  patch: Record<string, unknown> = {},
+) {
+  try {
+    await admin
+      .from("system_backups")
+      .update({ debug_log: debugLog.slice(-120), ...patch })
+      .eq("id", backupId);
+  } catch (err) {
+    console.warn("[backup] failed to persist debug log:", err);
+  }
 }
 
 export function computeBusinessSummaryFromRows(data: {
