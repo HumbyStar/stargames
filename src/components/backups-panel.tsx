@@ -37,6 +37,7 @@ import {
   getBackupDownloadUrl,
   getBackupSchedule,
   listBackups,
+  resumeBackup,
   setBackupSchedule,
   type BackupDebugEntry,
   type BackupErrorDetails,
@@ -239,6 +240,7 @@ function BackupFailureModal({
 export function BackupsPanel() {
   const list = useServerFn(listBackups);
   const create = useServerFn(createBackupNow);
+  const resume = useServerFn(resumeBackup);
   const del = useServerFn(deleteBackup);
   const getUrl = useServerFn(getBackupDownloadUrl);
   const getSchedule = useServerFn(getBackupSchedule);
@@ -295,6 +297,10 @@ export function BackupsPanel() {
     if (!running || !activeBackupId) return;
     const started = Date.now();
     const MAX_MS = 20 * 60 * 1000;
+    const STALL_MS = 30 * 1000;
+    let lastProgressAt = Date.now();
+    let lastLogSignature = "";
+    let resumeAttempts = 0;
     let stopped = false;
     const poll = async () => {
       if (stopped) return;
@@ -323,6 +329,28 @@ export function BackupsPanel() {
           setActiveBackupId(null);
           return;
         }
+        if (row) {
+          const sig = `${row.debugLog.length}:${row.debugLog.at(-1)?.at ?? ""}`;
+          if (sig !== lastLogSignature) {
+            lastLogSignature = sig;
+            lastProgressAt = Date.now();
+          } else if (
+            resumeAttempts < 3 &&
+            Date.now() - lastProgressAt > STALL_MS
+          ) {
+            resumeAttempts += 1;
+            lastProgressAt = Date.now();
+            toast.loading(
+              `Retomando backup (tentativa ${resumeAttempts})…`,
+              { id: "backup-run" },
+            );
+            try {
+              await resume({ data: { id: activeBackupId } });
+            } catch (err) {
+              console.warn("[backup] resume failed:", err);
+            }
+          }
+        }
         if (Date.now() - started > MAX_MS) {
           toast.error("Tempo esgotado (20 min). Verifique o histórico.", { id: "backup-run" });
           setRunning(false);
@@ -339,7 +367,7 @@ export function BackupsPanel() {
       stopped = true;
       clearInterval(iv);
     };
-  }, [running, activeBackupId, list]);
+  }, [running, activeBackupId, list, resume]);
 
   const totalSize = useMemo(
     () => rows.reduce((s, r) => s + (r.sizeBytes ?? 0), 0),
@@ -363,6 +391,26 @@ export function BackupsPanel() {
         setRunningSince(null);
       }
     } catch (err: any) {
+      // Antes de abrir o modal de falha, ver se o backend criou uma linha
+      // pending/running mesmo com erro de resposta (Worker cortou a request
+      // mas o job continuou). Se sim, entramos em modo poll + auto-resume.
+      try {
+        const rowsRes = await list();
+        setRows(rowsRes);
+        const recent = rowsRes.find(
+          (r) => r.status === "pending" || r.status === "running",
+        );
+        if (recent) {
+          setActiveBackupId(recent.id);
+          toast.loading(
+            "Resposta interrompida pelo servidor. Retomando backup em background…",
+            { id: "backup-run" },
+          );
+          return;
+        }
+      } catch {
+        // ignore
+      }
       toast.error(err?.message ?? "Falha ao gerar backup.", { id: "backup-run" });
       const now = new Date().toISOString();
       setFailureRow({
@@ -417,6 +465,19 @@ export function BackupsPanel() {
       await refresh();
     } catch (err: any) {
       toast.error(err?.message ?? "Falha ao excluir.");
+    }
+  };
+
+  const handleResume = async (id: string) => {
+    try {
+      toast.loading("Retomando backup…", { id: "backup-run" });
+      await resume({ data: { id } });
+      setActiveBackupId(id);
+      setRunning(true);
+      setRunningSince(Date.now());
+      setElapsed(0);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Falha ao retomar backup.", { id: "backup-run" });
     }
   };
 
@@ -621,6 +682,17 @@ export function BackupsPanel() {
                           >
                             <TerminalSquare className="size-3.5" />
                           </Button>
+                          {(r.status === "pending" || r.status === "running") ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              title="Retomar backup"
+                              disabled={running}
+                              onClick={() => void handleResume(r.id)}
+                            >
+                              <Play className="size-3.5" />
+                            </Button>
+                          ) : null}
                           <Button
                             size="sm"
                             variant="outline"
