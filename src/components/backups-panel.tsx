@@ -297,6 +297,10 @@ export function BackupsPanel() {
     if (!running || !activeBackupId) return;
     const started = Date.now();
     const MAX_MS = 20 * 60 * 1000;
+    const STALL_MS = 30 * 1000;
+    let lastProgressAt = Date.now();
+    let lastLogSignature = "";
+    let resumeAttempts = 0;
     let stopped = false;
     const poll = async () => {
       if (stopped) return;
@@ -325,6 +329,28 @@ export function BackupsPanel() {
           setActiveBackupId(null);
           return;
         }
+        if (row) {
+          const sig = `${row.debugLog.length}:${row.debugLog.at(-1)?.at ?? ""}`;
+          if (sig !== lastLogSignature) {
+            lastLogSignature = sig;
+            lastProgressAt = Date.now();
+          } else if (
+            resumeAttempts < 3 &&
+            Date.now() - lastProgressAt > STALL_MS
+          ) {
+            resumeAttempts += 1;
+            lastProgressAt = Date.now();
+            toast.loading(
+              `Retomando backup (tentativa ${resumeAttempts})…`,
+              { id: "backup-run" },
+            );
+            try {
+              await resume({ data: { id: activeBackupId } });
+            } catch (err) {
+              console.warn("[backup] resume failed:", err);
+            }
+          }
+        }
         if (Date.now() - started > MAX_MS) {
           toast.error("Tempo esgotado (20 min). Verifique o histórico.", { id: "backup-run" });
           setRunning(false);
@@ -341,7 +367,7 @@ export function BackupsPanel() {
       stopped = true;
       clearInterval(iv);
     };
-  }, [running, activeBackupId, list]);
+  }, [running, activeBackupId, list, resume]);
 
   const totalSize = useMemo(
     () => rows.reduce((s, r) => s + (r.sizeBytes ?? 0), 0),
