@@ -317,7 +317,7 @@ export function BackupsPanel() {
                             onClick={() => {
                               setSummaryData({
                                 filename: r.storagePath?.split("/").pop(),
-                                summary: (r as any).businessSummary ?? null,
+                                summary: r.businessSummary ?? null,
                               });
                               setSummaryOpen(true);
                             }}
