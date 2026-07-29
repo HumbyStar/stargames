@@ -70,12 +70,14 @@ function statusBadge(status: BackupRow["status"]) {
     running: "bg-sky-500/15 text-sky-600 border-sky-500/30",
     pending: "bg-amber-500/15 text-amber-600 border-amber-500/30",
     failed: "bg-destructive/15 text-destructive border-destructive/30",
+    cancelled: "bg-muted text-muted-foreground border-border",
   };
   const label: Record<BackupRow["status"], string> = {
     completed: "Concluído",
     running: "Executando",
     pending: "Aguardando",
     failed: "Falhou",
+    cancelled: "Cancelado",
   };
   return (
     <span
