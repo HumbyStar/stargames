@@ -9,6 +9,8 @@ import {
   Play,
   RefreshCcw,
   Trash2,
+  BarChart3,
+  Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui-bits";
@@ -31,6 +33,9 @@ import {
 } from "@/lib/backup.functions";
 import { formatDateBR } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { BackupSummaryModal } from "@/components/backup-summary-modal";
+import { RestoreBackupModal } from "@/components/restore-backup-modal";
+import type { BusinessSummary } from "@/lib/backup.functions";
 
 function formatBytes(n: number | null | undefined): string {
   if (!n || n <= 0) return "—";
@@ -79,6 +84,12 @@ export function BackupsPanel() {
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryData, setSummaryData] = useState<{
+    filename?: string;
+    summary: BusinessSummary | null;
+  } | null>(null);
+  const [restoreOpen, setRestoreOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -213,6 +224,10 @@ export function BackupsPanel() {
             <RefreshCcw className={cn("mr-2 size-4", loading && "animate-spin")} />
             Atualizar
           </Button>
+          <Button variant="outline" onClick={() => setRestoreOpen(true)}>
+            <Undo2 className="mr-2 size-4" />
+            Restaurar backup
+          </Button>
           <div className="ml-auto flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Agendamento:</span>
             <Select
@@ -248,7 +263,7 @@ export function BackupsPanel() {
                   <th className="px-2 py-2">Status</th>
                   <th className="px-2 py-2 text-right">Tamanho</th>
                   <th className="px-2 py-2 text-right">Duração</th>
-                  <th className="px-2 py-2 text-right">Arquivos</th>
+                  <th className="px-2 py-2 text-right">Conteúdo</th>
                   <th className="px-2 py-2 text-right">Ações</th>
                 </tr>
               </thead>
@@ -297,6 +312,21 @@ export function BackupsPanel() {
                           <Button
                             size="sm"
                             variant="outline"
+                            title="Ver resumo"
+                            disabled={r.status !== "completed"}
+                            onClick={() => {
+                              setSummaryData({
+                                filename: r.storagePath?.split("/").pop(),
+                                summary: r.businessSummary ?? null,
+                              });
+                              setSummaryOpen(true);
+                            }}
+                          >
+                            <BarChart3 className="size-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
                             disabled={r.status !== "completed"}
                             onClick={() => void handleDownload(r.id)}
                           >
@@ -320,6 +350,14 @@ export function BackupsPanel() {
           </div>
         )}
       </Card>
+
+      <BackupSummaryModal
+        open={summaryOpen}
+        onClose={() => setSummaryOpen(false)}
+        backupSummary={summaryData?.summary ?? null}
+        filename={summaryData?.filename}
+      />
+      <RestoreBackupModal open={restoreOpen} onClose={() => setRestoreOpen(false)} />
     </div>
   );
 }

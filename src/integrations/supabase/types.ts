@@ -707,6 +707,7 @@ export type Database = {
       }
       system_backups: {
         Row: {
+          business_summary: Json
           created_at: string
           created_by: string | null
           duration_ms: number | null
@@ -722,6 +723,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          business_summary?: Json
           created_at?: string
           created_by?: string | null
           duration_ms?: number | null
@@ -737,6 +739,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          business_summary?: Json
           created_at?: string
           created_by?: string | null
           duration_ms?: number | null

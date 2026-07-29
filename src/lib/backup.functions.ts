@@ -16,7 +16,7 @@ import { z } from "zod";
 // ---------------------------------------------------------------------------
 
 const BACKUP_BUCKET = "system-backups";
-const BACKUP_SCHEMA_VERSION = 1;
+const BACKUP_SCHEMA_VERSION = 2;
 
 // Todas as tabelas do app que devem entrar no backup.
 // Ordenadas por prioridade (independentes primeiro; dependentes depois).
@@ -45,6 +45,202 @@ const BACKUP_TABLES = [
 ] as const;
 
 type BackupTable = (typeof BACKUP_TABLES)[number];
+
+// ---------------------------------------------------------------------------
+// Resumo de negócio
+// ---------------------------------------------------------------------------
+
+export interface BusinessSummary {
+  generatedAt: string;
+  clients: {
+    total: number;
+    withFicha: number;
+    withoutFicha: number;
+    mgmvOnly: number;
+  };
+  products: {
+    total: number;
+    bySituation: Record<string, number>;
+    byFinancialStatus: Record<string, number>;
+    withNf: number;
+    withoutNf: number;
+  };
+  mgmv: {
+    agreements: number;
+    active: number;
+    completed: number;
+    needsReview: number;
+    installmentsTotal: number;
+    installmentsPaid: number;
+    installmentsPending: number;
+    installmentsOverdue: number;
+    totalAgreedCents: number;
+    totalPaidCents: number;
+    remainingCents: number;
+  };
+  financeiro: {
+    receivedCents: number;
+    receivableCents: number;
+    overdueCents: number;
+  };
+  nfInvoices: {
+    total: number;
+    totalCents: number;
+  };
+  team: {
+    tasksTotal: number;
+    tasksByStatus: Record<string, number>;
+    punchesThisMonth: number;
+  };
+}
+
+function toCents(v: unknown): number {
+  const n = typeof v === "number" ? v : Number(v ?? 0);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100);
+}
+
+function bumpMap(map: Record<string, number>, key: string, by = 1) {
+  const k = (key ?? "").toString().trim() || "—";
+  map[k] = (map[k] ?? 0) + by;
+}
+
+export function computeBusinessSummaryFromRows(data: {
+  clients: any[];
+  products: any[];
+  agreements: any[];
+  installments: any[];
+  nfInvoices: any[];
+  teamTasks: any[];
+  punchEntries: any[];
+}): BusinessSummary {
+  const now = new Date();
+  const monthStart = new Date(now.getUTCFullYear(), now.getUTCMonth(), 1);
+
+  // Ficha completa: heurística — clients.customer_data com >= 40 chars.
+  const withFicha = data.clients.filter(
+    (c) => typeof c.customer_data === "string" && c.customer_data.trim().length >= 40,
+  ).length;
+  const mgmvClientIds = new Set(
+    data.agreements
+      .filter((a) => a.status !== "cancelled" && a.status !== "cancelado")
+      .map((a) => a.client_id),
+  );
+  const clientIdsWithNonMgmvProduct = new Set(
+    data.products.filter((p) => !p.included_in_mgmv).map((p) => p.client_id),
+  );
+  const mgmvOnly = Array.from(mgmvClientIds).filter(
+    (id) => !clientIdsWithNonMgmvProduct.has(id),
+  ).length;
+
+  const bySituation: Record<string, number> = {};
+  const byFinancialStatus: Record<string, number> = {};
+  const productIdsWithNf = new Set<string>();
+  let nfTotalCents = 0;
+  for (const nf of data.nfInvoices) {
+    nfTotalCents += Number(nf.total_cents ?? 0);
+    for (const pid of nf.product_ids ?? []) productIdsWithNf.add(pid);
+  }
+  for (const p of data.products) {
+    bumpMap(bySituation, p.situation);
+    bumpMap(byFinancialStatus, p.financial_status);
+  }
+  const withNf = data.products.filter((p) => productIdsWithNf.has(p.id)).length;
+
+  // MGMV
+  let totalAgreedCents = 0;
+  let totalPaidCents = 0;
+  let active = 0;
+  let completed = 0;
+  let needsReview = 0;
+  for (const a of data.agreements) {
+    totalAgreedCents += toCents(a.total_agreement_value);
+    totalPaidCents += toCents(a.paid_value);
+    if (a.needs_review) needsReview++;
+    const s = (a.status ?? "").toString().toLowerCase();
+    if (s === "completed" || s === "concluido" || s === "concluído" || s === "quitado") completed++;
+    else if (s !== "cancelled" && s !== "cancelado") active++;
+  }
+  let installmentsPaid = 0;
+  let installmentsPending = 0;
+  let installmentsOverdue = 0;
+  let overdueCents = 0;
+  let receivableCents = 0;
+  for (const i of data.installments) {
+    const st = (i.status ?? "").toString().toLowerCase();
+    if (st.startsWith("pag") || st === "paid") installmentsPaid++;
+    else {
+      installmentsPending++;
+      const remaining = toCents(i.amount) - toCents(i.paid_amount);
+      receivableCents += Math.max(0, remaining);
+      const due = i.due_date ? new Date(i.due_date) : null;
+      if (due && due < now) {
+        installmentsOverdue++;
+        overdueCents += Math.max(0, remaining);
+      }
+    }
+  }
+
+  // Produtos não-MGMV: a receber e vencidos
+  for (const p of data.products) {
+    if (p.included_in_mgmv) continue;
+    const remaining = toCents(p.total_value) - toCents(p.paid_value);
+    if (remaining <= 0) continue;
+    const st = (p.financial_status ?? "").toString().toLowerCase();
+    if (st === "pago" || st === "paid") continue;
+    receivableCents += remaining;
+    const due = p.due_date ? new Date(p.due_date) : null;
+    if (due && due < now) overdueCents += remaining;
+  }
+  const receivedCents = totalPaidCents +
+    data.products
+      .filter((p) => !p.included_in_mgmv)
+      .reduce((s, p) => s + toCents(p.paid_value), 0);
+
+  const tasksByStatus: Record<string, number> = {};
+  for (const t of data.teamTasks) bumpMap(tasksByStatus, t.status);
+  const punchesThisMonth = data.punchEntries.filter((e) => {
+    const d = e.punched_at ? new Date(e.punched_at) : null;
+    return d && d >= monthStart;
+  }).length;
+
+  return {
+    generatedAt: now.toISOString(),
+    clients: {
+      total: data.clients.length,
+      withFicha,
+      withoutFicha: data.clients.length - withFicha,
+      mgmvOnly,
+    },
+    products: {
+      total: data.products.length,
+      bySituation,
+      byFinancialStatus,
+      withNf,
+      withoutNf: data.products.length - withNf,
+    },
+    mgmv: {
+      agreements: data.agreements.length,
+      active,
+      completed,
+      needsReview,
+      installmentsTotal: data.installments.length,
+      installmentsPaid,
+      installmentsPending,
+      installmentsOverdue,
+      totalAgreedCents,
+      totalPaidCents,
+      remainingCents: Math.max(0, totalAgreedCents - totalPaidCents),
+    },
+    financeiro: { receivedCents, receivableCents, overdueCents },
+    nfInvoices: { total: data.nfInvoices.length, totalCents: nfTotalCents },
+    team: {
+      tasksTotal: data.teamTasks.length,
+      tasksByStatus,
+      punchesThisMonth,
+    },
+  };
+}
 
 async function assertAdmin(ctx: { supabase: any; userId: string }) {
   const { data, error } = await ctx.supabase
@@ -196,11 +392,13 @@ async function runBackup(opts: {
   try {
     const zip = new JSZip();
     const rowCounts: Record<string, number> = {};
+    const tableRows: Record<string, any[]> = {};
 
     // Tabelas
     for (const table of BACKUP_TABLES) {
       const rows = await fetchAllRows(supabaseAdmin, table);
       rowCounts[table] = rows.length;
+      tableRows[table] = rows;
       const jsonl = rows.map((r) => JSON.stringify(r)).join("\n");
       zip.file(`database/data/${table}.jsonl`, jsonl);
     }
@@ -220,6 +418,16 @@ async function runBackup(opts: {
       console.warn("[backup] mirror bucket failed:", err);
     }
 
+    const businessSummary = computeBusinessSummaryFromRows({
+      clients: tableRows["clients"] ?? [],
+      products: tableRows["products"] ?? [],
+      agreements: tableRows["mgmv_agreements"] ?? [],
+      installments: tableRows["mgmv_installments"] ?? [],
+      nfInvoices: tableRows["nf_invoices"] ?? [],
+      teamTasks: tableRows["team_tasks"] ?? [],
+      punchEntries: tableRows["team_punch_entries"] ?? [],
+    });
+
     const manifest = {
       schemaVersion: BACKUP_SCHEMA_VERSION,
       generatedAt: now.toISOString(),
@@ -228,8 +436,10 @@ async function runBackup(opts: {
       storageObjectCount,
       tables: BACKUP_TABLES,
       buckets: ["notion-html-originals"],
+      businessSummary,
     };
     zip.file("manifest.json", JSON.stringify(manifest, null, 2));
+    zip.file("summary.json", JSON.stringify(businessSummary, null, 2));
     zip.file("RESTORE.md", RESTORE_MD);
 
     const zipBuf = await zip.generateAsync({
@@ -256,6 +466,7 @@ async function runBackup(opts: {
         row_counts: rowCounts,
         storage_object_count: storageObjectCount,
         finished_at: new Date().toISOString(),
+        business_summary: businessSummary as any,
       })
       .eq("id", backupId);
 
@@ -322,6 +533,7 @@ export interface BackupRow {
   rowCounts: Record<string, number>;
   storageObjectCount: number;
   error: string | null;
+  businessSummary: BusinessSummary | null;
 }
 
 export const listBackups = createServerFn({ method: "GET" })
@@ -348,6 +560,10 @@ export const listBackups = createServerFn({ method: "GET" })
       rowCounts: r.row_counts ?? {},
       storageObjectCount: r.storage_object_count ?? 0,
       error: r.error,
+      businessSummary:
+        r.business_summary && Object.keys(r.business_summary).length > 0
+          ? (r.business_summary as BusinessSummary)
+          : null,
     }));
   });
 
@@ -445,4 +661,331 @@ export const setBackupSchedule = createServerFn({ method: "POST" })
     });
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+// ---------------------------------------------------------------------------
+// Resumo do banco vivo (para comparação com backup)
+// ---------------------------------------------------------------------------
+
+export const getCurrentBusinessSummary = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<BusinessSummary> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [clients, products, agreements, installments, nfInvoices, teamTasks, punchEntries] =
+      await Promise.all([
+        fetchAllRows(supabaseAdmin, "clients"),
+        fetchAllRows(supabaseAdmin, "products"),
+        fetchAllRows(supabaseAdmin, "mgmv_agreements"),
+        fetchAllRows(supabaseAdmin, "mgmv_installments"),
+        fetchAllRows(supabaseAdmin, "nf_invoices"),
+        fetchAllRows(supabaseAdmin, "team_tasks"),
+        fetchAllRows(supabaseAdmin, "team_punch_entries"),
+      ]);
+    return computeBusinessSummaryFromRows({
+      clients,
+      products,
+      agreements,
+      installments,
+      nfInvoices,
+      teamTasks,
+      punchEntries,
+    });
+  });
+
+// ---------------------------------------------------------------------------
+// Restauração a partir de backup
+// ---------------------------------------------------------------------------
+
+// Tabelas restauráveis. Mantém a mesma ordem de dependência do backup.
+// `user_roles` e `profiles` do próprio usuário logado ficam protegidos contra
+// lockout — filtrados no handler.
+const RESTORABLE_TABLES = BACKUP_TABLES.filter(
+  (t) => t !== "audit_log" && t !== "import_progress",
+);
+
+export interface RestorePreview {
+  ok: true;
+  source: "backup" | "upload";
+  filename: string;
+  schemaVersion: number;
+  generatedAt: string | null;
+  rowCounts: Record<string, number>;
+  storageObjectCount: number;
+  businessSummary: BusinessSummary | null;
+  current: BusinessSummary;
+  availableTables: string[];
+}
+
+export interface RestoreResult {
+  ok: true;
+  mode: "merge" | "replace";
+  tablesRestored: Array<{ table: string; inserted: number; skipped: number; deleted: number }>;
+  storageFilesRestored: number;
+  durationMs: number;
+}
+
+const restorePreviewSchema = z.object({
+  backupId: z.string().uuid().optional(),
+  uploadedZipBase64: z.string().optional(),
+});
+
+const restoreApplySchema = z.object({
+  backupId: z.string().uuid().optional(),
+  uploadedZipBase64: z.string().optional(),
+  mode: z.enum(["merge", "replace"]),
+  tables: z.array(z.string()).optional(),
+  includeStorage: z.boolean().default(false),
+  confirmReplace: z.string().optional(),
+});
+
+async function loadBackupZip(
+  admin: any,
+  opts: { backupId?: string; uploadedZipBase64?: string },
+): Promise<{ zip: any; filename: string }> {
+  const JSZip = (await import("jszip")).default;
+  if (opts.backupId) {
+    const { data: row, error } = await admin
+      .from("system_backups")
+      .select("storage_path")
+      .eq("id", opts.backupId)
+      .maybeSingle();
+    if (error || !row?.storage_path) throw new Error("Backup não encontrado.");
+    const { data: blob, error: dlErr } = await admin.storage
+      .from(BACKUP_BUCKET)
+      .download(row.storage_path);
+    if (dlErr || !blob) throw new Error(dlErr?.message ?? "Falha ao baixar backup.");
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    const zip = await JSZip.loadAsync(buf);
+    return { zip, filename: row.storage_path.split("/").pop() ?? "backup.zip" };
+  }
+  if (opts.uploadedZipBase64) {
+    const raw = opts.uploadedZipBase64.includes(",")
+      ? opts.uploadedZipBase64.split(",", 2)[1]
+      : opts.uploadedZipBase64;
+    const bin = Uint8Array.from(atob(raw), (c) => c.charCodeAt(0));
+    if (bin.byteLength > 250 * 1024 * 1024) {
+      throw new Error("Arquivo maior que 250 MB.");
+    }
+    const zip = await JSZip.loadAsync(bin);
+    return { zip, filename: "upload.zip" };
+  }
+  throw new Error("Informe um backupId ou faça upload do ZIP.");
+}
+
+async function readManifest(zip: any): Promise<{
+  schemaVersion: number;
+  generatedAt: string | null;
+  rowCounts: Record<string, number>;
+  storageObjectCount: number;
+  businessSummary: BusinessSummary | null;
+}> {
+  const mf = zip.file("manifest.json");
+  if (!mf) throw new Error("manifest.json ausente — arquivo não parece um backup Star Games.");
+  const text = await mf.async("string");
+  const parsed = JSON.parse(text);
+  const version = Number(parsed.schemaVersion ?? 1);
+  if (version < 1 || version > BACKUP_SCHEMA_VERSION) {
+    throw new Error(`Versão de schema incompatível: ${version}`);
+  }
+  return {
+    schemaVersion: version,
+    generatedAt: parsed.generatedAt ?? null,
+    rowCounts: parsed.rowCounts ?? {},
+    storageObjectCount: Number(parsed.storageObjectCount ?? 0),
+    businessSummary: parsed.businessSummary ?? null,
+  };
+}
+
+async function loadTableRows(zip: any, table: string): Promise<any[]> {
+  const f = zip.file(`database/data/${table}.jsonl`);
+  if (!f) return [];
+  const text = await f.async("string");
+  if (!text.trim()) return [];
+  const rows: any[] = [];
+  for (const line of text.split("\n")) {
+    const t = line.trim();
+    if (!t) continue;
+    try {
+      rows.push(JSON.parse(t));
+    } catch {
+      // linha corrompida: ignora
+    }
+  }
+  return rows;
+}
+
+export const previewBackupRestore = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => restorePreviewSchema.parse(d))
+  .handler(async ({ data, context }): Promise<RestorePreview> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { zip, filename } = await loadBackupZip(supabaseAdmin, data);
+    const manifest = await readManifest(zip);
+
+    // Se o backup for antigo (sem businessSummary), calcula na hora a partir do ZIP.
+    let summary = manifest.businessSummary;
+    if (!summary) {
+      const [clients, products, agreements, installments, nfInvoices, teamTasks, punchEntries] =
+        await Promise.all([
+          loadTableRows(zip, "clients"),
+          loadTableRows(zip, "products"),
+          loadTableRows(zip, "mgmv_agreements"),
+          loadTableRows(zip, "mgmv_installments"),
+          loadTableRows(zip, "nf_invoices"),
+          loadTableRows(zip, "team_tasks"),
+          loadTableRows(zip, "team_punch_entries"),
+        ]);
+      summary = computeBusinessSummaryFromRows({
+        clients,
+        products,
+        agreements,
+        installments,
+        nfInvoices,
+        teamTasks,
+        punchEntries,
+      });
+    }
+
+    // Estado atual do banco vivo
+    const [clients, products, agreements, installments, nfInvoices, teamTasks, punchEntries] =
+      await Promise.all([
+        fetchAllRows(supabaseAdmin, "clients"),
+        fetchAllRows(supabaseAdmin, "products"),
+        fetchAllRows(supabaseAdmin, "mgmv_agreements"),
+        fetchAllRows(supabaseAdmin, "mgmv_installments"),
+        fetchAllRows(supabaseAdmin, "nf_invoices"),
+        fetchAllRows(supabaseAdmin, "team_tasks"),
+        fetchAllRows(supabaseAdmin, "team_punch_entries"),
+      ]);
+    const current = computeBusinessSummaryFromRows({
+      clients,
+      products,
+      agreements,
+      installments,
+      nfInvoices,
+      teamTasks,
+      punchEntries,
+    });
+
+    const availableTables = RESTORABLE_TABLES.filter((t) => Boolean(zip.file(`database/data/${t}.jsonl`)));
+
+    return {
+      ok: true,
+      source: data.backupId ? "backup" : "upload",
+      filename,
+      schemaVersion: manifest.schemaVersion,
+      generatedAt: manifest.generatedAt,
+      rowCounts: manifest.rowCounts,
+      storageObjectCount: manifest.storageObjectCount,
+      businessSummary: summary,
+      current,
+      availableTables,
+    };
+  });
+
+export const restoreBackup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => restoreApplySchema.parse(d))
+  .handler(async ({ data, context }): Promise<RestoreResult> => {
+    await assertAdmin(context);
+    if (data.mode === "replace" && data.confirmReplace !== "REPLACE") {
+      throw new Error('Para o modo "Substituir tudo" digite REPLACE para confirmar.');
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const started = Date.now();
+    const { zip } = await loadBackupZip(supabaseAdmin, data);
+    await readManifest(zip);
+
+    const requested = data.tables && data.tables.length > 0
+      ? new Set(data.tables)
+      : new Set(RESTORABLE_TABLES);
+
+    const tablesToProcess = RESTORABLE_TABLES.filter((t) => requested.has(t));
+
+    const results: RestoreResult["tablesRestored"] = [];
+
+    // REPLACE: apaga em ordem reversa (dependentes primeiro)
+    if (data.mode === "replace") {
+      for (const table of [...tablesToProcess].reverse()) {
+        let query = supabaseAdmin.from(table).delete();
+        // Protege o admin logado
+        if (table === "user_roles" || table === "profiles") {
+          query = query.neq("user_id" as any, context.userId).neq("id" as any, context.userId);
+        }
+        // .delete() do PostgREST exige um filtro; usa neq id impossível como fallback.
+        const { error } = await query.neq("id" as any, "00000000-0000-0000-0000-000000000000");
+        if (error) {
+          console.warn(`[restore] delete ${table}:`, error.message);
+        }
+      }
+    }
+
+    // Insere/upsert em ordem normal
+    for (const table of tablesToProcess) {
+      const rows = await loadTableRows(zip, table);
+      let filtered = rows;
+      if (table === "user_roles") {
+        filtered = rows.filter((r) => r.user_id !== context.userId);
+      } else if (table === "profiles") {
+        filtered = rows.filter((r) => r.id !== context.userId);
+      }
+      let inserted = 0;
+      let skipped = 0;
+      const CHUNK = 500;
+      for (let i = 0; i < filtered.length; i += CHUNK) {
+        const chunk = filtered.slice(i, i + CHUNK);
+        const { error } = await supabaseAdmin.from(table).upsert(chunk, {
+          onConflict: "id",
+          ignoreDuplicates: false,
+        } as any);
+        if (error) {
+          console.warn(`[restore] upsert ${table} (chunk ${i}):`, error.message);
+          skipped += chunk.length;
+        } else {
+          inserted += chunk.length;
+        }
+      }
+      results.push({ table, inserted, skipped, deleted: data.mode === "replace" ? rows.length : 0 });
+    }
+
+    // Storage: reenvia arquivos originais
+    let storageFilesRestored = 0;
+    if (data.includeStorage) {
+      const storageFiles = Object.values(zip.files).filter(
+        (f: any) => !f.dir && f.name.startsWith("storage/notion-html-originals/"),
+      );
+      for (const f of storageFiles as any[]) {
+        const rel = f.name.replace("storage/notion-html-originals/", "");
+        const bytes = await f.async("uint8array");
+        const { error } = await supabaseAdmin.storage
+          .from("notion-html-originals")
+          .upload(rel, bytes, { upsert: true });
+        if (!error) storageFilesRestored++;
+      }
+    }
+
+    // Registra no import_history
+    try {
+      await supabaseAdmin.from("import_history").insert({
+        date: new Date().toISOString(),
+        source: "backup-restore",
+        file: data.backupId ? `backup:${data.backupId}` : "upload.zip",
+        clients_created: 0,
+        products_added: 0,
+        errors: results.reduce((s, r) => s + r.skipped, 0),
+        status: "success",
+      } as any);
+    } catch (err) {
+      console.warn("[restore] import_history log failed:", err);
+    }
+
+    return {
+      ok: true,
+      mode: data.mode,
+      tablesRestored: results,
+      storageFilesRestored,
+      durationMs: Date.now() - started,
+    };
   });

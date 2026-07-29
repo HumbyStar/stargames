@@ -69,6 +69,7 @@ import { useUiStore } from "@/lib/ui-store";
 import { NotificationsPrefsCard } from "@/components/notifications-prefs-card";
 import { NavbarSettingsCard } from "@/components/navbar-settings-card";
 import { BackupsPanel } from "@/components/backups-panel";
+import { RestoreBackupModal } from "@/components/restore-backup-modal";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -406,6 +407,11 @@ export function ConfiguracoesSection() {
 
   const [dangerOpen, setDangerOpen] = useState(false);
   const [dangerAction, setDangerAction] = useState<DangerAction | null>(null);
+
+  const [restoreModalOpen, setRestoreModalOpen] = useState(false);
+  const [restoreModalSource, setRestoreModalSource] = useState<"existing" | "upload">(
+    "existing",
+  );
   const [confirmText, setConfirmText] = useState("");
 
   const handleSavePrefs = () => {
@@ -911,6 +917,26 @@ export function ConfiguracoesSection() {
                 className="justify-start gap-2 min-h-11"
               >
                 <History className="size-4" /> Ver histórico
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setRestoreModalSource("existing");
+                  setRestoreModalOpen(true);
+                }}
+                className="justify-start gap-2 min-h-11"
+              >
+                <Database className="size-4" /> Importar via backup
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setRestoreModalSource("upload");
+                  setRestoreModalOpen(true);
+                }}
+                className="justify-start gap-2 min-h-11"
+              >
+                <HardDrive className="size-4" /> Importar ZIP externo
               </Button>
             </div>
           </Card>
@@ -1455,6 +1481,11 @@ export function ConfiguracoesSection() {
 
       <AccessManagementDialog open={accessOpen} onOpenChange={setAccessOpen} />
       <AiTrainingModal open={aiTrainingOpen} onOpenChange={setAiTrainingOpen} />
+      <RestoreBackupModal
+        open={restoreModalOpen}
+        onClose={() => setRestoreModalOpen(false)}
+        initialSource={restoreModalSource}
+      />
     </section>
   );
 }
