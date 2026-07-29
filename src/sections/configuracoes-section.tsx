@@ -9,6 +9,7 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
+  HardDrive,
   History,
   KeyRound,
   LayoutGrid,
@@ -749,6 +750,13 @@ export function ConfiguracoesSection() {
               summary="Ações irreversíveis: limpar bases, resetar sistema."
               status="Use com cuidado"
               onOpen={() => setView("danger")}
+            />
+            <SecondaryCard
+              icon={HardDrive}
+              title="Backups do sistema"
+              summary="Snapshot completo (.zip) com todos os dados e arquivos, manual ou agendado."
+              status="Portabilidade total"
+              onOpen={() => setView("backups")}
             />
             <SecondaryCard
               icon={Brain}
