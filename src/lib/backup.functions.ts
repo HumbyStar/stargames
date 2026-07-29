@@ -619,6 +619,7 @@ async function runBackup(opts: {
 
     for (const table of BACKUP_TABLES) {
       phase = `database:${table}`;
+      if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
       const keepRows = KEEP_FOR_SUMMARY.has(table);
       const exported = await fetchRowsForBackup(supabaseAdmin, table, { keepRows });
       rowCounts[table] = exported.rowCount;
@@ -636,6 +637,7 @@ async function runBackup(opts: {
     // Storage: notion-html-originals
     let storageObjectCount = 0;
     try {
+      if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
       pushDebug("info", "storage:notion-html-originals", "Espelhando arquivos originais", {
         maxFiles: STORAGE_MIRROR_MAX_FILES,
         maxBytes: STORAGE_MIRROR_MAX_BYTES,
@@ -656,6 +658,7 @@ async function runBackup(opts: {
         storage_object_count: storageObjectCount,
       });
     } catch (err) {
+      if (err instanceof BackupCancelledError) throw err;
       // Se o bucket não existir, seguimos com o resto do backup.
       console.warn("[backup] mirror bucket failed:", err);
       pushDebug("warn", "storage:notion-html-originals", "Falha ao espelhar arquivos originais; backup seguirá sem esse espelho", {
@@ -665,6 +668,7 @@ async function runBackup(opts: {
     }
 
     pushDebug("info", "summary", "Calculando resumo de negócio");
+    if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
     await persistBackupDebug(supabaseAdmin, backupId, debugLog);
     const businessSummary = computeBusinessSummaryFromRows({
       clients: tableRows["clients"] ?? [],
@@ -691,6 +695,7 @@ async function runBackup(opts: {
     zip.file("RESTORE.md", RESTORE_MD);
 
     pushDebug("info", "zip:generate", "Gerando conteúdo final do ZIP");
+    if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
     await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
       business_summary: businessSummary as any,
     });
@@ -703,6 +708,7 @@ async function runBackup(opts: {
     pushDebug("info", "storage:upload", "Enviando ZIP para o armazenamento privado", {
       sizeBytes: zipBuf.byteLength,
     });
+    if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
     await persistBackupDebug(supabaseAdmin, backupId, debugLog);
     const { error: upErr } = await supabaseAdmin.storage
       .from(BACKUP_BUCKET)
@@ -739,6 +745,30 @@ async function runBackup(opts: {
 
     return { id: backupId, storagePath, sizeBytes: zipBuf.byteLength };
   } catch (err: any) {
+    if (err instanceof BackupCancelledError) {
+      const elapsed = Date.now() - startedAt;
+      pushDebug("warn", "cancelled", "Backup cancelado pelo usuário", { elapsedMs: elapsed });
+      await supabaseAdmin
+        .from("system_backups")
+        .update({
+          status: "cancelled",
+          error: "Cancelado pelo usuário",
+          error_details: {
+            message: "Backup cancelado pelo usuário.",
+            phase: "cancelled",
+            elapsedMs: elapsed,
+          } as any,
+          debug_log: debugLog,
+          finished_at: new Date().toISOString(),
+          cancel_requested: false,
+        } as any)
+        .eq("id", backupId);
+      // Limpa qualquer parcial no storage
+      try {
+        await supabaseAdmin.storage.from(BACKUP_BUCKET).remove([storagePath]);
+      } catch {}
+      return { id: backupId, storagePath, sizeBytes: 0 };
+    }
     const details = makeErrorDetails(err, phase, Date.now() - startedAt);
     pushDebug("error", details.phase ?? phase, details.message, {
       name: details.name ?? null,
