@@ -14,6 +14,7 @@ import {
   Trash2,
   BarChart3,
   Undo2,
+  Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui-bits";
