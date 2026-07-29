@@ -9,6 +9,7 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
+  FlaskConical,
   HardDrive,
   History,
   KeyRound,
@@ -69,6 +70,7 @@ import { useUiStore } from "@/lib/ui-store";
 import { NotificationsPrefsCard } from "@/components/notifications-prefs-card";
 import { NavbarSettingsCard } from "@/components/navbar-settings-card";
 import { BackupsPanel } from "@/components/backups-panel";
+import { SandboxSettingsCard } from "@/components/sandbox-settings-card";
 import { RestoreBackupModal } from "@/components/restore-backup-modal";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -84,6 +86,7 @@ type View =
   | "history"
   | "duplicates"
   | "backups"
+  | "sandbox"
   | "danger";
 
 function DiagBox({
@@ -765,6 +768,13 @@ export function ConfiguracoesSection() {
               onOpen={() => setView("backups")}
             />
             <SecondaryCard
+              icon={FlaskConical}
+              title="Modo Teste (Sandbox)"
+              summary="Ambiente idêntico ao real para testar importações, edições e backups sem afetar a produção."
+              status="Somente admin"
+              onOpen={() => setView("sandbox")}
+            />
+            <SecondaryCard
               icon={Brain}
               title="Treinar I.A"
               summary="Onboarding guiado + análise do sistema para gerar automações Python que reduzem o uso de IA."
@@ -1387,6 +1397,16 @@ export function ConfiguracoesSection() {
             description="Gere e agende snapshots completos e portáveis do sistema."
           />
           <BackupsPanel />
+        </>
+      )}
+
+      {view === "sandbox" && (
+        <>
+          <DetailHeader
+            title="Modo Teste (Sandbox)"
+            description="Uma cópia isolada do sistema para testar à vontade."
+          />
+          <SandboxSettingsCard />
         </>
       )}
 

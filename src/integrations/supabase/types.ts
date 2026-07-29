@@ -40,6 +40,7 @@ export type Database = {
           applies_to: string
           created_at: string
           description: string
+          env: Database["public"]["Enums"]["app_env"]
           estimated_ai_savings: string
           id: string
           name: string
@@ -55,6 +56,7 @@ export type Database = {
           applies_to?: string
           created_at?: string
           description?: string
+          env?: Database["public"]["Enums"]["app_env"]
           estimated_ai_savings?: string
           id?: string
           name: string
@@ -70,6 +72,7 @@ export type Database = {
           applies_to?: string
           created_at?: string
           description?: string
+          env?: Database["public"]["Enums"]["app_env"]
           estimated_ai_savings?: string
           id?: string
           name?: string
@@ -88,6 +91,7 @@ export type Database = {
           business_facts: Json
           created_at: string
           documents: Json
+          env: Database["public"]["Enums"]["app_env"]
           last_analysis_at: string | null
           onboarding_answers: Json
           onboarding_completed: boolean
@@ -98,6 +102,7 @@ export type Database = {
           business_facts?: Json
           created_at?: string
           documents?: Json
+          env?: Database["public"]["Enums"]["app_env"]
           last_analysis_at?: string | null
           onboarding_answers?: Json
           onboarding_completed?: boolean
@@ -108,6 +113,7 @@ export type Database = {
           business_facts?: Json
           created_at?: string
           documents?: Json
+          env?: Database["public"]["Enums"]["app_env"]
           last_analysis_at?: string | null
           onboarding_answers?: Json
           onboarding_completed?: boolean
@@ -118,6 +124,7 @@ export type Database = {
       }
       app_settings: {
         Row: {
+          env: Database["public"]["Enums"]["app_env"]
           id: string
           preferences: Json
           rules: Json
@@ -126,6 +133,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          env?: Database["public"]["Enums"]["app_env"]
           id?: string
           preferences?: Json
           rules?: Json
@@ -134,6 +142,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          env?: Database["public"]["Enums"]["app_env"]
           id?: string
           preferences?: Json
           rules?: Json
@@ -184,6 +193,7 @@ export type Database = {
           client_type: string
           created_at: string
           customer_data: string | null
+          env: Database["public"]["Enums"]["app_env"]
           folder: string | null
           id: string
           mgmv: Json | null
@@ -201,6 +211,7 @@ export type Database = {
           client_type?: string
           created_at?: string
           customer_data?: string | null
+          env?: Database["public"]["Enums"]["app_env"]
           folder?: string | null
           id?: string
           mgmv?: Json | null
@@ -218,6 +229,7 @@ export type Database = {
           client_type?: string
           created_at?: string
           customer_data?: string | null
+          env?: Database["public"]["Enums"]["app_env"]
           folder?: string | null
           id?: string
           mgmv?: Json | null
@@ -241,6 +253,7 @@ export type Database = {
           created_at: string
           date: string
           duration_ms: number | null
+          env: Database["public"]["Enums"]["app_env"]
           errors: number
           file: string
           file_hash: string | null
@@ -257,6 +270,7 @@ export type Database = {
           created_at?: string
           date?: string
           duration_ms?: number | null
+          env?: Database["public"]["Enums"]["app_env"]
           errors?: number
           file: string
           file_hash?: string | null
@@ -273,6 +287,7 @@ export type Database = {
           created_at?: string
           date?: string
           duration_ms?: number | null
+          env?: Database["public"]["Enums"]["app_env"]
           errors?: number
           file?: string
           file_hash?: string | null
@@ -347,6 +362,7 @@ export type Database = {
           created_at: string
           detection_log: Json | null
           due_day: number | null
+          env: Database["public"]["Enums"]["app_env"]
           first_due_date: string | null
           id: string
           installment_value: number | null
@@ -376,6 +392,7 @@ export type Database = {
           created_at?: string
           detection_log?: Json | null
           due_day?: number | null
+          env?: Database["public"]["Enums"]["app_env"]
           first_due_date?: string | null
           id?: string
           installment_value?: number | null
@@ -405,6 +422,7 @@ export type Database = {
           created_at?: string
           detection_log?: Json | null
           due_day?: number | null
+          env?: Database["public"]["Enums"]["app_env"]
           first_due_date?: string | null
           id?: string
           installment_value?: number | null
@@ -439,6 +457,7 @@ export type Database = {
           amount: number | null
           created_at: string
           due_date: string | null
+          env: Database["public"]["Enums"]["app_env"]
           id: string
           installment_number: number
           manual_partial: boolean
@@ -452,6 +471,7 @@ export type Database = {
           amount?: number | null
           created_at?: string
           due_date?: string | null
+          env?: Database["public"]["Enums"]["app_env"]
           id?: string
           installment_number: number
           manual_partial?: boolean
@@ -465,6 +485,7 @@ export type Database = {
           amount?: number | null
           created_at?: string
           due_date?: string | null
+          env?: Database["public"]["Enums"]["app_env"]
           id?: string
           installment_number?: number
           manual_partial?: boolean
@@ -488,6 +509,7 @@ export type Database = {
           client_id: string
           content: string
           created_at: string
+          env: Database["public"]["Enums"]["app_env"]
           generated_by: string | null
           id: string
           product_ids: string[]
@@ -497,6 +519,7 @@ export type Database = {
           client_id: string
           content: string
           created_at?: string
+          env?: Database["public"]["Enums"]["app_env"]
           generated_by?: string | null
           id?: string
           product_ids?: string[]
@@ -506,6 +529,7 @@ export type Database = {
           client_id?: string
           content?: string
           created_at?: string
+          env?: Database["public"]["Enums"]["app_env"]
           generated_by?: string | null
           id?: string
           product_ids?: string[]
@@ -568,6 +592,7 @@ export type Database = {
           collection_eligible: boolean
           created_at: string
           due_date: string
+          env: Database["public"]["Enums"]["app_env"]
           financial_status: string
           id: string
           included_in_mgmv: boolean
@@ -586,6 +611,7 @@ export type Database = {
           collection_eligible?: boolean
           created_at?: string
           due_date?: string
+          env?: Database["public"]["Enums"]["app_env"]
           financial_status?: string
           id?: string
           included_in_mgmv?: boolean
@@ -604,6 +630,7 @@ export type Database = {
           collection_eligible?: boolean
           created_at?: string
           due_date?: string
+          env?: Database["public"]["Enums"]["app_env"]
           financial_status?: string
           id?: string
           included_in_mgmv?: boolean
@@ -675,10 +702,35 @@ export type Database = {
         }
         Relationships: []
       }
+      sandbox_state: {
+        Row: {
+          active: boolean
+          cloned_at: string | null
+          created_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          cloned_at?: string | null
+          created_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          cloned_at?: string | null
+          created_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       saved_filters: {
         Row: {
           created_at: string
           created_by: string | null
+          env: Database["public"]["Enums"]["app_env"]
           id: string
           name: string
           payload: Json
@@ -688,6 +740,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          env?: Database["public"]["Enums"]["app_env"]
           id?: string
           name: string
           payload?: Json
@@ -697,6 +750,7 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          env?: Database["public"]["Enums"]["app_env"]
           id?: string
           name?: string
           payload?: Json
@@ -713,6 +767,7 @@ export type Database = {
           created_by: string | null
           debug_log: Json
           duration_ms: number | null
+          env: Database["public"]["Enums"]["app_env"]
           error: string | null
           error_details: Json | null
           finished_at: string | null
@@ -732,6 +787,7 @@ export type Database = {
           created_by?: string | null
           debug_log?: Json
           duration_ms?: number | null
+          env?: Database["public"]["Enums"]["app_env"]
           error?: string | null
           error_details?: Json | null
           finished_at?: string | null
@@ -751,6 +807,7 @@ export type Database = {
           created_by?: string | null
           debug_log?: Json
           duration_ms?: number | null
+          env?: Database["public"]["Enums"]["app_env"]
           error?: string | null
           error_details?: Json | null
           finished_at?: string | null
@@ -769,6 +826,7 @@ export type Database = {
         Row: {
           created_at: string
           day: string
+          env: Database["public"]["Enums"]["app_env"]
           feedback_environment: number | null
           feedback_mood: number | null
           feedback_notes: string | null
@@ -781,6 +839,7 @@ export type Database = {
         Insert: {
           created_at?: string
           day?: string
+          env?: Database["public"]["Enums"]["app_env"]
           feedback_environment?: number | null
           feedback_mood?: number | null
           feedback_notes?: string | null
@@ -793,6 +852,7 @@ export type Database = {
         Update: {
           created_at?: string
           day?: string
+          env?: Database["public"]["Enums"]["app_env"]
           feedback_environment?: number | null
           feedback_mood?: number | null
           feedback_notes?: string | null
@@ -809,6 +869,7 @@ export type Database = {
           action: string
           actor_id: string | null
           created_at: string
+          env: Database["public"]["Enums"]["app_env"]
           id: string
           payload: Json | null
           task_id: string
@@ -817,6 +878,7 @@ export type Database = {
           action: string
           actor_id?: string | null
           created_at?: string
+          env?: Database["public"]["Enums"]["app_env"]
           id?: string
           payload?: Json | null
           task_id: string
@@ -825,6 +887,7 @@ export type Database = {
           action?: string
           actor_id?: string | null
           created_at?: string
+          env?: Database["public"]["Enums"]["app_env"]
           id?: string
           payload?: Json | null
           task_id?: string
@@ -844,6 +907,7 @@ export type Database = {
           author_id: string
           body: string
           created_at: string
+          env: Database["public"]["Enums"]["app_env"]
           id: string
           kind: string
           task_id: string
@@ -852,6 +916,7 @@ export type Database = {
           author_id: string
           body: string
           created_at?: string
+          env?: Database["public"]["Enums"]["app_env"]
           id?: string
           kind?: string
           task_id: string
@@ -860,6 +925,7 @@ export type Database = {
           author_id?: string
           body?: string
           created_at?: string
+          env?: Database["public"]["Enums"]["app_env"]
           id?: string
           kind?: string
           task_id?: string
@@ -884,6 +950,7 @@ export type Database = {
           created_by: string
           description: string | null
           due_at: string | null
+          env: Database["public"]["Enums"]["app_env"]
           id: string
           linked_entity_id: string | null
           linked_entity_type: string | null
@@ -908,6 +975,7 @@ export type Database = {
           created_by: string
           description?: string | null
           due_at?: string | null
+          env?: Database["public"]["Enums"]["app_env"]
           id?: string
           linked_entity_id?: string | null
           linked_entity_type?: string | null
@@ -932,6 +1000,7 @@ export type Database = {
           created_by?: string
           description?: string | null
           due_at?: string | null
+          env?: Database["public"]["Enums"]["app_env"]
           id?: string
           linked_entity_id?: string | null
           linked_entity_type?: string | null
@@ -1006,6 +1075,10 @@ export type Database = {
         Returns: boolean
       }
       can_view_team_tasks: { Args: { _user_id: string }; Returns: boolean }
+      current_env: {
+        Args: never
+        Returns: Database["public"]["Enums"]["app_env"]
+      }
       get_system_backup_schedule: {
         Args: never
         Returns: {
@@ -1037,6 +1110,7 @@ export type Database = {
       show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
+      app_env: "producao" | "sandbox"
       app_permission:
         | "dashboard.view"
         | "clientes.view"
@@ -1207,6 +1281,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_env: ["producao", "sandbox"],
       app_permission: [
         "dashboard.view",
         "clientes.view",

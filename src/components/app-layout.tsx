@@ -1,6 +1,7 @@
 import { Outlet } from "@tanstack/react-router";
 import {
   Search,
+  FlaskConical,
   Menu,
   Sun,
   Moon,
@@ -16,6 +17,7 @@ import {
   CircleDollarSign,
   KanbanSquare,
 } from "lucide-react";
+import { SandboxProvider, useSandbox } from "@/lib/use-sandbox";
 import { useEffect, useMemo, useRef, useState, lazy, memo, Suspense, type ReactNode } from "react";
 import type { ComponentType, SVGProps } from "react";
 import { cn } from "@/lib/utils";
@@ -1350,11 +1352,41 @@ export function AppLayout({ children }: { children?: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-background bg-gradient-to-b from-background via-background to-accent/30">
-      <FloatingNavbar />
-      <main className="page-container">{children ?? <Outlet />}</main>
-      <GlobalModals />
-      <FloatingConcierge />
+    <SandboxProvider>
+      <div className="min-h-screen bg-background bg-gradient-to-b from-background via-background to-accent/30">
+        <SandboxBanner />
+        <FloatingNavbar />
+        <main className="page-container">{children ?? <Outlet />}</main>
+        <GlobalModals />
+        <FloatingConcierge />
+      </div>
+    </SandboxProvider>
+  );
+}
+
+function SandboxBanner() {
+  const { state, setActive } = useSandbox();
+  const [leaving, setLeaving] = useState(false);
+  if (!state.active) return null;
+  return (
+    <div className="sticky top-0 z-50 flex flex-wrap items-center justify-center gap-2 border-b border-amber-500/40 bg-amber-500/15 px-4 py-2 text-xs font-medium text-amber-700 backdrop-blur dark:text-amber-300">
+      <FlaskConical className="size-3.5" />
+      MODO TESTE — você está em um ambiente isolado. Nada aqui afeta os dados reais.
+      <button
+        type="button"
+        disabled={leaving}
+        onClick={async () => {
+          setLeaving(true);
+          try {
+            await setActive(false);
+          } finally {
+            setLeaving(false);
+          }
+        }}
+        className="rounded-full border border-amber-500/50 px-2 py-0.5 transition-colors hover:bg-amber-500/20 disabled:opacity-60"
+      >
+        {leaving ? "Saindo…" : "Sair"}
+      </button>
     </div>
   );
 }
