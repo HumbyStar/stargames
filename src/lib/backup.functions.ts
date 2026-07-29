@@ -509,13 +509,41 @@ async function runBackup(opts: {
   const filename = formatFilename(now);
   const storagePath = opts.existing?.storagePath ?? storagePathFor(now, filename);
   const startedAt = Date.now();
+  const debugLog: BackupDebugEntry[] = [];
+  let phase = "initializing";
+  const pushDebug = (
+    level: BackupDebugEntry["level"],
+    nextPhase: string,
+    message: string,
+    meta?: Record<string, unknown>,
+  ) => {
+    phase = nextPhase;
+    const entry: BackupDebugEntry = {
+      at: new Date().toISOString(),
+      level,
+      phase: nextPhase,
+      message: sanitizeDiagnostic(message),
+      elapsedMs: Date.now() - startedAt,
+      meta: normalizeDebugMeta(meta),
+    };
+    debugLog.push(entry);
+    const line = `[backup] ${nextPhase}: ${entry.message}`;
+    if (level === "error") console.error(line, entry.meta ?? "");
+    else if (level === "warn") console.warn(line, entry.meta ?? "");
+    else console.info(line, entry.meta ?? "");
+    return entry;
+  };
 
   let backupId: string;
+  pushDebug("info", "initializing", "Backup iniciado", {
+    type: opts.type,
+    mode: opts.existing ? "resume" : "new",
+  });
   if (opts.existing) {
     backupId = opts.existing.id;
     const { error: startErr } = await supabaseAdmin
       .from("system_backups")
-      .update({ status: "running", error: null })
+      .update({ status: "running", error: null, error_details: null, debug_log: debugLog })
       .eq("id", backupId);
     if (startErr) throw new Error(startErr.message);
   } else {
@@ -526,6 +554,7 @@ async function runBackup(opts: {
         type: opts.type,
         status: "running",
         storage_path: storagePath,
+        debug_log: debugLog,
       })
       .select("id")
       .single();
@@ -534,6 +563,8 @@ async function runBackup(opts: {
   }
 
   try {
+    pushDebug("info", "zip:create", "Preparando arquivo ZIP");
+    await persistBackupDebug(supabaseAdmin, backupId, debugLog);
     const zip = new JSZip();
     const rowCounts: Record<string, number> = {};
     const tableRows: Record<string, any[]> = {};
@@ -551,6 +582,7 @@ async function runBackup(opts: {
     ]);
 
     for (const table of BACKUP_TABLES) {
+      phase = `database:${table}`;
       const keepRows = KEEP_FOR_SUMMARY.has(table);
       const exported = await fetchRowsForBackup(supabaseAdmin, table, { keepRows });
       rowCounts[table] = exported.rowCount;
@@ -558,11 +590,21 @@ async function runBackup(opts: {
       if (keepRows) {
         tableRows[table] = exported.rows ?? [];
       }
+      pushDebug("info", `database:${table}`, `Tabela ${table} exportada`, {
+        rows: exported.rowCount,
+        keptForSummary: keepRows,
+      });
+      await persistBackupDebug(supabaseAdmin, backupId, debugLog, { row_counts: rowCounts });
     }
 
     // Storage: notion-html-originals
     let storageObjectCount = 0;
     try {
+      pushDebug("info", "storage:notion-html-originals", "Espelhando arquivos originais", {
+        maxFiles: STORAGE_MIRROR_MAX_FILES,
+        maxBytes: STORAGE_MIRROR_MAX_BYTES,
+      });
+      await persistBackupDebug(supabaseAdmin, backupId, debugLog);
       storageObjectCount = await mirrorBucket(
         supabaseAdmin,
         "notion-html-originals",
@@ -571,11 +613,23 @@ async function runBackup(opts: {
         },
         { maxTotalBytes: STORAGE_MIRROR_MAX_BYTES, maxFiles: STORAGE_MIRROR_MAX_FILES },
       );
+      pushDebug("info", "storage:notion-html-originals", "Arquivos originais espelhados", {
+        files: storageObjectCount,
+      });
+      await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
+        storage_object_count: storageObjectCount,
+      });
     } catch (err) {
       // Se o bucket não existir, seguimos com o resto do backup.
       console.warn("[backup] mirror bucket failed:", err);
+      pushDebug("warn", "storage:notion-html-originals", "Falha ao espelhar arquivos originais; backup seguirá sem esse espelho", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      await persistBackupDebug(supabaseAdmin, backupId, debugLog);
     }
 
+    pushDebug("info", "summary", "Calculando resumo de negócio");
+    await persistBackupDebug(supabaseAdmin, backupId, debugLog);
     const businessSummary = computeBusinessSummaryFromRows({
       clients: tableRows["clients"] ?? [],
       products: tableRows["products"] ?? [],
@@ -600,12 +654,20 @@ async function runBackup(opts: {
     zip.file("summary.json", JSON.stringify(businessSummary, null, 2));
     zip.file("RESTORE.md", RESTORE_MD);
 
+    pushDebug("info", "zip:generate", "Gerando conteúdo final do ZIP");
+    await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
+      business_summary: businessSummary as any,
+    });
     const zipBuf = await zip.generateAsync({
       type: "uint8array",
       compression: "STORE",
       streamFiles: true,
     });
 
+    pushDebug("info", "storage:upload", "Enviando ZIP para o armazenamento privado", {
+      sizeBytes: zipBuf.byteLength,
+    });
+    await persistBackupDebug(supabaseAdmin, backupId, debugLog);
     const { error: upErr } = await supabaseAdmin.storage
       .from(BACKUP_BUCKET)
       .upload(storagePath, zipBuf, {
@@ -615,16 +677,24 @@ async function runBackup(opts: {
     if (upErr) throw new Error(upErr.message);
 
     const duration = Date.now() - startedAt;
+    pushDebug("info", "completed", "Backup concluído com sucesso", {
+      sizeBytes: zipBuf.byteLength,
+      durationMs: duration,
+      storageObjectCount,
+    });
     await supabaseAdmin
       .from("system_backups")
       .update({
         status: "completed",
+        error: null,
+        error_details: null,
         size_bytes: zipBuf.byteLength,
         duration_ms: duration,
         row_counts: rowCounts,
         storage_object_count: storageObjectCount,
         finished_at: new Date().toISOString(),
         business_summary: businessSummary as any,
+        debug_log: debugLog,
       })
       .eq("id", backupId);
 
@@ -633,11 +703,18 @@ async function runBackup(opts: {
 
     return { id: backupId, storagePath, sizeBytes: zipBuf.byteLength };
   } catch (err: any) {
+    const details = makeErrorDetails(err, phase, Date.now() - startedAt);
+    pushDebug("error", details.phase ?? phase, details.message, {
+      name: details.name ?? null,
+      elapsedMs: details.elapsedMs ?? null,
+    });
     await supabaseAdmin
       .from("system_backups")
       .update({
         status: "failed",
-        error: err?.message ?? String(err),
+        error: details.message,
+        error_details: details as any,
+        debug_log: debugLog,
         finished_at: new Date().toISOString(),
       })
       .eq("id", backupId);
