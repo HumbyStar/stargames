@@ -994,6 +994,14 @@ export type Database = {
         Returns: boolean
       }
       can_view_team_tasks: { Args: { _user_id: string }; Returns: boolean }
+      get_system_backup_schedule: {
+        Args: never
+        Returns: {
+          active: boolean
+          jobid: number
+          schedule: string
+        }[]
+      }
       has_any_internal_role: { Args: { _user_id: string }; Returns: boolean }
       has_permission: {
         Args: {
@@ -1008,6 +1016,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      set_system_backup_schedule: {
+        Args: { _frequency: string; _job_name: string }
+        Returns: undefined
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
