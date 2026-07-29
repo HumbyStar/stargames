@@ -39,6 +39,7 @@ import {
   getBackupSchedule,
   listBackups,
   resumeBackup,
+  cancelBackup,
   setBackupSchedule,
   BACKUP_TABLE_NAMES,
   type BackupDebugEntry,
