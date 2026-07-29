@@ -563,6 +563,13 @@ export function BackupsPanel() {
           setActiveBackupId(null);
           return;
         }
+        if (row?.status === "cancelled") {
+          toast.success("Backup cancelado.", { id: "backup-run" });
+          setRunning(false);
+          setRunningSince(null);
+          setActiveBackupId(null);
+          return;
+        }
         if (row) {
           const sig = `${row.debugLog.length}:${row.debugLog.at(-1)?.at ?? ""}`;
           if (sig !== lastLogSignature) {
