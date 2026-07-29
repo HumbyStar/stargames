@@ -400,7 +400,7 @@ export function BackupsPanel() {
                             size="sm"
                             variant="outline"
                             title="Ver resumo"
-                            disabled={r.status !== "completed"}
+                            disabled={r.status !== "completed" || running}
                             onClick={() => {
                               setSummaryData({
                                 filename: r.storagePath?.split("/").pop(),
@@ -414,7 +414,7 @@ export function BackupsPanel() {
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={r.status !== "completed"}
+                            disabled={r.status !== "completed" || running}
                             onClick={() => void handleDownload(r.id)}
                           >
                             <Download className="size-3.5" />
@@ -423,6 +423,7 @@ export function BackupsPanel() {
                             size="sm"
                             variant="ghost"
                             className="text-destructive"
+                            disabled={running}
                             onClick={() => void handleDelete(r.id)}
                           >
                             <Trash2 className="size-3.5" />
