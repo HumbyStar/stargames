@@ -439,8 +439,9 @@ async function runBackup(opts: {
   const storagePath = opts.existing?.storagePath ?? storagePathFor(now, filename);
   const startedAt = Date.now();
 
-  let backupId = opts.existing?.id;
-  if (backupId) {
+  let backupId: string;
+  if (opts.existing) {
+    backupId = opts.existing.id;
     const { error: startErr } = await supabaseAdmin
       .from("system_backups")
       .update({ status: "running", error: null })
