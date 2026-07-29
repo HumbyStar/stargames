@@ -380,37 +380,102 @@ export function BackupsPanel() {
     setRunningSince(Date.now());
     setElapsed(0);
     toast.loading("Gerando backup completo…", { id: "backup-run" });
+    const attemptLog: BackupDebugEntry[] = [];
+    const isTransient = (e: any): boolean => {
+      const msg = String(e?.message ?? e ?? "").toLowerCase();
+      const status = Number(e?.status ?? e?.statusCode ?? 0);
+      if (status >= 500 && status < 600) return true;
+      return (
+        msg.includes("internal server error") ||
+        msg.includes("fetch failed") ||
+        msg.includes("network") ||
+        msg.includes("timeout") ||
+        msg.includes("timed out") ||
+        msg.includes("econnreset") ||
+        msg.includes("socket") ||
+        msg.includes("worker") ||
+        msg.includes("502") ||
+        msg.includes("503") ||
+        msg.includes("504")
+      );
+    };
+    const MAX_ATTEMPTS = 4;
+    const backoffMs = (n: number) => Math.min(8000, 1000 * 2 ** (n - 1));
+    let finalErr: any = null;
     try {
-      const res = await create();
-      setActiveBackupId(res.id ?? null);
-      await refresh();
-      if (!res.id) {
-        // No id returned — treat as complete.
-        toast.success(`Backup gerado (${formatBytes(res.sizeBytes)}).`, { id: "backup-run" });
-        setRunning(false);
-        setRunningSince(null);
-      }
-    } catch (err: any) {
-      // Antes de abrir o modal de falha, ver se o backend criou uma linha
-      // pending/running mesmo com erro de resposta (Worker cortou a request
-      // mas o job continuou). Se sim, entramos em modo poll + auto-resume.
-      try {
-        const rowsRes = await list();
-        setRows(rowsRes);
-        const recent = rowsRes.find(
-          (r) => r.status === "pending" || r.status === "running",
-        );
-        if (recent) {
-          setActiveBackupId(recent.id);
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        const startedAt = Date.now();
+        attemptLog.push({
+          at: new Date(startedAt).toISOString(),
+          level: "info",
+          phase: "createBackupNow",
+          message: `Tentativa ${attempt}/${MAX_ATTEMPTS} de iniciar backup.`,
+        });
+        try {
+          const res = await create();
+          attemptLog.push({
+            at: new Date().toISOString(),
+            level: "info",
+            phase: "createBackupNow",
+            message: `Tentativa ${attempt} aceita pelo backend (id=${res.id ?? "—"}).`,
+            elapsedMs: Date.now() - startedAt,
+          });
+          setActiveBackupId(res.id ?? null);
+          await refresh();
+          if (!res.id) {
+            toast.success(`Backup gerado (${formatBytes(res.sizeBytes)}).`, { id: "backup-run" });
+            setRunning(false);
+            setRunningSince(null);
+          }
+          return;
+        } catch (err: any) {
+          finalErr = err;
+          attemptLog.push({
+            at: new Date().toISOString(),
+            level: "error",
+            phase: "createBackupNow",
+            message: `Tentativa ${attempt} falhou: ${err?.message ?? "erro desconhecido"}`,
+            elapsedMs: Date.now() - startedAt,
+            meta: { name: err?.name, status: err?.status },
+          });
+          // Se o backend criou uma linha mesmo com erro de resposta (Worker cortou a
+          // request mas o job continuou), entramos em modo poll + auto-resume.
+          try {
+            const rowsRes = await list();
+            setRows(rowsRes);
+            const recent = rowsRes.find(
+              (r) => r.status === "pending" || r.status === "running",
+            );
+            if (recent) {
+              setActiveBackupId(recent.id);
+              toast.loading(
+                "Resposta interrompida pelo servidor. Retomando backup em background…",
+                { id: "backup-run" },
+              );
+              return;
+            }
+          } catch {
+            // ignore
+          }
+          if (attempt >= MAX_ATTEMPTS || !isTransient(err)) {
+            throw err;
+          }
+          const wait = backoffMs(attempt);
+          attemptLog.push({
+            at: new Date().toISOString(),
+            level: "warn",
+            phase: "createBackupNow",
+            message: `Erro transitório detectado. Nova tentativa em ${wait}ms.`,
+          });
           toast.loading(
-            "Resposta interrompida pelo servidor. Retomando backup em background…",
+            `Erro transitório. Tentando novamente em ${Math.round(wait / 1000)}s (${attempt}/${MAX_ATTEMPTS - 1})…`,
             { id: "backup-run" },
           );
-          return;
+          await new Promise((r) => setTimeout(r, wait));
         }
-      } catch {
-        // ignore
       }
+    } catch (err: any) {
+      finalErr = err;
       toast.error(err?.message ?? "Falha ao gerar backup.", { id: "backup-run" });
       const now = new Date().toISOString();
       setFailureRow({
@@ -432,11 +497,12 @@ export function BackupsPanel() {
           phase: "createBackupNow",
         },
         debugLog: [
+          ...attemptLog,
           {
             at: now,
             level: "error",
             phase: "createBackupNow",
-            message: err?.message ?? "Falha ao gerar backup.",
+            message: `Falha final após ${attemptLog.filter((e) => e.message.startsWith("Tentativa")).length} tentativa(s): ${err?.message ?? "erro desconhecido"}`,
           },
         ],
         businessSummary: null,
@@ -446,6 +512,7 @@ export function BackupsPanel() {
       setRunningSince(null);
       setActiveBackupId(null);
     }
+    void finalErr;
   };
 
   const handleDownload = async (id: string) => {
