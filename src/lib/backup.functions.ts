@@ -26,6 +26,27 @@ const STORAGE_MIRROR_MAX_FILES = 10_000;
 // Heurística: cada linha ocupa ~800 bytes em JSONL (chaves + valores).
 const ESTIMATED_BYTES_PER_ROW = 800;
 
+class BackupCancelledError extends Error {
+  constructor() {
+    super("Backup cancelado pelo usuário.");
+    this.name = "BackupCancelledError";
+  }
+}
+
+async function isCancellationRequested(admin: any, backupId: string): Promise<boolean> {
+  try {
+    const { data } = await admin
+      .from("system_backups")
+      .select("cancel_requested,status")
+      .eq("id", backupId)
+      .maybeSingle();
+    if (!data) return false;
+    return Boolean(data.cancel_requested) || data.status === "cancelled";
+  } catch {
+    return false;
+  }
+}
+
 export interface BackupDebugEntry {
   at: string;
   level: "info" | "warn" | "error";
