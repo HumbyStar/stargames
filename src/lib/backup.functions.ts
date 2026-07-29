@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { deferWithWorkerContext } from "@/lib/worker-context";
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
@@ -17,6 +18,9 @@ import { z } from "zod";
 
 const BACKUP_BUCKET = "system-backups";
 const BACKUP_SCHEMA_VERSION = 2;
+const STALE_BACKUP_MS = 20 * 60 * 1000;
+const STORAGE_MIRROR_MAX_BYTES = 500 * 1024 * 1024;
+const STORAGE_MIRROR_MAX_FILES = 10_000;
 
 // Todas as tabelas do app que devem entrar no backup.
 // Ordenadas por prioridade (independentes primeiro; dependentes depois).
@@ -243,13 +247,13 @@ export function computeBusinessSummaryFromRows(data: {
 }
 
 async function assertAdmin(ctx: { supabase: any; userId: string }) {
-  const { data, error } = await ctx.supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", ctx.userId)
-    .in("role", ["admin", "admin_master"]);
-  if (error) throw new Error(error.message);
-  if (!data || data.length === 0) {
+  const [admin, adminMaster] = await Promise.all([
+    ctx.supabase.rpc("has_role", { _user_id: ctx.userId, _role: "admin" }),
+    ctx.supabase.rpc("has_role", { _user_id: ctx.userId, _role: "admin_master" }),
+  ]);
+  if (admin.error) throw new Error(admin.error.message);
+  if (adminMaster.error) throw new Error(adminMaster.error.message);
+  if (!admin.data && !adminMaster.data) {
     throw new Error("Forbidden: admin only");
   }
 }
@@ -324,6 +328,48 @@ async function fetchAllRows(
   return out;
 }
 
+async function fetchRowsForBackup(
+  admin: any,
+  table: BackupTable,
+  opts: { batchSize?: number; keepRows?: boolean } = {},
+): Promise<{ rowCount: number; jsonl: string; rows?: any[] }> {
+  const batchSize = opts.batchSize ?? 1000;
+  const rowsToKeep: any[] | undefined = opts.keepRows ? [] : undefined;
+  const chunks: string[] = [];
+  let from = 0;
+  let rowCount = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { data, error } = await admin
+      .from(table)
+      .select("*")
+      .range(from, from + batchSize - 1);
+    if (error) throw new Error(`[${table}] ${error.message}`);
+    if (!data || data.length === 0) break;
+
+    const batchJsonl = data.map((r: any) => JSON.stringify(r)).join("\n");
+    if (batchJsonl) chunks.push(rowCount === 0 ? batchJsonl : `\n${batchJsonl}`);
+    if (rowsToKeep) rowsToKeep.push(...data);
+    rowCount += data.length;
+    if (data.length < batchSize) break;
+    from += batchSize;
+  }
+  return { rowCount, jsonl: chunks.join(""), rows: rowsToKeep };
+}
+
+async function cleanupStaleBackups(admin: any) {
+  const cutoff = new Date(Date.now() - STALE_BACKUP_MS).toISOString();
+  await admin
+    .from("system_backups")
+    .update({
+      status: "failed",
+      error: "Backup interrompido por timeout/limite de execução. Gere novamente.",
+      finished_at: new Date().toISOString(),
+    })
+    .in("status", ["pending", "running"])
+    .lt("created_at", cutoff);
+}
+
 async function mirrorBucket(
   admin: any,
   bucket: string,
@@ -381,28 +427,40 @@ async function mirrorBucket(
 async function runBackup(opts: {
   type: "manual" | "scheduled";
   createdBy: string | null;
+  existing?: { id: string; storagePath: string };
 }): Promise<{ id: string; storagePath: string; sizeBytes: number }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const JSZip = (await import("jszip")).default;
 
+  await cleanupStaleBackups(supabaseAdmin);
+
   const now = new Date();
   const filename = formatFilename(now);
-  const storagePath = storagePathFor(now, filename);
+  const storagePath = opts.existing?.storagePath ?? storagePathFor(now, filename);
   const startedAt = Date.now();
 
-  // Cria linha em system_backups (status=running)
-  const { data: rowIns, error: insErr } = await supabaseAdmin
-    .from("system_backups")
-    .insert({
-      created_by: opts.createdBy,
-      type: opts.type,
-      status: "running",
-      storage_path: storagePath,
-    })
-    .select("id")
-    .single();
-  if (insErr || !rowIns) throw new Error(insErr?.message ?? "insert failed");
-  const backupId = rowIns.id as string;
+  let backupId: string;
+  if (opts.existing) {
+    backupId = opts.existing.id;
+    const { error: startErr } = await supabaseAdmin
+      .from("system_backups")
+      .update({ status: "running", error: null })
+      .eq("id", backupId);
+    if (startErr) throw new Error(startErr.message);
+  } else {
+    const { data: rowIns, error: insErr } = await supabaseAdmin
+      .from("system_backups")
+      .insert({
+        created_by: opts.createdBy,
+        type: opts.type,
+        status: "running",
+        storage_path: storagePath,
+      })
+      .select("id")
+      .single();
+    if (insErr || !rowIns) throw new Error(insErr?.message ?? "insert failed");
+    backupId = rowIns.id as string;
+  }
 
   try {
     const zip = new JSZip();
@@ -422,12 +480,12 @@ async function runBackup(opts: {
     ]);
 
     for (const table of BACKUP_TABLES) {
-      const rows = await fetchAllRows(supabaseAdmin, table);
-      rowCounts[table] = rows.length;
-      const jsonl = rows.map((r) => JSON.stringify(r)).join("\n");
-      zip.file(`database/data/${table}.jsonl`, jsonl);
-      if (KEEP_FOR_SUMMARY.has(table)) {
-        tableRows[table] = rows;
+      const keepRows = KEEP_FOR_SUMMARY.has(table);
+      const exported = await fetchRowsForBackup(supabaseAdmin, table, { keepRows });
+      rowCounts[table] = exported.rowCount;
+      zip.file(`database/data/${table}.jsonl`, exported.jsonl);
+      if (keepRows) {
+        tableRows[table] = exported.rows ?? [];
       }
     }
 
@@ -440,7 +498,7 @@ async function runBackup(opts: {
         (relPath, bytes) => {
           zip.file(`storage/notion-html-originals/${relPath}`, bytes);
         },
-        { maxTotalBytes: 20 * 1024 * 1024, maxFiles: 300 },
+        { maxTotalBytes: STORAGE_MIRROR_MAX_BYTES, maxFiles: STORAGE_MIRROR_MAX_FILES },
       );
     } catch (err) {
       // Se o bucket não existir, seguimos com o resto do backup.
@@ -473,8 +531,8 @@ async function runBackup(opts: {
 
     const zipBuf = await zip.generateAsync({
       type: "uint8array",
-      compression: "DEFLATE",
-      compressionOptions: { level: 6 },
+      compression: "STORE",
+      streamFiles: true,
     });
 
     const { error: upErr } = await supabaseAdmin.storage
@@ -546,7 +604,40 @@ export const createBackupNow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context);
-    return runBackup({ type: "manual", createdBy: context.userId });
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await cleanupStaleBackups(supabaseAdmin);
+
+    const now = new Date();
+    const filename = formatFilename(now);
+    const storagePath = storagePathFor(now, filename);
+    const { data: rowIns, error: insErr } = await supabaseAdmin
+      .from("system_backups")
+      .insert({
+        created_by: context.userId,
+        type: "manual",
+        status: "pending",
+        storage_path: storagePath,
+      })
+      .select("id")
+      .single();
+    if (insErr || !rowIns) throw new Error(insErr?.message ?? "insert failed");
+
+    const started = runBackup({
+      type: "manual",
+      createdBy: context.userId,
+      existing: { id: rowIns.id as string, storagePath },
+    }).catch((err) => console.error("[backup] background run failed:", err));
+
+    if (!deferWithWorkerContext(started)) {
+      await started;
+    }
+
+    return {
+      id: rowIns.id as string,
+      storagePath,
+      sizeBytes: null,
+      queued: true,
+    };
   });
 
 export interface BackupRow {
@@ -570,6 +661,7 @@ export const listBackups = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<BackupRow[]> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await cleanupStaleBackups(supabaseAdmin);
     const { data, error } = await supabaseAdmin
       .from("system_backups")
       .select("*")
