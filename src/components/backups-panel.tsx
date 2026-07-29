@@ -34,13 +34,16 @@ import {
 import {
   createBackupNow,
   deleteBackup,
+  estimateBackup,
   getBackupDownloadUrl,
   getBackupSchedule,
   listBackups,
   resumeBackup,
   setBackupSchedule,
+  BACKUP_TABLE_NAMES,
   type BackupDebugEntry,
   type BackupErrorDetails,
+  type BackupEstimate,
   type BackupRow,
   type BackupScheduleInfo,
 } from "@/lib/backup.functions";
@@ -50,6 +53,7 @@ import { BackupSummaryModal } from "@/components/backup-summary-modal";
 import { RestoreBackupModal } from "@/components/restore-backup-modal";
 import type { BusinessSummary } from "@/lib/backup.functions";
 import { useUiStore } from "@/lib/ui-store";
+import { Progress } from "@/components/ui/progress";
 
 function formatBytes(n: number | null | undefined): string {
   if (!n || n <= 0) return "—";
@@ -89,6 +93,217 @@ function formatElapsed(ms: number | null | undefined): string {
   if (!ms || ms < 0) return "—";
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
+}
+
+// ---------------------------------------------------------------------------
+// Progresso baseado no debug_log persistido pelo backend
+// ---------------------------------------------------------------------------
+
+interface BackupProgress {
+  percent: number;
+  label: string;
+  done: number;
+  total: number;
+  tablesDone: number;
+  tablesTotal: number;
+}
+
+function computeBackupProgress(row: BackupRow | null): BackupProgress {
+  const tablesTotal = BACKUP_TABLE_NAMES.length;
+  const total = 1 + tablesTotal + 1 + 1 + 1 + 1; // init + tabelas + mirror + summary + zip:generate + upload
+  if (!row) return { percent: 0, label: "Aguardando…", done: 0, total, tablesDone: 0, tablesTotal };
+  const tables = new Set<string>();
+  let hasInit = false;
+  let hasMirror = false;
+  let hasSummary = false;
+  let hasZipGen = false;
+  let hasUpload = false;
+  let currentLabel = "Iniciando…";
+  for (const e of row.debugLog) {
+    const p = e.phase;
+    if (p === "initializing" || p === "zip:create") {
+      hasInit = true;
+      currentLabel = "Preparando execução";
+    } else if (p.startsWith("database:")) {
+      tables.add(p);
+      currentLabel = `Exportando ${p.slice("database:".length)}`;
+    } else if (p === "storage:notion-html-originals") {
+      hasMirror = true;
+      currentLabel = "Espelhando arquivos originais";
+    } else if (p === "summary") {
+      hasSummary = true;
+      currentLabel = "Calculando resumo de negócio";
+    } else if (p === "zip:generate") {
+      hasZipGen = true;
+      currentLabel = "Montando ZIP final";
+    } else if (p === "storage:upload") {
+      hasUpload = true;
+      currentLabel = "Gravando no bucket";
+    } else if (p === "completed") {
+      hasInit = hasMirror = hasSummary = hasZipGen = hasUpload = true;
+      currentLabel = "Concluído";
+    }
+  }
+  if (row.status === "completed") {
+    return { percent: 100, label: "Concluído", done: total, total, tablesDone: tablesTotal, tablesTotal };
+  }
+  let done = 0;
+  if (hasInit) done += 1;
+  done += Math.min(tables.size, tablesTotal);
+  if (hasMirror) done += 1;
+  if (hasSummary) done += 1;
+  if (hasZipGen) done += 1;
+  if (hasUpload) done += 1;
+  const percent = Math.min(99, Math.round((done / total) * 100));
+  return { percent, label: currentLabel, done, total, tablesDone: tables.size, tablesTotal };
+}
+
+function formatBytesLoose(n: number): string {
+  if (n <= 0) return "0 B";
+  if (n < 1024) return `${n} B`;
+  const kb = n / 1024;
+  if (kb < 1024) return `${kb.toFixed(1)} KB`;
+  const mb = kb / 1024;
+  if (mb < 1024) return `${mb.toFixed(1)} MB`;
+  return `${(mb / 1024).toFixed(2)} GB`;
+}
+
+function BackupPreflightModal({
+  open,
+  loading,
+  estimate,
+  error,
+  onCancel,
+  onConfirm,
+  onRetry,
+}: {
+  open: boolean;
+  loading: boolean;
+  estimate: BackupEstimate | null;
+  error: string | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+  onRetry: () => void;
+}) {
+  const topTables = useMemo(
+    () => (estimate?.tables ?? []).slice().sort((a, b) => b.rows - a.rows).slice(0, 8),
+    [estimate],
+  );
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onCancel()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <BarChart3 className="size-5" /> Prévia do backup
+          </DialogTitle>
+          <DialogDescription>
+            Estimativa de tamanho e conteúdo antes de iniciar. Se ultrapassar os limites,
+            o backup ainda pode ser gerado, mas conteúdos serão truncados.
+          </DialogDescription>
+        </DialogHeader>
+
+        {loading ? (
+          <div className="flex items-center justify-center gap-3 py-10 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" /> Calculando estimativa…
+          </div>
+        ) : error ? (
+          <div className="space-y-3">
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={onCancel}>Cancelar</Button>
+              <Button onClick={onRetry}>Tentar novamente</Button>
+            </div>
+          </div>
+        ) : estimate ? (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border border-border bg-card/50 p-3">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Linhas totais</div>
+                <div className="mt-1 text-xl font-semibold tabular-nums">
+                  {estimate.totalRows.toLocaleString("pt-BR")}
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  em {estimate.tables.length} tabelas
+                </div>
+              </div>
+              <div className="rounded-lg border border-border bg-card/50 p-3">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Arquivos originais</div>
+                <div className="mt-1 text-xl font-semibold tabular-nums">
+                  {estimate.storageFiles.toLocaleString("pt-BR")}
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  {formatBytesLoose(estimate.storageBytes)}
+                  {estimate.storageListingTruncated ? " (parcial)" : ""}
+                </div>
+              </div>
+              <div className="rounded-lg border border-border bg-card/50 p-3">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">ZIP estimado</div>
+                <div className="mt-1 text-xl font-semibold tabular-nums">
+                  {formatBytesLoose(estimate.estimatedZipBytes)}
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  BD {formatBytesLoose(estimate.estimatedDatabaseBytes)} + storage
+                </div>
+              </div>
+            </div>
+
+            {estimate.warnings.length > 0 ? (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                  <AlertTriangle className="size-3.5" /> Avisos e limites
+                </div>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-amber-800">
+                  {estimate.warnings.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+                <div className="mt-2 text-[10px] text-amber-700/80">
+                  Limites atuais: {estimate.limits.storageMaxFiles.toLocaleString("pt-BR")} arquivos ·{" "}
+                  {formatBytesLoose(estimate.limits.storageMaxBytes)} de storage por backup.
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-700">
+                Nenhum aviso — o backup deve caber sem truncamento.
+              </div>
+            )}
+
+            <div className="rounded-lg border border-border bg-muted/30 p-3">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Maiores tabelas
+              </div>
+              <div className="grid gap-1 text-xs sm:grid-cols-2">
+                {topTables.map((t) => (
+                  <div key={t.name} className="flex items-center justify-between gap-2">
+                    <span className="truncate">{t.name}</span>
+                    <span className="tabular-nums text-muted-foreground">
+                      {t.rows.toLocaleString("pt-BR")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="outline" onClick={onCancel}>Cancelar</Button>
+              <Button variant="outline" onClick={onRetry}>
+                <RefreshCcw className="mr-2 size-3.5" /> Recalcular
+              </Button>
+              <Button
+                onClick={onConfirm}
+                className={estimate.exceedsLimits ? "bg-amber-600 hover:bg-amber-700 text-white" : undefined}
+              >
+                <Play className="mr-2 size-4" />
+                {estimate.exceedsLimits ? "Gerar mesmo assim" : "Gerar backup"}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function diagnosticsText(row: BackupRow | null): string {
@@ -241,6 +456,7 @@ export function BackupsPanel() {
   const list = useServerFn(listBackups);
   const create = useServerFn(createBackupNow);
   const resume = useServerFn(resumeBackup);
+  const estimate = useServerFn(estimateBackup);
   const del = useServerFn(deleteBackup);
   const getUrl = useServerFn(getBackupDownloadUrl);
   const getSchedule = useServerFn(getBackupSchedule);
@@ -262,6 +478,10 @@ export function BackupsPanel() {
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [failureOpen, setFailureOpen] = useState(false);
   const [failureRow, setFailureRow] = useState<BackupRow | null>(null);
+  const [preflightOpen, setPreflightOpen] = useState(false);
+  const [preflightLoading, setPreflightLoading] = useState(false);
+  const [preflightData, setPreflightData] = useState<BackupEstimate | null>(null);
+  const [preflightError, setPreflightError] = useState<string | null>(null);
   const setSettingsLocked = useUiStore((s) => s.setSettingsLocked);
 
   useEffect(() => {
@@ -374,8 +594,31 @@ export function BackupsPanel() {
     [rows],
   );
 
+  const activeRow = useMemo(
+    () => (activeBackupId ? rows.find((r) => r.id === activeBackupId) ?? null : null),
+    [rows, activeBackupId],
+  );
+  const progress = useMemo(() => computeBackupProgress(activeRow), [activeRow]);
+
+  const openPreflight = async () => {
+    if (running) return;
+    setPreflightOpen(true);
+    setPreflightData(null);
+    setPreflightError(null);
+    setPreflightLoading(true);
+    try {
+      const est = await estimate();
+      setPreflightData(est);
+    } catch (err: any) {
+      setPreflightError(err?.message ?? "Falha ao calcular estimativa do backup.");
+    } finally {
+      setPreflightLoading(false);
+    }
+  };
+
   const handleGenerate = async () => {
     if (running) return;
+    setPreflightOpen(false);
     setRunning(true);
     setRunningSince(Date.now());
     setElapsed(0);
@@ -580,6 +823,18 @@ export function BackupsPanel() {
             <div className="text-[11px] text-sky-700/80">
               Não feche esta janela. Tempo decorrido: {elapsed}s
             </div>
+            <div className="mt-2 space-y-1">
+              <Progress value={progress.percent} className="h-1.5" />
+              <div className="flex items-center justify-between text-[10px] text-sky-700/80 tabular-nums">
+                <span>
+                  {progress.label}
+                  {progress.tablesTotal > 0
+                    ? ` · tabelas ${progress.tablesDone}/${progress.tablesTotal}`
+                    : ""}
+                </span>
+                <span>{progress.percent}%</span>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -625,7 +880,7 @@ export function BackupsPanel() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button onClick={handleGenerate} disabled={running}>
+          <Button onClick={() => void openPreflight()} disabled={running}>
             {running ? (
               <Loader2 className="mr-2 size-4 animate-spin" />
             ) : (
@@ -799,6 +1054,15 @@ export function BackupsPanel() {
         open={failureOpen}
         row={failureRow}
         onClose={() => setFailureOpen(false)}
+      />
+      <BackupPreflightModal
+        open={preflightOpen}
+        loading={preflightLoading}
+        estimate={preflightData}
+        error={preflightError}
+        onCancel={() => setPreflightOpen(false)}
+        onRetry={() => void openPreflight()}
+        onConfirm={() => void handleGenerate()}
       />
     </div>
   );
