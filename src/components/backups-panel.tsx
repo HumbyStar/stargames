@@ -813,6 +813,34 @@ export function BackupsPanel() {
     }
   };
 
+  const handleCancel = async (id: string) => {
+    const ok = window.confirm(
+      "Cancelar o backup em andamento? O arquivo parcial será descartado.",
+    );
+    if (!ok) return;
+    try {
+      toast.loading("Cancelando backup…", { id: "backup-run" });
+      const res = await cancel({ data: { id } });
+      if (res.alreadyFinished) {
+        toast.info(`Backup já estava em estado "${res.status}".`, { id: "backup-run" });
+      } else if (res.status === "cancelled") {
+        toast.success("Backup cancelado.", { id: "backup-run" });
+        if (id === activeBackupId) {
+          setRunning(false);
+          setRunningSince(null);
+          setActiveBackupId(null);
+        }
+      } else {
+        toast.loading("Cancelamento solicitado. Finalizando etapa atual…", {
+          id: "backup-run",
+        });
+      }
+      await refresh();
+    } catch (err: any) {
+      toast.error(err?.message ?? "Falha ao cancelar backup.", { id: "backup-run" });
+    }
+  };
+
   const handleScheduleChange = async (freq: "off" | "daily" | "weekly") => {
     setSavingSchedule(true);
     try {
