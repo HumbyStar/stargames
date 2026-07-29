@@ -29,9 +29,10 @@ interface Props {
   onClose: () => void;
   client: Client | null;
   products: NfProduct[];
+  onSaved?: () => void;
 }
 
-export function NfFormatModal({ open, onClose, client, products }: Props) {
+export function NfFormatModal({ open, onClose, client, products, onSaved }: Props) {
   const analyze = useServerFn(analyzeCustomerData);
   const classify = useServerFn(classifyProductsForNf);
   const save = useServerFn(saveNfInvoice);
@@ -114,6 +115,7 @@ export function NfFormatModal({ open, onClose, client, products }: Props) {
         },
       });
       toast.success("Nota registrada no histórico do cliente.");
+      onSaved?.();
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao salvar nota.");
