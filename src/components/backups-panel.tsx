@@ -111,64 +111,183 @@ interface BackupProgress {
   tablesDone: number;
   tablesTotal: number;
   stageIndex: number; // 0..3, -1 antes de iniciar
+  etaMs: number | null;
+  elapsedMs: number;
+  phaseLabel: string;
+  phasePercent: number;
+  currentTable: string | null;
+  uploadBytes: number | null;
 }
 
-function computeBackupProgress(row: BackupRow | null): BackupProgress {
+// Pesos relativos por fase (soma 100). Refletem quanto do tempo real de um
+// backup típico é gasto em cada bloco — usado para o percentual global.
+const PHASE_WEIGHTS = {
+  init: 2,
+  database: 55,
+  mirror: 18,
+  summary: 3,
+  zip: 7,
+  upload: 15,
+} as const;
+
+function computeBackupProgress(
+  row: BackupRow | null,
+  estimate: BackupEstimate | null,
+  nowElapsedMs: number,
+): BackupProgress {
   const tablesTotal = BACKUP_TABLE_NAMES.length;
-  const total = 1 + tablesTotal + 1 + 1 + 1 + 1; // init + tabelas + mirror + summary + zip:generate + upload
-  if (!row) return { percent: 0, label: "Aguardando…", done: 0, total, tablesDone: 0, tablesTotal, stageIndex: -1 };
-  const tables = new Set<string>();
+  const total = 1 + tablesTotal + 1 + 1 + 1 + 1;
+  if (!row) {
+    return {
+      percent: 0,
+      label: "Aguardando…",
+      done: 0,
+      total,
+      tablesDone: 0,
+      tablesTotal,
+      stageIndex: -1,
+      etaMs: null,
+      elapsedMs: 0,
+      phaseLabel: "Aguardando início",
+      phasePercent: 0,
+      currentTable: null,
+      uploadBytes: null,
+    };
+  }
+  const tablesDoneRows = new Map<string, number>();
   let hasInit = false;
   let hasMirror = false;
   let hasSummary = false;
   let hasZipGen = false;
   let hasUpload = false;
+  let uploadBytes: number | null = null;
   let currentLabel = "Iniciando…";
-  let stageIndex = 0; // extração por padrão quando roda
+  let currentTable: string | null = null;
+  let phaseLabel = "Inicialização";
+  let stageIndex = 0;
+  let lastElapsedMs = 0;
   for (const e of row.debugLog) {
     const p = e.phase;
+    if (typeof e.elapsedMs === "number") lastElapsedMs = e.elapsedMs;
     if (p === "initializing" || p === "zip:create") {
       hasInit = true;
       currentLabel = "Preparando execução";
+      phaseLabel = "Inicialização";
       stageIndex = 0;
     } else if (p.startsWith("database:")) {
-      tables.add(p);
-      currentLabel = `Exportando ${p.slice("database:".length)}`;
+      const tbl = p.slice("database:".length);
+      const rows = Number((e.meta as any)?.rows ?? 0);
+      tablesDoneRows.set(tbl, rows);
+      currentTable = tbl;
+      currentLabel = `Exportando ${tbl} (${rows.toLocaleString("pt-BR")} linhas)`;
+      phaseLabel = "Extração do banco";
       stageIndex = 0;
     } else if (p === "storage:notion-html-originals") {
-      hasMirror = true;
+      const files = Number((e.meta as any)?.files ?? 0);
+      if (files > 0) hasMirror = true;
       currentLabel = "Espelhando arquivos originais";
+      phaseLabel = "Espelhamento de storage";
       stageIndex = 0;
     } else if (p === "summary") {
       hasSummary = true;
       currentLabel = "Calculando resumo de negócio";
+      phaseLabel = "Resumo de negócio";
       stageIndex = 3;
     } else if (p === "zip:generate") {
       hasZipGen = true;
       currentLabel = "Montando ZIP final";
+      phaseLabel = "Compactação";
       stageIndex = 1;
     } else if (p === "storage:upload") {
       hasUpload = true;
+      const sz = Number((e.meta as any)?.sizeBytes ?? 0);
+      if (sz > 0) uploadBytes = sz;
       currentLabel = "Gravando no bucket";
+      phaseLabel = "Upload do ZIP";
       stageIndex = 2;
     } else if (p === "completed") {
       hasInit = hasMirror = hasSummary = hasZipGen = hasUpload = true;
       currentLabel = "Concluído";
+      phaseLabel = "Concluído";
       stageIndex = 3;
     }
   }
+  const elapsedMs = Math.max(nowElapsedMs, lastElapsedMs);
+  const tablesDone = tablesDoneRows.size;
   if (row.status === "completed") {
-    return { percent: 100, label: "Concluído", done: total, total, tablesDone: tablesTotal, tablesTotal, stageIndex: 3 };
+    return {
+      percent: 100,
+      label: "Concluído",
+      done: total,
+      total,
+      tablesDone: tablesTotal,
+      tablesTotal,
+      stageIndex: 3,
+      etaMs: 0,
+      elapsedMs,
+      phaseLabel: "Concluído",
+      phasePercent: 100,
+      currentTable: null,
+      uploadBytes,
+    };
   }
+
+  let dbFraction = tablesTotal > 0 ? tablesDone / tablesTotal : 0;
+  if (estimate && estimate.totalRows > 0) {
+    const rowsDone = Array.from(tablesDoneRows.entries()).reduce((sum, [name, r]) => {
+      const est = estimate.tables.find((t) => t.name === name);
+      return sum + (r || est?.rows || 0);
+    }, 0);
+    dbFraction = Math.min(1, rowsDone / estimate.totalRows);
+  }
+
+  const parts: Array<{ w: number; done: number }> = [
+    { w: PHASE_WEIGHTS.init, done: hasInit ? 1 : 0 },
+    { w: PHASE_WEIGHTS.database, done: dbFraction },
+    { w: PHASE_WEIGHTS.mirror, done: hasMirror ? 1 : dbFraction >= 1 ? 0.3 : 0 },
+    { w: PHASE_WEIGHTS.summary, done: hasSummary ? 1 : 0 },
+    { w: PHASE_WEIGHTS.zip, done: hasZipGen ? 1 : 0 },
+    { w: PHASE_WEIGHTS.upload, done: hasUpload ? 0.5 : 0 },
+  ];
+  const weighted = parts.reduce((s, p) => s + p.w * p.done, 0);
+  const percent = Math.min(99, Math.max(1, Math.round(weighted)));
+
+  let phasePercent = 0;
+  if (phaseLabel === "Extração do banco") phasePercent = Math.round(dbFraction * 100);
+  else if (phaseLabel === "Inicialização") phasePercent = hasInit ? 100 : 40;
+  else if (phaseLabel === "Espelhamento de storage") phasePercent = hasMirror ? 100 : 40;
+  else if (phaseLabel === "Resumo de negócio") phasePercent = hasSummary ? 100 : 50;
+  else if (phaseLabel === "Compactação") phasePercent = hasZipGen ? 100 : 40;
+  else if (phaseLabel === "Upload do ZIP") phasePercent = hasUpload ? 60 : 20;
+
+  let etaMs: number | null = null;
+  if (elapsedMs > 2000 && percent >= 3) {
+    const projectedTotal = (elapsedMs / percent) * 100;
+    etaMs = Math.max(0, Math.round(projectedTotal - elapsedMs));
+  }
+
   let done = 0;
   if (hasInit) done += 1;
-  done += Math.min(tables.size, tablesTotal);
+  done += Math.min(tablesDone, tablesTotal);
   if (hasMirror) done += 1;
   if (hasSummary) done += 1;
   if (hasZipGen) done += 1;
   if (hasUpload) done += 1;
-  const percent = Math.min(99, Math.round((done / total) * 100));
-  return { percent, label: currentLabel, done, total, tablesDone: tables.size, tablesTotal, stageIndex };
+  return {
+    percent,
+    label: currentLabel,
+    done,
+    total,
+    tablesDone,
+    tablesTotal,
+    stageIndex,
+    etaMs,
+    elapsedMs,
+    phaseLabel,
+    phasePercent,
+    currentTable,
+    uploadBytes,
+  };
 }
 
 function formatBytesLoose(n: number): string {
@@ -238,6 +357,18 @@ function _formatBytesLoose(n: number): string {
   const mb = kb / 1024;
   if (mb < 1024) return `${mb.toFixed(1)} MB`;
   return `${(mb / 1024).toFixed(2)} GB`;
+}
+
+function formatDurationShort(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  const totalSec = Math.round(ms / 1000);
+  if (totalSec < 60) return `${totalSec}s`;
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  if (m < 60) return s ? `${m}m ${s}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return mm ? `${h}h ${mm}m` : `${h}h`;
 }
 
 function BackupPreflightModal({
@@ -701,7 +832,10 @@ export function BackupsPanel() {
     () => (activeBackupId ? rows.find((r) => r.id === activeBackupId) ?? null : null),
     [rows, activeBackupId],
   );
-  const progress = useMemo(() => computeBackupProgress(activeRow), [activeRow]);
+  const progress = useMemo(
+    () => computeBackupProgress(activeRow, preflightData, elapsed * 1000),
+    [activeRow, preflightData, elapsed],
+  );
 
   const openPreflight = async () => {
     if (running) return;
@@ -952,19 +1086,32 @@ export function BackupsPanel() {
             <div className="text-sm font-semibold text-sky-700">
               Backup em execução…
             </div>
-            <div className="text-[11px] text-sky-700/80">
-              Não feche esta janela. Tempo decorrido: {elapsed}s
+            <div className="text-[11px] text-sky-700/80 flex flex-wrap gap-x-3 gap-y-0.5">
+              <span>Não feche esta janela.</span>
+              <span>Decorrido: {formatDurationShort(elapsed * 1000)}</span>
+              {progress.etaMs != null ? (
+                <span>ETA: ~{formatDurationShort(progress.etaMs)}</span>
+              ) : (
+                <span className="opacity-70">ETA: calculando…</span>
+              )}
+              {progress.uploadBytes != null ? (
+                <span>ZIP: {formatBytesLoose(progress.uploadBytes)}</span>
+              ) : null}
             </div>
             <div className="mt-2 space-y-1">
               <Progress value={progress.percent} className="h-1.5" />
               <div className="flex items-center justify-between text-[10px] text-sky-700/80 tabular-nums">
                 <span>
-                  {progress.label}
+                  <strong className="font-semibold">{progress.phaseLabel}</strong>
+                  {progress.phasePercent > 0 ? ` · ${progress.phasePercent}%` : ""}
                   {progress.tablesTotal > 0
                     ? ` · tabelas ${progress.tablesDone}/${progress.tablesTotal}`
                     : ""}
                 </span>
                 <span>{progress.percent}%</span>
+              </div>
+              <div className="truncate text-[10px] text-sky-700/70">
+                {progress.label}
               </div>
               <BackupStages current={progress.stageIndex} />
             </div>
