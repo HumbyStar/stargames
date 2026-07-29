@@ -961,6 +961,7 @@ export function BackupsPanel() {
       setFailureRow({
         id: "erro-imediato",
         createdAt: now,
+        updatedAt: now,
         finishedAt: now,
         createdBy: null,
         type: "manual",
