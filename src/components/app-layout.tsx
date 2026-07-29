@@ -1383,6 +1383,93 @@ function GlobalModals() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={financeOpen} onOpenChange={(o) => (o ? null : closeFinance())}>
+ <DialogContent>
+          <DialogHeader className="sr-only">
+            <DialogTitle>Finanças</DialogTitle>
+            <DialogDescription>Dashboard financeiro consolidado.</DialogDescription>
+          </DialogHeader>
+          <FinanceDashboard />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={importOpen} onOpenChange={(o) => (o ? null : closeImport())}>
+        <DialogContent className="max-w-[min(1200px,95vw)] max-h-[90vh] overflow-y-auto" data-tour="import-modal">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Importar</DialogTitle>
+            <DialogDescription>Importe listas, planilhas e arquivos.</DialogDescription>
+          </DialogHeader>
+          {importOpen && (
+            <Suspense fallback={null}>
+              <ImportSection onScrollTo={(id) => scrollToSection(id)} />
+            </Suspense>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={equipeOpen} onOpenChange={(o) => (o ? null : closeEquipe())}>
+        <DialogContent className="max-w-[min(1200px,95vw)] max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Equipe</DialogTitle>
+            <DialogDescription>Gestão de tarefas e membros da equipe.</DialogDescription>
+          </DialogHeader>
+          {equipeOpen && (
+            <Suspense fallback={null}>
+              <EquipeSection />
+            </Suspense>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <TutorialRunner />
+      <ConciergeModal />
+    </>
+  );
+}
+
+function SettingsModal() {
+  const settingsOpen = useUiStore((s) => s.settingsOpen);
+  const settingsLocked = useUiStore((s) => s.settingsLocked);
+  const closeSettings = useUiStore((s) => s.closeSettings);
+  return (
+    <Dialog open={settingsOpen} onOpenChange={(o) => (o ? null : closeSettings())}>
+      <DialogContent
+        data-tour="settings-modal"
+        hideClose={settingsLocked}
+        onEscapeKeyDown={(e) => {
+          if (settingsLocked) e.preventDefault();
+        }}
+        onPointerDownOutside={(e) => {
+          if (settingsLocked) e.preventDefault();
+        }}
+        onInteractOutside={(e) => {
+          if (settingsLocked) e.preventDefault();
+        }}
+      >
+        <DialogHeader className="sr-only">
+          <DialogTitle>Configurações</DialogTitle>
+          <DialogDescription>Preferências, regras e zona de perigo.</DialogDescription>
+        </DialogHeader>
+        <ConfiguracoesSection />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+  return (
+    <>
+      <SettingsModal />
+
+      <Dialog open={helpOpen} onOpenChange={(o) => (o ? null : closeHelp())}>
+ <DialogContent>
+          <DialogHeader className="sr-only">
+            <DialogTitle>Central de Ajuda</DialogTitle>
+            <DialogDescription>Tutoriais guiados visuais.</DialogDescription>
+          </DialogHeader>
+          <HelpCenter />
+        </DialogContent>
+      </Dialog>
+
 
       <Dialog open={financeOpen} onOpenChange={(o) => (o ? null : closeFinance())}>
  <DialogContent>
