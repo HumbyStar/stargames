@@ -1013,6 +1013,17 @@ export function BackupsPanel() {
                           >
                             <TerminalSquare className="size-3.5" />
                           </Button>
+                          {r.status === "failed" ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              title="Tentar novamente"
+                              disabled={running}
+                              onClick={() => void openPreflight()}
+                            >
+                              <RefreshCcw className="size-3.5" />
+                            </Button>
+                          ) : null}
                           {(r.status === "pending" || r.status === "running") ? (
                             <Button
                               size="sm"
