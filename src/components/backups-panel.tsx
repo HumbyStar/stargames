@@ -682,6 +682,17 @@ export function BackupsPanel() {
                           >
                             <TerminalSquare className="size-3.5" />
                           </Button>
+                          {(r.status === "pending" || r.status === "running") ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              title="Retomar backup"
+                              disabled={running}
+                              onClick={() => void handleResume(r.id)}
+                            >
+                              <Play className="size-3.5" />
+                            </Button>
+                          ) : null}
                           <Button
                             size="sm"
                             variant="outline"
