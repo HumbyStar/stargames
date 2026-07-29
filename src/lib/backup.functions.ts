@@ -726,6 +726,7 @@ async function runBackup(opts: {
       );
       pushDebug("info", "storage:notion-html-originals", "Arquivos originais espelhados", {
         files: storageObjectCount,
+        completed: true,
       });
       await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
         storage_object_count: storageObjectCount,
