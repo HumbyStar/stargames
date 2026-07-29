@@ -407,6 +407,11 @@ export function ConfiguracoesSection() {
 
   const [dangerOpen, setDangerOpen] = useState(false);
   const [dangerAction, setDangerAction] = useState<DangerAction | null>(null);
+
+  const [restoreModalOpen, setRestoreModalOpen] = useState(false);
+  const [restoreModalSource, setRestoreModalSource] = useState<"existing" | "upload">(
+    "existing",
+  );
   const [confirmText, setConfirmText] = useState("");
 
   const handleSavePrefs = () => {
