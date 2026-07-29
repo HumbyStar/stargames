@@ -880,10 +880,10 @@ export const createBackupNow = createServerFn({ method: "POST" })
     const cutoffIso = new Date(Date.now() - STALE_BACKUP_MS).toISOString();
     const { data: existingRow } = await supabaseAdmin
       .from("system_backups")
-      .select("id, storage_path, status, created_at")
+      .select("id, storage_path, status, updated_at")
       .eq("created_by", context.userId)
       .in("status", ["pending", "running"])
-      .gte("created_at", cutoffIso)
+      .gte("updated_at", cutoffIso)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
