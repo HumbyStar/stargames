@@ -1067,6 +1067,47 @@ export const resumeBackup = createServerFn({ method: "POST" })
 
 // removido: implementação original de createBackupNow substituída acima
 
+// Sinaliza cancelamento de um backup pendente/em execução. O runBackup
+// checa o flag entre etapas e encerra graciosamente com status "cancelled".
+export const cancelBackup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => idSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row, error } = await supabaseAdmin
+      .from("system_backups")
+      .select("id, status")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!row) throw new Error("Backup não encontrado.");
+    if (row.status !== "pending" && row.status !== "running") {
+      return { ok: true, status: row.status as string, alreadyFinished: true };
+    }
+    const nowIso = new Date().toISOString();
+    // Se ainda estiver "pending" e nenhum job pegou, finalize direto.
+    if (row.status === "pending") {
+      await supabaseAdmin
+        .from("system_backups")
+        .update({
+          status: "cancelled",
+          cancel_requested: false,
+          error: "Cancelado pelo usuário",
+          error_details: { message: "Backup cancelado pelo usuário.", phase: "cancelled" } as any,
+          finished_at: nowIso,
+        } as any)
+        .eq("id", data.id);
+      return { ok: true, status: "cancelled", alreadyFinished: false };
+    }
+    // Em execução: apenas sinaliza; o loop encerra na próxima checagem.
+    await supabaseAdmin
+      .from("system_backups")
+      .update({ cancel_requested: true } as any)
+      .eq("id", data.id);
+    return { ok: true, status: "cancelling", alreadyFinished: false };
+  });
+
 export interface BackupRow {
   id: string;
   createdAt: string;
