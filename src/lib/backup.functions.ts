@@ -427,6 +427,7 @@ async function mirrorBucket(
 async function runBackup(opts: {
   type: "manual" | "scheduled";
   createdBy: string | null;
+  existing?: { id: string; storagePath: string };
 }): Promise<{ id: string; storagePath: string; sizeBytes: number }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const JSZip = (await import("jszip")).default;
@@ -435,22 +436,30 @@ async function runBackup(opts: {
 
   const now = new Date();
   const filename = formatFilename(now);
-  const storagePath = storagePathFor(now, filename);
+  const storagePath = opts.existing?.storagePath ?? storagePathFor(now, filename);
   const startedAt = Date.now();
 
-  // Cria linha em system_backups (status=running)
-  const { data: rowIns, error: insErr } = await supabaseAdmin
-    .from("system_backups")
-    .insert({
-      created_by: opts.createdBy,
-      type: opts.type,
-      status: "running",
-      storage_path: storagePath,
-    })
-    .select("id")
-    .single();
-  if (insErr || !rowIns) throw new Error(insErr?.message ?? "insert failed");
-  const backupId = rowIns.id as string;
+  let backupId = opts.existing?.id;
+  if (backupId) {
+    const { error: startErr } = await supabaseAdmin
+      .from("system_backups")
+      .update({ status: "running", error: null })
+      .eq("id", backupId);
+    if (startErr) throw new Error(startErr.message);
+  } else {
+    const { data: rowIns, error: insErr } = await supabaseAdmin
+      .from("system_backups")
+      .insert({
+        created_by: opts.createdBy,
+        type: opts.type,
+        status: "running",
+        storage_path: storagePath,
+      })
+      .select("id")
+      .single();
+    if (insErr || !rowIns) throw new Error(insErr?.message ?? "insert failed");
+    backupId = rowIns.id as string;
+  }
 
   try {
     const zip = new JSZip();
