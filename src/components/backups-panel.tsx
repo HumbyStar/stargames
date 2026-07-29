@@ -172,6 +172,65 @@ function computeBackupProgress(row: BackupRow | null): BackupProgress {
 }
 
 function formatBytesLoose(n: number): string {
+  return _formatBytesLoose(n);
+}
+
+const BACKUP_STAGES: Array<{ label: string }> = [
+  { label: "Extração" },
+  { label: "Compactação" },
+  { label: "Upload" },
+  { label: "Verificação" },
+];
+
+function BackupStages({ current }: { current: number }) {
+  return (
+    <div className="mt-1 flex items-center gap-1">
+      {BACKUP_STAGES.map((s, i) => {
+        const done = i < current;
+        const active = i === current;
+        return (
+          <div key={s.label} className="flex flex-1 items-center gap-1">
+            <div
+              className={cn(
+                "flex size-4 items-center justify-center rounded-full border text-[9px] font-semibold tabular-nums",
+                done
+                  ? "border-emerald-500 bg-emerald-500 text-white"
+                  : active
+                    ? "border-sky-500 bg-sky-500 text-white animate-pulse"
+                    : "border-border bg-background text-muted-foreground",
+              )}
+              aria-current={active ? "step" : undefined}
+            >
+              {done ? "✓" : i + 1}
+            </div>
+            <span
+              className={cn(
+                "flex-1 truncate text-[10px]",
+                done
+                  ? "text-emerald-700 dark:text-emerald-400"
+                  : active
+                    ? "font-semibold text-sky-700"
+                    : "text-muted-foreground",
+              )}
+            >
+              {s.label}
+            </span>
+            {i < BACKUP_STAGES.length - 1 ? (
+              <div
+                className={cn(
+                  "h-px flex-1",
+                  done ? "bg-emerald-500/60" : "bg-border",
+                )}
+              />
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function _formatBytesLoose(n: number): string {
   if (n <= 0) return "0 B";
   if (n < 1024) return `${n} B`;
   const kb = n / 1024;
