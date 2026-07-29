@@ -1360,8 +1360,6 @@ export function AppLayout({ children }: { children?: ReactNode }) {
 }
 
 function GlobalModals() {
-  const settingsOpen = useUiStore((s) => s.settingsOpen);
-  const closeSettings = useUiStore((s) => s.closeSettings);
   const helpOpen = useUiStore((s) => s.helpOpen);
   const closeHelp = useUiStore((s) => s.closeHelp);
   const financeOpen = useUiStore((s) => s.financeOpen);
@@ -1373,15 +1371,7 @@ function GlobalModals() {
 
   return (
     <>
-      <Dialog open={settingsOpen} onOpenChange={(o) => (o ? null : closeSettings())}>
- <DialogContent data-tour="settings-modal">
-          <DialogHeader className="sr-only">
-            <DialogTitle>Configurações</DialogTitle>
-            <DialogDescription>Preferências, regras e zona de perigo.</DialogDescription>
-          </DialogHeader>
-          <ConfiguracoesSection />
-        </DialogContent>
-      </Dialog>
+      <SettingsModal />
 
       <Dialog open={helpOpen} onOpenChange={(o) => (o ? null : closeHelp())}>
  <DialogContent>
@@ -1392,7 +1382,6 @@ function GlobalModals() {
           <HelpCenter />
         </DialogContent>
       </Dialog>
-
 
       <Dialog open={financeOpen} onOpenChange={(o) => (o ? null : closeFinance())}>
  <DialogContent>
@@ -1435,5 +1424,34 @@ function GlobalModals() {
       <TutorialRunner />
       <ConciergeModal />
     </>
+  );
+}
+
+function SettingsModal() {
+  const settingsOpen = useUiStore((s) => s.settingsOpen);
+  const settingsLocked = useUiStore((s) => s.settingsLocked);
+  const closeSettings = useUiStore((s) => s.closeSettings);
+  return (
+    <Dialog open={settingsOpen} onOpenChange={(o) => (o ? null : closeSettings())}>
+      <DialogContent
+        data-tour="settings-modal"
+        hideClose={settingsLocked}
+        onEscapeKeyDown={(e) => {
+          if (settingsLocked) e.preventDefault();
+        }}
+        onPointerDownOutside={(e) => {
+          if (settingsLocked) e.preventDefault();
+        }}
+        onInteractOutside={(e) => {
+          if (settingsLocked) e.preventDefault();
+        }}
+      >
+        <DialogHeader className="sr-only">
+          <DialogTitle>Configurações</DialogTitle>
+          <DialogDescription>Preferências, regras e zona de perigo.</DialogDescription>
+        </DialogHeader>
+        <ConfiguracoesSection />
+      </DialogContent>
+    </Dialog>
   );
 }

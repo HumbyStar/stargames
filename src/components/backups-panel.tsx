@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { BackupSummaryModal } from "@/components/backup-summary-modal";
 import { RestoreBackupModal } from "@/components/restore-backup-modal";
 import type { BusinessSummary } from "@/lib/backup.functions";
+import { useUiStore } from "@/lib/ui-store";
 
 function formatBytes(n: number | null | undefined): string {
   if (!n || n <= 0) return "—";
@@ -83,6 +84,9 @@ export function BackupsPanel() {
   const [schedule, setSchedule] = useState<BackupScheduleInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
+  const [runningSince, setRunningSince] = useState<number | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const [activeBackupId, setActiveBackupId] = useState<string | null>(null);
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryData, setSummaryData] = useState<{
@@ -90,6 +94,18 @@ export function BackupsPanel() {
     summary: BusinessSummary | null;
   } | null>(null);
   const [restoreOpen, setRestoreOpen] = useState(false);
+  const setSettingsLocked = useUiStore((s) => s.setSettingsLocked);
+
+  useEffect(() => {
+    setSettingsLocked(running);
+    return () => setSettingsLocked(false);
+  }, [running, setSettingsLocked]);
+
+  useEffect(() => {
+    if (!running || !runningSince) return;
+    const t = setInterval(() => setElapsed(Math.floor((Date.now() - runningSince) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [running, runningSince]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -108,6 +124,55 @@ export function BackupsPanel() {
     void refresh();
   }, [refresh]);
 
+  // Poll while a backup is running to detect completion / failure.
+  useEffect(() => {
+    if (!running || !activeBackupId) return;
+    const started = Date.now();
+    const MAX_MS = 20 * 60 * 1000;
+    let stopped = false;
+    const poll = async () => {
+      if (stopped) return;
+      try {
+        const rowsRes = await list();
+        setRows(rowsRes);
+        const row = rowsRes.find((r) => r.id === activeBackupId);
+        if (row?.status === "completed") {
+          toast.success(`Backup gerado (${formatBytes(row.sizeBytes)}).`, { id: "backup-run" });
+          setSummaryData({
+            filename: row.storagePath?.split("/").pop(),
+            summary: row.businessSummary ?? null,
+          });
+          setSummaryOpen(true);
+          setRunning(false);
+          setRunningSince(null);
+          setActiveBackupId(null);
+          return;
+        }
+        if (row?.status === "failed") {
+          toast.error(row.error ?? "Falha ao gerar backup.", { id: "backup-run" });
+          setRunning(false);
+          setRunningSince(null);
+          setActiveBackupId(null);
+          return;
+        }
+        if (Date.now() - started > MAX_MS) {
+          toast.error("Tempo esgotado (20 min). Verifique o histórico.", { id: "backup-run" });
+          setRunning(false);
+          setRunningSince(null);
+          setActiveBackupId(null);
+          return;
+        }
+      } catch {
+        // ignore transient errors while polling
+      }
+    };
+    const iv = setInterval(() => void poll(), 3000);
+    return () => {
+      stopped = true;
+      clearInterval(iv);
+    };
+  }, [running, activeBackupId, list]);
+
   const totalSize = useMemo(
     () => rows.reduce((s, r) => s + (r.sizeBytes ?? 0), 0),
     [rows],
@@ -116,15 +181,24 @@ export function BackupsPanel() {
   const handleGenerate = async () => {
     if (running) return;
     setRunning(true);
+    setRunningSince(Date.now());
+    setElapsed(0);
     toast.loading("Gerando backup completo…", { id: "backup-run" });
     try {
       const res = await create();
-      toast.success(`Backup gerado (${formatBytes(res.sizeBytes)}).`, { id: "backup-run" });
+      setActiveBackupId(res.id ?? null);
       await refresh();
+      if (!res.id) {
+        // No id returned — treat as complete.
+        toast.success(`Backup gerado (${formatBytes(res.sizeBytes)}).`, { id: "backup-run" });
+        setRunning(false);
+        setRunningSince(null);
+      }
     } catch (err: any) {
       toast.error(err?.message ?? "Falha ao gerar backup.", { id: "backup-run" });
-    } finally {
       setRunning(false);
+      setRunningSince(null);
+      setActiveBackupId(null);
     }
   };
 
@@ -170,6 +244,19 @@ export function BackupsPanel() {
 
   return (
     <div className="space-y-4">
+      {running && (
+        <div className="sticky top-0 z-30 flex items-center gap-3 rounded-lg border border-sky-500/40 bg-sky-500/10 px-4 py-3 shadow-sm animate-pulse">
+          <Loader2 className="size-4 animate-spin text-sky-600" />
+          <div className="flex-1">
+            <div className="text-sm font-semibold text-sky-700">
+              Backup em execução…
+            </div>
+            <div className="text-[11px] text-sky-700/80">
+              Não feche esta janela. Tempo decorrido: {elapsed}s
+            </div>
+          </div>
+        </div>
+      )}
       <Card title="Backup completo">
         <p className="mb-3 text-xs text-muted-foreground">
           Gera um único arquivo .zip com todas as tabelas do sistema, arquivos originais de
@@ -220,11 +307,11 @@ export function BackupsPanel() {
             )}
             Gerar backup agora
           </Button>
-          <Button variant="outline" onClick={() => void refresh()} disabled={loading}>
+          <Button variant="outline" onClick={() => void refresh()} disabled={loading || running}>
             <RefreshCcw className={cn("mr-2 size-4", loading && "animate-spin")} />
             Atualizar
           </Button>
-          <Button variant="outline" onClick={() => setRestoreOpen(true)}>
+          <Button variant="outline" onClick={() => setRestoreOpen(true)} disabled={running}>
             <Undo2 className="mr-2 size-4" />
             Restaurar backup
           </Button>
@@ -233,7 +320,7 @@ export function BackupsPanel() {
             <Select
               value={schedule?.frequency ?? "off"}
               onValueChange={(v) => handleScheduleChange(v as "off" | "daily" | "weekly")}
-              disabled={savingSchedule}
+              disabled={savingSchedule || running}
             >
               <SelectTrigger className="h-8 w-40 text-xs">
                 <SelectValue />
@@ -313,7 +400,7 @@ export function BackupsPanel() {
                             size="sm"
                             variant="outline"
                             title="Ver resumo"
-                            disabled={r.status !== "completed"}
+                            disabled={r.status !== "completed" || running}
                             onClick={() => {
                               setSummaryData({
                                 filename: r.storagePath?.split("/").pop(),
@@ -327,7 +414,7 @@ export function BackupsPanel() {
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={r.status !== "completed"}
+                            disabled={r.status !== "completed" || running}
                             onClick={() => void handleDownload(r.id)}
                           >
                             <Download className="size-3.5" />
@@ -336,6 +423,7 @@ export function BackupsPanel() {
                             size="sm"
                             variant="ghost"
                             className="text-destructive"
+                            disabled={running}
                             onClick={() => void handleDelete(r.id)}
                           >
                             <Trash2 className="size-3.5" />
