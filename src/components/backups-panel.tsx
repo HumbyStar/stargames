@@ -110,12 +110,13 @@ interface BackupProgress {
   total: number;
   tablesDone: number;
   tablesTotal: number;
+  stageIndex: number; // 0..3, -1 antes de iniciar
 }
 
 function computeBackupProgress(row: BackupRow | null): BackupProgress {
   const tablesTotal = BACKUP_TABLE_NAMES.length;
   const total = 1 + tablesTotal + 1 + 1 + 1 + 1; // init + tabelas + mirror + summary + zip:generate + upload
-  if (!row) return { percent: 0, label: "Aguardando…", done: 0, total, tablesDone: 0, tablesTotal };
+  if (!row) return { percent: 0, label: "Aguardando…", done: 0, total, tablesDone: 0, tablesTotal, stageIndex: -1 };
   const tables = new Set<string>();
   let hasInit = false;
   let hasMirror = false;
@@ -123,33 +124,41 @@ function computeBackupProgress(row: BackupRow | null): BackupProgress {
   let hasZipGen = false;
   let hasUpload = false;
   let currentLabel = "Iniciando…";
+  let stageIndex = 0; // extração por padrão quando roda
   for (const e of row.debugLog) {
     const p = e.phase;
     if (p === "initializing" || p === "zip:create") {
       hasInit = true;
       currentLabel = "Preparando execução";
+      stageIndex = 0;
     } else if (p.startsWith("database:")) {
       tables.add(p);
       currentLabel = `Exportando ${p.slice("database:".length)}`;
+      stageIndex = 0;
     } else if (p === "storage:notion-html-originals") {
       hasMirror = true;
       currentLabel = "Espelhando arquivos originais";
+      stageIndex = 0;
     } else if (p === "summary") {
       hasSummary = true;
       currentLabel = "Calculando resumo de negócio";
+      stageIndex = 3;
     } else if (p === "zip:generate") {
       hasZipGen = true;
       currentLabel = "Montando ZIP final";
+      stageIndex = 1;
     } else if (p === "storage:upload") {
       hasUpload = true;
       currentLabel = "Gravando no bucket";
+      stageIndex = 2;
     } else if (p === "completed") {
       hasInit = hasMirror = hasSummary = hasZipGen = hasUpload = true;
       currentLabel = "Concluído";
+      stageIndex = 3;
     }
   }
   if (row.status === "completed") {
-    return { percent: 100, label: "Concluído", done: total, total, tablesDone: tablesTotal, tablesTotal };
+    return { percent: 100, label: "Concluído", done: total, total, tablesDone: tablesTotal, tablesTotal, stageIndex: 3 };
   }
   let done = 0;
   if (hasInit) done += 1;
@@ -159,7 +168,7 @@ function computeBackupProgress(row: BackupRow | null): BackupProgress {
   if (hasZipGen) done += 1;
   if (hasUpload) done += 1;
   const percent = Math.min(99, Math.round((done / total) * 100));
-  return { percent, label: currentLabel, done, total, tablesDone: tables.size, tablesTotal };
+  return { percent, label: currentLabel, done, total, tablesDone: tables.size, tablesTotal, stageIndex };
 }
 
 function formatBytesLoose(n: number): string {
