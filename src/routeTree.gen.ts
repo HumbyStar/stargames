@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated.index'
 import { Route as AuthenticatedQaRouteImport } from './routes/_authenticated.qa'
 import { Route as AuthenticatedNikostartRouteImport } from './routes/_authenticated.nikostart'
+import { Route as ApiPublicHooksBackupRunRouteImport } from './routes/api/public/hooks/backup-run'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -39,18 +40,25 @@ const AuthenticatedNikostartRoute = AuthenticatedNikostartRouteImport.update({
   path: '/nikostart',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const ApiPublicHooksBackupRunRoute = ApiPublicHooksBackupRunRouteImport.update({
+  id: '/api/public/hooks/backup-run',
+  path: '/api/public/hooks/backup-run',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
   '/nikostart': typeof AuthenticatedNikostartRoute
   '/qa': typeof AuthenticatedQaRoute
+  '/api/public/hooks/backup-run': typeof ApiPublicHooksBackupRunRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/nikostart': typeof AuthenticatedNikostartRoute
   '/qa': typeof AuthenticatedQaRoute
   '/': typeof AuthenticatedIndexRoute
+  '/api/public/hooks/backup-run': typeof ApiPublicHooksBackupRunRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -59,12 +67,18 @@ export interface FileRoutesById {
   '/_authenticated/nikostart': typeof AuthenticatedNikostartRoute
   '/_authenticated/qa': typeof AuthenticatedQaRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/api/public/hooks/backup-run': typeof ApiPublicHooksBackupRunRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/nikostart' | '/qa'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/nikostart'
+    | '/qa'
+    | '/api/public/hooks/backup-run'
   fileRoutesByTo: FileRoutesByTo
-  to: '/auth' | '/nikostart' | '/qa' | '/'
+  to: '/auth' | '/nikostart' | '/qa' | '/' | '/api/public/hooks/backup-run'
   id:
     | '__root__'
     | '/_authenticated'
@@ -72,11 +86,13 @@ export interface FileRouteTypes {
     | '/_authenticated/nikostart'
     | '/_authenticated/qa'
     | '/_authenticated/'
+    | '/api/public/hooks/backup-run'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicHooksBackupRunRoute: typeof ApiPublicHooksBackupRunRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -116,6 +132,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedNikostartRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/api/public/hooks/backup-run': {
+      id: '/api/public/hooks/backup-run'
+      path: '/api/public/hooks/backup-run'
+      fullPath: '/api/public/hooks/backup-run'
+      preLoaderRoute: typeof ApiPublicHooksBackupRunRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -138,6 +161,7 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicHooksBackupRunRoute: ApiPublicHooksBackupRunRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
