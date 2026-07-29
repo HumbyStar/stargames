@@ -841,6 +841,147 @@ export const createBackupNow = createServerFn({ method: "POST" })
     };
   });
 
+// ---------------------------------------------------------------------------
+// Estimativa (preflight) — roda antes de iniciar o backup
+// ---------------------------------------------------------------------------
+
+export interface BackupEstimate {
+  generatedAt: string;
+  tables: { name: string; rows: number }[];
+  totalRows: number;
+  estimatedDatabaseBytes: number;
+  storageFiles: number;
+  storageBytes: number;
+  storageListingTruncated: boolean;
+  estimatedZipBytes: number;
+  limits: {
+    storageMaxFiles: number;
+    storageMaxBytes: number;
+    staleMs: number;
+  };
+  warnings: string[];
+  exceedsLimits: boolean;
+}
+
+export const estimateBackup = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<BackupEstimate> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const tables: { name: string; rows: number }[] = [];
+    let totalRows = 0;
+    for (const t of BACKUP_TABLES) {
+      try {
+        const { count, error } = await supabaseAdmin
+          .from(t)
+          .select("*", { count: "exact", head: true });
+        if (error) throw error;
+        const rows = count ?? 0;
+        tables.push({ name: t, rows });
+        totalRows += rows;
+      } catch (err) {
+        console.warn(`[backup] estimate table ${t} failed:`, err);
+        tables.push({ name: t, rows: 0 });
+      }
+    }
+
+    let storageFiles = 0;
+    let storageBytes = 0;
+    let storageListingTruncated = false;
+    // Limite total de nós visitados para não estourar o Worker em buckets
+    // enormes — se atingir, marcamos truncated e usamos os dados parciais.
+    const MAX_LIST_NODES = 5000;
+    let visited = 0;
+    try {
+      const walk = async (prefix: string) => {
+        if (storageListingTruncated) return;
+        let offset = 0;
+        const limit = 100;
+        while (true) {
+          if (storageListingTruncated) return;
+          const { data, error } = await supabaseAdmin.storage
+            .from("notion-html-originals")
+            .list(prefix, { limit, offset, sortBy: { column: "name", order: "asc" } });
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+          for (const item of data) {
+            visited++;
+            if (visited > MAX_LIST_NODES) {
+              storageListingTruncated = true;
+              return;
+            }
+            const isFolder = !item.id && !item.metadata;
+            const path = prefix ? `${prefix}/${item.name}` : item.name;
+            if (isFolder) {
+              await walk(path);
+            } else {
+              storageFiles++;
+              storageBytes += Number((item.metadata as any)?.size ?? 0);
+            }
+          }
+          if (data.length < limit) break;
+          offset += limit;
+        }
+      };
+      await walk("");
+    } catch (err) {
+      console.warn("[backup] estimate storage listing failed:", err);
+    }
+
+    const estimatedDatabaseBytes = totalRows * ESTIMATED_BYTES_PER_ROW;
+    const includedStorageBytes = Math.min(storageBytes, STORAGE_MIRROR_MAX_BYTES);
+    // ZIP em modo STORE (sem compressão) ≈ soma dos conteúdos + ~2% de overhead.
+    const estimatedZipBytes = Math.round(
+      (estimatedDatabaseBytes + includedStorageBytes) * 1.02,
+    );
+
+    const warnings: string[] = [];
+    let exceedsLimits = false;
+    if (storageFiles > STORAGE_MIRROR_MAX_FILES) {
+      exceedsLimits = true;
+      warnings.push(
+        `Bucket possui ${storageFiles.toLocaleString("pt-BR")} arquivos; o backup incluirá apenas os primeiros ${STORAGE_MIRROR_MAX_FILES.toLocaleString("pt-BR")}.`,
+      );
+    }
+    if (storageBytes > STORAGE_MIRROR_MAX_BYTES) {
+      exceedsLimits = true;
+      const mb = Math.round(storageBytes / 1024 / 1024);
+      const cap = Math.round(STORAGE_MIRROR_MAX_BYTES / 1024 / 1024);
+      warnings.push(
+        `Bucket possui ~${mb} MB; o backup incluirá apenas os primeiros ${cap} MB.`,
+      );
+    }
+    if (storageListingTruncated) {
+      warnings.push(
+        `Listagem do bucket truncada em ${MAX_LIST_NODES} itens — o número real pode ser maior.`,
+      );
+    }
+    if (totalRows > 500_000) {
+      warnings.push(
+        `${totalRows.toLocaleString("pt-BR")} linhas para exportar — o backup pode levar vários minutos e usar bastante memória do Worker.`,
+      );
+    }
+
+    return {
+      generatedAt: new Date().toISOString(),
+      tables,
+      totalRows,
+      estimatedDatabaseBytes,
+      storageFiles,
+      storageBytes,
+      storageListingTruncated,
+      estimatedZipBytes,
+      limits: {
+        storageMaxFiles: STORAGE_MIRROR_MAX_FILES,
+        storageMaxBytes: STORAGE_MIRROR_MAX_BYTES,
+        staleMs: STALE_BACKUP_MS,
+      },
+      warnings,
+      exceedsLimits,
+    };
+  });
+
 // Retoma um backup pending/running que ficou parado (Worker morto no meio).
 // Idempotente: se o backup já concluiu ou falhou definitivamente, apenas
 // retorna o status atual.
