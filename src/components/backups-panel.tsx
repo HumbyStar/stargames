@@ -110,12 +110,13 @@ interface BackupProgress {
   total: number;
   tablesDone: number;
   tablesTotal: number;
+  stageIndex: number; // 0..3, -1 antes de iniciar
 }
 
 function computeBackupProgress(row: BackupRow | null): BackupProgress {
   const tablesTotal = BACKUP_TABLE_NAMES.length;
   const total = 1 + tablesTotal + 1 + 1 + 1 + 1; // init + tabelas + mirror + summary + zip:generate + upload
-  if (!row) return { percent: 0, label: "Aguardando…", done: 0, total, tablesDone: 0, tablesTotal };
+  if (!row) return { percent: 0, label: "Aguardando…", done: 0, total, tablesDone: 0, tablesTotal, stageIndex: -1 };
   const tables = new Set<string>();
   let hasInit = false;
   let hasMirror = false;
@@ -123,33 +124,41 @@ function computeBackupProgress(row: BackupRow | null): BackupProgress {
   let hasZipGen = false;
   let hasUpload = false;
   let currentLabel = "Iniciando…";
+  let stageIndex = 0; // extração por padrão quando roda
   for (const e of row.debugLog) {
     const p = e.phase;
     if (p === "initializing" || p === "zip:create") {
       hasInit = true;
       currentLabel = "Preparando execução";
+      stageIndex = 0;
     } else if (p.startsWith("database:")) {
       tables.add(p);
       currentLabel = `Exportando ${p.slice("database:".length)}`;
+      stageIndex = 0;
     } else if (p === "storage:notion-html-originals") {
       hasMirror = true;
       currentLabel = "Espelhando arquivos originais";
+      stageIndex = 0;
     } else if (p === "summary") {
       hasSummary = true;
       currentLabel = "Calculando resumo de negócio";
+      stageIndex = 3;
     } else if (p === "zip:generate") {
       hasZipGen = true;
       currentLabel = "Montando ZIP final";
+      stageIndex = 1;
     } else if (p === "storage:upload") {
       hasUpload = true;
       currentLabel = "Gravando no bucket";
+      stageIndex = 2;
     } else if (p === "completed") {
       hasInit = hasMirror = hasSummary = hasZipGen = hasUpload = true;
       currentLabel = "Concluído";
+      stageIndex = 3;
     }
   }
   if (row.status === "completed") {
-    return { percent: 100, label: "Concluído", done: total, total, tablesDone: tablesTotal, tablesTotal };
+    return { percent: 100, label: "Concluído", done: total, total, tablesDone: tablesTotal, tablesTotal, stageIndex: 3 };
   }
   let done = 0;
   if (hasInit) done += 1;
@@ -159,10 +168,69 @@ function computeBackupProgress(row: BackupRow | null): BackupProgress {
   if (hasZipGen) done += 1;
   if (hasUpload) done += 1;
   const percent = Math.min(99, Math.round((done / total) * 100));
-  return { percent, label: currentLabel, done, total, tablesDone: tables.size, tablesTotal };
+  return { percent, label: currentLabel, done, total, tablesDone: tables.size, tablesTotal, stageIndex };
 }
 
 function formatBytesLoose(n: number): string {
+  return _formatBytesLoose(n);
+}
+
+const BACKUP_STAGES: Array<{ label: string }> = [
+  { label: "Extração" },
+  { label: "Compactação" },
+  { label: "Upload" },
+  { label: "Verificação" },
+];
+
+function BackupStages({ current }: { current: number }) {
+  return (
+    <div className="mt-1 flex items-center gap-1">
+      {BACKUP_STAGES.map((s, i) => {
+        const done = i < current;
+        const active = i === current;
+        return (
+          <div key={s.label} className="flex flex-1 items-center gap-1">
+            <div
+              className={cn(
+                "flex size-4 items-center justify-center rounded-full border text-[9px] font-semibold tabular-nums",
+                done
+                  ? "border-emerald-500 bg-emerald-500 text-white"
+                  : active
+                    ? "border-sky-500 bg-sky-500 text-white animate-pulse"
+                    : "border-border bg-background text-muted-foreground",
+              )}
+              aria-current={active ? "step" : undefined}
+            >
+              {done ? "✓" : i + 1}
+            </div>
+            <span
+              className={cn(
+                "flex-1 truncate text-[10px]",
+                done
+                  ? "text-emerald-700 dark:text-emerald-400"
+                  : active
+                    ? "font-semibold text-sky-700"
+                    : "text-muted-foreground",
+              )}
+            >
+              {s.label}
+            </span>
+            {i < BACKUP_STAGES.length - 1 ? (
+              <div
+                className={cn(
+                  "h-px flex-1",
+                  done ? "bg-emerald-500/60" : "bg-border",
+                )}
+              />
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function _formatBytesLoose(n: number): string {
   if (n <= 0) return "0 B";
   if (n < 1024) return `${n} B`;
   const kb = n / 1024;
@@ -878,7 +946,7 @@ export function BackupsPanel() {
   return (
     <div className="space-y-4">
       {running && (
-        <div className="sticky top-0 z-30 flex items-center gap-3 rounded-lg border border-sky-500/40 bg-sky-500/10 px-4 py-3 shadow-sm animate-pulse">
+        <div className="sticky top-0 z-30 flex items-center gap-3 rounded-lg border border-sky-500/40 bg-sky-500/10 px-4 py-3 shadow-sm">
           <Loader2 className="size-4 animate-spin text-sky-600" />
           <div className="flex-1">
             <div className="text-sm font-semibold text-sky-700">
@@ -898,6 +966,7 @@ export function BackupsPanel() {
                 </span>
                 <span>{progress.percent}%</span>
               </div>
+              <BackupStages current={progress.stageIndex} />
             </div>
           </div>
           {activeBackupId ? (
