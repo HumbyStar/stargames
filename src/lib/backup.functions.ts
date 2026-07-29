@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { deferWithWorkerContext } from "@/lib/worker-context";
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
@@ -593,7 +594,40 @@ export const createBackupNow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context);
-    return runBackup({ type: "manual", createdBy: context.userId });
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await cleanupStaleBackups(supabaseAdmin);
+
+    const now = new Date();
+    const filename = formatFilename(now);
+    const storagePath = storagePathFor(now, filename);
+    const { data: rowIns, error: insErr } = await supabaseAdmin
+      .from("system_backups")
+      .insert({
+        created_by: context.userId,
+        type: "manual",
+        status: "pending",
+        storage_path: storagePath,
+      })
+      .select("id")
+      .single();
+    if (insErr || !rowIns) throw new Error(insErr?.message ?? "insert failed");
+
+    const started = runBackup({
+      type: "manual",
+      createdBy: context.userId,
+      existing: { id: rowIns.id as string, storagePath },
+    }).catch((err) => console.error("[backup] background run failed:", err));
+
+    if (!deferWithWorkerContext(started)) {
+      await started;
+    }
+
+    return {
+      id: rowIns.id as string,
+      storagePath,
+      sizeBytes: null,
+      queued: true,
+    };
   });
 
 export interface BackupRow {
