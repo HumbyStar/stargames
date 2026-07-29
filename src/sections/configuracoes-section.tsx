@@ -69,6 +69,7 @@ import { useUiStore } from "@/lib/ui-store";
 import { NotificationsPrefsCard } from "@/components/notifications-prefs-card";
 import { NavbarSettingsCard } from "@/components/navbar-settings-card";
 import { BackupsPanel } from "@/components/backups-panel";
+import { RestoreBackupModal } from "@/components/restore-backup-modal";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 
