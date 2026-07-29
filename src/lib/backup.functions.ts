@@ -801,6 +801,8 @@ export interface BackupRow {
   rowCounts: Record<string, number>;
   storageObjectCount: number;
   error: string | null;
+  errorDetails: BackupErrorDetails | null;
+  debugLog: BackupDebugEntry[];
   businessSummary: BusinessSummary | null;
 }
 
@@ -829,6 +831,8 @@ export const listBackups = createServerFn({ method: "GET" })
       rowCounts: r.row_counts ?? {},
       storageObjectCount: r.storage_object_count ?? 0,
       error: r.error,
+      errorDetails: r.error_details ?? null,
+      debugLog: Array.isArray(r.debug_log) ? (r.debug_log as BackupDebugEntry[]) : [],
       businessSummary:
         r.business_summary && Object.keys(r.business_summary).length > 0
           ? (r.business_summary as BusinessSummary)
