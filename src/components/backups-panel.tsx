@@ -1063,6 +1063,10 @@ export function BackupsPanel() {
         open={failureOpen}
         row={failureRow}
         onClose={() => setFailureOpen(false)}
+        onRetry={() => {
+          setFailureOpen(false);
+          void openPreflight();
+        }}
       />
       <BackupPreflightModal
         open={preflightOpen}
