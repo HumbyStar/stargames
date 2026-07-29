@@ -47,6 +47,9 @@ import { CustomerDataModal } from "@/components/customer-data-modal";
 import { isFichaComplete } from "@/lib/ficha-parse";
 import { NfFormatModal } from "@/components/nf-format-modal";
 import { NfHistoryModal } from "@/components/nf-history-modal";
+import { NfEmittedBadge } from "@/components/nf-emitted-badge";
+import { listNfInvoices, type NfInvoiceRow } from "@/lib/nf-history.functions";
+import { useServerFn } from "@tanstack/react-start";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
 import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
@@ -1152,6 +1155,37 @@ function ClientDrawer({
   const [nfModalOpen, setNfModalOpen] = useState(false);
   const [nfProducts, setNfProducts] = useState<Product[]>([]);
   const [nfHistoryOpen, setNfHistoryOpen] = useState(false);
+  const listInvoicesFn = useServerFn(listNfInvoices);
+  const [nfInvoices, setNfInvoices] = useState<NfInvoiceRow[]>([]);
+  const refreshNfInvoices = useMemo(
+    () => async () => {
+      try {
+        const rows = await listInvoicesFn({ data: { clientId: client.id } });
+        setNfInvoices(rows);
+      } catch {
+        /* silencioso: badge é informativo */
+      }
+    },
+    [listInvoicesFn, client.id],
+  );
+  useEffect(() => {
+    void refreshNfInvoices();
+  }, [refreshNfInvoices]);
+  const nfProductMap = useMemo(() => {
+    const map = new Map<string, { count: number; lastAt: string }>();
+    for (const inv of nfInvoices) {
+      for (const pid of inv.productIds) {
+        const cur = map.get(pid);
+        if (!cur) {
+          map.set(pid, { count: 1, lastAt: inv.createdAt });
+        } else {
+          cur.count += 1;
+          if (new Date(inv.createdAt) > new Date(cur.lastAt)) cur.lastAt = inv.createdAt;
+        }
+      }
+    }
+    return map;
+  }, [nfInvoices]);
   const updateProduct = useStore((s) => s.updateProduct);
   // Edição por lápis dos produtos do cliente. Apenas Confirmar persiste;
   // Fechar descarta. Blur / click-outside são ignorados pelo hook.
@@ -1723,7 +1757,15 @@ function ClientDrawer({
                           aria-label="Editar nome do produto"
                         />
                       ) : (
-                        p.name
+                        <span className="inline-flex items-center">
+                          {p.name}
+                          {(() => {
+                            const info = nfProductMap.get(p.id);
+                            return info ? (
+                              <NfEmittedBadge count={info.count} lastAt={info.lastAt} />
+                            ) : null;
+                          })()}
+                        </span>
                       )}
                     </td>
                     <td className="py-2 pr-3 text-muted-foreground">
@@ -2056,6 +2098,9 @@ function ClientDrawer({
       <NfFormatModal
         open={nfModalOpen}
         onClose={() => setNfModalOpen(false)}
+        onSaved={() => {
+          void refreshNfInvoices();
+        }}
         client={client}
         products={nfProducts.map((p) => ({
           id: p.id,
