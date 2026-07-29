@@ -1,6 +1,7 @@
 import { Outlet } from "@tanstack/react-router";
 import {
   Search,
+  FlaskConical,
   Menu,
   Sun,
   Moon,
@@ -16,6 +17,7 @@ import {
   CircleDollarSign,
   KanbanSquare,
 } from "lucide-react";
+import { SandboxProvider, useSandbox } from "@/lib/use-sandbox";
 import { useEffect, useMemo, useRef, useState, lazy, memo, Suspense, type ReactNode } from "react";
 import type { ComponentType, SVGProps } from "react";
 import { cn } from "@/lib/utils";
