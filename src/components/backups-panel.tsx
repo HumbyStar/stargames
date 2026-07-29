@@ -14,6 +14,7 @@ import {
   Trash2,
   BarChart3,
   Undo2,
+  Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui-bits";
@@ -39,6 +40,7 @@ import {
   getBackupSchedule,
   listBackups,
   resumeBackup,
+  cancelBackup,
   setBackupSchedule,
   BACKUP_TABLE_NAMES,
   type BackupDebugEntry,
@@ -70,12 +72,14 @@ function statusBadge(status: BackupRow["status"]) {
     running: "bg-sky-500/15 text-sky-600 border-sky-500/30",
     pending: "bg-amber-500/15 text-amber-600 border-amber-500/30",
     failed: "bg-destructive/15 text-destructive border-destructive/30",
+    cancelled: "bg-muted text-muted-foreground border-border",
   };
   const label: Record<BackupRow["status"], string> = {
     completed: "Concluído",
     running: "Executando",
     pending: "Aguardando",
     failed: "Falhou",
+    cancelled: "Cancelado",
   };
   return (
     <span
@@ -465,6 +469,7 @@ export function BackupsPanel() {
   const list = useServerFn(listBackups);
   const create = useServerFn(createBackupNow);
   const resume = useServerFn(resumeBackup);
+  const cancel = useServerFn(cancelBackup);
   const estimate = useServerFn(estimateBackup);
   const del = useServerFn(deleteBackup);
   const getUrl = useServerFn(getBackupDownloadUrl);
@@ -553,6 +558,13 @@ export function BackupsPanel() {
           toast.error(row.error ?? "Falha ao gerar backup.", { id: "backup-run" });
           setFailureRow(row);
           setFailureOpen(true);
+          setRunning(false);
+          setRunningSince(null);
+          setActiveBackupId(null);
+          return;
+        }
+        if (row?.status === "cancelled") {
+          toast.success("Backup cancelado.", { id: "backup-run" });
           setRunning(false);
           setRunningSince(null);
           setActiveBackupId(null);
@@ -737,6 +749,7 @@ export function BackupsPanel() {
         createdBy: null,
         type: "manual",
         status: "failed",
+        cancelRequested: false,
         storagePath: null,
         sizeBytes: null,
         durationMs: null,
@@ -800,6 +813,34 @@ export function BackupsPanel() {
     }
   };
 
+  const handleCancel = async (id: string) => {
+    const ok = window.confirm(
+      "Cancelar o backup em andamento? O arquivo parcial será descartado.",
+    );
+    if (!ok) return;
+    try {
+      toast.loading("Cancelando backup…", { id: "backup-run" });
+      const res = await cancel({ data: { id } });
+      if (res.alreadyFinished) {
+        toast.info(`Backup já estava em estado "${res.status}".`, { id: "backup-run" });
+      } else if (res.status === "cancelled") {
+        toast.success("Backup cancelado.", { id: "backup-run" });
+        if (id === activeBackupId) {
+          setRunning(false);
+          setRunningSince(null);
+          setActiveBackupId(null);
+        }
+      } else {
+        toast.loading("Cancelamento solicitado. Finalizando etapa atual…", {
+          id: "backup-run",
+        });
+      }
+      await refresh();
+    } catch (err: any) {
+      toast.error(err?.message ?? "Falha ao cancelar backup.", { id: "backup-run" });
+    }
+  };
+
   const handleScheduleChange = async (freq: "off" | "daily" | "weekly") => {
     setSavingSchedule(true);
     try {
@@ -845,6 +886,18 @@ export function BackupsPanel() {
               </div>
             </div>
           </div>
+          {activeBackupId ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive"
+              disabled={activeRow?.cancelRequested}
+              onClick={() => void handleCancel(activeBackupId)}
+            >
+              <Ban className="mr-1.5 size-3.5" />
+              {activeRow?.cancelRequested ? "Cancelando…" : "Cancelar"}
+            </Button>
+          ) : null}
         </div>
       )}
       <Card title="Backup completo">
@@ -1033,6 +1086,18 @@ export function BackupsPanel() {
                               onClick={() => void handleResume(r.id)}
                             >
                               <Play className="size-3.5" />
+                            </Button>
+                          ) : null}
+                          {(r.status === "pending" || r.status === "running") ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-destructive"
+                              title={r.cancelRequested ? "Cancelamento solicitado…" : "Cancelar backup"}
+                              disabled={r.cancelRequested}
+                              onClick={() => void handleCancel(r.id)}
+                            >
+                              <Ban className="size-3.5" />
                             </Button>
                           ) : null}
                           <Button

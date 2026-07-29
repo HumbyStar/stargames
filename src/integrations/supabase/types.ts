@@ -708,6 +708,7 @@ export type Database = {
       system_backups: {
         Row: {
           business_summary: Json
+          cancel_requested: boolean
           created_at: string
           created_by: string | null
           debug_log: Json
@@ -726,6 +727,7 @@ export type Database = {
         }
         Insert: {
           business_summary?: Json
+          cancel_requested?: boolean
           created_at?: string
           created_by?: string | null
           debug_log?: Json
@@ -744,6 +746,7 @@ export type Database = {
         }
         Update: {
           business_summary?: Json
+          cancel_requested?: boolean
           created_at?: string
           created_by?: string | null
           debug_log?: Json
