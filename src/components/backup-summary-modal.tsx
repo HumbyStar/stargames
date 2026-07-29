@@ -183,7 +183,7 @@ export function BackupSummaryModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden p-0 flex flex-col gap-0">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden p-0 flex flex-col gap-0 sm:flex sm:flex-col sm:gap-0 sm:p-0 sm:grid-none">
         <DialogHeader className="border-b border-border bg-gradient-to-br from-primary/5 via-card to-card px-6 py-5">
           <div className="flex items-start gap-3">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
