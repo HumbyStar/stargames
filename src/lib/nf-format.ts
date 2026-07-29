@@ -77,7 +77,7 @@ export function buildFiscalHeader(f: CustomerFiscalData): string {
   const cityUf = [f.city, f.state].filter(Boolean).join("/");
   const line3 = `Endereço: ${addr}${complement}${neighborhood}${cityUf ? ` – ${cityUf}` : ""}`;
   return [
-    `Cliente: ${f.fullName}`,
+    f.fullName,
     `CPF: ${formatCpfCnpj(f.cpfCnpj)}`,
     line3,
     `CEP: ${formatCep(f.cep)}`,

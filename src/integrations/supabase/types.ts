@@ -483,6 +483,44 @@ export type Database = {
           },
         ]
       }
+      nf_invoices: {
+        Row: {
+          client_id: string
+          content: string
+          created_at: string
+          generated_by: string | null
+          id: string
+          product_ids: string[]
+          total_cents: number
+        }
+        Insert: {
+          client_id: string
+          content: string
+          created_at?: string
+          generated_by?: string | null
+          id?: string
+          product_ids?: string[]
+          total_cents?: number
+        }
+        Update: {
+          client_id?: string
+          content?: string
+          created_at?: string
+          generated_by?: string | null
+          id?: string
+          product_ids?: string[]
+          total_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nf_invoices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notion_html_access_log: {
         Row: {
           action: string
