@@ -451,7 +451,11 @@ async function fetchAllRows(
 async function fetchRowsForBackup(
   admin: any,
   table: BackupTable,
-  opts: { batchSize?: number; keepRows?: boolean } = {},
+  opts: {
+    batchSize?: number;
+    keepRows?: boolean;
+    onBatch?: (rowCount: number) => Promise<void>;
+  } = {},
 ): Promise<{ rowCount: number; jsonl: string; rows?: any[] }> {
   const batchSize = opts.batchSize ?? 1000;
   const rowsToKeep: any[] | undefined = opts.keepRows ? [] : undefined;
@@ -471,6 +475,7 @@ async function fetchRowsForBackup(
     if (batchJsonl) chunks.push(rowCount === 0 ? batchJsonl : `\n${batchJsonl}`);
     if (rowsToKeep) rowsToKeep.push(...data);
     rowCount += data.length;
+    if (opts.onBatch) await opts.onBatch(rowCount);
     if (data.length < batchSize) break;
     from += batchSize;
   }
@@ -674,7 +679,21 @@ async function runBackup(opts: {
       });
       await persistBackupDebug(supabaseAdmin, backupId, debugLog, { row_counts: rowCounts });
       const keepRows = KEEP_FOR_SUMMARY.has(table);
-      const exported = await fetchRowsForBackup(supabaseAdmin, table, { keepRows });
+      let lastBatchLogAt = 0;
+      const exported = await fetchRowsForBackup(supabaseAdmin, table, {
+        keepRows,
+        onBatch: async (rows) => {
+          if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
+          const nowMs = Date.now();
+          if (nowMs - lastBatchLogAt < 2500) return;
+          lastBatchLogAt = nowMs;
+          pushDebug("info", `database:${table}`, `Exportando ${table}: ${rows.toLocaleString("pt-BR")} linhas lidas`, {
+            rows,
+            progress: true,
+          });
+          await persistBackupDebug(supabaseAdmin, backupId, debugLog, { row_counts: rowCounts });
+        },
+      });
       rowCounts[table] = exported.rowCount;
       zip.file(`database/data/${table}.jsonl`, exported.jsonl);
       if (keepRows) {
@@ -753,11 +772,26 @@ async function runBackup(opts: {
     await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
       business_summary: businessSummary as any,
     });
-    const zipBuf = await zip.generateAsync({
-      type: "uint8array",
-      compression: "STORE",
-      streamFiles: true,
-    });
+    let lastZipProgressAt = 0;
+    const zipBuf = await zip.generateAsync(
+      {
+        type: "uint8array",
+        compression: "STORE",
+        streamFiles: true,
+      },
+      (metadata) => {
+        const nowMs = Date.now();
+        if (nowMs - lastZipProgressAt < 3000 && metadata.percent < 100) return;
+        lastZipProgressAt = nowMs;
+        pushDebug("info", "zip:generate", "Gerando conteúdo final do ZIP", {
+          percent: Math.round(metadata.percent),
+          currentFile: metadata.currentFile ?? null,
+        });
+        void persistBackupDebug(supabaseAdmin, backupId, debugLog, {
+          business_summary: businessSummary as any,
+        });
+      },
+    );
 
     pushDebug("info", "storage:upload", "Enviando ZIP para o armazenamento privado", {
       sizeBytes: zipBuf.byteLength,
