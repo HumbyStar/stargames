@@ -1354,6 +1354,16 @@ export function ConfiguracoesSection() {
         </>
       )}
 
+      {view === "backups" && (
+        <>
+          <DetailHeader
+            title="Backups do sistema"
+            description="Gere e agende snapshots completos e portáveis do sistema."
+          />
+          <BackupsPanel />
+        </>
+      )}
+
       {view === "danger" && (
         <>
           <DetailHeader
