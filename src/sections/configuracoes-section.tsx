@@ -67,6 +67,7 @@ import {
 import { useUiStore } from "@/lib/ui-store";
 import { NotificationsPrefsCard } from "@/components/notifications-prefs-card";
 import { NavbarSettingsCard } from "@/components/navbar-settings-card";
+import { BackupsPanel } from "@/components/backups-panel";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -80,6 +81,7 @@ type View =
   | "navbar"
   | "history"
   | "duplicates"
+  | "backups"
   | "danger";
 
 function DiagBox({
