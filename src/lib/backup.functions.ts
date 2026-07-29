@@ -1073,7 +1073,8 @@ export interface BackupRow {
   finishedAt: string | null;
   createdBy: string | null;
   type: "manual" | "scheduled";
-  status: "pending" | "running" | "completed" | "failed";
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  cancelRequested: boolean;
   storagePath: string | null;
   sizeBytes: number | null;
   durationMs: number | null;
@@ -1104,6 +1105,7 @@ export const listBackups = createServerFn({ method: "GET" })
       createdBy: r.created_by,
       type: r.type,
       status: r.status,
+      cancelRequested: Boolean(r.cancel_requested),
       storagePath: r.storage_path,
       sizeBytes: r.size_bytes,
       durationMs: r.duration_ms,
