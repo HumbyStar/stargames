@@ -16,7 +16,7 @@ import { z } from "zod";
 // ---------------------------------------------------------------------------
 
 const BACKUP_BUCKET = "system-backups";
-const BACKUP_SCHEMA_VERSION = 1;
+const BACKUP_SCHEMA_VERSION = 2;
 
 // Todas as tabelas do app que devem entrar no backup.
 // Ordenadas por prioridade (independentes primeiro; dependentes depois).
@@ -45,6 +45,202 @@ const BACKUP_TABLES = [
 ] as const;
 
 type BackupTable = (typeof BACKUP_TABLES)[number];
+
+// ---------------------------------------------------------------------------
+// Resumo de negócio
+// ---------------------------------------------------------------------------
+
+export interface BusinessSummary {
+  generatedAt: string;
+  clients: {
+    total: number;
+    withFicha: number;
+    withoutFicha: number;
+    mgmvOnly: number;
+  };
+  products: {
+    total: number;
+    bySituation: Record<string, number>;
+    byFinancialStatus: Record<string, number>;
+    withNf: number;
+    withoutNf: number;
+  };
+  mgmv: {
+    agreements: number;
+    active: number;
+    completed: number;
+    needsReview: number;
+    installmentsTotal: number;
+    installmentsPaid: number;
+    installmentsPending: number;
+    installmentsOverdue: number;
+    totalAgreedCents: number;
+    totalPaidCents: number;
+    remainingCents: number;
+  };
+  financeiro: {
+    receivedCents: number;
+    receivableCents: number;
+    overdueCents: number;
+  };
+  nfInvoices: {
+    total: number;
+    totalCents: number;
+  };
+  team: {
+    tasksTotal: number;
+    tasksByStatus: Record<string, number>;
+    punchesThisMonth: number;
+  };
+}
+
+function toCents(v: unknown): number {
+  const n = typeof v === "number" ? v : Number(v ?? 0);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100);
+}
+
+function bumpMap(map: Record<string, number>, key: string, by = 1) {
+  const k = (key ?? "").toString().trim() || "—";
+  map[k] = (map[k] ?? 0) + by;
+}
+
+export function computeBusinessSummaryFromRows(data: {
+  clients: any[];
+  products: any[];
+  agreements: any[];
+  installments: any[];
+  nfInvoices: any[];
+  teamTasks: any[];
+  punchEntries: any[];
+}): BusinessSummary {
+  const now = new Date();
+  const monthStart = new Date(now.getUTCFullYear(), now.getUTCMonth(), 1);
+
+  // Ficha completa: heurística — clients.customer_data com >= 40 chars.
+  const withFicha = data.clients.filter(
+    (c) => typeof c.customer_data === "string" && c.customer_data.trim().length >= 40,
+  ).length;
+  const mgmvClientIds = new Set(
+    data.agreements
+      .filter((a) => a.status !== "cancelled" && a.status !== "cancelado")
+      .map((a) => a.client_id),
+  );
+  const clientIdsWithNonMgmvProduct = new Set(
+    data.products.filter((p) => !p.included_in_mgmv).map((p) => p.client_id),
+  );
+  const mgmvOnly = Array.from(mgmvClientIds).filter(
+    (id) => !clientIdsWithNonMgmvProduct.has(id),
+  ).length;
+
+  const bySituation: Record<string, number> = {};
+  const byFinancialStatus: Record<string, number> = {};
+  const productIdsWithNf = new Set<string>();
+  let nfTotalCents = 0;
+  for (const nf of data.nfInvoices) {
+    nfTotalCents += Number(nf.total_cents ?? 0);
+    for (const pid of nf.product_ids ?? []) productIdsWithNf.add(pid);
+  }
+  for (const p of data.products) {
+    bumpMap(bySituation, p.situation);
+    bumpMap(byFinancialStatus, p.financial_status);
+  }
+  const withNf = data.products.filter((p) => productIdsWithNf.has(p.id)).length;
+
+  // MGMV
+  let totalAgreedCents = 0;
+  let totalPaidCents = 0;
+  let active = 0;
+  let completed = 0;
+  let needsReview = 0;
+  for (const a of data.agreements) {
+    totalAgreedCents += toCents(a.total_agreement_value);
+    totalPaidCents += toCents(a.paid_value);
+    if (a.needs_review) needsReview++;
+    const s = (a.status ?? "").toString().toLowerCase();
+    if (s === "completed" || s === "concluido" || s === "concluído" || s === "quitado") completed++;
+    else if (s !== "cancelled" && s !== "cancelado") active++;
+  }
+  let installmentsPaid = 0;
+  let installmentsPending = 0;
+  let installmentsOverdue = 0;
+  let overdueCents = 0;
+  let receivableCents = 0;
+  for (const i of data.installments) {
+    const st = (i.status ?? "").toString().toLowerCase();
+    if (st.startsWith("pag") || st === "paid") installmentsPaid++;
+    else {
+      installmentsPending++;
+      const remaining = toCents(i.amount) - toCents(i.paid_amount);
+      receivableCents += Math.max(0, remaining);
+      const due = i.due_date ? new Date(i.due_date) : null;
+      if (due && due < now) {
+        installmentsOverdue++;
+        overdueCents += Math.max(0, remaining);
+      }
+    }
+  }
+
+  // Produtos não-MGMV: a receber e vencidos
+  for (const p of data.products) {
+    if (p.included_in_mgmv) continue;
+    const remaining = toCents(p.total_value) - toCents(p.paid_value);
+    if (remaining <= 0) continue;
+    const st = (p.financial_status ?? "").toString().toLowerCase();
+    if (st === "pago" || st === "paid") continue;
+    receivableCents += remaining;
+    const due = p.due_date ? new Date(p.due_date) : null;
+    if (due && due < now) overdueCents += remaining;
+  }
+  const receivedCents = totalPaidCents +
+    data.products
+      .filter((p) => !p.included_in_mgmv)
+      .reduce((s, p) => s + toCents(p.paid_value), 0);
+
+  const tasksByStatus: Record<string, number> = {};
+  for (const t of data.teamTasks) bumpMap(tasksByStatus, t.status);
+  const punchesThisMonth = data.punchEntries.filter((e) => {
+    const d = e.punched_at ? new Date(e.punched_at) : null;
+    return d && d >= monthStart;
+  }).length;
+
+  return {
+    generatedAt: now.toISOString(),
+    clients: {
+      total: data.clients.length,
+      withFicha,
+      withoutFicha: data.clients.length - withFicha,
+      mgmvOnly,
+    },
+    products: {
+      total: data.products.length,
+      bySituation,
+      byFinancialStatus,
+      withNf,
+      withoutNf: data.products.length - withNf,
+    },
+    mgmv: {
+      agreements: data.agreements.length,
+      active,
+      completed,
+      needsReview,
+      installmentsTotal: data.installments.length,
+      installmentsPaid,
+      installmentsPending,
+      installmentsOverdue,
+      totalAgreedCents,
+      totalPaidCents,
+      remainingCents: Math.max(0, totalAgreedCents - totalPaidCents),
+    },
+    financeiro: { receivedCents, receivableCents, overdueCents },
+    nfInvoices: { total: data.nfInvoices.length, totalCents: nfTotalCents },
+    team: {
+      tasksTotal: data.teamTasks.length,
+      tasksByStatus,
+      punchesThisMonth,
+    },
+  };
+}
 
 async function assertAdmin(ctx: { supabase: any; userId: string }) {
   const { data, error } = await ctx.supabase
