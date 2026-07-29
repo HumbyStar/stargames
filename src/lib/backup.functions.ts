@@ -435,6 +435,15 @@ async function cleanupStaleBackups(admin: any) {
         phase: "timeout",
         elapsedMs: STALE_BACKUP_MS,
       },
+      debug_log: [
+        {
+          at: new Date().toISOString(),
+          level: "error",
+          phase: "timeout",
+          message: "Backup interrompido por timeout/limite de execução. Gere novamente.",
+          elapsedMs: STALE_BACKUP_MS,
+        },
+      ],
       finished_at: new Date().toISOString(),
     } as any)
     .in("status", ["pending", "running"])
