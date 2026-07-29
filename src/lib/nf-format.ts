@@ -77,15 +77,18 @@ export function buildFiscalHeader(f: CustomerFiscalData): string {
   const neighborhood = f.neighborhood ? ` – ${f.neighborhood}` : "";
   const cityUf = [f.city, f.state].filter(Boolean).join("/");
   const enderecoLine = `Endereço: ${addr}${neighborhood}${cityUf ? ` – ${cityUf}` : ""}`;
-  const parts: string[] = [
-    f.fullName,
-    `CPF: ${formatCpfCnpj(f.cpfCnpj)}`,
+  const addressBlockLines: string[] = [
     enderecoLine,
     `CEP: ${formatCep(f.cep)}`,
   ];
   if (f.complement && f.complement.trim()) {
-    parts.push(`Complemento: ${f.complement.trim()}`);
+    addressBlockLines.push(`Complemento: ${f.complement.trim()}`);
   }
+  const parts: string[] = [
+    f.fullName,
+    `CPF: ${formatCpfCnpj(f.cpfCnpj)}`,
+    addressBlockLines.join("\n"),
+  ];
   return parts.join("\n\n");
 }
 
