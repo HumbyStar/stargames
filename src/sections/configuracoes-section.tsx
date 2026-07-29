@@ -1481,6 +1481,11 @@ export function ConfiguracoesSection() {
 
       <AccessManagementDialog open={accessOpen} onOpenChange={setAccessOpen} />
       <AiTrainingModal open={aiTrainingOpen} onOpenChange={setAiTrainingOpen} />
+      <RestoreBackupModal
+        open={restoreModalOpen}
+        onClose={() => setRestoreModalOpen(false)}
+        initialSource={restoreModalSource}
+      />
     </section>
   );
 }
