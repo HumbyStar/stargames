@@ -615,7 +615,7 @@ async function runBackup(opts: {
       .maybeSingle();
     debugLog.push(
       ...(Array.isArray(existingRow?.debug_log)
-        ? (existingRow.debug_log as BackupDebugEntry[])
+        ? (existingRow.debug_log as unknown as BackupDebugEntry[])
         : []),
     );
     pushDebug("info", "initializing", "Retomada do backup iniciada", {
