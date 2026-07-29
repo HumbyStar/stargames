@@ -1373,16 +1373,7 @@ function GlobalModals() {
 
   return (
     <>
-      <Dialog open={settingsOpen} onOpenChange={(o) => (o ? null : closeSettings())}>
- <SettingsDialogContent />
-      </Dialog>
-          <DialogHeader className="sr-only">
-            <DialogTitle>Configurações</DialogTitle>
-            <DialogDescription>Preferências, regras e zona de perigo.</DialogDescription>
-          </DialogHeader>
-          <ConfiguracoesSection />
-        </DialogContent>
-      </Dialog>
+      <SettingsModal />
 
       <Dialog open={helpOpen} onOpenChange={(o) => (o ? null : closeHelp())}>
  <DialogContent>
