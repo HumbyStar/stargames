@@ -1360,8 +1360,6 @@ export function AppLayout({ children }: { children?: ReactNode }) {
 }
 
 function GlobalModals() {
-  const settingsOpen = useUiStore((s) => s.settingsOpen);
-  const closeSettings = useUiStore((s) => s.closeSettings);
   const helpOpen = useUiStore((s) => s.helpOpen);
   const closeHelp = useUiStore((s) => s.closeHelp);
   const financeOpen = useUiStore((s) => s.financeOpen);
