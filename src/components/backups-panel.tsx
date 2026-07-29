@@ -240,6 +240,7 @@ function BackupFailureModal({
 export function BackupsPanel() {
   const list = useServerFn(listBackups);
   const create = useServerFn(createBackupNow);
+  const resume = useServerFn(resumeBackup);
   const del = useServerFn(deleteBackup);
   const getUrl = useServerFn(getBackupDownloadUrl);
   const getSchedule = useServerFn(getBackupSchedule);
