@@ -410,7 +410,7 @@ export const getBackupSchedule = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<BackupScheduleInfo> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data, error } = await supabaseAdmin.rpc("get_system_backup_schedule");
+    const { data, error } = await (supabaseAdmin as any).rpc("get_system_backup_schedule");
     if (error) {
       // função ainda não existe (primeira execução)
       return { active: false, frequency: "off", cron: null, jobId: null };
@@ -439,7 +439,7 @@ export const setBackupSchedule = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.rpc("set_system_backup_schedule", {
+    const { error } = await (supabaseAdmin as any).rpc("set_system_backup_schedule", {
       _frequency: data.frequency,
       _job_name: JOB_NAME,
     });
