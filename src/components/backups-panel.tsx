@@ -1076,6 +1076,18 @@ export function BackupsPanel() {
                               <Play className="size-3.5" />
                             </Button>
                           ) : null}
+                          {(r.status === "pending" || r.status === "running") ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-destructive"
+                              title={r.cancelRequested ? "Cancelamento solicitado…" : "Cancelar backup"}
+                              disabled={r.cancelRequested}
+                              onClick={() => void handleCancel(r.id)}
+                            >
+                              <Ban className="size-3.5" />
+                            </Button>
+                          ) : null}
                           <Button
                             size="sm"
                             variant="outline"
