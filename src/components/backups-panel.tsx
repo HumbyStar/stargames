@@ -1074,19 +1074,32 @@ export function BackupsPanel() {
             <div className="text-sm font-semibold text-sky-700">
               Backup em execução…
             </div>
-            <div className="text-[11px] text-sky-700/80">
-              Não feche esta janela. Tempo decorrido: {elapsed}s
+            <div className="text-[11px] text-sky-700/80 flex flex-wrap gap-x-3 gap-y-0.5">
+              <span>Não feche esta janela.</span>
+              <span>Decorrido: {formatDurationShort(elapsed * 1000)}</span>
+              {progress.etaMs != null ? (
+                <span>ETA: ~{formatDurationShort(progress.etaMs)}</span>
+              ) : (
+                <span className="opacity-70">ETA: calculando…</span>
+              )}
+              {progress.uploadBytes != null ? (
+                <span>ZIP: {formatBytesLoose(progress.uploadBytes)}</span>
+              ) : null}
             </div>
             <div className="mt-2 space-y-1">
               <Progress value={progress.percent} className="h-1.5" />
               <div className="flex items-center justify-between text-[10px] text-sky-700/80 tabular-nums">
                 <span>
-                  {progress.label}
+                  <strong className="font-semibold">{progress.phaseLabel}</strong>
+                  {progress.phasePercent > 0 ? ` · ${progress.phasePercent}%` : ""}
                   {progress.tablesTotal > 0
                     ? ` · tabelas ${progress.tablesDone}/${progress.tablesTotal}`
                     : ""}
                 </span>
                 <span>{progress.percent}%</span>
+              </div>
+              <div className="truncate text-[10px] text-sky-700/70">
+                {progress.label}
               </div>
               <BackupStages current={progress.stageIndex} />
             </div>
