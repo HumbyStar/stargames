@@ -186,9 +186,9 @@ export function BackupsPanel() {
     toast.loading("Gerando backup completo…", { id: "backup-run" });
     try {
       const res = await create();
-      setActiveBackupId(res.backupId ?? null);
+      setActiveBackupId(res.id ?? null);
       await refresh();
-      if (!res.backupId) {
+      if (!res.id) {
         // No id returned — treat as complete.
         toast.success(`Backup gerado (${formatBytes(res.sizeBytes)}).`, { id: "backup-run" });
         setRunning(false);
