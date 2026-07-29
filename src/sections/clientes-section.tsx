@@ -2098,6 +2098,9 @@ function ClientDrawer({
       <NfFormatModal
         open={nfModalOpen}
         onClose={() => setNfModalOpen(false)}
+        onSaved={() => {
+          void refreshNfInvoices();
+        }}
         client={client}
         products={nfProducts.map((p) => ({
           id: p.id,
