@@ -468,6 +468,19 @@ export function BackupsPanel() {
     }
   };
 
+  const handleResume = async (id: string) => {
+    try {
+      toast.loading("Retomando backup…", { id: "backup-run" });
+      await resume({ data: { id } });
+      setActiveBackupId(id);
+      setRunning(true);
+      setRunningSince(Date.now());
+      setElapsed(0);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Falha ao retomar backup.", { id: "backup-run" });
+    }
+  };
+
   const handleScheduleChange = async (freq: "off" | "daily" | "weekly") => {
     setSavingSchedule(true);
     try {
