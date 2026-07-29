@@ -66,7 +66,8 @@ export const getSandboxState = createServerFn({ method: "GET" })
     if (!isAdmin) {
       return { active: false, clonedAt: null, counts: {}, isAdmin: false };
     }
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { supabaseAdmin: adminClient } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = adminClient as any;
     const state = await readState(supabaseAdmin, context.userId);
     const counts = await countsForEnv(supabaseAdmin, "sandbox");
     return { ...state, counts, isAdmin: true };
@@ -77,7 +78,8 @@ export const setSandboxMode = createServerFn({ method: "POST" })
   .inputValidator((data: { active: boolean }) => z.object({ active: z.boolean() }).parse(data))
   .handler(async ({ data, context }): Promise<SandboxState> => {
     await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { supabaseAdmin: adminClient } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = adminClient as any;
     const { error } = await supabaseAdmin
       .from("sandbox_state")
       .upsert(
@@ -94,7 +96,8 @@ export const resetSandbox = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<{ deleted: Record<string, number> }> => {
     await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { supabaseAdmin: adminClient } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = adminClient as any;
     const before = await countsForEnv(supabaseAdmin, "sandbox");
     // Ordem inversa das dependências
     for (const table of [...CLONE_ORDER].reverse()) {
@@ -122,7 +125,8 @@ export const cloneProductionToSandbox = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<CloneResult> => {
     await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { supabaseAdmin: adminClient } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = adminClient as any;
 
     // Limpa o sandbox anterior (ordem inversa de dependência)
     for (const table of [...CLONE_ORDER].reverse()) {
