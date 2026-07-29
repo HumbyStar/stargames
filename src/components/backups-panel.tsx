@@ -887,7 +887,7 @@ export function BackupsPanel() {
   return (
     <div className="space-y-4">
       {running && (
-        <div className="sticky top-0 z-30 flex items-center gap-3 rounded-lg border border-sky-500/40 bg-sky-500/10 px-4 py-3 shadow-sm animate-pulse">
+        <div className="sticky top-0 z-30 flex items-center gap-3 rounded-lg border border-sky-500/40 bg-sky-500/10 px-4 py-3 shadow-sm">
           <Loader2 className="size-4 animate-spin text-sky-600" />
           <div className="flex-1">
             <div className="text-sm font-semibold text-sky-700">
@@ -907,6 +907,7 @@ export function BackupsPanel() {
                 </span>
                 <span>{progress.percent}%</span>
               </div>
+              <BackupStages current={progress.stageIndex} />
             </div>
           </div>
           {activeBackupId ? (
