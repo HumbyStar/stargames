@@ -71,17 +71,22 @@ function formatCep(raw: string): string {
 }
 
 export function buildFiscalHeader(f: CustomerFiscalData): string {
-  const addr = [f.street, f.number].filter(Boolean).join(", ");
-  const complement = f.complement ? ` – ${f.complement}` : "";
+  const addr = f.street
+    ? `${f.street}${f.number ? `, nº ${f.number}` : ""}`
+    : "";
   const neighborhood = f.neighborhood ? ` – ${f.neighborhood}` : "";
   const cityUf = [f.city, f.state].filter(Boolean).join("/");
-  const line3 = `Endereço: ${addr}${complement}${neighborhood}${cityUf ? ` – ${cityUf}` : ""}`;
-  return [
+  const enderecoLine = `Endereço: ${addr}${neighborhood}${cityUf ? ` – ${cityUf}` : ""}`;
+  const parts: string[] = [
     f.fullName,
     `CPF: ${formatCpfCnpj(f.cpfCnpj)}`,
-    line3,
+    enderecoLine,
     `CEP: ${formatCep(f.cep)}`,
-  ].join("\n");
+  ];
+  if (f.complement && f.complement.trim()) {
+    parts.push(`Complemento: ${f.complement.trim()}`);
+  }
+  return parts.join("\n\n");
 }
 
 const UNCLASSIFIED_KEY = "__unclassified__";
@@ -120,18 +125,16 @@ export function groupByNcm(
 
 export function renderNfText(header: string, groups: NfGroup[]): string {
   const total = groups.reduce((s, g) => s + g.subtotal, 0);
-  const lines: string[] = [header, ""];
+  const blocks: string[] = [header];
   groups.forEach((g, i) => {
-    lines.push(`Lote ${i + 1} – ${g.category}`);
-    g.items.forEach((it) => {
-      const platform = it.platform ? ` (${it.platform})` : "";
-      lines.push(`  • ${it.name}${platform} — ${formatBRL(it.totalValue)}`);
-    });
-    lines.push(`Quantidade: ${g.items.length}`);
-    lines.push(`NCM: ${g.ncm}`);
-    lines.push(`Subtotal lote: ${formatBRL(g.subtotal)}`);
-    lines.push("");
+    const block = [
+      `Lote ${i + 1} – ${g.category}`,
+      `Quantidade: ${g.items.length}`,
+      `NCM: ${g.ncm}`,
+      `Subtotal lote: ${formatBRL(g.subtotal)}`,
+    ].join("\n\n");
+    blocks.push(block);
   });
-  lines.push(`VALOR TOTAL DA NOTA: ${formatBRL(total)}`);
-  return lines.join("\n");
+  blocks.push(`✅ VALOR TOTAL DA NOTA: ${formatBRL(total)}`);
+  return blocks.join("\n\n");
 }
