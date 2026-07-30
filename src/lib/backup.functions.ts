@@ -1,6 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { CLONE_ORDER, SANDBOX_TABLES, remapRow, type CloneTable } from "@/lib/sandbox-clone";
+import {
+  RESTORE_KEY_COLUMNS,
+  dedupeRestoreRows,
+  restoreRowKey,
+} from "@/lib/backup-restore-keys";
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
@@ -1857,7 +1862,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
       for (const table of [...tablesToWipe].reverse()) {
         // Conta antes de apagar para relatar quantos registros saíram.
         try {
-          let counter = (supabaseAdmin as any).from(table).select("id", { count: "exact", head: true });
+          let counter = (supabaseAdmin as any).from(table).select("*", { count: "exact", head: true });
           if (ENV_SCOPED_TABLES.has(table)) counter = counter.eq("env", targetEnv);
           const { count } = await counter;
           deletedByTable[table] = count ?? 0;
@@ -1875,8 +1880,12 @@ export const restoreBackup = createServerFn({ method: "POST" })
         if (table === "user_roles" || table === "profiles") {
           query = query.neq("user_id" as any, context.userId).neq("id" as any, context.userId);
         }
-        // .delete() do PostgREST exige um filtro; usa neq id impossível como fallback.
-        const { error } = await query.neq("id" as any, "00000000-0000-0000-0000-000000000000");
+        // Tabelas de ambiente já possuem o filtro obrigatório acima. O fallback
+        // por `id` só é usado em tabelas globais que realmente possuem essa coluna.
+        const deletion = ENV_SCOPED_TABLES.has(table)
+          ? query
+          : query.neq("id" as any, "00000000-0000-0000-0000-000000000000");
+        const { error } = await deletion;
         if (error) {
           console.warn(`[restore] delete ${table}:`, error.message);
           deletedByTable[table] = 0;
@@ -1894,6 +1903,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
       } else if (table === "profiles") {
         filtered = rows.filter((r) => r.id !== context.userId);
       }
+      expectedByTable[table] = filtered.length;
 
       const cloneTable = CLONE_BY_TABLE[table];
       let payload: any[];
@@ -1906,6 +1916,31 @@ export const restoreBackup = createServerFn({ method: "POST" })
         payload = filtered.map((row) =>
           ENV_SCOPED_TABLES.has(table) ? { ...row, env: targetEnv } : { ...row },
         );
+      }
+
+      // Consolida chaves repetidas depois de aplicar o ambiente de destino. É
+      // nessa etapa que duas linhas produção/sandbox do ZIP podem convergir.
+      const deduped = dedupeRestoreRows(table, payload);
+      payload = deduped.rows;
+
+      // `team_punch_entries` tem uma chave de negócio histórica sem `env`.
+      // Nunca disputa essa chave com a produção: no sandbox, ignora somente as
+      // batidas já existentes e mantém intacta a linha real.
+      let businessKeySkipped = deduped.removed;
+      if (targetEnv === "sandbox" && table === "team_punch_entries" && payload.length > 0) {
+        const { data: productionPunches, error: punchReadError } = await (supabaseAdmin as any)
+          .from("team_punch_entries")
+          .select("user_id,day,kind")
+          .eq("env", "producao");
+        if (punchReadError) {
+          throw new Error(`[restore] team_punch_entries: não foi possível conferir colisões: ${punchReadError.message}`);
+        }
+        const productionKeys = new Set(
+          (productionPunches ?? []).map((row: Record<string, unknown>) => restoreRowKey(table, row)),
+        );
+        const beforeCollisionFilter = payload.length;
+        payload = payload.filter((row) => !productionKeys.has(restoreRowKey(table, row)));
+        businessKeySkipped += beforeCollisionFilter - payload.length;
       }
 
       // Trava final: nada é gravado se alguma linha não estiver carimbada com
@@ -1924,9 +1959,8 @@ export const restoreBackup = createServerFn({ method: "POST" })
       }
 
       let inserted = 0;
-      let skipped = 0;
+      let skipped = businessKeySkipped;
       const CHUNK = 500;
-      expectedByTable[table] = payload.length;
       const useInsert = targetEnv === "sandbox" && Boolean(cloneTable?.idColumn);
       for (let i = 0; i < payload.length; i += CHUNK) {
         const chunk = payload.slice(i, i + CHUNK);
@@ -1997,9 +2031,9 @@ export const restoreBackup = createServerFn({ method: "POST" })
       const expected = expectedByTable[table] ?? 0;
       let actual = -1;
       try {
-        let counter = (supabaseAdmin as any)
+          let counter = (supabaseAdmin as any)
           .from(table)
-          .select("id", { count: "exact", head: true });
+            .select("*", { count: "exact", head: true });
         if (ENV_SCOPED_TABLES.has(table)) counter = counter.eq("env", targetEnv);
         const { count, error } = await counter;
         if (!error) actual = count ?? 0;
@@ -2291,11 +2325,17 @@ export const validateBackupRestore = createServerFn({ method: "POST" })
 
     for (const table of selected) {
       const rows = backupRows[table] ?? [];
-      const ids = rows.map((r) => r?.id).filter(Boolean);
-      if (ids.length > 0 && new Set(ids).size !== ids.length) {
+      const normalizedRows = rows.map((row) =>
+        ENV_SCOPED_TABLES.has(table) ? { ...row, env: "sandbox" } : row,
+      );
+      const keyedRows = normalizedRows
+        .map((row) => restoreRowKey(table, row))
+        .filter((key): key is string => key !== null);
+      if (keyedRows.length > 0 && new Set(keyedRows).size !== keyedRows.length) {
+        const keyLabel = (RESTORE_KEY_COLUMNS[table] ?? ["id"]).join(" + ");
         issues.push({
-          level: "error",
-          message: `${table}: existem identificadores repetidos dentro do backup.`,
+          level: "warn",
+          message: `${table}: existem linhas repetidas pela chave ${keyLabel}; a restauração consolidará essas versões antes de gravar.`,
         });
       }
       if (rows.length === 0 && (manifest.rowCounts?.[table] ?? 0) > 0) {
@@ -2303,6 +2343,33 @@ export const validateBackupRestore = createServerFn({ method: "POST" })
           level: "warn",
           message: `${table}: o manifesto indica ${manifest.rowCounts[table]} registro(s), mas o arquivo veio vazio.`,
         });
+      }
+    }
+    if ((backupRows["team_punch_entries"] ?? []).length > 0) {
+      const { data: productionPunches, error: punchReadError } = await (supabaseAdmin as any)
+        .from("team_punch_entries")
+        .select("user_id,day,kind")
+        .eq("env", "producao");
+      if (punchReadError) {
+        issues.push({
+          level: "error",
+          message: `team_punch_entries: não foi possível verificar colisões com a produção (${punchReadError.message}).`,
+        });
+      } else {
+        const productionKeys = new Set(
+          (productionPunches ?? []).map((row: Record<string, unknown>) =>
+            restoreRowKey("team_punch_entries", row),
+          ),
+        );
+        const collisions = (backupRows["team_punch_entries"] ?? []).filter((row) =>
+          productionKeys.has(restoreRowKey("team_punch_entries", row)),
+        ).length;
+        if (collisions > 0) {
+          issues.push({
+            level: "warn",
+            message: `team_punch_entries: ${collisions} batida(s) já existem na produção pela mesma combinação usuário + dia + tipo e serão ignoradas no sandbox para preservar o isolamento.`,
+          });
+        }
       }
     }
     if (selected.length === 0) {

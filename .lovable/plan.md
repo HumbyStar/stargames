@@ -1,33 +1,31 @@
-## Diagnóstico
-- No upload de ZIP, o arquivo inteiro é convertido em **base64 no navegador** (`fileToBase64` em `src/components/restore-backup-modal.tsx`) e enviado como um único campo de texto (`uploadedZipBase64`) para `previewBackupRestore` / `restoreBackup`.
-- Um backup real do sistema tem ~94 MB → vira uma string de ~125 MB, que ainda é serializada na chamada RPC e depois decodificada com `atob` no servidor (`loadBackupZip`, `src/lib/backup.functions.ts`), gerando outra cópia em memória.
-- É por isso que o erro do tipo “cannot fit …” aparece **na etapa de analisar/prévia** e apenas no upload de ZIP: o payload não cabe no limite de memória/corpo de requisição do runtime. Confirmado também que a auditoria do Modo Teste (`sandbox_import_audit`) está vazia — a execução nunca chega à restauração.
+## Objetivo
+Fazer a restauração do backup no Modo Teste concluir de forma isolada, corrigindo exatamente os três erros exibidos e melhorando a validação antes da gravação.
 
-## Solução: parar de trafegar o ZIP em base64
-O arquivo passa a ir direto para o armazenamento e o servidor lê de lá.
+## Diagnóstico confirmado
+- `ai_training_profile` não possui coluna `id`; sua chave é composta por `user_id, env`. A rotina atual usa `select("id")` para contar e uma operação baseada em `id` para limpar, por isso falha antes da carga.
+- `app_settings` usa chave composta `id, env`. O lote pode conter mais de uma linha que, após a conversão para `env = sandbox`, converge para a mesma chave e faz o mesmo `UPSERT` tentar atualizar a linha duas vezes.
+- `team_punch_entries` possui uma unicidade adicional por `user_id, day, kind` que não considera `env`. Já existe na produção a batida indicada no erro; portanto, copiar a mesma identidade do usuário para o sandbox colide com a produção mesmo quando a linha recebe `env = sandbox`.
 
-### 1. Envio direto para o armazenamento
-- Nova função de servidor (somente admin) que devolve uma **URL assinada de upload** para um caminho temporário no bucket de backups, ex.: `uploads/<user>/<timestamp>-<nome>.zip`.
-- O modal envia o arquivo binário direto para essa URL (com barra de progresso real), sem base64 e sem passar pelo servidor da aplicação.
-- Em vez de `uploadedZipBase64`, o modal passa apenas o **caminho** do arquivo enviado.
+## Implementação
+1. **Limpeza e contagem independentes de `id`**
+   - Alterar a restauração para usar uma projeção compatível com todas as tabelas na contagem.
+   - Limpar tabelas com `env` diretamente por `env = sandbox`, sem presumir a existência de `id`.
+   - Manter a ordem inversa de dependências e registrar erros por tabela/etapa.
 
-### 2. Prévia, validação e restauração lendo do armazenamento
-- `loadBackupZip` ganha um terceiro caminho de entrada: `uploadedPath`, baixando o ZIP do bucket como bytes (mesmo mecanismo já usado para “backup salvo”, que hoje funciona).
-- `previewBackupRestore`, `validateBackupRestore` e `restoreBackup` aceitam esse caminho; o base64 continua aceito apenas para arquivos pequenos (limite baixo, ex. 8 MB), como compatibilidade.
-- Após concluir (ou falhar), o arquivo temporário do upload é removido do bucket; sobras antigas de `uploads/` são limpas junto com a retenção de backups.
+2. **Normalização e deduplicação antes dos lotes**
+   - Normalizar todas as linhas para `env = sandbox` antes de gravar.
+   - Deduplicar `app_settings` por `id + env` e `ai_training_profile` por `user_id + env`, preservando uma única versão determinística por chave.
+   - Deduplicar as demais tabelas pela chave real de conflito antes de cada `UPSERT`, evitando que um lote afete a mesma linha duas vezes.
 
-### 3. Isolamento do Modo Teste preservado
-- Nenhuma mudança nas regras de isolamento: destino continua decidido no servidor, o ambiente de teste continua sendo zerado antes da carga, ids são regerados, tabelas globais nunca são tocadas e a auditoria com contagens de produção antes/depois continua sendo gravada.
+3. **Batidas de ponto isoladas no sandbox**
+   - Tratar `team_punch_entries` pela chave de negócio `user_id + day + kind`.
+   - Como a restrição atual atravessa produção e sandbox, ignorar no sandbox somente as batidas que colidirem com uma batida já existente para o mesmo usuário/dia/tipo, registrar o motivo no relatório e continuar restaurando as demais tabelas.
+   - Não alterar, apagar nem atualizar a batida existente da produção.
 
-### 4. Mensagens de erro úteis
-- Erros de leitura do ZIP passam a exibir a causa real (arquivo inválido, manifesto ausente, falha de download) em vez de estourar um erro de memória genérico.
-- Estados claros no modal: “Enviando arquivo… x%”, “Analisando backup…”, “Restaurando…”.
+4. **Pré-validação coerente com a gravação real**
+   - Detectar no ZIP duplicidades nas chaves compostas de `app_settings`, `ai_training_profile` e `team_punch_entries`, em vez de verificar apenas `id`.
+   - Mostrar avisos claros sobre linhas consolidadas ou ignoradas antes da restauração.
 
-## Verificação
-- Enviar um backup completo real (~94 MB) no Modo Teste: upload conclui, prévia mostra tabelas e resumo, restauração termina com sucesso.
-- Conferir que os dados aparecem nas seções em modo teste e que as contagens de produção antes/depois no registro de auditoria ficam idênticas.
-- Repetir com um ZIP pequeno e com a opção “usar backup salvo” para garantir que os dois caminhos continuam funcionando.
-
-## Arquivos principais
-- `src/lib/backup.functions.ts` — URL assinada de upload, `loadBackupZip` por caminho, limpeza do temporário.
-- `src/components/restore-backup-modal.tsx` — upload direto com progresso, sem base64.
+5. **Verificação**
+   - Executar os testes seletivos do fluxo de backup/restauração.
+   - Validar no preview a restauração do ZIP no Modo Teste, conferindo contagens restauradas, linhas ignoradas justificadamente, ausência dos três erros e o indicador de que a produção permaneceu intacta.
