@@ -153,7 +153,9 @@ export function GithubCard() {
       const localRepo = readLocalPref(LS_REPO);
       const localBranch = readLocalPref(LS_BRANCH);
       setSelectedRepo(savedRepo || localRepo || "");
-      setBranch(s.config.branch || (savedRepo ? "" : localBranch) || "");
+      const restoredBranch = s.config.branch || (savedRepo ? "" : localBranch) || "";
+      setBranch(restoredBranch);
+      setBranchTouched(Boolean(restoredBranch));
       setAutoPushBackup(s.config.autoPushBackup);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Falha ao carregar o status do GitHub");
