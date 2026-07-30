@@ -1234,7 +1234,7 @@ export const resumeBackup = createServerFn({ method: "POST" })
 
     const { data: row, error } = await supabaseAdmin
       .from("system_backups")
-      .select("id, storage_path, status, updated_at, created_by")
+      .select("id, storage_path, status, updated_at, created_by, env")
       .eq("id", data.id)
       .maybeSingle();
     if (error) throw new Error(error.message);
