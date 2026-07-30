@@ -813,7 +813,11 @@ export function BackupsPanel() {
   }, [running, activeBackupId, list]);
 
   const totalSize = useMemo(
-    () => rows.reduce((s, r) => s + (r.sizeBytes ?? 0), 0),
+    () => rows.reduce((s, r) => s + (r.status === "completed" ? (r.sizeBytes ?? 0) : 0), 0),
+    [rows],
+  );
+  const completedCount = useMemo(
+    () => rows.filter((row) => row.status === "completed").length,
     [rows],
   );
 
@@ -1130,9 +1134,9 @@ export function BackupsPanel() {
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
               <HardDrive className="size-3.5" /> Backups guardados
             </div>
-            <div className="text-2xl font-semibold tabular-nums">{rows.length}</div>
+            <div className="text-2xl font-semibold tabular-nums">{completedCount}</div>
             <div className="text-xs text-muted-foreground">
-              Retenção automática: últimos 14
+              Retenção: até 10 versões ou 1 GB
             </div>
           </div>
           <div className="rounded-lg border border-border bg-card/50 p-3">
@@ -1140,7 +1144,9 @@ export function BackupsPanel() {
               <Download className="size-3.5" /> Espaço utilizado
             </div>
             <div className="text-2xl font-semibold tabular-nums">{formatBytes(totalSize)}</div>
-            <div className="text-xs text-muted-foreground">Bucket privado system-backups</div>
+            <div className="text-xs text-muted-foreground">
+              O backup concluído mais recente é sempre preservado
+            </div>
           </div>
           <div className="rounded-lg border border-border bg-card/50 p-3">
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
