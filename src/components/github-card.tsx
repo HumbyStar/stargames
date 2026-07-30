@@ -167,7 +167,24 @@ export function GithubCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadRepos = async (silent = false) => {
+  const loadRepos = async (silent = false, force = false) => {
+    const login = status?.account?.login ?? "";
+    if (!force) {
+      const cache = readReposCache();
+      if (
+        cache &&
+        cache.repos.length > 0 &&
+        Date.now() - cache.savedAt < CACHE_TTL_MS &&
+        (!login || cache.login === login)
+      ) {
+        setRepos(cache.repos);
+        setReposComplete(cache.complete);
+        setReposLoaded(true);
+        setReposError(null);
+        setCacheInfo({ savedAt: cache.savedAt, fromCache: true });
+        return;
+      }
+    }
     setReposLoading(true);
     setReposError(null);
     try {
@@ -175,6 +192,12 @@ export function GithubCard() {
       setRepos(result.repos);
       setReposComplete(result.complete);
       setReposLoaded(true);
+      setReposWarnings(result.warnings ?? []);
+      const savedAt = Date.now();
+      setCacheInfo({ savedAt, fromCache: false });
+      if (result.repos.length > 0) {
+        writeReposCache({ login, savedAt, complete: result.complete, repos: result.repos });
+      }
       if (result.repos.length === 0) {
         setReposError(
           "Nenhum repositório acessível com esse token. Verifique se o token tem o escopo 'repo' (clássico) ou permissão de leitura em Contents/Metadata (fine-grained), se ele não expirou e se a organização autorizou o token via SSO.",
@@ -193,6 +216,37 @@ export function GithubCard() {
       setReposLoading(false);
     }
   };
+
+  const handleClearCache = () => {
+    clearReposCache();
+    setRepos([]);
+    setReposLoaded(false);
+    setReposError(null);
+    setReposWarnings([]);
+    setCacheInfo(null);
+    toast.success("Cache de repositórios limpo. Clique em \"Atualizar lista\" para recarregar.");
+  };
+
+  // Branch padrão detectada para o repositório atual.
+  const detectedBranch = useMemo(() => {
+    if (status?.repo && status.repo.fullName === selectedRepo) return status.repo.defaultBranch;
+    return repos.find((r) => r.fullName === selectedRepo)?.defaultBranch ?? "";
+  }, [status?.repo, repos, selectedRepo]);
+
+  // Pré-seleciona a branch padrão enquanto o usuário não digitar a sua.
+  useEffect(() => {
+    if (!branchTouched && detectedBranch && branch !== detectedBranch) {
+      setBranch(detectedBranch);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detectedBranch, branchTouched]);
+
+  const repoUrl = useMemo(() => {
+    if (status?.repo && status.repo.fullName === selectedRepo) return status.repo.htmlUrl;
+    return /^[^/\s]+\/[^/\s]+$/.test(selectedRepo.trim())
+      ? `https://github.com/${selectedRepo.trim()}`
+      : null;
+  }, [status?.repo, selectedRepo]);
 
   // Carrega a lista de repositórios assim que a conexão estiver validada.
   useEffect(() => {
