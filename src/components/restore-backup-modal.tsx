@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { emitAppEvent } from "@/lib/app-events";
 import {
   Loader2,
   Upload,
@@ -361,6 +362,12 @@ export function RestoreBackupModal({
         void discardUpload({ data: { path: uploadedPath } }).catch(() => {});
         setUploadedPath("");
       }
+      emitAppEvent({
+        category: "backup",
+        title: "Restauração de backup concluída",
+        description: uploadFile?.name,
+        severity: "success",
+      });
       // Dispara reset em cache/realtime.
       window.dispatchEvent(new CustomEvent("app:reset"));
     } catch (err: any) {

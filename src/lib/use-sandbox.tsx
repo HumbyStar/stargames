@@ -1,4 +1,5 @@
 import {
+import { emitAppEvent } from "./app-events";
   createContext,
   useCallback,
   useContext,
@@ -33,6 +34,11 @@ const SandboxContext = createContext<SandboxContextValue>({
 /** Recarrega todos os dados do app sem F5 (mesmo evento usado no reset/restore). */
 export function reloadAppData() {
   if (typeof window !== "undefined") {
+    emitAppEvent({
+      category: "sistema",
+      title: "Dados do sistema recarregados",
+      severity: "info",
+    });
     window.dispatchEvent(new CustomEvent("app:reset"));
   }
 }
