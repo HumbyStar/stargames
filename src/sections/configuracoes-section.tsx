@@ -88,6 +88,7 @@ type View =
   | "duplicates"
   | "backups"
   | "sandbox"
+  | "local"
   | "danger";
 
 function DiagBox({
@@ -776,6 +777,13 @@ export function ConfiguracoesSection() {
               onOpen={() => setView("sandbox")}
             />
             <SecondaryCard
+              icon={MonitorDown}
+              title="Instalar sistema (Windows)"
+              summary="Instala o sistema no computador com uma cópia atualizada dos dados para trabalhar mesmo sem internet."
+              status="Offline"
+              onOpen={() => setView("local")}
+            />
+            <SecondaryCard
               icon={Brain}
               title="Treinar I.A"
               summary="Onboarding guiado + análise do sistema para gerar automações Python que reduzem o uso de IA."
@@ -1409,6 +1417,16 @@ export function ConfiguracoesSection() {
           />
           <SandboxSettingsCard />
           <SandboxAuditCard />
+        </>
+      )}
+
+      {view === "local" && (
+        <>
+          <DetailHeader
+            title="Instalar sistema (Windows)"
+            description="Cópia local do sistema e dos dados para usar offline."
+          />
+          <LocalInstallCard />
         </>
       )}
 
