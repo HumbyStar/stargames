@@ -89,6 +89,52 @@ function downloadWindowsShortcut() {
   saveFile(new Blob([content], { type: "application/internet-shortcut" }), "Star Games.url");
 }
 
+export const INSTALLER_FILENAME = "Instalar Star Games.cmd";
+
+/**
+ * Instalador do Windows (.cmd): cria atalhos na Area de Trabalho e no Menu
+ * Iniciar que abrem o sistema em janela propria (modo aplicativo do
+ * Chrome/Edge) - sem barra de enderecos, como um app instalado.
+ * Texto sem acentos de proposito (console do Windows usa codepage legada).
+ */
+function buildWindowsInstaller(url: string): string {
+  const lines = [
+    "@echo off",
+    "setlocal",
+    'title Instalador Star Games',
+    'set "APPURL=' + url + '"',
+    'set "APPNAME=Star Games"',
+    "echo.",
+    "echo  Instalando o aplicativo Star Games neste computador...",
+    "echo.",
+    'set "BROWSER="',
+    'for %%P in ("%ProgramFiles%\\Google\\Chrome\\Application\\chrome.exe" "%ProgramFiles(x86)%\\Google\\Chrome\\Application\\chrome.exe" "%LocalAppData%\\Google\\Chrome\\Application\\chrome.exe" "%ProgramFiles(x86)%\\Microsoft\\Edge\\Application\\msedge.exe" "%ProgramFiles%\\Microsoft\\Edge\\Application\\msedge.exe") do if not defined BROWSER if exist %%~P set "BROWSER=%%~P"',
+    "if not defined BROWSER (",
+    "  echo  Chrome ou Edge nao encontrado. Instale um deles e rode novamente.",
+    "  pause",
+    "  exit /b 1",
+    ")",
+    'set "TARGETDIR=%LocalAppData%\\StarGames"',
+    'if not exist "%TARGETDIR%" mkdir "%TARGETDIR%"',
+    'set "STARTMENU=%AppData%\\Microsoft\\Windows\\Start Menu\\Programs"',
+    'powershell -NoProfile -ExecutionPolicy Bypass -Command "$w=New-Object -ComObject WScript.Shell; foreach($p in @(\\"$env:UserProfile\\Desktop\\Star Games.lnk\\", \\"$env:AppData\\Microsoft\\Windows\\Start Menu\\Programs\\Star Games.lnk\\")){$s=$w.CreateShortcut($p); $s.TargetPath=\'%BROWSER%\'; $s.Arguments=\'--app=%APPURL% --window-size=1400,900\'; $s.WorkingDirectory=Split-Path \'%BROWSER%\'; $s.IconLocation=\'%BROWSER%,0\'; $s.Description=\'Star Games - Sistema\'; $s.Save()}"',
+    "echo  Pronto! Atalhos criados na Area de Trabalho e no Menu Iniciar.",
+    "echo  Abrindo o aplicativo...",
+    'start "" "%BROWSER%" --app=%APPURL% --window-size=1400,900',
+    "timeout /t 4 >nul",
+    "endlocal",
+  ];
+  return lines.join("\r\n") + "\r\n";
+}
+
+/** Baixa o instalador .cmd (app em janela propria). */
+function downloadWindowsInstaller() {
+  saveFile(
+    new Blob([buildWindowsInstaller(appUrl())], { type: "application/octet-stream" }),
+    INSTALLER_FILENAME,
+  );
+}
+
 export function LocalInstallCard() {
   const [meta, setMeta] = useState<LocalPackageMeta | null>(null);
   const [pref, setPref] = useState<LocalModePreference>("auto");
