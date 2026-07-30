@@ -161,22 +161,26 @@ export function RestoreBackupModal({
   };
 
   const handleApply = async () => {
-    if (mode === "replace" && confirmText !== "REPLACE") {
+    const sandboxTarget = previewData?.targetEnv === "sandbox";
+    if (!sandboxTarget && mode === "replace" && confirmText !== "REPLACE") {
       toast.error('Digite "REPLACE" para confirmar a substituição.');
       return;
     }
     setLoading(true);
-    toast.loading("Restaurando backup…", { id: "restore" });
+    toast.loading(
+      sandboxTarget ? "Zerando ambiente de teste e restaurando…" : "Restaurando backup…",
+      { id: "restore" },
+    );
     try {
       const res = await restore({
         data: {
           ...(source === "existing"
             ? { backupId }
             : { uploadedZipBase64: uploadedBase64 }),
-          mode,
+          mode: sandboxTarget ? "replace" : mode,
           tables: Array.from(selectedTables),
           includeStorage,
-          confirmReplace: mode === "replace" ? confirmText : undefined,
+          confirmReplace: !sandboxTarget && mode === "replace" ? confirmText : undefined,
         },
       });
       setResult(res);
