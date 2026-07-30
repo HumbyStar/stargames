@@ -243,11 +243,12 @@ export function LocalInstallCard() {
       setMeta(installed);
       setLocalPackageInstalled(true);
       downloadWindowsShortcut();
-      setLastFiles([zipName, "Star Games.url"]);
+      downloadWindowsInstaller();
+      setLastFiles([zipName, INSTALLER_FILENAME, "Star Games.url"]);
       setProgress(100);
       setStep("Pacote local atualizado.");
       toast.success("Sistema instalado localmente.", {
-        description: `Dois arquivos foram baixados: “${zipName}” (cópia dos dados) e “Star Games.url” (atalho para abrir o sistema).`,
+        description: `Baixados: “${zipName}” (cópia dos dados) e “${INSTALLER_FILENAME}” — dê dois cliques nele para instalar o aplicativo no PC (abre em janela própria, sem barra de endereços).`,
         duration: 10000,
         action: {
           label: "Abrir sistema",
@@ -391,6 +392,10 @@ export function LocalInstallCard() {
             Exportar alterações (.zip)
           </Button>
 
+          <Button onClick={() => downloadWindowsInstaller()}>
+            <HardDrive className="size-4" /> Baixar instalador (.cmd)
+          </Button>
+
           <Button variant="outline" onClick={() => downloadWindowsShortcut()}>
             <FolderDown className="size-4" /> Baixar atalho (.url)
           </Button>
@@ -424,9 +429,11 @@ export function LocalInstallCard() {
               </ul>
               <p className="mt-1.5 text-[11px] text-muted-foreground">
                 Estão na pasta <span className="font-medium">Downloads</span> do seu PC (Ctrl+J no
-                Chrome/Edge). Dê dois cliques em <span className="font-medium">Star Games.url</span>{" "}
-                para abrir o sistema — pode arrastá-lo para a Área de Trabalho. O .zip é a cópia dos
-                dados para restaurar no Modo Teste se precisar.
+                Chrome/Edge). Dê dois cliques em{" "}
+                <span className="font-medium">{INSTALLER_FILENAME}</span> — ele cria o aplicativo
+                Star Games na Área de Trabalho e no Menu Iniciar e abre em janela própria, como um
+                programa instalado. Se o Windows avisar “SmartScreen”, clique em “Mais informações”
+                → “Executar assim mesmo”. O .zip é a cópia dos dados para restaurar no Modo Teste.
               </p>
             </div>
           )}
