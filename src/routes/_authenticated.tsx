@@ -12,11 +12,5 @@ export const Route = createFileRoute("/_authenticated")({
     }
     return { user: data.user };
   },
-  component: () => (
-    <PermissionsProvider>
-      <SessionGuard>
-        <Outlet />
-      </SessionGuard>
-    </PermissionsProvider>
-  ),
+  component: () => <Outlet />,
 });
