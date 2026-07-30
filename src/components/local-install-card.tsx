@@ -11,6 +11,8 @@ import {
   HardDrive,
   FileArchive,
   CheckCircle2,
+  ExternalLink,
+  FolderDown,
 } from "lucide-react";
 import { Card } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -58,6 +60,33 @@ const FRESH_MS = 6 * 60 * 60 * 1000;
 
 function fmtDate(iso: string | null | undefined) {
   return iso ? new Date(iso).toLocaleString("pt-BR") : "—";
+}
+
+/** Endereço publicado do sistema (usado no atalho do Windows). */
+function appUrl(): string {
+  if (typeof window === "undefined") return "https://stargames.lovable.app/";
+  const host = window.location.hostname;
+  const isPreview = host.includes("lovableproject") || host.includes("lovable.app") === false;
+  return isPreview ? "https://stargames.lovable.app/" : window.location.origin + "/";
+}
+
+/** Dispara um download real (o arquivo aparece em Downloads do navegador). */
+function saveFile(blob: Blob, filename: string) {
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 4000);
+}
+
+/** Atalho do Windows (.url) que abre o sistema instalado com dois cliques. */
+function downloadWindowsShortcut() {
+  const content = `[InternetShortcut]\r\nURL=${appUrl()}\r\nIconIndex=0\r\n`;
+  saveFile(new Blob([content], { type: "application/internet-shortcut" }), "Star Games.url");
 }
 
 export function LocalInstallCard() {
