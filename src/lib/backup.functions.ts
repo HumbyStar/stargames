@@ -1981,10 +1981,35 @@ export const restoreBackup = createServerFn({ method: "POST" })
       console.warn("[restore] import_history log failed:", err);
     }
 
+    // Conferência pós-restauração: conta o que ficou no banco (no ambiente de
+    // destino) e compara com o que o backup trouxe.
+    const verification: NonNullable<RestoreResult["verification"]> = [];
+    for (const table of tablesToProcess) {
+      const expected = expectedByTable[table] ?? 0;
+      let actual = -1;
+      try {
+        let counter = (supabaseAdmin as any)
+          .from(table)
+          .select("id", { count: "exact", head: true });
+        if (ENV_SCOPED_TABLES.has(table)) counter = counter.eq("env", targetEnv);
+        const { count, error } = await counter;
+        if (!error) actual = count ?? 0;
+      } catch {
+        /* contagem best-effort */
+      }
+      verification.push({
+        table,
+        expected,
+        actual,
+        diff: actual < 0 ? 0 : actual - expected,
+      });
+    }
+
     // Auditoria do Modo Teste + verificação de que a produção não mudou.
+    let productionUntouched: boolean | null = null;
     if (targetEnv === "sandbox") {
       const productionAfter = await countProductionRows(supabaseAdmin);
-      await logSandboxImport(supabaseAdmin, {
+      productionUntouched = await logSandboxImport(supabaseAdmin, {
         userId: context.userId,
         userEmail: (context as any)?.claims?.email ?? null,
         source: data.backupId ? "backup-salvo" : "upload-zip",
@@ -1993,10 +2018,11 @@ export const restoreBackup = createServerFn({ method: "POST" })
         tables: tablesToProcess,
         rowCounts: Object.fromEntries(results.map((r) => [r.table, r.inserted])),
         durationMs: Date.now() - started,
-        result: results.some((r) => r.skipped > 0) ? "error" : "success",
+        result: restoreErrors.length > 0 ? "error" : "success",
+        error: restoreErrors[0] ? `${restoreErrors[0].table}: ${restoreErrors[0].message}` : null,
         productionBefore,
         productionAfter,
-        report: { tablesRestored: results },
+        report: { tablesRestored: results, verification, errors: restoreErrors },
       });
     }
 
@@ -2007,6 +2033,10 @@ export const restoreBackup = createServerFn({ method: "POST" })
       tablesRestored: results,
       storageFilesRestored,
       durationMs: Date.now() - started,
+      filename: zipName,
+      errors: restoreErrors,
+      verification,
+      productionUntouched,
     };
   });
 
