@@ -1638,6 +1638,8 @@ export const restoreBackup = createServerFn({ method: "POST" })
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const started = Date.now();
+    // Destino decidido no servidor. O navegador não escolhe ambiente.
+    const targetEnv = await resolveTargetEnv(supabaseAdmin, context.userId);
     const { zip } = await loadBackupZip(supabaseAdmin, data);
     await readManifest(zip);
 
@@ -1645,14 +1647,31 @@ export const restoreBackup = createServerFn({ method: "POST" })
       ? new Set(data.tables)
       : new Set(RESTORABLE_TABLES);
 
-    const tablesToProcess = RESTORABLE_TABLES.filter((t) => requested.has(t));
+    const tablesToProcess = (
+      targetEnv === "sandbox"
+        ? // No sandbox seguimos a ordem de dependência da clonagem para que as
+          // chaves estrangeiras já estejam remapeadas quando forem usadas, e
+          // nunca tocamos tabelas globais (perfis, papéis, permissões).
+          (CLONE_ORDER.map((t) => t.name) as string[]).filter(
+            (t) => RESTORABLE_TABLES.includes(t as any) && !GLOBAL_TABLES.has(t),
+          )
+        : (RESTORABLE_TABLES as unknown as string[])
+    ).filter((t) => requested.has(t));
 
     const results: RestoreResult["tablesRestored"] = [];
+    // Mapa de ids originais -> novos ids (somente sandbox).
+    const idMaps: Record<string, Record<string, string>> = {};
 
     // REPLACE: apaga em ordem reversa (dependentes primeiro)
     if (data.mode === "replace") {
       for (const table of [...tablesToProcess].reverse()) {
         let query = supabaseAdmin.from(table).delete();
+        // Exclusão SEMPRE escopada ao ambiente de destino.
+        if (ENV_SCOPED_TABLES.has(table)) {
+          query = query.eq("env" as any, targetEnv);
+        } else if (targetEnv === "sandbox") {
+          continue; // tabela global: nunca apagada em teste
+        }
         // Protege o admin logado
         if (table === "user_roles" || table === "profiles") {
           query = query.neq("user_id" as any, context.userId).neq("id" as any, context.userId);
@@ -1674,15 +1693,47 @@ export const restoreBackup = createServerFn({ method: "POST" })
       } else if (table === "profiles") {
         filtered = rows.filter((r) => r.id !== context.userId);
       }
+
+      const cloneTable = CLONE_BY_TABLE[table];
+      let payload: any[];
+      if (targetEnv === "sandbox" && cloneTable) {
+        // Regenera todos os ids e reescreve as FKs — nenhum id do backup entra
+        // como está, então é impossível sobrescrever uma linha de produção.
+        idMaps[table] = idMaps[table] ?? {};
+        payload = filtered.map((row) => remapRow(cloneTable, row, idMaps));
+      } else {
+        payload = filtered.map((row) =>
+          ENV_SCOPED_TABLES.has(table) ? { ...row, env: targetEnv } : { ...row },
+        );
+      }
+
+      // Trava final: nada é gravado se alguma linha não estiver carimbada com
+      // o ambiente de destino (ou, no sandbox, se algum id não foi regerado).
+      if (ENV_SCOPED_TABLES.has(table)) {
+        const bad = payload.find((r) => r.env !== targetEnv);
+        if (bad) throw new Error(`[restore] ${table}: linha fora do ambiente ${targetEnv}. Abortado.`);
+      }
+      if (targetEnv === "sandbox" && cloneTable?.idColumn) {
+        const map = idMaps[table] ?? {};
+        const collision = payload.find((r) => {
+          const id = r[cloneTable.idColumn as string];
+          return typeof id === "string" && map[id] !== undefined;
+        });
+        if (collision) throw new Error(`[restore] ${table}: id não remapeado. Abortado.`);
+      }
+
       let inserted = 0;
       let skipped = 0;
       const CHUNK = 500;
-      for (let i = 0; i < filtered.length; i += CHUNK) {
-        const chunk = filtered.slice(i, i + CHUNK);
-        const { error } = await supabaseAdmin.from(table).upsert(chunk, {
-          onConflict: "id",
-          ignoreDuplicates: false,
-        } as any);
+      const useInsert = targetEnv === "sandbox" && Boolean(cloneTable?.idColumn);
+      for (let i = 0; i < payload.length; i += CHUNK) {
+        const chunk = payload.slice(i, i + CHUNK);
+        const { error } = useInsert
+          ? await supabaseAdmin.from(table).insert(chunk as any)
+          : await supabaseAdmin.from(table).upsert(chunk as any, {
+              onConflict: "id",
+              ignoreDuplicates: false,
+            } as any);
         if (error) {
           console.warn(`[restore] upsert ${table} (chunk ${i}):`, error.message);
           skipped += chunk.length;
@@ -1693,9 +1744,9 @@ export const restoreBackup = createServerFn({ method: "POST" })
       results.push({ table, inserted, skipped, deleted: data.mode === "replace" ? rows.length : 0 });
     }
 
-    // Storage: reenvia arquivos originais
+    // Storage: reenvia arquivos originais (o acervo é único; em teste é só leitura)
     let storageFilesRestored = 0;
-    if (data.includeStorage) {
+    if (data.includeStorage && targetEnv === "producao") {
       const storageFiles = Object.values(zip.files).filter(
         (f: any) => !f.dir && f.name.startsWith("storage/notion-html-originals/"),
       );
@@ -1719,6 +1770,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
         products_added: 0,
         errors: results.reduce((s, r) => s + r.skipped, 0),
         status: "success",
+        env: targetEnv,
       } as any);
     } catch (err) {
       console.warn("[restore] import_history log failed:", err);
@@ -1727,6 +1779,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
     return {
       ok: true,
       mode: data.mode,
+      targetEnv,
       tablesRestored: results,
       storageFilesRestored,
       durationMs: Date.now() - started,
