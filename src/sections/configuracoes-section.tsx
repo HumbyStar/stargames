@@ -29,6 +29,7 @@ import {
   LogOut,
   HelpCircle,
 } from "lucide-react";
+import { MonitorDown } from "lucide-react";
 import { Card, PageHeader, Tag } from "@/components/ui-bits";
 import { AiTrainingModal } from "@/components/ai-training-modal";
 import { Button } from "@/components/ui/button";
@@ -72,6 +73,7 @@ import { NavbarSettingsCard } from "@/components/navbar-settings-card";
 import { BackupsPanel } from "@/components/backups-panel";
 import { SandboxSettingsCard } from "@/components/sandbox-settings-card";
 import { SandboxAuditCard } from "@/components/sandbox-audit-card";
+import { LocalInstallCard } from "@/components/local-install-card";
 import { RestoreBackupModal } from "@/components/restore-backup-modal";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
