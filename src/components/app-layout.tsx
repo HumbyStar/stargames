@@ -1354,10 +1354,10 @@ export function AppLayout({ children }: { children?: ReactNode }) {
     <SandboxProvider>
       <div className="min-h-screen bg-background bg-gradient-to-b from-background via-background to-accent/30">
         <SandboxBanner />
-        {false && <FloatingNavbar />}
+        <FloatingNavbar />
         <main className="page-container">{children ?? <Outlet />}</main>
-        {false && <GlobalModals />}
-        {false && <FloatingConcierge />}
+        <GlobalModals />
+        <FloatingConcierge />
       </div>
     </SandboxProvider>
   );
