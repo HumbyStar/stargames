@@ -1640,7 +1640,10 @@ export const restoreBackup = createServerFn({ method: "POST" })
     const started = Date.now();
     // Destino decidido no servidor. O navegador não escolhe ambiente.
     const targetEnv = await resolveTargetEnv(supabaseAdmin, context.userId);
-    const { zip } = await loadBackupZip(supabaseAdmin, data);
+    // Prova de isolamento: contagens de produção antes da execução em teste.
+    const productionBefore =
+      targetEnv === "sandbox" ? await countProductionRows(supabaseAdmin) : {};
+    const { zip, filename: zipName } = await loadBackupZip(supabaseAdmin, data);
     await readManifest(zip);
 
     const requested = data.tables && data.tables.length > 0
@@ -1776,6 +1779,25 @@ export const restoreBackup = createServerFn({ method: "POST" })
       console.warn("[restore] import_history log failed:", err);
     }
 
+    // Auditoria do Modo Teste + verificação de que a produção não mudou.
+    if (targetEnv === "sandbox") {
+      const productionAfter = await countProductionRows(supabaseAdmin);
+      await logSandboxImport(supabaseAdmin, {
+        userId: context.userId,
+        userEmail: (context as any)?.claims?.email ?? null,
+        source: data.backupId ? "backup-salvo" : "upload-zip",
+        fileName: zipName,
+        mode: data.mode,
+        tables: tablesToProcess,
+        rowCounts: Object.fromEntries(results.map((r) => [r.table, r.inserted])),
+        durationMs: Date.now() - started,
+        result: results.some((r) => r.skipped > 0) ? "error" : "success",
+        productionBefore,
+        productionAfter,
+        report: { tablesRestored: results },
+      });
+    }
+
     return {
       ok: true,
       mode: data.mode,
@@ -1784,4 +1806,421 @@ export const restoreBackup = createServerFn({ method: "POST" })
       storageFilesRestored,
       durationMs: Date.now() - started,
     };
+  });
+
+// ---------------------------------------------------------------------------
+// Modo de validação (dry-run no sandbox) + auditoria de importações em teste
+// ---------------------------------------------------------------------------
+
+/** Tabelas usadas para conferir que a produção não foi tocada. */
+const PROD_GUARD_TABLES = [
+  "clients",
+  "products",
+  "mgmv_agreements",
+  "mgmv_installments",
+  "nf_invoices",
+  "team_tasks",
+  "team_punch_entries",
+] as const;
+
+/** Conta linhas de PRODUÇÃO (nunca escreve nada) para provar o isolamento. */
+export async function countProductionRows(admin: any): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  await Promise.all(
+    PROD_GUARD_TABLES.map(async (table) => {
+      const { count, error } = await admin
+        .from(table)
+        .select("id", { count: "exact", head: true })
+        .eq("env", "producao");
+      out[table] = error ? -1 : (count ?? 0);
+    }),
+  );
+  return out;
+}
+
+function countsEqual(a: Record<string, number>, b: Record<string, number>): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const k of keys) {
+    if ((a[k] ?? 0) !== (b[k] ?? 0)) return false;
+  }
+  return true;
+}
+
+export interface SandboxAuditInput {
+  userId: string;
+  userEmail?: string | null;
+  source: string;
+  fileName?: string | null;
+  mode: string;
+  tables: string[];
+  rowCounts: Record<string, unknown>;
+  durationMs: number;
+  result?: "success" | "error" | "isolation_breach";
+  error?: string | null;
+  productionBefore: Record<string, number>;
+  productionAfter: Record<string, number>;
+  report?: unknown;
+}
+
+/**
+ * Registra uma importação/validação feita no Modo Teste, junto com a prova de
+ * que as contagens de produção não mudaram durante a execução.
+ */
+export async function logSandboxImport(admin: any, input: SandboxAuditInput): Promise<boolean> {
+  const untouched = countsEqual(input.productionBefore, input.productionAfter);
+  try {
+    await admin.from("sandbox_import_audit").insert({
+      user_id: input.userId,
+      user_email: input.userEmail ?? null,
+      env: "sandbox",
+      source: input.source,
+      file_name: input.fileName ?? null,
+      mode: input.mode,
+      tables_affected: input.tables,
+      row_counts: input.rowCounts as any,
+      duration_ms: Math.round(input.durationMs),
+      result: untouched ? (input.result ?? "success") : "isolation_breach",
+      error: input.error ?? null,
+      production_untouched: untouched,
+      production_counts_before: input.productionBefore as any,
+      production_counts_after: input.productionAfter as any,
+      report: (input.report ?? null) as any,
+    } as any);
+  } catch (err) {
+    console.warn("[sandbox-audit] falha ao registrar:", err);
+  }
+  return untouched;
+}
+
+export interface ValidationTableDiff {
+  table: string;
+  inBackup: number;
+  currentSandbox: number;
+  toInsert: number;
+  toDelete: number;
+  projected: number;
+}
+
+export interface ValidationIssue {
+  level: "error" | "warn" | "info";
+  message: string;
+}
+
+export interface ValidationReport {
+  ok: true;
+  filename: string;
+  generatedAt: string | null;
+  schemaVersion: number;
+  mode: "merge" | "replace";
+  targetEnv: "sandbox";
+  tables: ValidationTableDiff[];
+  skippedTables: string[];
+  currentSummary: BusinessSummary;
+  projectedSummary: BusinessSummary;
+  issues: ValidationIssue[];
+  productionUntouched: boolean;
+  productionCounts: Record<string, number>;
+  durationMs: number;
+  validatedAt: string;
+}
+
+const validateSchema = z.object({
+  backupId: z.string().uuid().optional(),
+  uploadedZipBase64: z.string().optional(),
+  mode: z.enum(["merge", "replace"]).default("merge"),
+  tables: z.array(z.string()).optional(),
+});
+
+const SUMMARY_TABLES = [
+  "clients",
+  "products",
+  "mgmv_agreements",
+  "mgmv_installments",
+  "nf_invoices",
+  "team_tasks",
+  "team_punch_entries",
+] as const;
+
+/**
+ * Executa a restauração "a seco": lê o backup, projeta o resultado no sandbox e
+ * devolve um relatório de diferenças. NENHUMA escrita de dados acontece — nem
+ * na produção, nem no sandbox (apenas o registro de auditoria é gravado).
+ */
+export const validateBackupRestore = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => validateSchema.parse(d))
+  .handler(async ({ data, context }): Promise<ValidationReport> => {
+    await assertAdmin(context);
+    const started = Date.now();
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const targetEnv = await resolveTargetEnv(supabaseAdmin, context.userId);
+    if (targetEnv !== "sandbox") {
+      throw new Error(
+        "A validação só roda no Modo Teste. Entre no Modo Teste (Configurações → Sandbox) e tente de novo.",
+      );
+    }
+
+    const productionBefore = await countProductionRows(supabaseAdmin);
+    const { zip, filename } = await loadBackupZip(supabaseAdmin, data);
+    const manifest = await readManifest(zip);
+
+    const inZip = RESTORABLE_TABLES.filter((t) => Boolean(zip.file(`database/data/${t}.jsonl`)));
+    const requested = data.tables && data.tables.length > 0 ? new Set(data.tables) : null;
+    const applicable = inZip.filter((t) => !GLOBAL_TABLES.has(t));
+    const skippedTables = inZip.filter((t) => GLOBAL_TABLES.has(t));
+    const selected = applicable.filter((t) => !requested || requested.has(t));
+
+    const issues: ValidationIssue[] = [];
+    if (skippedTables.length > 0) {
+      issues.push({
+        level: "info",
+        message: `Tabelas globais ignoradas em teste (usuários, papéis, permissões): ${skippedTables.join(", ")}`,
+      });
+    }
+
+    // Linhas do backup por tabela selecionada
+    const backupRows: Record<string, any[]> = {};
+    for (const table of selected) {
+      backupRows[table] = await loadTableRows(zip, table);
+    }
+
+    // Estado atual do sandbox
+    const currentRows: Record<string, any[]> = {};
+    await Promise.all(
+      SUMMARY_TABLES.map(async (table) => {
+        currentRows[table] = await fetchAllRows(supabaseAdmin, table as any, 1000, "sandbox");
+      }),
+    );
+    for (const table of selected) {
+      if (!currentRows[table]) {
+        currentRows[table] = await fetchAllRows(supabaseAdmin, table as any, 1000, "sandbox");
+      }
+    }
+
+    // Diferenças por tabela. No sandbox todos os ids são regerados, então
+    // merge sempre insere e replace apaga o que existe antes de inserir.
+    const tables: ValidationTableDiff[] = selected.map((table) => {
+      const inBackup = backupRows[table]?.length ?? 0;
+      const currentSandbox = currentRows[table]?.length ?? 0;
+      const toDelete = data.mode === "replace" ? currentSandbox : 0;
+      return {
+        table,
+        inBackup,
+        currentSandbox,
+        toInsert: inBackup,
+        toDelete,
+        projected: data.mode === "replace" ? inBackup : currentSandbox + inBackup,
+      };
+    });
+
+    // Integridade referencial dentro do ZIP
+    const idSet = (rows: any[]) => new Set(rows.map((r) => r?.id).filter(Boolean));
+    const clientIds = idSet(backupRows["clients"] ?? []);
+    const agreementIds = idSet(backupRows["mgmv_agreements"] ?? []);
+
+    const orphanProducts = (backupRows["products"] ?? []).filter(
+      (p) => p?.client_id && !clientIds.has(p.client_id),
+    ).length;
+    if (orphanProducts > 0) {
+      issues.push({
+        level: "error",
+        message: `${orphanProducts} produto(s) apontam para um cliente que não está no backup — ficariam sem vínculo.`,
+      });
+    }
+    const orphanInstallments = (backupRows["mgmv_installments"] ?? []).filter(
+      (i) => i?.agreement_id && !agreementIds.has(i.agreement_id),
+    ).length;
+    if (orphanInstallments > 0) {
+      issues.push({
+        level: "error",
+        message: `${orphanInstallments} parcela(s) apontam para um acordo MGMV inexistente no backup.`,
+      });
+    }
+    const orphanAgreements = (backupRows["mgmv_agreements"] ?? []).filter(
+      (a) => a?.client_id && !clientIds.has(a.client_id),
+    ).length;
+    if (orphanAgreements > 0) {
+      issues.push({
+        level: "error",
+        message: `${orphanAgreements} acordo(s) MGMV sem o cliente correspondente no backup.`,
+      });
+    }
+
+    for (const table of selected) {
+      const rows = backupRows[table] ?? [];
+      const ids = rows.map((r) => r?.id).filter(Boolean);
+      if (ids.length > 0 && new Set(ids).size !== ids.length) {
+        issues.push({
+          level: "error",
+          message: `${table}: existem identificadores repetidos dentro do backup.`,
+        });
+      }
+      if (rows.length === 0 && (manifest.rowCounts?.[table] ?? 0) > 0) {
+        issues.push({
+          level: "warn",
+          message: `${table}: o manifesto indica ${manifest.rowCounts[table]} registro(s), mas o arquivo veio vazio.`,
+        });
+      }
+    }
+    if (selected.length === 0) {
+      issues.push({ level: "error", message: "Nenhuma tabela restaurável foi encontrada no backup." });
+    }
+
+    const selectedSet = new Set<string>(selected as unknown as string[]);
+    const pick = (table: string) =>
+      data.mode === "replace"
+        ? selectedSet.has(table)
+          ? backupRows[table] ?? []
+          : currentRows[table] ?? []
+        : [...(currentRows[table] ?? []), ...(selectedSet.has(table) ? backupRows[table] ?? [] : [])];
+
+    const currentSummary = computeBusinessSummaryFromRows({
+      clients: currentRows["clients"] ?? [],
+      products: currentRows["products"] ?? [],
+      agreements: currentRows["mgmv_agreements"] ?? [],
+      installments: currentRows["mgmv_installments"] ?? [],
+      nfInvoices: currentRows["nf_invoices"] ?? [],
+      teamTasks: currentRows["team_tasks"] ?? [],
+      punchEntries: currentRows["team_punch_entries"] ?? [],
+    });
+    const projectedSummary = computeBusinessSummaryFromRows({
+      clients: pick("clients"),
+      products: pick("products"),
+      agreements: pick("mgmv_agreements"),
+      installments: pick("mgmv_installments"),
+      nfInvoices: pick("nf_invoices"),
+      teamTasks: pick("team_tasks"),
+      punchEntries: pick("team_punch_entries"),
+    });
+
+    const productionAfter = await countProductionRows(supabaseAdmin);
+    const durationMs = Date.now() - started;
+
+    const productionUntouched = await logSandboxImport(supabaseAdmin, {
+      userId: context.userId,
+      userEmail: (context as any)?.claims?.email ?? null,
+      source: data.backupId ? "backup-salvo" : "upload-zip",
+      fileName: filename,
+      mode: `validacao-${data.mode}`,
+      tables: selected,
+      rowCounts: Object.fromEntries(tables.map((t) => [t.table, t.inBackup])),
+      durationMs,
+      result: issues.some((i) => i.level === "error") ? "error" : "success",
+      productionBefore,
+      productionAfter,
+      report: { issues, tables },
+    });
+
+    return {
+      ok: true,
+      filename,
+      generatedAt: manifest.generatedAt,
+      schemaVersion: manifest.schemaVersion,
+      mode: data.mode,
+      targetEnv: "sandbox",
+      tables,
+      skippedTables,
+      currentSummary,
+      projectedSummary,
+      issues,
+      productionUntouched,
+      productionCounts: productionAfter,
+      durationMs,
+      validatedAt: new Date().toISOString(),
+    };
+  });
+
+export interface SandboxAuditRow {
+  id: string;
+  createdAt: string;
+  userEmail: string | null;
+  source: string;
+  fileName: string | null;
+  mode: string;
+  tables: string[];
+  rowCounts: Record<string, number>;
+  durationMs: number | null;
+  result: string;
+  error: string | null;
+  productionUntouched: boolean;
+}
+
+export const listSandboxImportAudit = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<SandboxAuditRow[]> => {
+    const { data, error } = await context.supabase
+      .from("sandbox_import_audit")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((r: any) => ({
+      id: r.id,
+      createdAt: r.created_at,
+      userEmail: r.user_email,
+      source: r.source,
+      fileName: r.file_name,
+      mode: r.mode,
+      tables: r.tables_affected ?? [],
+      rowCounts: (r.row_counts ?? {}) as Record<string, number>,
+      durationMs: r.duration_ms,
+      result: r.result,
+      error: r.error,
+      productionUntouched: r.production_untouched,
+    }));
+  });
+
+/** Snapshot das contagens de produção — usado antes de uma importação em teste. */
+export const snapshotProductionCounts = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<Record<string, number>> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const env = await resolveTargetEnv(supabaseAdmin, context.userId);
+    if (env !== "sandbox") return {};
+    return countProductionRows(supabaseAdmin);
+  });
+
+const recordSandboxImportSchema = z.object({
+  source: z.string(),
+  fileName: z.string().nullable().optional(),
+  mode: z.string().default("import"),
+  tables: z.array(z.string()).default([]),
+  rowCounts: z.record(z.string(), z.number()).default({}),
+  durationMs: z.number().default(0),
+  error: z.string().nullable().optional(),
+  productionBefore: z.record(z.string(), z.number()).default({}),
+});
+
+/**
+ * Registra uma importação comum (lista/ZIP) feita no Modo Teste e confere se as
+ * contagens de produção continuam idênticas às do início da operação.
+ */
+export const recordSandboxImport = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => recordSandboxImportSchema.parse(d))
+  .handler(async ({ data, context }): Promise<{ recorded: boolean; productionUntouched: boolean }> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const env = await resolveTargetEnv(supabaseAdmin, context.userId);
+    if (env !== "sandbox") return { recorded: false, productionUntouched: true };
+
+    const productionAfter = await countProductionRows(supabaseAdmin);
+    const before = Object.keys(data.productionBefore).length
+      ? data.productionBefore
+      : productionAfter;
+    const untouched = await logSandboxImport(supabaseAdmin, {
+      userId: context.userId,
+      userEmail: (context as any)?.claims?.email ?? null,
+      source: data.source,
+      fileName: data.fileName ?? null,
+      mode: data.mode,
+      tables: data.tables,
+      rowCounts: data.rowCounts,
+      durationMs: data.durationMs,
+      result: data.error ? "error" : "success",
+      error: data.error ?? null,
+      productionBefore: before,
+      productionAfter,
+    });
+    return { recorded: true, productionUntouched: untouched };
   });

@@ -1,39 +1,65 @@
-## Resposta curta sobre a página própria
+## Objetivo
 
-Vale a pena — mas por clareza, não por segurança. O isolamento real vem do banco (coluna de ambiente + regras de acesso + ids regerados), e ele funciona igual estando na mesma tela ou em outra. O ganho de uma página própria `/sandbox` é operacional: URL diferente, layout com moldura de aviso permanente, impossível "esquecer" que está no teste, e dá para deixar duas abas do navegador abertas (uma produção, uma teste) sem confundir. Recomendo fazer: página própria **e** o isolamento reforçado no servidor.
+Três entregas independentes:
+1. **Modo de validação** — executar a restauração de um backup no sandbox e produzir um relatório de diferenças, sem tocar na produção.
+2. **Error Boundary global** — tela amigável com botão de recarregar quando o app quebrar (inclusive em loop de render).
+3. **Auditoria de importações do sandbox** — registro de cada importação/restauração feita em teste, com garantia verificável de que nada foi gravado na produção.
 
-## Escopo
+---
 
-### 1. Limite de envio 500 MB
-- ZIP enviado direto na importação por backup passa de 250 MB para 500 MB, com validação no cliente e no servidor, e mensagem clara quando exceder.
-- Backups já salvos na nuvem continuam sem limite (não passam pelo navegador).
+## 1. Modo de validação (dry-run + relatório de diferenças)
 
-### 2. Página própria do Modo Teste (`/sandbox`)
-- Nova rota `src/routes/_authenticated.sandbox.tsx` (admin/admin_master; quem não for é redirecionado).
-- Layout próprio com moldura/faixa fixa "MODO TESTE — produção intocada" sempre visível, e o app inteiro (Clientes, MGMV, Collection, Finanças, Equipe, Importação, Backups) renderizado dentro dela sobre os dados de teste.
-- Em Configurações, o card atual vira o ponto de entrada: "Abrir Modo Teste" leva para `/sandbox`; "Sair" volta para `/`.
-- Entrar/sair da página liga/desliga o modo no servidor e dispara a recarga em tempo real (sem F5).
-- Se alguém abrir `/sandbox` sem o modo ativo, a própria página ativa; ao sair da página, o modo é desligado — não fica ligado por acidente.
+O restaurador já decide o ambiente no servidor (`resolveTargetEnv`) e já regenera IDs no sandbox. Falta um caminho de "validar sem aplicar" e um comparativo antes/depois.
 
-### 3. Importação exclusiva por backup/ZIP, com isolamento total
+**Backend (`src/lib/backup.functions.ts`)**
+- Nova server fn `validateBackupRestore` (admin, mesma entrada de `restoreBackup` + `tables`), que:
+  - exige sandbox ativo; se o usuário estiver em produção, recusa com mensagem clara ("entre no Modo Teste para validar").
+  - lê o ZIP e monta, por tabela: linhas no backup, linhas hoje no sandbox, quantas seriam inseridas, atualizadas, ignoradas e removidas (no modo replace).
+  - compara os indicadores de negócio (clientes, produtos, acordos, parcelas pendentes, NFs, a receber, inadimplência, recebido) entre "sandbox atual" e "sandbox projetado após restauração", reaproveitando o resumo de negócio já existente.
+  - lista problemas detectados: FKs órfãs (produto sem cliente, parcela sem acordo), IDs duplicados no ZIP, colunas do ZIP que não existem na tabela, tabelas globais ignoradas em teste.
+  - **não escreve nada**: nenhuma operação de escrita no caminho de validação; a decisão de ambiente continua exclusivamente no servidor.
+- Opcional dentro do mesmo fluxo: "validar aplicando no sandbox" — usa o `restoreBackup` normal (já isolado) e depois gera o mesmo relatório com números reais pós-restauração.
 
-Novo card "Importar de backup (ZIP)" na seção Importação, disponível nos dois ambientes.
+**UI (`src/components/restore-backup-modal.tsx`)**
+- Nova etapa "Validação" entre *preview* e *aplicar*: botão **Validar no sandbox (não aplica)**.
+- Relatório em cards no padrão visual da OnePage: badge de destino, tabela por entidade (backup / atual / projetado / delta), bloco de alertas e um selo verde "Produção intacta — nenhuma escrita realizada".
+- Botão para exportar o relatório em JSON.
+- Em produção o botão de validação aparece desabilitado com a explicação.
 
-Garantias (o núcleo da entrega):
-1. **Destino decidido no servidor**, a partir do estado de sandbox do usuário. Não existe parâmetro de ambiente vindo do navegador.
-2. **No sandbox, todos os ids são regerados** e as ligações entre tabelas (cliente → acordo → parcelas → produtos → NF → tarefas) reescritas com o mesmo mecanismo da clonagem. Nenhum id do backup entra como está, então é impossível sobrescrever uma linha de produção.
-3. **Toda gravação carimba o ambiente de destino** — o ambiente gravado no ZIP é descartado.
-4. **Exclusões sempre filtradas por ambiente**: "substituir tudo" no sandbox apaga só o sandbox.
-5. **Trava final antes de cada lote**: o servidor confere que todas as linhas têm o ambiente de destino e que nenhum id colide com produção; divergência aborta sem gravar nada.
-6. **Modo padrão é mesclar**, preservando o que já existe no sandbox.
-7. Papéis, perfis e log de auditoria não são tocados quando o destino é sandbox.
+---
 
-UI do card: upload de `.zip` (até 500 MB) ou escolha de backup salvo, selo de destino calculado no servidor ("Destino: SANDBOX — produção não será alterada"), prévia com contagem por tabela e comparação com o estado atual, escolha mesclar/substituir com confirmação digitada, progresso por tabela e atualização em tempo real ao final.
+## 2. Error Boundary global
+
+Hoje só existe o `errorComponent` do TanStack, que não captura erros de render dentro da árvore de componentes (ex.: "Maximum update depth exceeded" no `AppLayout`).
+
+- Novo `src/components/global-error-boundary.tsx`: class component com `componentDidCatch`, que reporta via `reportLovableError` e renderiza uma tela amigável em português: título, explicação simples, botões **Recarregar página** e **Voltar ao início**, e um bloco recolhível com o detalhe técnico do erro.
+- Detecção específica de loop de render: se a mensagem contiver "Maximum update depth", a mensagem sugere recarregar e informa que o estado local será limpo.
+- Montado em `src/routes/__root.tsx`, envolvendo o `<Outlet />` dentro do `QueryClientProvider`, com `key` reiniciável para permitir "tentar novamente" sem reload completo.
+- No reload, limpa chaves de UI persistidas que possam estar causando o loop (mantendo sessão e dados).
+
+---
+
+## 3. Auditoria de importações do sandbox
+
+- **Migração**: nova tabela `public.sandbox_import_audit` com usuário, tipo de origem (backup salvo / upload / lista / ZIP), nome do arquivo, modo (merge/replace/validação), tabelas afetadas, contagens por tabela, duração, resultado e uma verificação de segurança (`production_untouched`). Grants + RLS: cada usuário vê os próprios registros, admins veem tudo; ninguém edita ou apaga.
+- **Registro**: `restoreBackup` e a nova `validateBackupRestore` gravam nessa tabela; os demais importadores (lista TXT, ZIP) também registram quando o usuário estiver em Modo Teste.
+- **Garantia de não-escrita em produção**: antes e depois da operação em sandbox, contam-se as linhas de produção das tabelas envolvidas; se algum número mudar, o registro é marcado como falha de isolamento e a UI mostra alerta em vermelho. Em caminho normal isso confirma "produção inalterada".
+- **UI**: nova aba/card em Configurações → Modo Teste com o histórico de importações do sandbox (data, origem, modo, linhas, duração, selo de isolamento) e detalhe expandível por execução.
+
+---
 
 ## Detalhes técnicos
 
-- `src/lib/backup.functions.ts`: destino por ambiente, remapeamento de ids reutilizando `CLONE_ORDER`/`remapRow`, delete filtrado por ambiente, verificação pré-gravação, limite 500 MB.
-- Novo `src/components/backup-import-card.tsx`; integração em `src/sections/import-section.tsx`.
-- Nova rota `src/routes/_authenticated.sandbox.tsx` + ajuste em `src/components/sandbox-settings-card.tsx` e `src/components/app-layout.tsx` (faixa passa a viver na página).
-- O painel de Backups em Configurações passa a usar a mesma rotina segura, eliminando o caminho antigo sem filtro de ambiente.
-- Sem alteração de schema no banco.
+- Backend em `createServerFn` com `requireSupabaseAuth` + checagem de admin, seguindo o padrão do arquivo atual; `supabaseAdmin` importado dentro do handler.
+- O ambiente-alvo continua resolvido no servidor via `sandbox_state`; o navegador nunca envia o ambiente.
+- O relatório de diferenças reaproveita `BusinessSummary`, `fetchAllRows`, `CLONE_ORDER` e `ENV_SCOPED_TABLES` já existentes — sem duplicar regra de negócio.
+- Nenhuma alteração no cálculo financeiro existente.
+
+## Arquivos afetados
+
+- `src/lib/backup.functions.ts` (validação + auditoria)
+- `src/components/restore-backup-modal.tsx` (etapa de validação e relatório)
+- `src/components/global-error-boundary.tsx` (novo)
+- `src/routes/__root.tsx` (montar o boundary)
+- `src/components/sandbox-settings-card.tsx` (histórico de auditoria)
+- Migração de banco para `sandbox_import_audit`

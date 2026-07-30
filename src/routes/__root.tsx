@@ -14,6 +14,7 @@ import { useStore } from "@/lib/store";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
+import { GlobalErrorBoundary } from "@/components/global-error-boundary";
 import faviconIco from "@/assets/favicons/favicon.ico.asset.json";
 import favicon32 from "@/assets/favicons/mascot-32.png.asset.json";
 import favicon180 from "@/assets/favicons/mascot-180.png.asset.json";
@@ -147,8 +148,10 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <GlobalErrorBoundary>
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+      </GlobalErrorBoundary>
       <Toaster position="top-right" richColors />
     </QueryClientProvider>
   );

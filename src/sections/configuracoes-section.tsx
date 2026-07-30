@@ -71,6 +71,7 @@ import { NotificationsPrefsCard } from "@/components/notifications-prefs-card";
 import { NavbarSettingsCard } from "@/components/navbar-settings-card";
 import { BackupsPanel } from "@/components/backups-panel";
 import { SandboxSettingsCard } from "@/components/sandbox-settings-card";
+import { SandboxAuditCard } from "@/components/sandbox-audit-card";
 import { RestoreBackupModal } from "@/components/restore-backup-modal";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -1407,6 +1408,7 @@ export function ConfiguracoesSection() {
             description="Uma cópia isolada do sistema para testar à vontade."
           />
           <SandboxSettingsCard />
+          <SandboxAuditCard />
         </>
       )}
 

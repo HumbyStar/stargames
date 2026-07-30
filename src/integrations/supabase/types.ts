@@ -702,6 +702,66 @@ export type Database = {
         }
         Relationships: []
       }
+      sandbox_import_audit: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          env: Database["public"]["Enums"]["app_env"]
+          error: string | null
+          file_name: string | null
+          id: string
+          mode: string
+          production_counts_after: Json
+          production_counts_before: Json
+          production_untouched: boolean
+          report: Json | null
+          result: string
+          row_counts: Json
+          source: string
+          tables_affected: string[]
+          user_email: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          env?: Database["public"]["Enums"]["app_env"]
+          error?: string | null
+          file_name?: string | null
+          id?: string
+          mode: string
+          production_counts_after?: Json
+          production_counts_before?: Json
+          production_untouched?: boolean
+          report?: Json | null
+          result?: string
+          row_counts?: Json
+          source: string
+          tables_affected?: string[]
+          user_email?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          env?: Database["public"]["Enums"]["app_env"]
+          error?: string | null
+          file_name?: string | null
+          id?: string
+          mode?: string
+          production_counts_after?: Json
+          production_counts_before?: Json
+          production_untouched?: boolean
+          report?: Json | null
+          result?: string
+          row_counts?: Json
+          source?: string
+          tables_affected?: string[]
+          user_email?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       sandbox_state: {
         Row: {
           active: boolean
