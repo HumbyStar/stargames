@@ -4,6 +4,7 @@ import { PermissionsProvider } from "@/lib/use-permissions";
 import { SessionGuard } from "@/components/session-guard";
 
 export const Route = createFileRoute("/_authenticated")({
+  ssr: false,
   beforeLoad: async () => {
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) {
@@ -11,5 +12,11 @@ export const Route = createFileRoute("/_authenticated")({
     }
     return { user: data.user };
   },
-  component: () => <Outlet />,
+  component: () => (
+    <PermissionsProvider>
+      <SessionGuard>
+        <Outlet />
+      </SessionGuard>
+    </PermissionsProvider>
+  ),
 });
