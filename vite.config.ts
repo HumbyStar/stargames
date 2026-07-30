@@ -21,12 +21,9 @@ export default defineConfig({
   },
 });
 
+/** Plugins do PWA restritos ao bundle do cliente. */
 function pwaClientOnly() {
-  return (
-    VitePWA as unknown as (o: Record<string, unknown>) => unknown[]
-  ) === undefined
-    ? []
-    : [
+  const plugins = ([] as unknown[]).concat(
       // Instalação local (Windows) + funcionamento offline.
       // O registro é feito só em produção, pelo wrapper src/lib/pwa.ts.
       VitePWA({
@@ -97,9 +94,10 @@ function pwaClientOnly() {
             },
           ],
         },
-        }),
-      ].map((plugin) => ({
-        ...(plugin as Record<string, unknown>),
-        applyToEnvironment: (env: { name: string }) => env.name === "client",
-      }));
+      }) as unknown,
+  );
+  return plugins.map((plugin) => ({
+    ...(plugin as Record<string, unknown>),
+    applyToEnvironment: (env: { name: string }) => env.name === "client",
+  })) as never[];
 }
