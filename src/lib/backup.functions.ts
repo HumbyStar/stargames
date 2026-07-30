@@ -1640,7 +1640,10 @@ export const restoreBackup = createServerFn({ method: "POST" })
     const started = Date.now();
     // Destino decidido no servidor. O navegador não escolhe ambiente.
     const targetEnv = await resolveTargetEnv(supabaseAdmin, context.userId);
-    const { zip } = await loadBackupZip(supabaseAdmin, data);
+    // Prova de isolamento: contagens de produção antes da execução em teste.
+    const productionBefore =
+      targetEnv === "sandbox" ? await countProductionRows(supabaseAdmin) : {};
+    const { zip, filename: zipName } = await loadBackupZip(supabaseAdmin, data);
     await readManifest(zip);
 
     const requested = data.tables && data.tables.length > 0
@@ -1774,6 +1777,25 @@ export const restoreBackup = createServerFn({ method: "POST" })
       } as any);
     } catch (err) {
       console.warn("[restore] import_history log failed:", err);
+    }
+
+    // Auditoria do Modo Teste + verificação de que a produção não mudou.
+    if (targetEnv === "sandbox") {
+      const productionAfter = await countProductionRows(supabaseAdmin);
+      await logSandboxImport(supabaseAdmin, {
+        userId: context.userId,
+        userEmail: (context as any)?.claims?.email ?? null,
+        source: data.backupId ? "backup-salvo" : "upload-zip",
+        fileName: zipName,
+        mode: data.mode,
+        tables: tablesToProcess,
+        rowCounts: Object.fromEntries(results.map((r) => [r.table, r.inserted])),
+        durationMs: Date.now() - started,
+        result: results.some((r) => r.skipped > 0) ? "error" : "success",
+        productionBefore,
+        productionAfter,
+        report: { tablesRestored: results },
+      });
     }
 
     return {
