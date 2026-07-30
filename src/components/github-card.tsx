@@ -112,6 +112,10 @@ export function GithubCard() {
   }, [repos, selectedRepo]);
 
   const handleSave = async () => {
+    if (!/^[^/\s]+\/[^/\s]+$/.test(selectedRepo.trim())) {
+      toast.error("Informe o repositório no formato dono/repositório.");
+      return;
+    }
     const [owner = "", name = ""] = selectedRepo.split("/");
     setSaving(true);
     try {
@@ -131,6 +135,25 @@ export function GithubCard() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const ensureRepoSaved = async () => {
+    const repo = selectedRepo.trim();
+    if (!repo) {
+      throw new Error("Selecione ou digite um repositório (dono/repositório) antes de publicar.");
+    }
+    const savedRepo = status?.config.repoOwner
+      ? `${status.config.repoOwner}/${status.config.repoName}`
+      : "";
+    if (savedRepo === repo && (status?.config.branch ?? "") === branch.trim()) return;
+    const [owner = "", name = ""] = repo.split("/");
+    if (!owner || !name) {
+      throw new Error("Repositório inválido. Use o formato dono/repositório.");
+    }
+    await saveGithubConfig({
+      data: { repoOwner: owner, repoName: name, branch: branch.trim(), autoPushBackup },
+    });
+    await loadStatus();
   };
 
   const runAction = async (key: string, fn: () => Promise<void>) => {
