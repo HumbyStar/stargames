@@ -398,8 +398,13 @@ export function mapAuditRow(
       break;
     }
     case "app_settings": {
-      title = `${actorLabel} alterou as configurações do sistema`;
-      description = describeChanges(changedFields(prev, row.new_data));
+      const detalhado = describeSettingsChange(
+        actorLabel,
+        row.old_data,
+        row.new_data ?? row.old_data,
+      );
+      title = detalhado.title;
+      description = detalhado.description;
       break;
     }
     case "saved_filters": {
