@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useMemo, useRef } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Alert, Card, MetricCard, PageHeader, StackedBar } from "@/components/ui-bits";
@@ -135,17 +135,22 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
       financialStatus: string;
     }>,
   };
-  if (aggregatesQuery.isSuccess && perfStartRef.current > 0) {
-    reportDashboardPerf({ type: "aggregate", ms: performance.now() - perfStartRef.current });
-    perfStartRef.current = 0;
-  }
+  const isSuccess = aggregatesQuery.isSuccess;
+  // IMPORTANTE: reportar métricas SEMPRE em efeito (nunca durante o render).
+  // Emitir durante o render atualiza o estado do badge no meio da fase de
+  // render e faz o React reiniciar a renderização em loop infinito
+  // ("Maximum update depth exceeded"), derrubando a página inteira.
+  useEffect(() => {
+    if (isSuccess && perfStartRef.current > 0) {
+      reportDashboardPerf({ type: "aggregate", ms: performance.now() - perfStartRef.current });
+      perfStartRef.current = 0;
+    }
+  }, [isSuccess]);
 
   // Contador de renders p/ o badge (dev-only, sem custo em prod).
-  const renderRef = useRef(0);
-  renderRef.current++;
-  if (import.meta.env.DEV) {
-    reportDashboardPerf({ type: "render" });
-  }
+  useEffect(() => {
+    if (import.meta.env.DEV) reportDashboardPerf({ type: "render" });
+  });
 
   const {
     reservasAtivas,
