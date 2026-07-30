@@ -1,37 +1,61 @@
-## O que está acontecendo
+## Resposta direta
 
-Confirmei no banco a causa exata da divergência:
+Sim — e é bem mais simples que o plano anterior. O caminho nativo é:
 
-| tabela | produção | modo teste | soma |
-|---|---|---|---|
-| clients | 2.723 | 2.724 | **5.447** |
-| products | 23.352 | 23.351 | **46.703** |
+1. **Uma conta GitHub conecta o projeto** (menu + no chat → GitHub → Connect project). O Lovable cria o repositório e liga o sync bidirecional: tudo que muda aqui vira commit lá, e todo push lá volta pra cá automaticamente.
+2. **No GitHub você dá acesso a quem quiser**: Settings → Collaborators (repo pessoal) ou um Team dentro de uma organização (repo de empresa). Cada pessoa entra com a conta GitHub dela, com papel definido — Read (só ver), Triage (issues), Write (push), Maintain, Admin.
+3. Pronto: código versionado, acesso controlado por pessoa, e ninguém precisa da sua senha.
 
-Os números da prévia do backup (5.447 clientes, 46.703 produtos) são exatamente **produção + modo teste somados**. Não é duplicação de dados nem erro do sistema local: o backup simplesmente não separa os dois ambientes.
+Observação importante: só **uma** conta GitHub fica conectada à sua conta Lovable por vez, e o sync é por projeto — então esse modelo de "uma conta dona + colaboradores" é exatamente o que a plataforma suporta nativamente. Não dá para cada admin conectar a própria conta e fazer o Lovable sincronizar o código por ela.
 
-Motivo técnico: em `src/lib/backup.functions.ts` tanto a estimativa (`estimateBackup`) quanto a exportação real (`fetchRowsForBackup`) leem as tabelas inteiras, sem aplicar o filtro `env` — que já existe e já é usado na restauração. Como o ambiente de teste é um clone completo da produção, tudo aparece em dobro.
+Recomendação: se o repo for da empresa, crie uma **organização** no GitHub (grátis) e conecte o projeto lá. Assim o repositório não fica preso à conta pessoal de ninguém e o controle de acesso vira gerenciamento de times.
 
-## O que vou fazer
+## Plano revisado
 
-1. **Backup passa a ser por ambiente**
-   - A prévia e a exportação passam a filtrar pelo ambiente atual do usuário (produção, ou teste quando o sandbox estiver ativo) em todas as tabelas que têm essa separação.
-   - Tabelas globais (papéis, permissões, auditoria, perfis) continuam saindo inteiras, como hoje.
-   - Resultado esperado: a prévia mostrará 2.723 clientes e 23.352 produtos, batendo com a tela inicial.
+Como o acesso ao código passa a ser resolvido nativamente no GitHub, o card em Configurações fica menor e focado em duas coisas: **orientar a conexão** e **publicar o que o sistema gera**.
 
-2. **Registro do ambiente no backup**
-   - O ambiente de origem já é gravado no registro do backup; vou exibi-lo na prévia, no card do backup e no resumo, para nunca mais haver dúvida sobre "de onde veio" o arquivo.
+### 1. Card "GitHub" em Configurações
+Visível apenas para `admin` e `admin_master`.
 
-3. **Resumo de negócio corrigido**
-   - Os totais do resumo (clientes, acordos, parcelas, notas) são calculados a partir das linhas exportadas, então passam automaticamente a refletir só o ambiente correto.
+**Bloco A — Código-fonte (guia, sem código)**
+- Passo a passo do sync nativo: menu + → GitHub → Connect project.
+- Passo a passo para liberar acesso a outras pessoas: Collaborators ou Team da organização, com explicação de cada papel (Read / Write / Admin) em linguagem simples.
+- Link para baixar o ZIP do código pelo editor, como alternativa manual.
+- Checklist visual com os passos, marcável, salvo nas configurações.
 
-4. **Correção de leitura instável (bug latente)**
-   - A leitura em blocos de 1.000 linhas hoje é feita sem ordenação definida, o que pode repetir ou pular linhas em tabelas grandes. Vou ordenar por chave estável na paginação, garantindo contagem exata em cada tabela.
+**Bloco B — Publicar dados do sistema no repositório (funcional)**
+Uma única conexão de serviço, configurada pelo admin master, usada por todos:
+- Campo para o repositório de destino (owner/nome) e um token do GitHub guardado como secret do backend, criptografado, nunca exposto ao navegador.
+- **Enviar backup**: manda o ZIP do último backup para `backups/AAAA-MM-DD-hhmm.zip`, com opção de envio automático ao concluir cada backup.
+- **Enviar exports**: CSVs de clientes, produtos e acordos MGMV em `exports/`.
+- **Gerar changelog**: monta `CHANGELOG.md` a partir do `audit_log` (quem alterou o quê e quando).
+- **Abrir issue**: cria issue no repo a partir de um erro capturado ou de uma tarefa da equipe.
+- Cada ação registra no feed de "Atualizações em tempo real" com o nome de quem executou — então mesmo com uma conta única, fica rastreável quem disparou o quê dentro do sistema.
 
-5. **Verificação**
-   - Rodo a prévia e confiro que os números batem com o dashboard, e gero um backup de teste para confirmar que a contagem final e o resumo ficam idênticos.
+Se você preferir, o Bloco B pode ficar de fora agora e entregarmos só o guia — me diga na hora de implementar.
 
-## Detalhes técnicos
+## Benefícios do GitHub para o Star Games
 
-- `src/lib/backup.functions.ts`: resolver `env` do usuário (`resolveTargetEnv`) no início de `estimateBackup` e do fluxo de geração; aplicar `.eq("env", env)` em `fetchRowsForBackup` e na contagem `head: true` para tabelas em `ENV_SCOPED_TABLES`; adicionar `.order(<pk>, { ascending: true })` antes do `.range()`.
-- UI (`backup-preview-modal`, `backups-panel`, `backup-summary-modal`): badge com o ambiente de origem do backup.
-- Sem migração de banco — nada muda no esquema.
+- **Histórico versionado** com autor e data em cada mudança; dá para voltar a qualquer ponto.
+- **Editar fora do Lovable**: clonar, abrir no VS Code/Cursor, dar push — volta sincronizado.
+- **Branches e Pull Requests** para testar mudanças arriscadas antes de afetar produção.
+- **Backups versionados** fora da infraestrutura do banco: redundância real.
+- **GitHub Actions**: rotinas agendadas grátis (baixar backup diário, validar integridade, alertar por e-mail em falha).
+- **Issues e Projects**: erros capturados pelo sistema viram tarefas rastreáveis ligadas ao commit que resolveu.
+- **Releases**: marcar versões estáveis ("v1.4 — MGMV com revisão IA") e saber o que rodava em cada data.
+- **Independência de plataforma**: com o código no GitHub, o sistema pode ser hospedado em qualquer lugar.
+
+## Detalhes técnicos (Bloco B)
+
+- Configuração guardada em `public.app_settings` (chave `github`): `repo_owner`, `repo_name`, `auto_push_backup`. Sem token no banco.
+- Token do GitHub (fine-grained PAT, escopo apenas no repositório escolhido) salvo via formulário seguro de secrets como `GITHUB_TOKEN` — só o backend lê.
+- Server functions em `src/lib/github.functions.ts` com `requireSupabaseAuth` + checagem de `admin`/`admin_master` via `has_role`: `getGithubConfig`, `saveGithubConfig`, `pushFile`, `pushBackup`, `pushExports`, `pushChangelog`, `createIssue`.
+- Chamadas à API do GitHub sempre no servidor (contents API com base64 + sha para atualizar arquivos existentes).
+- UI em `src/components/github-card.tsx`, montada em `src/sections/configuracoes-section.tsx`, seguindo os tokens de design da onepage (cards, badges, responsivo).
+- Nenhuma tabela nova e nenhum fluxo de OAuth próprio — bem mais leve que a versão anterior do plano.
+
+## O que preciso de você
+
+1. Conectar o projeto ao GitHub pelo menu + (uma vez; depois é automático).
+2. Adicionar os colaboradores no GitHub com o papel adequado.
+3. Se quiser o Bloco B: criar um fine-grained token com permissão de conteúdo no repositório e colar no formulário seguro que eu abro.
