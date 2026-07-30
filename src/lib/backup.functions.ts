@@ -979,6 +979,7 @@ export const createBackupNow = createServerFn({ method: "POST" })
 
     let backupId: string;
     let storagePath: string;
+    let shouldExecute = false;
     if (existingRow?.id && existingRow.storage_path) {
       backupId = existingRow.id as string;
       storagePath = existingRow.storage_path as string;
@@ -998,20 +999,42 @@ export const createBackupNow = createServerFn({ method: "POST" })
         .single();
       if (insErr || !rowIns) throw new Error(insErr?.message ?? "insert failed");
       backupId = rowIns.id as string;
+      shouldExecute = true;
     }
 
-    const result = await runBackup({
+    return {
+      id: backupId,
+      storagePath,
+      sizeBytes: null,
+      queued: true,
+      shouldExecute,
+    };
+  });
+
+export const executeBackupNow = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string }) => input)
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row, error } = await supabaseAdmin
+      .from("system_backups")
+      .select("id, storage_path, status, created_by")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (error || !row) throw new Error(error?.message ?? "Backup não encontrado.");
+    if (row.created_by !== context.userId) throw new Error("Você não pode executar este backup.");
+    if (!row.storage_path) throw new Error("Caminho do backup inválido.");
+    if (row.status === "completed") return { id: row.id as string, status: "completed" as const };
+    if (row.status !== "pending") {
+      throw new Error(`Este backup não pode ser iniciado no estado ${row.status}.`);
+    }
+    await runBackup({
       type: "manual",
       createdBy: context.userId,
-      existing: { id: backupId, storagePath },
+      existing: { id: row.id as string, storagePath: row.storage_path as string },
     });
-
-    return {
-      id: result.id,
-      storagePath: result.storagePath,
-      sizeBytes: result.sizeBytes,
-      queued: false,
-    };
+    return { id: row.id as string, status: "completed" as const };
   });
 
 // ---------------------------------------------------------------------------
