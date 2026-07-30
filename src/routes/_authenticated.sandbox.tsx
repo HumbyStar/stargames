@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { FlaskConical, Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, ShieldCheck } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
 import { OnePageBody } from "@/components/one-page";
 import { useSandbox } from "@/lib/use-sandbox";
@@ -78,27 +78,7 @@ function SandboxGate() {
     );
   }
 
-  return (
-    <div className="rounded-2xl border-2 border-dashed border-amber-500/50 bg-amber-500/[0.03] p-3 sm:p-5">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-500/10 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400">
-            <FlaskConical className="size-4" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
-              MODO TESTE — produção intocada
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Importar, editar, apagar e gerar backup aqui não altera nenhum dado real.
-            </p>
-          </div>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => void navigate({ to: "/" })}>
-          Sair do Modo Teste
-        </Button>
-      </div>
-      <OnePageBody />
-    </div>
-  );
+  // O aviso de Modo Teste agora vive na navbar e a moldura tracejada é aplicada
+  // globalmente às seções e modais enquanto o ambiente de teste estiver ativo.
+  return <OnePageBody />;
 }

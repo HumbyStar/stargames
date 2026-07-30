@@ -460,6 +460,44 @@
   content-visibility: visible;
 }
 
+/* ===== Modo Teste (sandbox): moldura tracejada laranja global ===== */
+html[data-env="sandbox"] .one-page-section,
+html[data-env="sandbox"] #clientes {
+  border: 2px dashed color-mix(in oklch, oklch(0.75 0.15 75) 55%, transparent);
+  border-radius: 1rem;
+  background-color: color-mix(in oklch, oklch(0.75 0.15 75) 5%, transparent);
+  margin-bottom: 12px;
+}
+html[data-env="sandbox"] [role="dialog"] .one-page-section,
+html[data-env="sandbox"] [role="alertdialog"] .one-page-section {
+  border: none;
+  background-color: transparent;
+  margin-bottom: 0;
+}
+
+html[data-env="sandbox"] [role="dialog"],
+html[data-env="sandbox"] [role="alertdialog"] {
+  border: 2px dashed color-mix(in oklch, oklch(0.75 0.15 75) 60%, transparent) !important;
+}
+html[data-env="sandbox"] [role="dialog"]::before,
+html[data-env="sandbox"] [role="alertdialog"]::before {
+  content: "MODO TESTE";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in oklch, oklch(0.75 0.15 75) 60%, transparent);
+  background: var(--color-popover, var(--color-background));
+  color: oklch(0.62 0.14 75);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+}
+
 /* Tabela dentro de uma seção one-page:
    - O cabeçalho fica fixo (sticky) ao topo do container de scroll da seção.
    - O conteúdo da seção rola dentro da própria seção, não da página inteira.
