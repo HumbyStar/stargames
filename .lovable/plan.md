@@ -1,35 +1,44 @@
-## Situação
+## Objetivo
 
-O envio do código-fonte para o GitHub não é feito por código dentro do app — é a **sincronização nativa do Lovable**, que só você pode acionar (uma vez). Depois disso, tudo que mudar aqui vira commit no repositório automaticamente, e todo push lá volta pra cá.
+Deixar o card GitHub (Configurações) mais rápido e transparente: lista em cache controlável, erros de token explicados, branch padrão detectada sozinha e acesso rápido ao repositório.
 
-Como você não tem certeza se já está conectado, o caminho é verificar e conectar.
+## 1. Cache de repositórios com expiração
 
-## Passo a passo (você faz, leva ~2 minutos)
+- Guardar a lista carregada em `localStorage` (`stargames.github.repos.cache`) junto com o timestamp e o login da conta conectada.
+- TTL de 30 minutos: ao abrir o card, se o cache for válido e da mesma conta, a lista aparece instantaneamente sem chamar o GitHub.
+- Rodapé indicando a origem: "Lista em cache — atualizada há X min" ou "Lista carregada agora do GitHub".
+- Dois botões: **Atualizar lista** (força busca nova e regrava o cache) e **Limpar cache** (apaga o armazenamento local, zera a lista e mostra o estado "não carregado").
+- Cache invalidado automaticamente quando a conta conectada muda de login.
 
-1. No chat, clique no botão **+** (canto inferior esquerdo do campo de mensagem).
-2. Escolha **GitHub**.
-   - Se aparecer o nome de um repositório, **já está conectado** — anote qual é.
-   - Se aparecer **Connect project**, ainda não está.
-3. Clique em **Connect project** e autorize o app do Lovable no GitHub.
-4. Escolha a conta ou organização onde o repositório deve viver.
-5. Clique em **Create Repository**.
+## 2. Validação de permissões e erros detalhados
 
-Sobre o nome **StarGames.app**: o Lovable cria o repositório com o nome do projeto. Se ele nascer com outro nome, é só renomear depois no GitHub em **Settings → General → Repository name** — a sincronização continua funcionando normalmente.
+- Na resposta do GitHub, ler o cabeçalho `x-oauth-scopes` (tokens clássicos) e expor os escopos no status.
+- Mapear os erros por status com mensagens em português:
+  - **401** — token inválido ou expirado; instrução para gerar outro e salvá-lo novamente.
+  - **403** — sem permissão / rate limit / autorização SSO da organização pendente; se houver `x-ratelimit-remaining: 0`, informar o horário de liberação.
+  - **404** — repositório inexistente ou fora do alcance do token (já implementado; mantém a sugestão de nome parecido).
+- Aviso quando um token clássico não tem o escopo `repo`: alerta explicando que repositórios privados não aparecerão na lista.
+- Aviso de lista incompleta (mais de 5 páginas) com sugestão de usar a busca ou o campo manual.
+- Todos esses avisos ficam em um bloco de diagnóstico dentro do card, não só em toast.
 
-## Depois de conectado
+## 3. Branch default automática
 
-- Cada alteração feita aqui vira um commit no repositório, com autor e data.
-- Para dar acesso a outras pessoas: no GitHub, **Settings → Collaborators** (repo pessoal) ou um **Team** (se for de organização), com papel Read / Write / Admin.
-- Recomendação: se o repositório for da empresa, crie uma **organização** gratuita no GitHub e conecte lá, para o projeto não ficar preso a uma conta pessoal.
+- Cada item da lista já traz `default_branch`; ao selecionar um repositório pelo select, preencher automaticamente o campo Branch com essa branch quando o usuário ainda não tiver digitado uma branch própria.
+- Para repositório digitado manualmente, buscar a branch padrão via status ao validar o repositório.
+- Placeholder passa a mostrar a branch detectada; um botão pequeno "usar padrão" restaura a branch detectada caso o usuário tenha editado.
 
-## O que fica de fora agora
+## 4. Link "Abrir no GitHub"
 
-Conforme você definiu, o card "Conectar conta GitHub" em Configurações (publicação de backups, exports CSV e changelog no repositório) **fica parado por enquanto** — o código já existe no projeto e só precisa do token quando você quiser ativar.
+- Ao lado do select, botão-ícone com link externo apontando para `https://github.com/{owner}/{repo}` (usando `htmlUrl` real quando o status já validou o repositório), abrindo em nova aba.
+- Desabilitado enquanto não houver repositório em formato `dono/repositório` válido.
 
 ## Detalhes técnicos
 
-Nenhuma alteração de código é necessária para esta etapa. `src/lib/github.functions.ts`, `src/lib/github.server.ts` e `src/components/github-card.tsx` permanecem como estão, inertes até que o secret `GITHUB_TOKEN` seja configurado.
+- `src/lib/github.server.ts`: `githubFetch` passa a retornar também os headers relevantes (`x-oauth-scopes`, `x-ratelimit-*`) através de uma variante `githubFetchWithMeta`, sem alterar as chamadas existentes.
+- `src/lib/github.functions.ts`:
+  - `listGithubRepos` retorna `{ repos, complete, total, scopes, warnings }`.
+  - `getGithubStatus` inclui `scopes` e mensagens específicas para 401/403.
+  - Nenhuma mudança de schema no banco; a configuração continua em `app_settings` (`id = 'github'`).
+- `src/components/github-card.tsx`: estados novos para cache (`cachedAt`, origem da lista), diagnóstico e branch detectada; helpers de leitura/escrita no `localStorage` já existentes são estendidos.
 
-## O que eu faço quando você aprovar
-
-Como a ação depende inteiramente do menu do GitHub no chat, aprovar este plano serve para eu acompanhar: me diga o que apareceu no passo 2 e eu te oriento a partir dali (incluindo renomear o repositório para StarGames.app ou ativar o card de publicação).
+Nada muda no fluxo de publicação (backup, exports, changelog) nem no sync nativo do código-fonte.
