@@ -52,6 +52,28 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+const LS_REPO = "stargames.github.repo";
+const LS_BRANCH = "stargames.github.branch";
+
+function readLocalPref(key: string): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeLocalPref(key: string, value: string) {
+  if (typeof window === "undefined") return;
+  try {
+    if (value) window.localStorage.setItem(key, value);
+    else window.localStorage.removeItem(key);
+  } catch {
+    /* storage indisponível */
+  }
+}
+
 export function GithubCard() {
   const [status, setStatus] = useState<GithubStatus | null>(null);
   const [loading, setLoading] = useState(true);
