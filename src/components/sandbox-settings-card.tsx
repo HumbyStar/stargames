@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   FlaskConical,
@@ -45,6 +46,7 @@ const TABLE_LABELS: Record<string, string> = {
 
 export function SandboxSettingsCard() {
   const { state, loading, refresh, setActive } = useSandbox();
+  const navigate = useNavigate();
   const clone = useServerFn(cloneProductionToSandbox);
   const reset = useServerFn(resetSandbox);
 
@@ -183,7 +185,13 @@ export function SandboxSettingsCard() {
 
           <div className="flex flex-wrap gap-2">
             {state.active ? (
-              <Button onClick={() => void toggle(false)} disabled={busy !== null}>
+              <Button
+                onClick={async () => {
+                  await toggle(false);
+                  void navigate({ to: "/" });
+                }}
+                disabled={busy !== null}
+              >
                 {busy === "exit" ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : (
@@ -194,7 +202,7 @@ export function SandboxSettingsCard() {
             ) : (
               <Button onClick={() => setConfirmEnter(true)} disabled={busy !== null || loading}>
                 <LogIn className="size-4" />
-                Entrar no Modo Teste
+                Abrir Modo Teste
               </Button>
             )}
             <Button
