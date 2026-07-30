@@ -341,10 +341,19 @@ export function RestoreBackupModal({
                 {uploadFile ? (
                   <div className="text-[11px] text-muted-foreground">
                     {uploadFile.name} · {(uploadFile.size / 1024 / 1024).toFixed(1)} MB
+                    {uploadedPath ? " · enviado" : uploadPct > 0 ? " · enviando…" : ""}
                   </div>
                 ) : (
                   <div className="text-[11px] text-muted-foreground">
                     Até {MAX_UPLOAD_MB} MB.
+                  </div>
+                )}
+                {uploadPct > 0 && !uploadedPath && (
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full bg-primary transition-all"
+                      style={{ width: `${uploadPct}%` }}
+                    />
                   </div>
                 )}
               </div>
