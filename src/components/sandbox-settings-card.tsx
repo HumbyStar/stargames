@@ -269,13 +269,15 @@ export function SandboxSettingsCard() {
                 Clonar agora
               </Button>
             )}
-            <Button onClick={() => void toggle(true)} disabled={busy !== null}>
-              {busy === "enter" ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <LogIn className="size-4" />
-              )}
-              Entrar
+            <Button
+              onClick={() => {
+                setConfirmEnter(false);
+                void navigate({ to: "/sandbox" });
+              }}
+              disabled={busy !== null}
+            >
+              <LogIn className="size-4" />
+              Abrir página de teste
             </Button>
           </DialogFooter>
         </DialogContent>
