@@ -18,6 +18,8 @@ export interface GithubConfig {
   repoName: string;
   branch: string;
   autoPushBackup: boolean;
+  /** id numérico do repositório no GitHub — imune a renomeação/caixa alta. */
+  repoId: number | null;
 }
 
 export interface GithubStatus {
@@ -27,6 +29,8 @@ export interface GithubStatus {
   account: { login: string; name: string | null; avatarUrl: string | null } | null;
   repo: { fullName: string; private: boolean; htmlUrl: string; defaultBranch: string } | null;
   error: string | null;
+  errorStatus?: number | null;
+  errorHints?: string[];
   scopes?: string[] | null;
   scopeWarning?: string | null;
 }
@@ -36,6 +40,7 @@ const EMPTY_CONFIG: GithubConfig = {
   repoName: "",
   branch: "",
   autoPushBackup: false,
+  repoId: null,
 };
 
 async function assertAdmin(ctx: { supabase: any; userId: string }) {
@@ -60,6 +65,7 @@ async function loadConfig(supabaseAdmin: any): Promise<GithubConfig> {
     repoName: prefs.repoName ?? "",
     branch: prefs.branch ?? "",
     autoPushBackup: Boolean(prefs.autoPushBackup),
+    repoId: typeof prefs.repoId === "number" ? prefs.repoId : null,
   };
 }
 
