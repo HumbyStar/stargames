@@ -1831,6 +1831,8 @@ export const restoreBackup = createServerFn({ method: "POST" })
     ).filter((t) => requested.has(t));
 
     const results: RestoreResult["tablesRestored"] = [];
+    const restoreErrors: NonNullable<RestoreResult["errors"]> = [];
+    const deletedByTable: Record<string, number> = {};
     // Mapa de ids originais -> novos ids (somente sandbox).
     const idMaps: Record<string, Record<string, string>> = {};
 
@@ -1843,6 +1845,15 @@ export const restoreBackup = createServerFn({ method: "POST" })
           ? (CLONE_ORDER.map((t) => t.name) as string[]).filter((t) => !GLOBAL_TABLES.has(t))
           : tablesToProcess;
       for (const table of [...tablesToWipe].reverse()) {
+        // Conta antes de apagar para relatar quantos registros saíram.
+        try {
+          let counter = (supabaseAdmin as any).from(table).select("id", { count: "exact", head: true });
+          if (ENV_SCOPED_TABLES.has(table)) counter = counter.eq("env", targetEnv);
+          const { count } = await counter;
+          deletedByTable[table] = count ?? 0;
+        } catch {
+          deletedByTable[table] = 0;
+        }
         let query = (supabaseAdmin as any).from(table).delete();
         // Exclusão SEMPRE escopada ao ambiente de destino.
         if (ENV_SCOPED_TABLES.has(table)) {
@@ -1858,6 +1869,8 @@ export const restoreBackup = createServerFn({ method: "POST" })
         const { error } = await query.neq("id" as any, "00000000-0000-0000-0000-000000000000");
         if (error) {
           console.warn(`[restore] delete ${table}:`, error.message);
+          deletedByTable[table] = 0;
+          restoreErrors.push({ table, stage: "limpeza", message: error.message });
         }
       }
     }
