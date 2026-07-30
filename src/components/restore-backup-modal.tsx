@@ -44,6 +44,7 @@ import {
   type ValidationReport,
 } from "@/lib/backup.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { suspendRealtimeRefresh } from "@/lib/db-sync";
 import { formatDateBR } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -326,6 +327,10 @@ export function RestoreBackupModal({
       sandboxTarget ? "Zerando ambiente de teste e restaurando…" : "Restaurando backup…",
       { id: "restore" },
     );
+    // Enquanto o backend grava milhares de linhas, o Realtime emitiria uma
+    // rajada de eventos e cada um recarregaria o snapshot inteiro, travando
+    // a UI. Suspendemos os refreshes e fazemos UM único ao final.
+    const resumeRealtime = suspendRealtimeRefresh();
     try {
       const res = await restore({
         data: {
@@ -367,6 +372,7 @@ export function RestoreBackupModal({
       });
       toast.error(err?.message ?? "Falha ao restaurar.", { id: "restore" });
     } finally {
+      resumeRealtime();
       setLoading(false);
     }
   };
