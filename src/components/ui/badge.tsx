@@ -26,7 +26,11 @@ export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {}
 
 function Badge({ className, variant, ...props }: BadgeProps) {
-  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
+  // `translate="no"` evita que tradutores automáticos substituam os nós de
+  // texto internos e quebrem a reconciliação do React (insertBefore).
+  return (
+    <div translate="no" className={cn(badgeVariants({ variant }), className)} {...props} />
+  );
 }
 
 export { Badge, badgeVariants };

@@ -8,6 +8,7 @@ interface Props {
 interface State {
   error: Error | null;
   info: string | null;
+  remountKey: number;
 }
 
 function isRenderLoop(error: Error | null): boolean {
@@ -15,11 +16,25 @@ function isRenderLoop(error: Error | null): boolean {
 }
 
 /**
+ * Erros de DOM causados por tradutores automáticos / extensões que reescrevem
+ * nós de texto sob a árvore do React.
+ */
+function isDomMutationError(error: Error | null): boolean {
+  return Boolean(
+    error?.message &&
+      /insertBefore|removeChild|appendChild|not a child of this node|NotFoundError/i.test(
+        error.message,
+      ),
+  );
+}
+
+/**
  * Captura erros de render em qualquer ponto da árvore (inclusive loops de
  * atualização) e mostra uma tela amigável em vez da página em branco.
  */
 export class GlobalErrorBoundary extends Component<Props, State> {
-  state: State = { error: null, info: null };
+  state: State = { error: null, info: null, remountKey: 0 };
+  private autoRecoveries = 0;
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     return { error };
@@ -32,6 +47,19 @@ export class GlobalErrorBoundary extends Component<Props, State> {
       reportLovableError(error, { boundary: "global_error_boundary" });
     } catch {
       // relatório é best-effort
+    }
+
+    // Erros provocados por tradução automática do navegador: remonta a
+    // subárvore uma única vez em vez de mostrar a tela de falha.
+    if (isDomMutationError(error) && this.autoRecoveries < 1) {
+      this.autoRecoveries += 1;
+      setTimeout(() => {
+        this.setState((prev) => ({
+          error: null,
+          info: null,
+          remountKey: prev.remountKey + 1,
+        }));
+      }, 0);
     }
   }
 
@@ -57,8 +85,10 @@ export class GlobalErrorBoundary extends Component<Props, State> {
   };
 
   render() {
-    const { error } = this.state;
-    if (!error) return this.props.children;
+    const { error, remountKey } = this.state;
+    if (!error) {
+      return <div key={remountKey} className="contents">{this.props.children}</div>;
+    }
 
     const loop = isRenderLoop(error);
 
