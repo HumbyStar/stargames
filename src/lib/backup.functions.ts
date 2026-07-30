@@ -1665,7 +1665,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
     // REPLACE: apaga em ordem reversa (dependentes primeiro)
     if (data.mode === "replace") {
       for (const table of [...tablesToProcess].reverse()) {
-        let query = supabaseAdmin.from(table).delete();
+        let query = (supabaseAdmin as any).from(table).delete();
         // Exclusão SEMPRE escopada ao ambiente de destino.
         if (ENV_SCOPED_TABLES.has(table)) {
           query = query.eq("env" as any, targetEnv);
@@ -1729,8 +1729,8 @@ export const restoreBackup = createServerFn({ method: "POST" })
       for (let i = 0; i < payload.length; i += CHUNK) {
         const chunk = payload.slice(i, i + CHUNK);
         const { error } = useInsert
-          ? await supabaseAdmin.from(table).insert(chunk as any)
-          : await supabaseAdmin.from(table).upsert(chunk as any, {
+          ? await (supabaseAdmin as any).from(table).insert(chunk as any)
+          : await (supabaseAdmin as any).from(table).upsert(chunk as any, {
               onConflict: "id",
               ignoreDuplicates: false,
             } as any);
