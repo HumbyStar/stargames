@@ -224,6 +224,12 @@ interface SettingChange {
 const SETTINGS_IGNORED = new Set([
   "__migratedFromLocalStorage_v1",
   "mgmv.lastUpdatedIds",
+  // Termos digitados em campos de busca/pesquisa não são alterações de
+  // configuração relevantes para o acompanhamento — geram ruído.
+  "search",
+  "searchTerm",
+  "query",
+  "globalSearch",
 ]);
 
 const SECTION_LABELS: Record<string, string> = {
