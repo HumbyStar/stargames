@@ -136,6 +136,7 @@ export function GithubCard() {
   const runAction = async (key: string, fn: () => Promise<void>) => {
     setBusy(key);
     try {
+      await ensureRepoSaved();
       await fn();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Falha ao publicar no GitHub");
