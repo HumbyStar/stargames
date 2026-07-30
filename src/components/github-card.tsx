@@ -11,6 +11,7 @@ import {
   Loader2,
   RefreshCw,
   Save,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,11 +52,37 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+const LS_REPO = "stargames.github.repo";
+const LS_BRANCH = "stargames.github.branch";
+
+function readLocalPref(key: string): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeLocalPref(key: string, value: string) {
+  if (typeof window === "undefined") return;
+  try {
+    if (value) window.localStorage.setItem(key, value);
+    else window.localStorage.removeItem(key);
+  } catch {
+    /* storage indisponível */
+  }
+}
+
 export function GithubCard() {
   const [status, setStatus] = useState<GithubStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [repos, setRepos] = useState<RepoOption[]>([]);
   const [reposLoading, setReposLoading] = useState(false);
+  const [reposLoaded, setReposLoaded] = useState(false);
+  const [reposComplete, setReposComplete] = useState(true);
+  const [reposError, setReposError] = useState<string | null>(null);
+  const [repoSearch, setRepoSearch] = useState("");
   const [selectedRepo, setSelectedRepo] = useState("");
   const [branch, setBranch] = useState("");
   const [autoPushBackup, setAutoPushBackup] = useState(false);
@@ -68,12 +95,15 @@ export function GithubCard() {
     try {
       const s = await getGithubStatus();
       setStatus(s);
-      setSelectedRepo(
+      const savedRepo =
         s.config.repoOwner && s.config.repoName
           ? `${s.config.repoOwner}/${s.config.repoName}`
-          : "",
-      );
-      setBranch(s.config.branch ?? "");
+          : "";
+      // Restaura a última escolha local quando ainda não há config salva.
+      const localRepo = readLocalPref(LS_REPO);
+      const localBranch = readLocalPref(LS_BRANCH);
+      setSelectedRepo(savedRepo || localRepo || "");
+      setBranch(s.config.branch || (savedRepo ? "" : localBranch) || "");
       setAutoPushBackup(s.config.autoPushBackup);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Falha ao carregar o status do GitHub");
@@ -89,16 +119,26 @@ export function GithubCard() {
 
   const loadRepos = async (silent = false) => {
     setReposLoading(true);
+    setReposError(null);
     try {
-      const list = await listGithubRepos();
-      setRepos(list);
-      if (list.length === 0 && !silent) {
-        toast.info("Nenhum repositório acessível com esse token.");
+      const result = await listGithubRepos();
+      setRepos(result.repos);
+      setReposComplete(result.complete);
+      setReposLoaded(true);
+      if (result.repos.length === 0) {
+        setReposError(
+          "Nenhum repositório acessível com esse token. Verifique se o token tem o escopo 'repo' (clássico) ou permissão de leitura em Contents/Metadata (fine-grained), se ele não expirou e se a organização autorizou o token via SSO.",
+        );
+      } else if (!silent) {
+        toast.success(
+          `${result.repos.length} repositório(s) carregados${result.complete ? "" : " (lista parcial)"}.`,
+        );
       }
     } catch (err) {
-      if (!silent) {
-        toast.error(err instanceof Error ? err.message : "Falha ao listar repositórios");
-      }
+      const message = err instanceof Error ? err.message : "Falha ao listar repositórios";
+      setReposError(message);
+      setReposLoaded(true);
+      if (!silent) toast.error(message);
     } finally {
       setReposLoading(false);
     }
@@ -122,6 +162,20 @@ export function GithubCard() {
     }
     return repos;
   }, [repos, selectedRepo]);
+
+  const filteredRepoOptions = useMemo(() => {
+    const term = repoSearch.trim().toLowerCase();
+    if (!term) return repoOptions;
+    return repoOptions.filter((r) => r.fullName.toLowerCase().includes(term));
+  }, [repoOptions, repoSearch]);
+
+  // Persiste localmente a última escolha para não precisar selecionar de novo.
+  useEffect(() => {
+    writeLocalPref(LS_REPO, selectedRepo);
+  }, [selectedRepo]);
+  useEffect(() => {
+    writeLocalPref(LS_BRANCH, branch);
+  }, [branch]);
 
   const handleSave = async () => {
     if (!/^[^/\s]+\/[^/\s]+$/.test(selectedRepo.trim())) {
@@ -315,14 +369,44 @@ export function GithubCard() {
             <div className="flex gap-2">
               <Select value={selectedRepo} onValueChange={setSelectedRepo}>
                 <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="Selecione um repositório" />
+                  <SelectValue
+                    placeholder={
+                      reposLoading
+                        ? "Carregando repositórios..."
+                        : repoOptions.length === 0
+                          ? "Nenhum repositório disponível"
+                          : "Selecione um repositório"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  {repoOptions.map((r) => (
+                  <div className="sticky top-0 z-10 bg-popover p-2">
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        value={repoSearch}
+                        onChange={(e) => setRepoSearch(e.target.value)}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        placeholder="Buscar repositório..."
+                        className="h-8 pl-7"
+                      />
+                    </div>
+                  </div>
+                  {reposLoading && (
+                    <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando lista...
+                    </div>
+                  )}
+                  {filteredRepoOptions.map((r) => (
                     <SelectItem key={r.fullName} value={r.fullName}>
                       {r.fullName}
                     </SelectItem>
                   ))}
+                  {!reposLoading && filteredRepoOptions.length === 0 && (
+                    <div className="px-3 py-2 text-xs text-muted-foreground">
+                      Nenhum repositório encontrado.
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
               <Button
@@ -331,12 +415,28 @@ export function GithubCard() {
                 disabled={reposLoading}
               >
                 {reposLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
-                  <RefreshCw className="h-4 w-4" />
+                  <RefreshCw className="mr-2 h-4 w-4" />
                 )}
+                Atualizar lista
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              {reposLoading
+                ? "Buscando repositórios no GitHub..."
+                : reposLoaded
+                  ? reposComplete
+                    ? `${repos.length} repositório(s) — lista completa carregada.`
+                    : `${repos.length} repositório(s) carregados — pode haver mais páginas, clique em "Atualizar lista".`
+                  : "A lista carrega automaticamente após validar o token."}
+            </p>
+            {reposError && (
+              <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{reposError}</span>
+              </div>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="gh-branch">Branch (opcional)</Label>
