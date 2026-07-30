@@ -87,18 +87,30 @@ export function GithubCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadRepos = async () => {
+  const loadRepos = async (silent = false) => {
     setReposLoading(true);
     try {
       const list = await listGithubRepos();
       setRepos(list);
-      if (list.length === 0) toast.info("Nenhum repositório acessível com esse token.");
+      if (list.length === 0 && !silent) {
+        toast.info("Nenhum repositório acessível com esse token.");
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Falha ao listar repositórios");
+      if (!silent) {
+        toast.error(err instanceof Error ? err.message : "Falha ao listar repositórios");
+      }
     } finally {
       setReposLoading(false);
     }
   };
+
+  // Carrega a lista de repositórios assim que a conexão estiver validada.
+  useEffect(() => {
+    if (status?.connected && repos.length === 0 && !reposLoading) {
+      void loadRepos(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status?.connected]);
 
   const repoOptions = useMemo(() => {
     if (selectedRepo && !repos.some((r) => r.fullName === selectedRepo)) {
