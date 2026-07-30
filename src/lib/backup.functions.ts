@@ -2170,3 +2170,57 @@ export const listSandboxImportAudit = createServerFn({ method: "GET" })
       productionUntouched: r.production_untouched,
     }));
   });
+
+/** Snapshot das contagens de produção — usado antes de uma importação em teste. */
+export const snapshotProductionCounts = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<Record<string, number>> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const env = await resolveTargetEnv(supabaseAdmin, context.userId);
+    if (env !== "sandbox") return {};
+    return countProductionRows(supabaseAdmin);
+  });
+
+const recordSandboxImportSchema = z.object({
+  source: z.string(),
+  fileName: z.string().nullable().optional(),
+  mode: z.string().default("import"),
+  tables: z.array(z.string()).default([]),
+  rowCounts: z.record(z.string(), z.number()).default({}),
+  durationMs: z.number().default(0),
+  error: z.string().nullable().optional(),
+  productionBefore: z.record(z.string(), z.number()).default({}),
+});
+
+/**
+ * Registra uma importação comum (lista/ZIP) feita no Modo Teste e confere se as
+ * contagens de produção continuam idênticas às do início da operação.
+ */
+export const recordSandboxImport = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => recordSandboxImportSchema.parse(d))
+  .handler(async ({ data, context }): Promise<{ recorded: boolean; productionUntouched: boolean }> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const env = await resolveTargetEnv(supabaseAdmin, context.userId);
+    if (env !== "sandbox") return { recorded: false, productionUntouched: true };
+
+    const productionAfter = await countProductionRows(supabaseAdmin);
+    const before = Object.keys(data.productionBefore).length
+      ? data.productionBefore
+      : productionAfter;
+    const untouched = await logSandboxImport(supabaseAdmin, {
+      userId: context.userId,
+      userEmail: (context as any)?.claims?.email ?? null,
+      source: data.source,
+      fileName: data.fileName ?? null,
+      mode: data.mode,
+      tables: data.tables,
+      rowCounts: data.rowCounts,
+      durationMs: data.durationMs,
+      result: data.error ? "error" : "success",
+      error: data.error ?? null,
+      productionBefore: before,
+      productionAfter,
+    });
+    return { recorded: true, productionUntouched: untouched };
+  });
