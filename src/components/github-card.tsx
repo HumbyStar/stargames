@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Save,
   Search,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +55,53 @@ function formatBytes(bytes: number) {
 
 const LS_REPO = "stargames.github.repo";
 const LS_BRANCH = "stargames.github.branch";
+const LS_REPOS_CACHE = "stargames.github.repos.cache";
+const CACHE_TTL_MS = 30 * 60 * 1000;
+
+type ReposCache = {
+  login: string;
+  savedAt: number;
+  complete: boolean;
+  repos: RepoOption[];
+};
+
+function readReposCache(): ReposCache | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(LS_REPOS_CACHE);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ReposCache;
+    if (!Array.isArray(parsed?.repos) || typeof parsed.savedAt !== "number") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeReposCache(cache: ReposCache) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LS_REPOS_CACHE, JSON.stringify(cache));
+  } catch {
+    /* storage indisponível */
+  }
+}
+
+function clearReposCache() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(LS_REPOS_CACHE);
+  } catch {
+    /* storage indisponível */
+  }
+}
+
+function minutesAgo(ts: number) {
+  const mins = Math.max(0, Math.round((Date.now() - ts) / 60000));
+  if (mins < 1) return "agora mesmo";
+  if (mins === 1) return "há 1 minuto";
+  return `há ${mins} minutos`;
+}
 
 function readLocalPref(key: string): string {
   if (typeof window === "undefined") return "";
@@ -85,6 +133,9 @@ export function GithubCard() {
   const [repoSearch, setRepoSearch] = useState("");
   const [selectedRepo, setSelectedRepo] = useState("");
   const [branch, setBranch] = useState("");
+  const [reposWarnings, setReposWarnings] = useState<string[]>([]);
+  const [cacheInfo, setCacheInfo] = useState<{ savedAt: number; fromCache: boolean } | null>(null);
+  const [branchTouched, setBranchTouched] = useState(false);
   const [autoPushBackup, setAutoPushBackup] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -103,7 +154,9 @@ export function GithubCard() {
       const localRepo = readLocalPref(LS_REPO);
       const localBranch = readLocalPref(LS_BRANCH);
       setSelectedRepo(savedRepo || localRepo || "");
-      setBranch(s.config.branch || (savedRepo ? "" : localBranch) || "");
+      const restoredBranch = s.config.branch || (savedRepo ? "" : localBranch) || "";
+      setBranch(restoredBranch);
+      setBranchTouched(Boolean(restoredBranch));
       setAutoPushBackup(s.config.autoPushBackup);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Falha ao carregar o status do GitHub");
@@ -117,7 +170,24 @@ export function GithubCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadRepos = async (silent = false) => {
+  const loadRepos = async (silent = false, force = false) => {
+    const login = status?.account?.login ?? "";
+    if (!force) {
+      const cache = readReposCache();
+      if (
+        cache &&
+        cache.repos.length > 0 &&
+        Date.now() - cache.savedAt < CACHE_TTL_MS &&
+        (!login || cache.login === login)
+      ) {
+        setRepos(cache.repos);
+        setReposComplete(cache.complete);
+        setReposLoaded(true);
+        setReposError(null);
+        setCacheInfo({ savedAt: cache.savedAt, fromCache: true });
+        return;
+      }
+    }
     setReposLoading(true);
     setReposError(null);
     try {
@@ -125,6 +195,12 @@ export function GithubCard() {
       setRepos(result.repos);
       setReposComplete(result.complete);
       setReposLoaded(true);
+      setReposWarnings(result.warnings ?? []);
+      const savedAt = Date.now();
+      setCacheInfo({ savedAt, fromCache: false });
+      if (result.repos.length > 0) {
+        writeReposCache({ login, savedAt, complete: result.complete, repos: result.repos });
+      }
       if (result.repos.length === 0) {
         setReposError(
           "Nenhum repositório acessível com esse token. Verifique se o token tem o escopo 'repo' (clássico) ou permissão de leitura em Contents/Metadata (fine-grained), se ele não expirou e se a organização autorizou o token via SSO.",
@@ -143,6 +219,37 @@ export function GithubCard() {
       setReposLoading(false);
     }
   };
+
+  const handleClearCache = () => {
+    clearReposCache();
+    setRepos([]);
+    setReposLoaded(false);
+    setReposError(null);
+    setReposWarnings([]);
+    setCacheInfo(null);
+    toast.success("Cache de repositórios limpo. Clique em \"Atualizar lista\" para recarregar.");
+  };
+
+  // Branch padrão detectada para o repositório atual.
+  const detectedBranch = useMemo(() => {
+    if (status?.repo && status.repo.fullName === selectedRepo) return status.repo.defaultBranch;
+    return repos.find((r) => r.fullName === selectedRepo)?.defaultBranch ?? "";
+  }, [status?.repo, repos, selectedRepo]);
+
+  // Pré-seleciona a branch padrão enquanto o usuário não digitar a sua.
+  useEffect(() => {
+    if (!branchTouched && detectedBranch && branch !== detectedBranch) {
+      setBranch(detectedBranch);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detectedBranch, branchTouched]);
+
+  const repoUrl = useMemo(() => {
+    if (status?.repo && status.repo.fullName === selectedRepo) return status.repo.htmlUrl;
+    return /^[^/\s]+\/[^/\s]+$/.test(selectedRepo.trim())
+      ? `https://github.com/${selectedRepo.trim()}`
+      : null;
+  }, [status?.repo, selectedRepo]);
 
   // Carrega a lista de repositórios assim que a conexão estiver validada.
   useEffect(() => {
@@ -358,6 +465,17 @@ export function GithubCard() {
           {status?.hasToken && status.connected && status.error && (
             <p className="mt-3 text-sm text-destructive">{status.error}</p>
           )}
+          {status?.connected && status.scopeWarning && (
+            <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{status.scopeWarning}</span>
+            </div>
+          )}
+          {status?.connected && status.scopes && status.scopes.length > 0 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Escopos do token: {status.scopes.join(", ")}
+            </p>
+          )}
         </div>
       </Card>
 
@@ -411,7 +529,7 @@ export function GithubCard() {
               </Select>
               <Button
                 variant="outline"
-                onClick={() => void loadRepos()}
+                onClick={() => void loadRepos(false, true)}
                 disabled={reposLoading}
               >
                 {reposLoading ? (
@@ -420,6 +538,24 @@ export function GithubCard() {
                   <RefreshCw className="mr-2 h-4 w-4" />
                 )}
                 Atualizar lista
+              </Button>
+              <Button variant="ghost" onClick={handleClearCache} disabled={reposLoading}>
+                <Trash2 className="mr-2 h-4 w-4" /> Limpar cache
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                asChild={Boolean(repoUrl)}
+                disabled={!repoUrl}
+                title="Abrir no GitHub"
+              >
+                {repoUrl ? (
+                  <a href={repoUrl} target="_blank" rel="noreferrer" aria-label="Abrir no GitHub">
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                ) : (
+                  <ExternalLink className="h-4 w-4" />
+                )}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -430,7 +566,21 @@ export function GithubCard() {
                     ? `${repos.length} repositório(s) — lista completa carregada.`
                     : `${repos.length} repositório(s) carregados — pode haver mais páginas, clique em "Atualizar lista".`
                   : "A lista carrega automaticamente após validar o token."}
+              {cacheInfo &&
+                (cacheInfo.fromCache
+                  ? ` Lista em cache — atualizada ${minutesAgo(cacheInfo.savedAt)}.`
+                  : " Lista carregada agora do GitHub.")}
             </p>
+            {reposWarnings.length > 0 && (
+              <div className="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600 dark:text-amber-400">
+                {reposWarnings.map((w) => (
+                  <div key={w} className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>{w}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             {reposError && (
               <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -443,9 +593,29 @@ export function GithubCard() {
             <Input
               id="gh-branch"
               value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-              placeholder="padrão do repositório"
+              onChange={(e) => {
+                setBranchTouched(true);
+                setBranch(e.target.value);
+              }}
+              placeholder={detectedBranch || "padrão do repositório"}
             />
+            {detectedBranch && (
+              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                Branch padrão detectada: <code>{detectedBranch}</code>
+                {branch !== detectedBranch && (
+                  <button
+                    type="button"
+                    className="text-primary underline-offset-4 hover:underline"
+                    onClick={() => {
+                      setBranch(detectedBranch);
+                      setBranchTouched(false);
+                    }}
+                  >
+                    usar padrão
+                  </button>
+                )}
+              </p>
+            )}
           </div>
         </div>
 

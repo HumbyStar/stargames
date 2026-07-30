@@ -27,6 +27,8 @@ export interface GithubStatus {
   account: { login: string; name: string | null; avatarUrl: string | null } | null;
   repo: { fullName: string; private: boolean; htmlUrl: string; defaultBranch: string } | null;
   error: string | null;
+  scopes?: string[] | null;
+  scopeWarning?: string | null;
 }
 
 const EMPTY_CONFIG: GithubConfig = {
@@ -74,6 +76,45 @@ function stamp(date = new Date()): string {
   return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}-${p(date.getHours())}${p(date.getMinutes())}`;
 }
 
+/** Traduz erros da API do GitHub em mensagens acionáveis em português. */
+function describeGithubError(err: unknown): string {
+  const e = err as Error & { status?: number; meta?: { rateRemaining: number | null; rateResetAt: string | null } };
+  const raw = e?.message ?? "Falha na comunicação com o GitHub";
+  const status = e?.status;
+  if (status === 401) {
+    return (
+      "401 — token inválido, revogado ou expirado. Gere um novo Personal Access Token no GitHub " +
+      "(Settings → Developer settings → Tokens) e salve novamente o secret GITHUB_TOKEN."
+    );
+  }
+  if (status === 403) {
+    const rate = e?.meta;
+    if (rate && rate.rateRemaining === 0) {
+      const when = rate.rateResetAt ? new Date(rate.rateResetAt).toLocaleTimeString("pt-BR") : "em breve";
+      return `403 — limite de requisições do GitHub atingido. O acesso é liberado por volta de ${when}.`;
+    }
+    return (
+      "403 — o token não tem permissão para esta operação. Verifique o escopo 'repo' (token clássico) " +
+      "ou as permissões de Contents/Metadata (fine-grained) e, em repositórios de organização, autorize o token via SSO."
+    );
+  }
+  return raw;
+}
+
+function scopeWarningFor(scopes: string[] | null | undefined): string | null {
+  if (!scopes) return null; // fine-grained/GitHub App não expõe escopos
+  if (scopes.length === 0) {
+    return "O token não possui nenhum escopo — repositórios privados não serão listados nem aceitarão publicação.";
+  }
+  if (!scopes.includes("repo") && !scopes.includes("public_repo")) {
+    return `O token tem apenas os escopos: ${scopes.join(", ")}. Adicione o escopo "repo" para acessar repositórios privados.`;
+  }
+  if (!scopes.includes("repo") && scopes.includes("public_repo")) {
+    return "O token só tem 'public_repo' — repositórios privados não aparecerão na lista.";
+  }
+  return null;
+}
+
 export const getGithubStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<GithubStatus> => {
@@ -85,9 +126,11 @@ export const getGithubStatus = createServerFn({ method: "GET" })
       return { hasToken, config, connected: false, account: null, repo: null, error: null };
     }
 
-    const { githubFetch } = await import("./github.server");
+    const { githubFetch, githubFetchWithMeta } = await import("./github.server");
     try {
-      const me = await githubFetch("/user");
+      const { data: me, meta } = await githubFetchWithMeta("/user");
+      const scopes = meta.scopes;
+      const scopeWarning = scopeWarningFor(scopes);
       let repo: GithubStatus["repo"] = null;
       if (config.repoOwner && config.repoName) {
         try {
@@ -99,10 +142,10 @@ export const getGithubStatus = createServerFn({ method: "GET" })
             defaultBranch: r.default_branch,
           };
         } catch (err) {
-          const raw = err instanceof Error ? err.message : "Repositório inacessível";
+          const raw = describeGithubError(err);
           const target = `${config.repoOwner}/${config.repoName}`;
           let message = raw;
-          if (raw.includes("404")) {
+          if ((err as { status?: number })?.status === 404) {
             // 404 no GitHub também significa "existe, mas o token não enxerga".
             let suggestion = "";
             try {
@@ -132,6 +175,8 @@ export const getGithubStatus = createServerFn({ method: "GET" })
             account: { login: me.login, name: me.name ?? null, avatarUrl: me.avatar_url ?? null },
             repo: null,
             error: message,
+            scopes,
+            scopeWarning,
           };
         }
       }
@@ -142,6 +187,8 @@ export const getGithubStatus = createServerFn({ method: "GET" })
         account: { login: me.login, name: me.name ?? null, avatarUrl: me.avatar_url ?? null },
         repo,
         error: null,
+        scopes,
+        scopeWarning,
       };
     } catch (err) {
       return {
@@ -150,7 +197,9 @@ export const getGithubStatus = createServerFn({ method: "GET" })
         connected: false,
         account: null,
         repo: null,
-        error: err instanceof Error ? err.message : "Falha ao validar o token",
+        error: describeGithubError(err),
+        scopes: null,
+        scopeWarning: null,
       };
     }
   });
@@ -185,21 +234,27 @@ export const listGithubRepos = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context);
-    const { githubFetch } = await import("./github.server");
+    const { githubFetch, githubFetchWithMeta } = await import("./github.server");
     const collected: any[] = [];
     let complete = true;
     let pagesLoaded = 0;
+    let scopes: string[] | null = null;
 
     // 1) repositórios do usuário (todas as páginas, até 500)
-    for (let page = 1; page <= 5; page++) {
-      const batch = await githubFetch(
-        `/user/repos?per_page=100&page=${page}&sort=updated&affiliation=owner,collaborator,organization_member`,
-      );
-      if (!Array.isArray(batch) || batch.length === 0) break;
-      collected.push(...batch);
-      pagesLoaded = page;
-      if (batch.length < 100) break;
-      if (page === 5) complete = false; // pode haver mais páginas
+    try {
+      for (let page = 1; page <= 5; page++) {
+        const { data: batch, meta } = await githubFetchWithMeta(
+          `/user/repos?per_page=100&page=${page}&sort=updated&affiliation=owner,collaborator,organization_member`,
+        );
+        if (page === 1) scopes = meta.scopes;
+        if (!Array.isArray(batch) || batch.length === 0) break;
+        collected.push(...batch);
+        pagesLoaded = page;
+        if (batch.length < 100) break;
+        if (page === 5) complete = false; // pode haver mais páginas
+      }
+    } catch (err) {
+      throw new Error(describeGithubError(err));
     }
 
     // 2) fallback: tokens de GitHub App só enxergam repos via installations
@@ -224,7 +279,16 @@ export const listGithubRepos = createServerFn({ method: "GET" })
       updatedAt: (r.updated_at as string) ?? null,
     }));
 
-    return { repos, complete, pagesLoaded, total: repos.length };
+    const warnings: string[] = [];
+    const scopeWarning = scopeWarningFor(scopes);
+    if (scopeWarning) warnings.push(scopeWarning);
+    if (!complete) {
+      warnings.push(
+        "A lista pode estar incompleta (mais de 500 repositórios). Use a busca ou digite o repositório manualmente.",
+      );
+    }
+
+    return { repos, complete, pagesLoaded, total: repos.length, scopes, warnings };
   });
 
 export const pushBackupToGithub = createServerFn({ method: "POST" })

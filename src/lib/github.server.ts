@@ -13,10 +13,17 @@ export function getGithubToken(): string {
   return token;
 }
 
-export async function githubFetch(
+export interface GithubMeta {
+  scopes: string[] | null;
+  rateRemaining: number | null;
+  rateResetAt: string | null;
+  status: number;
+}
+
+export async function githubFetchWithMeta(
   path: string,
   init: RequestInit & { token?: string } = {},
-): Promise<any> {
+): Promise<{ data: any; meta: GithubMeta }> {
   const token = init.token ?? getGithubToken();
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/vnd.github+json");
@@ -27,6 +34,21 @@ export async function githubFetch(
   }
   const res = await fetch(`${GITHUB_API}${path}`, { ...init, headers });
   const text = await res.text();
+  const scopesHeader = res.headers.get("x-oauth-scopes");
+  const remaining = res.headers.get("x-ratelimit-remaining");
+  const reset = res.headers.get("x-ratelimit-reset");
+  const meta: GithubMeta = {
+    scopes:
+      scopesHeader === null
+        ? null
+        : scopesHeader
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+    rateRemaining: remaining === null ? null : Number(remaining),
+    rateResetAt: reset ? new Date(Number(reset) * 1000).toISOString() : null,
+    status: res.status,
+  };
   if (!res.ok) {
     console.error(`[github] ${init.method ?? "GET"} ${path} -> ${res.status}: ${text}`);
     let message = text;
@@ -36,9 +58,23 @@ export async function githubFetch(
     } catch {
       /* corpo não-JSON */
     }
-    throw new Error(`GitHub respondeu ${res.status}: ${message}`);
+    const error = new Error(`GitHub respondeu ${res.status}: ${message}`) as Error & {
+      status?: number;
+      meta?: GithubMeta;
+    };
+    error.status = res.status;
+    error.meta = meta;
+    throw error;
   }
-  return text ? JSON.parse(text) : null;
+  return { data: text ? JSON.parse(text) : null, meta };
+}
+
+export async function githubFetch(
+  path: string,
+  init: RequestInit & { token?: string } = {},
+): Promise<any> {
+  const { data } = await githubFetchWithMeta(path, init);
+  return data;
 }
 
 /** Converte bytes em base64 sem estourar a pilha com arquivos grandes. */
