@@ -1833,6 +1833,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
     const results: RestoreResult["tablesRestored"] = [];
     const restoreErrors: NonNullable<RestoreResult["errors"]> = [];
     const deletedByTable: Record<string, number> = {};
+    const expectedByTable: Record<string, number> = {};
     // Mapa de ids originais -> novos ids (somente sandbox).
     const idMaps: Record<string, Record<string, string>> = {};
 
