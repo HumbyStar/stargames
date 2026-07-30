@@ -225,37 +225,6 @@ export function RestoreBackupModal({
     URL.revokeObjectURL(url);
   };
 
-  const legacyApply = async () => {
-    if (mode === "replace" && confirmText !== "REPLACE") {
-      toast.error('Digite "REPLACE" para confirmar a substituição.');
-      return;
-    }
-    setLoading(true);
-    toast.loading("Restaurando backup…", { id: "restore" });
-    try {
-      const res = await restore({
-        data: {
-          ...(source === "existing"
-            ? { backupId }
-            : { uploadedZipBase64: uploadedBase64 }),
-          mode,
-          tables: Array.from(selectedTables),
-          includeStorage,
-          confirmReplace: mode === "replace" ? confirmText : undefined,
-        },
-      });
-      setResult(res);
-      setStep("done");
-      toast.success("Restauração concluída.", { id: "restore" });
-      // Dispara reset em cache/realtime.
-      window.dispatchEvent(new CustomEvent("app:reset"));
-    } catch (err: any) {
-      toast.error(err?.message ?? "Falha ao restaurar.", { id: "restore" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const toggleTable = (t: string) => {
     setSelectedTables((prev) => {
       const next = new Set(prev);
