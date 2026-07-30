@@ -188,6 +188,8 @@ export function RestoreBackupModal({
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<RestoreResult | null>(null);
   const [report, setReport] = useState<ValidationReport | null>(null);
+  const [precheck, setPrecheck] = useState<ZipPrecheck | null>(null);
+  const [errorInfo, setErrorInfo] = useState<ErrorInfo | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -204,6 +206,8 @@ export function RestoreBackupModal({
     setConfirmText("");
     setResult(null);
     setReport(null);
+    setPrecheck(null);
+    setErrorInfo(null);
     void list().then((rows) => {
       const completed = rows.filter((r) => r.status === "completed");
       setBackups(completed);
@@ -219,6 +223,8 @@ export function RestoreBackupModal({
   const handleFile = async (file: File | null) => {
     setUploadFile(file);
     setUploadPct(0);
+    setPrecheck(null);
+    setErrorInfo(null);
     if (!file) {
       setUploadedPath("");
       return;
@@ -226,12 +232,32 @@ export function RestoreBackupModal({
     if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
       setUploadFile(null);
       setUploadedPath("");
-      toast.error(`Arquivo maior que ${MAX_UPLOAD_MB} MB.`);
+      setErrorInfo({
+        stage: "Seleção do arquivo",
+        message: `Arquivo maior que ${MAX_UPLOAD_MB} MB.`,
+        hint: "Gere um backup mais recente ou restaure a partir de um backup salvo no sistema.",
+        file: file.name,
+      });
       return;
     }
     setLoading(true);
-    toast.loading("Enviando arquivo…", { id: "upload-zip" });
+    toast.loading("Verificando o arquivo…", { id: "upload-zip" });
     try {
+      // 1) Pré-validação local: estrutura e compatibilidade antes de subir.
+      const check = await precheckZip(file);
+      setPrecheck(check);
+      if (check.errors.length > 0) {
+        setUploadedPath("");
+        setErrorInfo({
+          stage: "Pré-validação do ZIP",
+          message: check.errors.join(" "),
+          hint: "O ZIP precisa conter manifest.json na raiz e a pasta database/data com os arquivos .jsonl gerados pelo próprio sistema.",
+          file: file.name,
+        });
+        toast.error("Arquivo reprovado na pré-validação.", { id: "upload-zip" });
+        return;
+      }
+      toast.loading("Enviando arquivo…", { id: "upload-zip" });
       // Envio direto ao armazenamento: o ZIP não passa pela requisição do app,
       // por isso backups grandes (dezenas/centenas de MB) não estouram memória.
       const { path, token, bucket } = await makeUploadUrl({
@@ -248,6 +274,12 @@ export function RestoreBackupModal({
     } catch (err: any) {
       setUploadedPath("");
       setUploadPct(0);
+      setErrorInfo({
+        stage: "Envio do arquivo",
+        message: err?.message ?? "Falha ao enviar o arquivo.",
+        hint: "Verifique sua conexão e tente enviar novamente. Arquivos muito grandes podem levar alguns minutos.",
+        file: file.name,
+      });
       toast.error(err?.message ?? "Falha ao enviar o arquivo.", { id: "upload-zip" });
     } finally {
       setLoading(false);
@@ -256,6 +288,7 @@ export function RestoreBackupModal({
 
   const handlePreview = async () => {
     setLoading(true);
+    setErrorInfo(null);
     toast.loading("Analisando backup…", { id: "preview-zip" });
     try {
       const res = await preview({
@@ -269,6 +302,12 @@ export function RestoreBackupModal({
       setStep("preview");
       toast.dismiss("preview-zip");
     } catch (err: any) {
+      setErrorInfo({
+        stage: "Análise do backup",
+        message: err?.message ?? "Falha ao ler backup.",
+        hint: "Erros de manifesto ou de versão de schema indicam um ZIP gerado por outra versão do sistema.",
+        file: uploadFile?.name,
+      });
       toast.error(err?.message ?? "Falha ao ler backup.", { id: "preview-zip" });
     } finally {
       setLoading(false);
