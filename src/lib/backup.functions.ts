@@ -1933,7 +1933,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
         const { error } = useInsert
           ? await (supabaseAdmin as any).from(table).insert(chunk as any)
           : await (supabaseAdmin as any).from(table).upsert(chunk as any, {
-              onConflict: "id",
+              onConflict: CONFLICT_TARGET[table] ?? "id",
               ignoreDuplicates: false,
             } as any);
         if (error) {
