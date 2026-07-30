@@ -405,10 +405,13 @@ export function mapAuditRow(
   let title = `${actorLabel} ${verb} um registro em ${row.table_name}`;
   let description: string | undefined;
   let severity: ActivitySeverity = action === "DELETE" ? "warning" : "info";
+  let changes: ActivityChange[] = rowChanges(action, row.old_data, row.new_data);
+  let recordLabel: string | undefined;
 
   switch (row.table_name) {
     case "clients": {
       const nome = str(data.name) ?? "cliente";
+      recordLabel = nome;
       title = `${actorLabel} ${verb} o cliente ${nome}`;
       description = action === "UPDATE"
         ? describeChanges(changedFields(prev, row.new_data))
@@ -417,6 +420,7 @@ export function mapAuditRow(
     }
     case "products": {
       const nome = str(data.name) ?? "produto";
+      recordLabel = nome;
       title =
         action === "INSERT"
           ? `${actorLabel} adicionou o produto ${nome}`
@@ -432,6 +436,7 @@ export function mapAuditRow(
     }
     case "mgmv_agreements": {
       const nome = str(data.client_name) ?? "cliente";
+      recordLabel = nome;
       title =
         action === "INSERT"
           ? `${actorLabel} criou o acordo MGMV de ${nome}`
@@ -450,6 +455,7 @@ export function mapAuditRow(
     case "mgmv_installments": {
       const n = num(data.installment_number);
       const st = str(data.status);
+      recordLabel = `Parcela ${n ?? "?"}`;
       const virouPaga = str(prev.status) !== st && st === "Paga";
       title = virouPaga
         ? `${actorLabel} marcou a parcela ${n ?? "?"} como paga`
@@ -461,6 +467,7 @@ export function mapAuditRow(
     }
     case "import_history": {
       const arquivo = str(data.file) ?? "arquivo";
+      recordLabel = arquivo;
       const erros = num(data.errors) ?? 0;
       title = `${actorLabel} executou uma importação — ${arquivo}`;
       description = `${num(data.clients_created) ?? 0} clientes, ${num(data.products_added) ?? 0} produtos${erros > 0 ? `, ${erros} erro(s)` : ""}`;
@@ -491,6 +498,7 @@ export function mapAuditRow(
     }
     case "team_tasks": {
       const t = str(data.title) ?? "tarefa";
+      recordLabel = t;
       title = `${actorLabel} ${verb} a tarefa "${t}"`;
       description =
         action === "UPDATE"
@@ -506,10 +514,13 @@ export function mapAuditRow(
       );
       title = detalhado.title;
       description = detalhado.description;
+      changes = detalhado.changes;
+      recordLabel = "Configurações do sistema";
       break;
     }
     case "saved_filters": {
-      title = `${actorLabel} ${verb} o filtro salvo "${str(data.name) ?? ""}"`;
+      recordLabel = str(data.name);
+      title = `${actorLabel} ${verb} o filtro salvo "${recordLabel ?? ""}"`;
       break;
     }
     case "user_roles": {
@@ -552,6 +563,14 @@ export function mapAuditRow(
     at: row.changed_at,
     actorId: row.user_id,
     actorLabel,
+    changes,
+    entity: {
+      table: row.table_name,
+      tableLabel: TABLE_LABELS[row.table_name] ?? row.table_name,
+      rowId: row.row_id,
+      recordLabel,
+      action: (action as ActivityEntity["action"]) ?? "UPDATE",
+    },
   };
 }
 
