@@ -971,6 +971,7 @@ export function BackupsPanel() {
         createdBy: null,
         type: "manual",
         status: "failed",
+        env: "producao",
         cancelRequested: false,
         storagePath: null,
         sizeBytes: null,
