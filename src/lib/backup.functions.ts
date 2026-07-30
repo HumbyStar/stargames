@@ -1535,6 +1535,14 @@ export interface RestoreResult {
   tablesRestored: Array<{ table: string; inserted: number; skipped: number; deleted: number }>;
   storageFilesRestored: number;
   durationMs: number;
+  /** Nome do arquivo usado na restauração. */
+  filename?: string;
+  /** Erros por tabela (causa real vinda do banco). */
+  errors?: Array<{ table: string; stage: string; message: string }>;
+  /** Conferência pós-restauração: esperado (backup) x contado no banco. */
+  verification?: Array<{ table: string; expected: number; actual: number; diff: number }>;
+  /** true = contagens de produção idênticas antes/depois (só no Modo Teste). */
+  productionUntouched?: boolean | null;
 }
 
 const restorePreviewSchema = z.object({
