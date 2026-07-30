@@ -1218,6 +1218,7 @@ export const estimateBackup = createServerFn({ method: "GET" })
       storageBytes,
       storageListingTruncated,
       estimatedZipBytes,
+      env: backupEnv,
       limits: {
         storageMaxFiles: STORAGE_MIRROR_MAX_FILES,
         storageMaxBytes: STORAGE_MIRROR_MAX_BYTES,
