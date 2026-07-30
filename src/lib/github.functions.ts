@@ -229,7 +229,7 @@ export const pushExportsToGithub = createServerFn({ method: "POST" })
     const { putRepoFile, toCsv } = await import("./github.server");
 
     const { data: envRow } = await context.supabase.rpc("current_env");
-    const env = (envRow as string) ?? "producao";
+    const env: "producao" | "sandbox" = envRow === "sandbox" ? "sandbox" : "producao";
 
     const tables = ["clients", "products", "mgmv_agreements"] as const;
     const written: { path: string; rows: number }[] = [];
