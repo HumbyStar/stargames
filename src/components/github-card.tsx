@@ -260,6 +260,58 @@ export function GithubCard() {
       : null;
   }, [status?.repo, selectedRepo]);
 
+  /** Confirma com a API que o token enxerga o repositório antes de fixar a seleção. */
+  const verifyRepo = async (fullName: string, repoId: number | null) => {
+    setVerifying(true);
+    setAccessError(null);
+    try {
+      const res = await verifyGithubRepoAccess({ data: { fullName, repoId } });
+      if (res.ok && res.repo) {
+        setSelectedRepo(res.repo.fullName);
+        setSelectedRepoId(res.repo.id);
+        if (!branchTouched) setBranch(res.repo.defaultBranch);
+        if (!res.repo.canPush) {
+          setAccessError({
+            message: `O token enxerga ${res.repo.fullName}, mas não tem permissão de escrita (push).`,
+            hints: [
+              "Token clássico: use o escopo 'repo' completo.",
+              "Token fine-grained: dê permissão de Contents = Read and write.",
+              "Confirme que a conta do token é colaboradora com papel Write ou superior.",
+            ],
+          });
+        } else {
+          toast.success(`Acesso confirmado a ${res.repo.fullName}.`);
+        }
+        return true;
+      }
+      setAccessError({ message: res.error ?? "Repositório inacessível.", hints: res.hints ?? [] });
+      return false;
+    } catch (err) {
+      setAccessError({
+        message: err instanceof Error ? err.message : "Falha ao verificar o repositório",
+        hints: [],
+      });
+      return false;
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleSelectRepo = (value: string) => {
+    const option = repos.find((r) => r.fullName === value);
+    setSelectedRepo(value);
+    setSelectedRepoId(option?.id ?? null);
+    void verifyRepo(value, option?.id ?? null);
+  };
+
+  const handleRetryVerify = () => {
+    if (!/^[^/\s]+\/[^/\s]+$/.test(selectedRepo.trim())) {
+      toast.error("Informe o repositório no formato dono/repositório.");
+      return;
+    }
+    void verifyRepo(selectedRepo.trim(), selectedRepoId);
+  };
+
   // Carrega a lista de repositórios assim que a conexão estiver validada.
   useEffect(() => {
     if (status?.connected && repos.length === 0 && !reposLoading) {
@@ -292,6 +344,9 @@ export function GithubCard() {
   useEffect(() => {
     writeLocalPref(LS_BRANCH, branch);
   }, [branch]);
+  useEffect(() => {
+    writeLocalPref(LS_REPO_ID, selectedRepoId ? String(selectedRepoId) : "");
+  }, [selectedRepoId]);
 
   const handleSave = async () => {
     if (!/^[^/\s]+\/[^/\s]+$/.test(selectedRepo.trim())) {
