@@ -554,6 +554,29 @@ export function GithubCard() {
           {status?.hasToken && status.connected && status.error && (
             <p className="mt-3 text-sm text-destructive">{status.error}</p>
           )}
+          {status?.connected && (status.errorHints?.length ?? 0) > 0 && (
+            <div className="mt-2 space-y-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+              <p className="font-medium">Verifique nesta ordem:</p>
+              <ul className="list-disc space-y-1 pl-5">
+                {status.errorHints!.map((h) => (
+                  <li key={h}>{h}</li>
+                ))}
+              </ul>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void loadRepos(false, true)}
+                  disabled={reposLoading}
+                >
+                  <RefreshCw className="mr-2 h-3.5 w-3.5" /> Atualizar lista
+                </Button>
+                <Button size="sm" variant="outline" onClick={handleRetryVerify} disabled={verifying}>
+                  <RefreshCw className="mr-2 h-3.5 w-3.5" /> Tentar novamente
+                </Button>
+              </div>
+            </div>
+          )}
           {status?.connected && status.scopeWarning && (
             <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600 dark:text-amber-400">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
