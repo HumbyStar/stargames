@@ -126,6 +126,169 @@ function describeChanges(fields: string[]): string | undefined {
   return fields.length > 3 ? `${shown} +${fields.length - 3}` : shown;
 }
 
+// ---------------------------------------------------------------------------
+// Configurações (app_settings) — descrição detalhada do que mudou
+// ---------------------------------------------------------------------------
+
+interface SettingChange {
+  section: string;
+  path: string;
+  from: unknown;
+  to: unknown;
+}
+
+/** Chaves cujo valor é ruído técnico e não ajuda no acompanhamento. */
+const SETTINGS_IGNORED = new Set([
+  "__migratedFromLocalStorage_v1",
+  "mgmv.lastUpdatedIds",
+]);
+
+const SECTION_LABELS: Record<string, string> = {
+  preferences: "Preferências",
+  rules: "Regras de negócio",
+  security: "Segurança",
+  ui_state: "Visualização",
+};
+
+/** Prefixos de ui_state → área do sistema. */
+const AREA_LABELS: Record<string, string> = {
+  clientes: "Clientes",
+  mgmv: "MGMV",
+  collection: "Cobrança",
+  import: "Importação",
+  notifications: "Notificações",
+  navbar: "Barra de navegação",
+  finance: "Finanças",
+  equipe: "Equipe",
+};
+
+const SETTING_KEY_LABELS: Record<string, string> = {
+  chip: "filtro rápido",
+  search: "busca",
+  folder: "pasta",
+  period: "período",
+  platform: "plataforma",
+  financial: "status financeiro",
+  situation: "situação",
+  filter: "filtro",
+  pageSize: "itens por página",
+  customFrom: "data inicial",
+  customTo: "data final",
+  savedFilters: "filtros salvos",
+  activeSavedId: "filtro salvo ativo",
+  resetVersion: "reset de importação",
+  prefs: "preferências de alerta",
+  readIds: "notificações lidas",
+  config: "layout dos botões",
+  reservaDaysDefault: "dias padrão de reserva",
+  blockReserveOnActiveMGMV: "bloquear reserva com MGMV ativo",
+  autoCalculateReservaDueDate: "cálculo automático da data de reserva",
+  hideAbandonosFromCollection: "ocultar abandonos da cobrança",
+  hideDesistenciasFromCollection: "ocultar desistências da cobrança",
+  treatOverduePendenteAsDelinquent: "tratar pendente vencido como inadimplente",
+  enableAuditLog: "registro de auditoria",
+  requireConfirmBeforeDelete: "confirmação antes de excluir",
+  blockMassDeleteWithoutPassword: "bloquear exclusão em massa sem senha",
+  theme: "tema",
+  density: "densidade",
+};
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** Compara dois objetos de configuração e devolve as diferenças reais. */
+function diffSettings(
+  prev: unknown,
+  next: unknown,
+  section: string,
+  path: string[] = [],
+  out: SettingChange[] = [],
+  depth = 0,
+): SettingChange[] {
+  if (isPlainObject(prev) && isPlainObject(next) && depth < 3) {
+    const keys = new Set([...Object.keys(prev), ...Object.keys(next)]);
+    for (const key of keys) {
+      if (SETTINGS_IGNORED.has(key) || SETTINGS_IGNORED.has([...path, key].join("."))) continue;
+      diffSettings(prev[key], next[key], section, [...path, key], out, depth + 1);
+    }
+    return out;
+  }
+  if (JSON.stringify(prev) !== JSON.stringify(next)) {
+    out.push({ section, path: path.join("."), from: prev, to: next });
+  }
+  return out;
+}
+
+function formatSettingValue(v: unknown): string {
+  if (v === undefined || v === null) return "vazio";
+  if (typeof v === "boolean") return v ? "ativado" : "desativado";
+  if (typeof v === "number") return String(v);
+  if (typeof v === "string") return v.trim() === "" ? "vazio" : `“${v}”`;
+  if (Array.isArray(v)) return v.length === 0 ? "nenhum item" : `${v.length} item(ns)`;
+  return "atualizado";
+}
+
+/** "clientes.chip" → { area: "Clientes", label: "filtro rápido" } */
+function describeSettingPath(section: string, path: string): { area?: string; label: string } {
+  const parts = path.split(".").filter(Boolean);
+  let area: string | undefined;
+  if (section === "ui_state" && parts.length > 1 && AREA_LABELS[parts[0]]) {
+    area = AREA_LABELS[parts[0]];
+    parts.shift();
+  }
+  // Ignora IDs (ex.: navbar.config.<uuid>.animation.ringMs)
+  const readable = parts.filter(
+    (p) => !/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(p) && !/^\d+$/.test(p),
+  );
+  const label = readable
+    .map((p) => SETTING_KEY_LABELS[p] ?? p.replace(/([A-Z])/g, " $1").toLowerCase())
+    .join(" › ");
+  return { area, label: label || (SECTION_LABELS[section] ?? section).toLowerCase() };
+}
+
+/** Frase objetiva do que foi alterado nas configurações. */
+function describeSettingsChange(
+  actorLabel: string,
+  prev: Record<string, unknown> | null,
+  next: Record<string, unknown> | null,
+): { title: string; description?: string } {
+  const sections = ["preferences", "rules", "security", "ui_state"];
+  const changes: SettingChange[] = [];
+  for (const s of sections) {
+    diffSettings(prev?.[s], next?.[s], s, [], changes);
+  }
+
+  if (changes.length === 0) {
+    return { title: `${actorLabel} salvou as configurações do sistema` };
+  }
+
+  const sectionsTouched = Array.from(new Set(changes.map((c) => c.section)));
+  const areasTouched = Array.from(
+    new Set(
+      changes
+        .map((c) => describeSettingPath(c.section, c.path).area)
+        .filter((a): a is string => Boolean(a)),
+    ),
+  );
+
+  const escopo =
+    areasTouched.length > 0 && sectionsTouched.every((s) => s === "ui_state")
+      ? areasTouched.slice(0, 2).join(" e ") + (areasTouched.length > 2 ? " +" + (areasTouched.length - 2) : "")
+      : sectionsTouched.map((s) => SECTION_LABELS[s] ?? s).join(", ");
+
+  const title = `${actorLabel} alterou ${escopo} nas configurações`;
+
+  const detalhes = changes.slice(0, 4).map((c) => {
+    const { area, label } = describeSettingPath(c.section, c.path);
+    const nome = area ? `${area} · ${label}` : label;
+    return `${nome}: ${formatSettingValue(c.from)} → ${formatSettingValue(c.to)}`;
+  });
+  if (changes.length > 4) detalhes.push(`e mais ${changes.length - 4} ajuste(s)`);
+
+  return { title, description: detalhes.join(" · ") };
+}
+
 /** Converte um registro de auditoria em um evento legível. */
 export function mapAuditRow(
   row: AuditRow,
@@ -235,8 +398,13 @@ export function mapAuditRow(
       break;
     }
     case "app_settings": {
-      title = `${actorLabel} alterou as configurações do sistema`;
-      description = describeChanges(changedFields(prev, row.new_data));
+      const detalhado = describeSettingsChange(
+        actorLabel,
+        row.old_data,
+        row.new_data ?? row.old_data,
+      );
+      title = detalhado.title;
+      description = detalhado.description;
       break;
     }
     case "saved_filters": {
