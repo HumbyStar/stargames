@@ -1928,6 +1928,13 @@ export const restoreBackup = createServerFn({ method: "POST" })
         if (error) {
           console.warn(`[restore] upsert ${table} (chunk ${i}):`, error.message);
           skipped += chunk.length;
+          if (restoreErrors.filter((e) => e.table === table).length < 2) {
+            restoreErrors.push({
+              table,
+              stage: "gravação",
+              message: `${error.message}${(error as any).hint ? ` — ${(error as any).hint}` : ""}${(error as any).details ? ` (${(error as any).details})` : ""}`,
+            });
+          }
         } else {
           inserted += chunk.length;
         }
@@ -1936,7 +1943,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
         table,
         inserted,
         skipped,
-        deleted: effectiveMode === "replace" ? rows.length : 0,
+        deleted: effectiveMode === "replace" ? (deletedByTable[table] ?? 0) : 0,
       });
     }
 
