@@ -15,6 +15,14 @@ export default defineConfig({
   },
   vite: {
     plugins: [
+      // Só no bundle do cliente — evita o worker ser emitido no build do servidor.
+      ...VitePWAClientOnly(),
+    ],
+  },
+});
+
+function VitePWAClientOnly() {
+  return [
       // Instalação local (Windows) + funcionamento offline.
       // O registro é feito só em produção, pelo wrapper src/lib/pwa.ts.
       VitePWA({
