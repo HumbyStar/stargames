@@ -40,6 +40,7 @@ import { listBackups } from "@/lib/backup.functions";
 import { emitAppEvent } from "@/lib/app-events";
 
 type RepoOption = {
+  id?: number;
   fullName: string;
   owner: string;
   name: string;
@@ -55,6 +56,7 @@ function formatBytes(bytes: number) {
 
 const LS_REPO = "stargames.github.repo";
 const LS_BRANCH = "stargames.github.branch";
+const LS_REPO_ID = "stargames.github.repoId";
 const LS_REPOS_CACHE = "stargames.github.repos.cache";
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
@@ -132,6 +134,9 @@ export function GithubCard() {
   const [reposError, setReposError] = useState<string | null>(null);
   const [repoSearch, setRepoSearch] = useState("");
   const [selectedRepo, setSelectedRepo] = useState("");
+  const [selectedRepoId, setSelectedRepoId] = useState<number | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [accessError, setAccessError] = useState<{ message: string; hints: string[] } | null>(null);
   const [branch, setBranch] = useState("");
   const [reposWarnings, setReposWarnings] = useState<string[]>([]);
   const [cacheInfo, setCacheInfo] = useState<{ savedAt: number; fromCache: boolean } | null>(null);
@@ -154,6 +159,10 @@ export function GithubCard() {
       const localRepo = readLocalPref(LS_REPO);
       const localBranch = readLocalPref(LS_BRANCH);
       setSelectedRepo(savedRepo || localRepo || "");
+      const localId = Number(readLocalPref(LS_REPO_ID));
+      setSelectedRepoId(
+        s.config.repoId ?? (savedRepo ? null : Number.isFinite(localId) && localId > 0 ? localId : null),
+      );
       const restoredBranch = s.config.branch || (savedRepo ? "" : localBranch) || "";
       setBranch(restoredBranch);
       setBranchTouched(Boolean(restoredBranch));
