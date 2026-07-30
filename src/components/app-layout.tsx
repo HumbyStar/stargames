@@ -18,6 +18,10 @@ import {
   KanbanSquare,
 } from "lucide-react";
 import { SandboxProvider, useSandbox } from "@/lib/use-sandbox";
+import { WifiOff } from "lucide-react";
+import { initLocalMode, isLocalMode, subscribeLocalMode } from "@/lib/local-mode";
+import { startLocalPersistence } from "@/lib/local-persistence";
+import { initInstallPrompt, registerServiceWorker } from "@/lib/pwa";
 import { useEffect, useMemo, useRef, useState, lazy, memo, Suspense, type ReactNode } from "react";
 import type { ComponentType, SVGProps } from "react";
 import { cn } from "@/lib/utils";
