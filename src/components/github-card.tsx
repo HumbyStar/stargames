@@ -465,6 +465,17 @@ export function GithubCard() {
           {status?.hasToken && status.connected && status.error && (
             <p className="mt-3 text-sm text-destructive">{status.error}</p>
           )}
+          {status?.connected && status.scopeWarning && (
+            <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{status.scopeWarning}</span>
+            </div>
+          )}
+          {status?.connected && status.scopes && status.scopes.length > 0 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Escopos do token: {status.scopes.join(", ")}
+            </p>
+          )}
         </div>
       </Card>
 
