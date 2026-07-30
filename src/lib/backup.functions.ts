@@ -1928,6 +1928,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
       } else if (table === "profiles") {
         filtered = rows.filter((r) => r.id !== context.userId);
       }
+      expectedByTable[table] = filtered.length;
 
       const cloneTable = CLONE_BY_TABLE[table];
       let payload: any[];
@@ -1985,7 +1986,6 @@ export const restoreBackup = createServerFn({ method: "POST" })
       let inserted = 0;
       let skipped = businessKeySkipped;
       const CHUNK = 500;
-      expectedByTable[table] = payload.length;
       const useInsert = targetEnv === "sandbox" && Boolean(cloneTable?.idColumn);
       for (let i = 0; i < payload.length; i += CHUNK) {
         const chunk = payload.slice(i, i + CHUNK);
@@ -2368,6 +2368,33 @@ export const validateBackupRestore = createServerFn({ method: "POST" })
           level: "warn",
           message: `${table}: o manifesto indica ${manifest.rowCounts[table]} registro(s), mas o arquivo veio vazio.`,
         });
+      }
+    }
+    if ((backupRows["team_punch_entries"] ?? []).length > 0) {
+      const { data: productionPunches, error: punchReadError } = await (supabaseAdmin as any)
+        .from("team_punch_entries")
+        .select("user_id,day,kind")
+        .eq("env", "producao");
+      if (punchReadError) {
+        issues.push({
+          level: "error",
+          message: `team_punch_entries: não foi possível verificar colisões com a produção (${punchReadError.message}).`,
+        });
+      } else {
+        const productionKeys = new Set(
+          (productionPunches ?? []).map((row: Record<string, unknown>) =>
+            restoreRowKey("team_punch_entries", row),
+          ),
+        );
+        const collisions = (backupRows["team_punch_entries"] ?? []).filter((row) =>
+          productionKeys.has(restoreRowKey("team_punch_entries", row)),
+        ).length;
+        if (collisions > 0) {
+          issues.push({
+            level: "warn",
+            message: `team_punch_entries: ${collisions} batida(s) já existem na produção pela mesma combinação usuário + dia + tipo e serão ignoradas no sandbox para preservar o isolamento.`,
+          });
+        }
       }
     }
     if (selected.length === 0) {
