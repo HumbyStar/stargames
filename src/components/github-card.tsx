@@ -357,8 +357,19 @@ export function GithubCard() {
     const [owner = "", name = ""] = selectedRepo.split("/");
     setSaving(true);
     try {
+      const ok = await verifyRepo(selectedRepo.trim(), selectedRepoId);
+      if (!ok) {
+        toast.error("O token não tem acesso a esse repositório — veja as verificações abaixo.");
+        return;
+      }
       await saveGithubConfig({
-        data: { repoOwner: owner, repoName: name, branch: branch.trim(), autoPushBackup },
+        data: {
+          repoOwner: owner,
+          repoName: name,
+          branch: branch.trim(),
+          autoPushBackup,
+          repoId: selectedRepoId,
+        },
       });
       toast.success("Configuração do GitHub salva.");
       emitAppEvent({
