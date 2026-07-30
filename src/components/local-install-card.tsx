@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { emitAppEvent } from "@/lib/app-events";
 import {
   MonitorDown,
   Download,
@@ -247,6 +248,11 @@ export function LocalInstallCard() {
       setLastFiles([zipName, INSTALLER_FILENAME, "Star Games.url"]);
       setProgress(100);
       setStep("Pacote local atualizado.");
+      emitAppEvent({
+        category: "local",
+        title: "Cópia local do sistema atualizada",
+        severity: "success",
+      });
       toast.success("Sistema instalado localmente.", {
         description: `Baixados: “${zipName}” (cópia dos dados) e “${INSTALLER_FILENAME}” — dê dois cliques nele para instalar o aplicativo no PC (abre em janela própria, sem barra de endereços).`,
         duration: 10000,
