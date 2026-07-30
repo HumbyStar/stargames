@@ -526,6 +526,8 @@ export function mapAuditRow(
       description = detalhado.description;
       changes = detalhado.changes;
       recordLabel = "Configurações do sistema";
+      // Se sobrou apenas ruído (ex.: digitação em campos de busca), não notifica.
+      if (action === "UPDATE" && detalhado.changes.length === 0) return null;
       break;
     }
     case "saved_filters": {
