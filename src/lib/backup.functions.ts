@@ -1711,13 +1711,17 @@ export const restoreBackup = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => restoreApplySchema.parse(d))
   .handler(async ({ data, context }): Promise<RestoreResult> => {
     await assertAdmin(context);
-    if (data.mode === "replace" && data.confirmReplace !== "REPLACE") {
-      throw new Error('Para o modo "Substituir tudo" digite REPLACE para confirmar.');
-    }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const started = Date.now();
     // Destino decidido no servidor. O navegador não escolhe ambiente.
     const targetEnv = await resolveTargetEnv(supabaseAdmin, context.userId);
+    // Na produção a substituição continua exigindo confirmação explícita.
+    // No teste o ambiente é SEMPRE zerado antes da carga (não há risco real).
+    if (targetEnv === "producao" && data.mode === "replace" && data.confirmReplace !== "REPLACE") {
+      throw new Error('Para o modo "Substituir tudo" digite REPLACE para confirmar.');
+    }
+    const effectiveMode: "merge" | "replace" =
+      targetEnv === "sandbox" ? "replace" : data.mode;
     // Prova de isolamento: contagens de produção antes da execução em teste.
     const productionBefore =
       targetEnv === "sandbox" ? await countProductionRows(supabaseAdmin) : {};
@@ -1743,9 +1747,15 @@ export const restoreBackup = createServerFn({ method: "POST" })
     // Mapa de ids originais -> novos ids (somente sandbox).
     const idMaps: Record<string, Record<string, string>> = {};
 
-    // REPLACE: apaga em ordem reversa (dependentes primeiro)
-    if (data.mode === "replace") {
-      for (const table of [...tablesToProcess].reverse()) {
+    // REPLACE: apaga em ordem reversa (dependentes primeiro).
+    // No sandbox a limpeza cobre TODAS as tabelas de teste, e não apenas as
+    // presentes no ZIP/seleção, para que cada restauração comece do zero.
+    if (effectiveMode === "replace") {
+      const tablesToWipe =
+        targetEnv === "sandbox"
+          ? (CLONE_ORDER.map((t) => t.name) as string[]).filter((t) => !GLOBAL_TABLES.has(t))
+          : tablesToProcess;
+      for (const table of [...tablesToWipe].reverse()) {
         let query = (supabaseAdmin as any).from(table).delete();
         // Exclusão SEMPRE escopada ao ambiente de destino.
         if (ENV_SCOPED_TABLES.has(table)) {
@@ -1822,7 +1832,12 @@ export const restoreBackup = createServerFn({ method: "POST" })
           inserted += chunk.length;
         }
       }
-      results.push({ table, inserted, skipped, deleted: data.mode === "replace" ? rows.length : 0 });
+      results.push({
+        table,
+        inserted,
+        skipped,
+        deleted: effectiveMode === "replace" ? rows.length : 0,
+      });
     }
 
     // Storage: reenvia arquivos originais (o acervo é único; em teste é só leitura)
@@ -1865,7 +1880,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
         userEmail: (context as any)?.claims?.email ?? null,
         source: data.backupId ? "backup-salvo" : "upload-zip",
         fileName: zipName,
-        mode: data.mode,
+        mode: targetEnv === "sandbox" ? "reset+carga" : data.mode,
         tables: tablesToProcess,
         rowCounts: Object.fromEntries(results.map((r) => [r.table, r.inserted])),
         durationMs: Date.now() - started,
@@ -1878,7 +1893,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
 
     return {
       ok: true,
-      mode: data.mode,
+      mode: effectiveMode,
       targetEnv,
       tablesRestored: results,
       storageFilesRestored,

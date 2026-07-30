@@ -161,22 +161,26 @@ export function RestoreBackupModal({
   };
 
   const handleApply = async () => {
-    if (mode === "replace" && confirmText !== "REPLACE") {
+    const sandboxTarget = previewData?.targetEnv === "sandbox";
+    if (!sandboxTarget && mode === "replace" && confirmText !== "REPLACE") {
       toast.error('Digite "REPLACE" para confirmar a substituição.');
       return;
     }
     setLoading(true);
-    toast.loading("Restaurando backup…", { id: "restore" });
+    toast.loading(
+      sandboxTarget ? "Zerando ambiente de teste e restaurando…" : "Restaurando backup…",
+      { id: "restore" },
+    );
     try {
       const res = await restore({
         data: {
           ...(source === "existing"
             ? { backupId }
             : { uploadedZipBase64: uploadedBase64 }),
-          mode,
+          mode: sandboxTarget ? "replace" : mode,
           tables: Array.from(selectedTables),
           includeStorage,
-          confirmReplace: mode === "replace" ? confirmText : undefined,
+          confirmReplace: !sandboxTarget && mode === "replace" ? confirmText : undefined,
         },
       });
       setResult(res);
@@ -355,7 +359,7 @@ export function RestoreBackupModal({
               </div>
               <div className="mt-0.5">
                 {previewData.targetEnv === "sandbox"
-                  ? "Todos os registros recebem novos identificadores e ficam isolados. A produção não será alterada."
+                  ? "O ambiente de teste será ZERADO antes de carregar este backup. Todos os registros recebem novos identificadores e ficam isolados — a produção não será alterada."
                   : "Os dados serão gravados no ambiente real."}
               </div>
               {previewData.skippedTables.length > 0 && (
@@ -459,6 +463,14 @@ export function RestoreBackupModal({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2 rounded-md border border-border p-3">
                 <Label>Modo</Label>
+                {previewData.targetEnv === "sandbox" ? (
+                  <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-[11px] text-amber-700 dark:text-amber-300">
+                    No Modo Teste sempre é <strong>zerar e carregar</strong>: o ambiente de
+                    teste é limpo por completo antes da importação, para você comparar os
+                    dados sem sobras da execução anterior.
+                  </div>
+                ) : (
+                  <>
                 <Select value={mode} onValueChange={(v) => setMode(v as any)}>
                   <SelectTrigger className="h-8 text-xs">
                     <SelectValue />
@@ -485,6 +497,8 @@ export function RestoreBackupModal({
                     />
                   </div>
                 ) : null}
+                  </>
+                )}
               </div>
               <div className="flex items-center justify-between rounded-md border border-border p-3">
                 <div>
@@ -523,12 +537,20 @@ export function RestoreBackupModal({
                 Validar no sandbox (não aplica)
               </Button>
               <Button
-                variant={mode === "replace" ? "destructive" : "default"}
+                variant={
+                  previewData.targetEnv !== "sandbox" && mode === "replace"
+                    ? "destructive"
+                    : "default"
+                }
                 disabled={loading || selectedTables.size === 0}
                 onClick={() => void handleApply()}
               >
                 {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                {mode === "replace" ? "Substituir tudo agora" : "Aplicar merge"}
+                {previewData.targetEnv === "sandbox"
+                  ? "Zerar teste e carregar backup"
+                  : mode === "replace"
+                    ? "Substituir tudo agora"
+                    : "Aplicar merge"}
               </Button>
             </DialogFooter>
           </div>
