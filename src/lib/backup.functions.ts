@@ -2067,12 +2067,13 @@ export const validateBackupRestore = createServerFn({ method: "POST" })
       issues.push({ level: "error", message: "Nenhuma tabela restaurável foi encontrada no backup." });
     }
 
+    const selectedSet = new Set<string>(selected as unknown as string[]);
     const pick = (table: string) =>
       data.mode === "replace"
-        ? selected.includes(table)
+        ? selectedSet.has(table)
           ? backupRows[table] ?? []
           : currentRows[table] ?? []
-        : [...(currentRows[table] ?? []), ...(selected.includes(table) ? backupRows[table] ?? [] : [])];
+        : [...(currentRows[table] ?? []), ...(selectedSet.has(table) ? backupRows[table] ?? [] : [])];
 
     const currentSummary = computeBusinessSummaryFromRows({
       clients: currentRows["clients"] ?? [],
