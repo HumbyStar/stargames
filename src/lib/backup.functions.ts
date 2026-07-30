@@ -434,6 +434,12 @@ No destino, recrie os usuários via Auth Admin API e envie link de redefinição
 de senha.
 `;
 
+/** Coluna estável usada para ordenar a paginação de cada tabela. */
+function orderKeyFor(table: string): string {
+  if (table === "ai_training_profile") return "user_id";
+  return "id";
+}
+
 async function fetchAllRows(
   admin: any,
   table: BackupTable,
