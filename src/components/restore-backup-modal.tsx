@@ -36,11 +36,14 @@ import {
   previewBackupRestore,
   restoreBackup,
   validateBackupRestore,
+  createBackupUploadUrl,
+  discardUploadedBackup,
   type BackupRow,
   type RestorePreview,
   type RestoreResult,
   type ValidationReport,
 } from "@/lib/backup.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { formatDateBR } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -50,17 +53,6 @@ const MAX_UPLOAD_MB = 500;
 
 function fmt(n: number): string {
   return (n ?? 0).toLocaleString("pt-BR");
-}
-
-async function fileToBase64(file: File): Promise<string> {
-  const buf = await file.arrayBuffer();
-  let binary = "";
-  const bytes = new Uint8Array(buf);
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + CHUNK)) as any);
-  }
-  return btoa(binary);
 }
 
 export function RestoreBackupModal({
