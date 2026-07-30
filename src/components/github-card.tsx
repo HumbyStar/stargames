@@ -369,14 +369,44 @@ export function GithubCard() {
             <div className="flex gap-2">
               <Select value={selectedRepo} onValueChange={setSelectedRepo}>
                 <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="Selecione um repositório" />
+                  <SelectValue
+                    placeholder={
+                      reposLoading
+                        ? "Carregando repositórios..."
+                        : repoOptions.length === 0
+                          ? "Nenhum repositório disponível"
+                          : "Selecione um repositório"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  {repoOptions.map((r) => (
+                  <div className="sticky top-0 z-10 bg-popover p-2">
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        value={repoSearch}
+                        onChange={(e) => setRepoSearch(e.target.value)}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        placeholder="Buscar repositório..."
+                        className="h-8 pl-7"
+                      />
+                    </div>
+                  </div>
+                  {reposLoading && (
+                    <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando lista...
+                    </div>
+                  )}
+                  {filteredRepoOptions.map((r) => (
                     <SelectItem key={r.fullName} value={r.fullName}>
                       {r.fullName}
                     </SelectItem>
                   ))}
+                  {!reposLoading && filteredRepoOptions.length === 0 && (
+                    <div className="px-3 py-2 text-xs text-muted-foreground">
+                      Nenhum repositório encontrado.
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
               <Button
@@ -385,12 +415,28 @@ export function GithubCard() {
                 disabled={reposLoading}
               >
                 {reposLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
-                  <RefreshCw className="h-4 w-4" />
+                  <RefreshCw className="mr-2 h-4 w-4" />
                 )}
+                Atualizar lista
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              {reposLoading
+                ? "Buscando repositórios no GitHub..."
+                : reposLoaded
+                  ? reposComplete
+                    ? `${repos.length} repositório(s) — lista completa carregada.`
+                    : `${repos.length} repositório(s) carregados — pode haver mais páginas, clique em "Atualizar lista".`
+                  : "A lista carrega automaticamente após validar o token."}
+            </p>
+            {reposError && (
+              <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{reposError}</span>
+              </div>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="gh-branch">Branch (opcional)</Label>
