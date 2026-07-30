@@ -376,6 +376,7 @@ export const listGithubRepos = createServerFn({ method: "GET" })
     for (const r of collected) if (r?.full_name) unique.set(r.full_name, r);
 
     const repos = Array.from(unique.values()).map((r: any) => ({
+      id: r.id as number,
       fullName: r.full_name as string,
       owner: r.owner?.login as string,
       name: r.name as string,
