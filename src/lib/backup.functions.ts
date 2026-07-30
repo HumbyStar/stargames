@@ -2087,6 +2087,7 @@ export interface ValidationReport {
 const validateSchema = z.object({
   backupId: z.string().uuid().optional(),
   uploadedZipBase64: z.string().optional(),
+  uploadedPath: z.string().optional(),
   mode: z.enum(["merge", "replace"]).default("merge"),
   tables: z.array(z.string()).optional(),
 });
