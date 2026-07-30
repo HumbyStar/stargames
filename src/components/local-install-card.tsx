@@ -311,6 +311,14 @@ export function LocalInstallCard() {
         </div>
 
         <div className="space-y-1.5 rounded-xl border border-border bg-muted/30 p-3">
+          {!installable && !isStandaloneInstall() && (
+            <p className="pb-1 text-[11px] text-muted-foreground">
+              O atalho automático fica disponível apenas no endereço publicado do sistema, aberto
+              em aba própria do Chrome/Edge (não funciona dentro da pré-visualização). Baixe os
+              dados locais primeiro e depois instale o atalho por lá — a cópia dos dados continua
+              válida no atalho.
+            </p>
+          )}
           <Label className="text-xs uppercase tracking-wide text-muted-foreground">
             Quando usar o banco local
           </Label>
