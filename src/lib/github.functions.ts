@@ -99,13 +99,39 @@ export const getGithubStatus = createServerFn({ method: "GET" })
             defaultBranch: r.default_branch,
           };
         } catch (err) {
+          const raw = err instanceof Error ? err.message : "Repositório inacessível";
+          const target = `${config.repoOwner}/${config.repoName}`;
+          let message = raw;
+          if (raw.includes("404")) {
+            // 404 no GitHub também significa "existe, mas o token não enxerga".
+            let suggestion = "";
+            try {
+              const mine = await githubFetch(
+                "/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member",
+              );
+              const match = (Array.isArray(mine) ? mine : []).find(
+                (r: any) =>
+                  String(r.full_name).toLowerCase() === target.toLowerCase() ||
+                  String(r.name).toLowerCase() === config.repoName.toLowerCase(),
+              );
+              if (match && match.full_name !== target) {
+                suggestion = ` Encontrei um repositório parecido acessível pelo token: ${match.full_name} — selecione exatamente esse nome.`;
+              }
+            } catch {
+              /* ignora falha da sugestão */
+            }
+            message =
+              `O GitHub retornou 404 para "${target}". Isso acontece quando o repositório não existe com esse nome exato, ` +
+              `ou quando o token não tem acesso a ele (token fine-grained limitado a repositórios selecionados, falta do escopo "repo" para repositórios privados, ` +
+              `ou organização exigindo autorização SSO).${suggestion}`;
+          }
           return {
             hasToken,
             config,
             connected: true,
             account: { login: me.login, name: me.name ?? null, avatarUrl: me.avatar_url ?? null },
             repo: null,
-            error: err instanceof Error ? err.message : "Repositório inacessível",
+            error: message,
           };
         }
       }
