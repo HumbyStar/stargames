@@ -244,13 +244,15 @@ export function RealtimeUpdatesCard() {
                       <span>{activityCategoryLabels[e.category]}</span>
                       <span>·</span>
                       <span>{relativeTime(e.at)}</span>
-                      {e.description && (
-                        <>
-                          <span>·</span>
-                          <span className="truncate">{e.description}</span>
-                        </>
-                      )}
                     </p>
+                    {e.description && (
+                      <p
+                        className="mt-1 text-xs leading-relaxed text-muted-foreground"
+                        title={e.description}
+                      >
+                        {e.description}
+                      </p>
+                    )}
                   </div>
                 </div>
               );
