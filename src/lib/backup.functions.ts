@@ -1495,6 +1495,15 @@ const CLONE_BY_TABLE: Record<string, CloneTable> = Object.fromEntries(
   CLONE_ORDER.map((t) => [t.name, t]),
 );
 
+// Alvo de conflito do upsert por tabela. As tabelas com chave composta
+// (id/env) precisam do alvo correto, senão o banco recusa a gravação.
+const CONFLICT_TARGET: Record<string, string> = {
+  app_settings: "id,env",
+  ai_training_profile: "user_id,env",
+  active_sessions: "user_id",
+  sandbox_state: "user_id",
+};
+
 const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
 
 /**
@@ -1535,6 +1544,14 @@ export interface RestoreResult {
   tablesRestored: Array<{ table: string; inserted: number; skipped: number; deleted: number }>;
   storageFilesRestored: number;
   durationMs: number;
+  /** Nome do arquivo usado na restauração. */
+  filename?: string;
+  /** Erros por tabela (causa real vinda do banco). */
+  errors?: Array<{ table: string; stage: string; message: string }>;
+  /** Conferência pós-restauração: esperado (backup) x contado no banco. */
+  verification?: Array<{ table: string; expected: number; actual: number; diff: number }>;
+  /** true = contagens de produção idênticas antes/depois (só no Modo Teste). */
+  productionUntouched?: boolean | null;
 }
 
 const restorePreviewSchema = z.object({
@@ -1823,6 +1840,9 @@ export const restoreBackup = createServerFn({ method: "POST" })
     ).filter((t) => requested.has(t));
 
     const results: RestoreResult["tablesRestored"] = [];
+    const restoreErrors: NonNullable<RestoreResult["errors"]> = [];
+    const deletedByTable: Record<string, number> = {};
+    const expectedByTable: Record<string, number> = {};
     // Mapa de ids originais -> novos ids (somente sandbox).
     const idMaps: Record<string, Record<string, string>> = {};
 
@@ -1835,6 +1855,15 @@ export const restoreBackup = createServerFn({ method: "POST" })
           ? (CLONE_ORDER.map((t) => t.name) as string[]).filter((t) => !GLOBAL_TABLES.has(t))
           : tablesToProcess;
       for (const table of [...tablesToWipe].reverse()) {
+        // Conta antes de apagar para relatar quantos registros saíram.
+        try {
+          let counter = (supabaseAdmin as any).from(table).select("id", { count: "exact", head: true });
+          if (ENV_SCOPED_TABLES.has(table)) counter = counter.eq("env", targetEnv);
+          const { count } = await counter;
+          deletedByTable[table] = count ?? 0;
+        } catch {
+          deletedByTable[table] = 0;
+        }
         let query = (supabaseAdmin as any).from(table).delete();
         // Exclusão SEMPRE escopada ao ambiente de destino.
         if (ENV_SCOPED_TABLES.has(table)) {
@@ -1850,6 +1879,8 @@ export const restoreBackup = createServerFn({ method: "POST" })
         const { error } = await query.neq("id" as any, "00000000-0000-0000-0000-000000000000");
         if (error) {
           console.warn(`[restore] delete ${table}:`, error.message);
+          deletedByTable[table] = 0;
+          restoreErrors.push({ table, stage: "limpeza", message: error.message });
         }
       }
     }
@@ -1895,18 +1926,26 @@ export const restoreBackup = createServerFn({ method: "POST" })
       let inserted = 0;
       let skipped = 0;
       const CHUNK = 500;
+      expectedByTable[table] = payload.length;
       const useInsert = targetEnv === "sandbox" && Boolean(cloneTable?.idColumn);
       for (let i = 0; i < payload.length; i += CHUNK) {
         const chunk = payload.slice(i, i + CHUNK);
         const { error } = useInsert
           ? await (supabaseAdmin as any).from(table).insert(chunk as any)
           : await (supabaseAdmin as any).from(table).upsert(chunk as any, {
-              onConflict: "id",
+              onConflict: CONFLICT_TARGET[table] ?? "id",
               ignoreDuplicates: false,
             } as any);
         if (error) {
           console.warn(`[restore] upsert ${table} (chunk ${i}):`, error.message);
           skipped += chunk.length;
+          if (restoreErrors.filter((e) => e.table === table).length < 2) {
+            restoreErrors.push({
+              table,
+              stage: "gravação",
+              message: `${error.message}${(error as any).hint ? ` — ${(error as any).hint}` : ""}${(error as any).details ? ` (${(error as any).details})` : ""}`,
+            });
+          }
         } else {
           inserted += chunk.length;
         }
@@ -1915,7 +1954,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
         table,
         inserted,
         skipped,
-        deleted: effectiveMode === "replace" ? rows.length : 0,
+        deleted: effectiveMode === "replace" ? (deletedByTable[table] ?? 0) : 0,
       });
     }
 
@@ -1951,10 +1990,35 @@ export const restoreBackup = createServerFn({ method: "POST" })
       console.warn("[restore] import_history log failed:", err);
     }
 
+    // Conferência pós-restauração: conta o que ficou no banco (no ambiente de
+    // destino) e compara com o que o backup trouxe.
+    const verification: NonNullable<RestoreResult["verification"]> = [];
+    for (const table of tablesToProcess) {
+      const expected = expectedByTable[table] ?? 0;
+      let actual = -1;
+      try {
+        let counter = (supabaseAdmin as any)
+          .from(table)
+          .select("id", { count: "exact", head: true });
+        if (ENV_SCOPED_TABLES.has(table)) counter = counter.eq("env", targetEnv);
+        const { count, error } = await counter;
+        if (!error) actual = count ?? 0;
+      } catch {
+        /* contagem best-effort */
+      }
+      verification.push({
+        table,
+        expected,
+        actual,
+        diff: actual < 0 ? 0 : actual - expected,
+      });
+    }
+
     // Auditoria do Modo Teste + verificação de que a produção não mudou.
+    let productionUntouched: boolean | null = null;
     if (targetEnv === "sandbox") {
       const productionAfter = await countProductionRows(supabaseAdmin);
-      await logSandboxImport(supabaseAdmin, {
+      productionUntouched = await logSandboxImport(supabaseAdmin, {
         userId: context.userId,
         userEmail: (context as any)?.claims?.email ?? null,
         source: data.backupId ? "backup-salvo" : "upload-zip",
@@ -1963,10 +2027,11 @@ export const restoreBackup = createServerFn({ method: "POST" })
         tables: tablesToProcess,
         rowCounts: Object.fromEntries(results.map((r) => [r.table, r.inserted])),
         durationMs: Date.now() - started,
-        result: results.some((r) => r.skipped > 0) ? "error" : "success",
+        result: restoreErrors.length > 0 ? "error" : "success",
+        error: restoreErrors[0] ? `${restoreErrors[0].table}: ${restoreErrors[0].message}` : null,
         productionBefore,
         productionAfter,
-        report: { tablesRestored: results },
+        report: { tablesRestored: results, verification, errors: restoreErrors },
       });
     }
 
@@ -1977,6 +2042,10 @@ export const restoreBackup = createServerFn({ method: "POST" })
       tablesRestored: results,
       storageFilesRestored,
       durationMs: Date.now() - started,
+      filename: zipName,
+      errors: restoreErrors,
+      verification,
+      productionUntouched,
     };
   });
 

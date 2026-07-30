@@ -51,8 +51,110 @@ type Step = "source" | "preview" | "validation" | "done";
 
 const MAX_UPLOAD_MB = 500;
 
+/** Tabelas mínimas que um backup Star Games precisa conter. */
+const REQUIRED_TABLES = ["clients", "products"];
+
+interface ZipPrecheck {
+  fileName: string;
+  sizeMB: number;
+  schemaVersion: number | null;
+  generatedAt: string | null;
+  tables: Array<{ table: string; rows: number }>;
+  errors: string[];
+  warnings: string[];
+}
+
+interface ErrorInfo {
+  stage: string;
+  message: string;
+  hint?: string;
+  file?: string;
+}
+
 function fmt(n: number): string {
   return (n ?? 0).toLocaleString("pt-BR");
+}
+
+/**
+ * Lê o ZIP no próprio navegador ANTES de enviar: confere manifesto, versão de
+ * schema e a presença dos arquivos de dados. Evita subir centenas de MB de um
+ * arquivo que o servidor recusaria depois.
+ */
+async function precheckZip(file: File): Promise<ZipPrecheck> {
+  const out: ZipPrecheck = {
+    fileName: file.name,
+    sizeMB: file.size / 1024 / 1024,
+    schemaVersion: null,
+    generatedAt: null,
+    tables: [],
+    errors: [],
+    warnings: [],
+  };
+  if (!/\.zip$/i.test(file.name)) {
+    out.errors.push("O arquivo precisa ter extensão .zip.");
+    return out;
+  }
+  let zip: any;
+  try {
+    const JSZip = (await import("jszip")).default;
+    zip = await JSZip.loadAsync(file);
+  } catch {
+    out.errors.push("Não foi possível abrir o ZIP — arquivo corrompido ou incompleto.");
+    return out;
+  }
+  const mf = zip.file("manifest.json");
+  if (!mf) {
+    out.errors.push(
+      "manifest.json ausente na raiz do ZIP — este arquivo não é um backup Star Games.",
+    );
+    return out;
+  }
+  let manifest: any;
+  try {
+    manifest = JSON.parse(await mf.async("string"));
+  } catch {
+    out.errors.push("manifest.json ilegível (JSON inválido).");
+    return out;
+  }
+  out.schemaVersion = Number(manifest.schemaVersion ?? 1);
+  out.generatedAt = manifest.generatedAt ?? null;
+  if (!Number.isFinite(out.schemaVersion) || out.schemaVersion < 1) {
+    out.errors.push(`Versão de schema inválida no manifesto: ${manifest.schemaVersion}`);
+  }
+
+  const dataFiles = Object.keys(zip.files).filter(
+    (n) => n.startsWith("database/data/") && n.endsWith(".jsonl"),
+  );
+  if (dataFiles.length === 0) {
+    out.errors.push("Pasta database/data ausente — o backup não contém dados de tabelas.");
+    return out;
+  }
+  const counts: Record<string, number> = manifest.rowCounts ?? {};
+  out.tables = dataFiles
+    .map((n) => {
+      const table = n.replace("database/data/", "").replace(/\.jsonl$/, "");
+      return { table, rows: Number(counts[table] ?? 0) };
+    })
+    .sort((a, b) => b.rows - a.rows);
+
+  const present = new Set(out.tables.map((t) => t.table));
+  const missing = REQUIRED_TABLES.filter((t) => !present.has(t));
+  if (missing.length > 0) {
+    out.errors.push(`Tabelas obrigatórias ausentes no backup: ${missing.join(", ")}.`);
+  }
+  for (const t of out.tables) {
+    const declared = Number(counts[t.table] ?? 0);
+    const entry = zip.file(`database/data/${t.table}.jsonl`);
+    if (declared > 0 && entry && (entry as any)._data?.uncompressedSize === 0) {
+      out.warnings.push(
+        `${t.table}: o manifesto declara ${fmt(declared)} registro(s), mas o arquivo está vazio.`,
+      );
+    }
+  }
+  if (out.tables.every((t) => t.rows === 0)) {
+    out.warnings.push("O manifesto não informa contagens — os totais só aparecerão na análise.");
+  }
+  return out;
 }
 
 export function RestoreBackupModal({
@@ -86,6 +188,8 @@ export function RestoreBackupModal({
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<RestoreResult | null>(null);
   const [report, setReport] = useState<ValidationReport | null>(null);
+  const [precheck, setPrecheck] = useState<ZipPrecheck | null>(null);
+  const [errorInfo, setErrorInfo] = useState<ErrorInfo | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -102,6 +206,8 @@ export function RestoreBackupModal({
     setConfirmText("");
     setResult(null);
     setReport(null);
+    setPrecheck(null);
+    setErrorInfo(null);
     void list().then((rows) => {
       const completed = rows.filter((r) => r.status === "completed");
       setBackups(completed);
@@ -117,6 +223,8 @@ export function RestoreBackupModal({
   const handleFile = async (file: File | null) => {
     setUploadFile(file);
     setUploadPct(0);
+    setPrecheck(null);
+    setErrorInfo(null);
     if (!file) {
       setUploadedPath("");
       return;
@@ -124,12 +232,32 @@ export function RestoreBackupModal({
     if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
       setUploadFile(null);
       setUploadedPath("");
-      toast.error(`Arquivo maior que ${MAX_UPLOAD_MB} MB.`);
+      setErrorInfo({
+        stage: "Seleção do arquivo",
+        message: `Arquivo maior que ${MAX_UPLOAD_MB} MB.`,
+        hint: "Gere um backup mais recente ou restaure a partir de um backup salvo no sistema.",
+        file: file.name,
+      });
       return;
     }
     setLoading(true);
-    toast.loading("Enviando arquivo…", { id: "upload-zip" });
+    toast.loading("Verificando o arquivo…", { id: "upload-zip" });
     try {
+      // 1) Pré-validação local: estrutura e compatibilidade antes de subir.
+      const check = await precheckZip(file);
+      setPrecheck(check);
+      if (check.errors.length > 0) {
+        setUploadedPath("");
+        setErrorInfo({
+          stage: "Pré-validação do ZIP",
+          message: check.errors.join(" "),
+          hint: "O ZIP precisa conter manifest.json na raiz e a pasta database/data com os arquivos .jsonl gerados pelo próprio sistema.",
+          file: file.name,
+        });
+        toast.error("Arquivo reprovado na pré-validação.", { id: "upload-zip" });
+        return;
+      }
+      toast.loading("Enviando arquivo…", { id: "upload-zip" });
       // Envio direto ao armazenamento: o ZIP não passa pela requisição do app,
       // por isso backups grandes (dezenas/centenas de MB) não estouram memória.
       const { path, token, bucket } = await makeUploadUrl({
@@ -146,6 +274,12 @@ export function RestoreBackupModal({
     } catch (err: any) {
       setUploadedPath("");
       setUploadPct(0);
+      setErrorInfo({
+        stage: "Envio do arquivo",
+        message: err?.message ?? "Falha ao enviar o arquivo.",
+        hint: "Verifique sua conexão e tente enviar novamente. Arquivos muito grandes podem levar alguns minutos.",
+        file: file.name,
+      });
       toast.error(err?.message ?? "Falha ao enviar o arquivo.", { id: "upload-zip" });
     } finally {
       setLoading(false);
@@ -154,6 +288,7 @@ export function RestoreBackupModal({
 
   const handlePreview = async () => {
     setLoading(true);
+    setErrorInfo(null);
     toast.loading("Analisando backup…", { id: "preview-zip" });
     try {
       const res = await preview({
@@ -167,6 +302,12 @@ export function RestoreBackupModal({
       setStep("preview");
       toast.dismiss("preview-zip");
     } catch (err: any) {
+      setErrorInfo({
+        stage: "Análise do backup",
+        message: err?.message ?? "Falha ao ler backup.",
+        hint: "Erros de manifesto ou de versão de schema indicam um ZIP gerado por outra versão do sistema.",
+        file: uploadFile?.name,
+      });
       toast.error(err?.message ?? "Falha ao ler backup.", { id: "preview-zip" });
     } finally {
       setLoading(false);
@@ -180,6 +321,7 @@ export function RestoreBackupModal({
       return;
     }
     setLoading(true);
+    setErrorInfo(null);
     toast.loading(
       sandboxTarget ? "Zerando ambiente de teste e restaurando…" : "Restaurando backup…",
       { id: "restore" },
@@ -198,7 +340,17 @@ export function RestoreBackupModal({
       });
       setResult(res);
       setStep("done");
-      toast.success("Restauração concluída.", { id: "restore" });
+      if (res.errors && res.errors.length > 0) {
+        setErrorInfo({
+          stage: `Gravação (${res.errors[0].table})`,
+          message: res.errors[0].message,
+          hint: "Normalmente indica incompatibilidade de schema entre o backup e o banco atual (coluna ou tipo diferente).",
+          file: res.filename,
+        });
+        toast.error("Restauração concluída com erros em algumas tabelas.", { id: "restore" });
+      } else {
+        toast.success("Restauração concluída.", { id: "restore" });
+      }
       // Remove o ZIP temporário enviado.
       if (uploadedPath) {
         void discardUpload({ data: { path: uploadedPath } }).catch(() => {});
@@ -207,6 +359,12 @@ export function RestoreBackupModal({
       // Dispara reset em cache/realtime.
       window.dispatchEvent(new CustomEvent("app:reset"));
     } catch (err: any) {
+      setErrorInfo({
+        stage: "Restauração",
+        message: err?.message ?? "Falha ao restaurar.",
+        hint: "Nenhuma alteração parcial fica no ambiente de teste: refaça a operação após corrigir a causa acima.",
+        file: uploadFile?.name,
+      });
       toast.error(err?.message ?? "Falha ao restaurar.", { id: "restore" });
     } finally {
       setLoading(false);
@@ -215,6 +373,7 @@ export function RestoreBackupModal({
 
   const handleValidate = async () => {
     setLoading(true);
+    setErrorInfo(null);
     toast.loading("Validando no Modo Teste…", { id: "validate" });
     try {
       const res = await validate({
@@ -230,6 +389,11 @@ export function RestoreBackupModal({
       setStep("validation");
       toast.success("Validação concluída — nada foi gravado.", { id: "validate" });
     } catch (err: any) {
+      setErrorInfo({
+        stage: "Validação (sem gravar)",
+        message: err?.message ?? "Falha ao validar.",
+        file: uploadFile?.name,
+      });
       toast.error(err?.message ?? "Falha ao validar.", { id: "validate" });
     } finally {
       setLoading(false);
@@ -356,6 +520,50 @@ export function RestoreBackupModal({
                     />
                   </div>
                 )}
+
+                {precheck && precheck.errors.length === 0 && (
+                  <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-[11px] text-emerald-700 dark:text-emerald-300">
+                    <div className="flex items-center gap-1.5 font-semibold">
+                      <CheckCircle2 className="size-3.5" /> Estrutura do ZIP validada
+                    </div>
+                    <div className="mt-1 text-muted-foreground">
+                      Schema v{precheck.schemaVersion} ·{" "}
+                      {precheck.generatedAt
+                        ? new Date(precheck.generatedAt).toLocaleString("pt-BR")
+                        : "data desconhecida"}{" "}
+                      · {precheck.tables.length} tabela(s)
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {precheck.tables.slice(0, 12).map((t) => (
+                        <span
+                          key={t.table}
+                          className="rounded-full border border-border bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground"
+                        >
+                          {t.table}
+                          {t.rows > 0 ? ` · ${fmt(t.rows)}` : ""}
+                        </span>
+                      ))}
+                    </div>
+                    {precheck.warnings.map((w) => (
+                      <div key={w} className="mt-1 text-amber-600 dark:text-amber-400">
+                        Atenção: {w}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {errorInfo && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-[11px] text-destructive">
+                <div className="font-semibold">Falha na etapa: {errorInfo.stage}</div>
+                {errorInfo.file ? (
+                  <div className="mt-0.5 text-muted-foreground">Arquivo: {errorInfo.file}</div>
+                ) : null}
+                <div className="mt-1 break-words">{errorInfo.message}</div>
+                {errorInfo.hint ? (
+                  <div className="mt-1 text-muted-foreground">Como resolver: {errorInfo.hint}</div>
+                ) : null}
               </div>
             )}
 
@@ -747,6 +955,36 @@ export function RestoreBackupModal({
                 ? ` ${result.storageFilesRestored} arquivo(s) originais reenviados.`
                 : ""}
             </div>
+
+            {result.targetEnv === "sandbox" && (
+              <div
+                className={cn(
+                  "rounded-md border p-3 text-[11px]",
+                  result.productionUntouched === false
+                    ? "border-destructive/40 bg-destructive/10 text-destructive"
+                    : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+                )}
+              >
+                <strong>Isolamento:</strong>{" "}
+                {result.productionUntouched === false
+                  ? "as contagens de produção mudaram durante a operação — verifique o registro de auditoria."
+                  : "produção conferida antes e depois com contagens idênticas. Nada da produção foi alterado."}
+              </div>
+            )}
+
+            {result.errors && result.errors.length > 0 && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-[11px] text-destructive">
+                <div className="font-semibold">Erros durante a importação</div>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  {result.errors.map((e, i) => (
+                    <li key={i} className="break-words">
+                      <strong>{e.table}</strong> ({e.stage}): {e.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="max-h-64 overflow-y-auto rounded-md border border-border">
               <table className="w-full text-xs">
                 <thead>
@@ -754,10 +992,14 @@ export function RestoreBackupModal({
                     <th className="px-2 py-1">Tabela</th>
                     <th className="px-2 py-1 text-right">Inseridas</th>
                     <th className="px-2 py-1 text-right">Ignoradas</th>
+                    <th className="px-2 py-1 text-right">No banco</th>
+                    <th className="px-2 py-1 text-right">Divergência</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {result.tablesRestored.map((r) => (
+                  {result.tablesRestored.map((r) => {
+                    const v = result.verification?.find((x) => x.table === r.table);
+                    return (
                     <tr key={r.table} className="border-b border-border/40 last:border-b-0">
                       <td className="px-2 py-1">{r.table}</td>
                       <td className="px-2 py-1 text-right tabular-nums">{fmt(r.inserted)}</td>
@@ -769,11 +1011,27 @@ export function RestoreBackupModal({
                       >
                         {fmt(r.skipped)}
                       </td>
+                      <td className="px-2 py-1 text-right tabular-nums">
+                        {v && v.actual >= 0 ? fmt(v.actual) : "—"}
+                      </td>
+                      <td
+                        className={cn(
+                          "px-2 py-1 text-right tabular-nums",
+                          v && v.diff !== 0 ? "text-destructive" : "text-muted-foreground",
+                        )}
+                      >
+                        {v && v.actual >= 0 ? (v.diff > 0 ? `+${v.diff}` : v.diff) : "—"}
+                      </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
+            <p className="text-[10px] text-muted-foreground">
+              “No banco” é a contagem real feita após a restauração no ambiente de destino;
+              divergência diferente de zero indica registros recusados ou pré-existentes.
+            </p>
             <DialogFooter>
               <Button onClick={onClose}>Fechar</Button>
             </DialogFooter>
