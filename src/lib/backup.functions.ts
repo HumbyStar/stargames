@@ -1495,6 +1495,15 @@ const CLONE_BY_TABLE: Record<string, CloneTable> = Object.fromEntries(
   CLONE_ORDER.map((t) => [t.name, t]),
 );
 
+// Alvo de conflito do upsert por tabela. As tabelas com chave composta
+// (id/env) precisam do alvo correto, senão o banco recusa a gravação.
+const CONFLICT_TARGET: Record<string, string> = {
+  app_settings: "id,env",
+  ai_training_profile: "user_id,env",
+  active_sessions: "user_id",
+  sandbox_state: "user_id",
+};
+
 const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
 
 /**
