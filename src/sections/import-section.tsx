@@ -2477,6 +2477,24 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         onValueChange={(v) => setImportAccordion(v as string[])}
         className="space-y-3"
       >
+        {/* Parte 0 — Importação exclusiva a partir de backup */}
+        <AccordionItem
+          value="import-backup"
+          className="overflow-hidden rounded-2xl border border-border bg-card shadow-xs"
+        >
+          <AccordionTrigger className="px-4 py-3 text-left text-sm font-semibold hover:no-underline">
+            <span className="flex items-center gap-2">
+              <span className="grid size-6 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+                <FileArchive className="size-3.5" />
+              </span>
+              Importar de backup (ZIP)
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="px-4 pb-4">
+            <BackupImportCard />
+          </AccordionContent>
+        </AccordionItem>
+
         {/* Parte 1 — Importação em massa */}
         <AccordionItem
           value="import-mass"
