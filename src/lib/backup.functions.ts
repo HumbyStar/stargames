@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { deferWithWorkerContext } from "@/lib/worker-context";
 import { CLONE_ORDER, SANDBOX_TABLES, remapRow, type CloneTable } from "@/lib/sandbox-clone";
 import { z } from "zod";
 
@@ -27,6 +26,9 @@ const STALE_BACKUP_MS = 5 * 60 * 1000;
 const RESUME_STALE_MS = 90 * 1000;
 const STORAGE_MIRROR_MAX_BYTES = 500 * 1024 * 1024;
 const STORAGE_MIRROR_MAX_FILES = 10_000;
+const BACKUP_RETENTION_COUNT = 10;
+const BACKUP_RETENTION_BYTES = 1024 * 1024 * 1024;
+const FAILED_BACKUP_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 // Heurística: cada linha ocupa ~800 bytes em JSONL (chaves + valores).
 const ESTIMATED_BYTES_PER_ROW = 800;
 
@@ -808,6 +810,19 @@ async function runBackup(opts: {
       });
     if (upErr) throw new Error(upErr.message);
 
+    const pathParts = storagePath.split("/");
+    const uploadedName = pathParts.pop();
+    const uploadedFolder = pathParts.join("/");
+    const { data: uploadedFiles, error: verifyErr } = await supabaseAdmin.storage
+      .from(BACKUP_BUCKET)
+      .list(uploadedFolder, { search: uploadedName, limit: 10 });
+    if (verifyErr) throw new Error(`Falha ao verificar o backup enviado: ${verifyErr.message}`);
+    const uploadedFile = uploadedFiles?.find((file: any) => file.name === uploadedName);
+    const uploadedSize = Number((uploadedFile?.metadata as any)?.size ?? 0);
+    if (!uploadedFile || (uploadedSize > 0 && uploadedSize !== zipBuf.byteLength)) {
+      throw new Error("O arquivo enviado não passou na verificação de integridade do armazenamento.");
+    }
+
     const duration = Date.now() - startedAt;
     pushDebug("info", "completed", "Backup concluído com sucesso", {
       sizeBytes: zipBuf.byteLength,
@@ -830,8 +845,7 @@ async function runBackup(opts: {
       } as any)
       .eq("id", backupId);
 
-    // Retenção: mantém últimos 14 backups.
-    await pruneOldBackups(supabaseAdmin, 14);
+    await enforceBackupRetention(supabaseAdmin);
 
     return { id: backupId, storagePath, sizeBytes: zipBuf.byteLength };
   } catch (err: any) {
@@ -878,19 +892,59 @@ async function runBackup(opts: {
   }
 }
 
-async function pruneOldBackups(admin: any, keep: number) {
+async function removeBackupFile(admin: any, storagePath: string | null): Promise<void> {
+  if (!storagePath) return;
+  const { error } = await admin.storage.from(BACKUP_BUCKET).remove([storagePath]);
+  if (error) throw new Error(error.message);
+}
+
+async function enforceBackupRetention(admin: any) {
   const { data } = await admin
     .from("system_backups")
-    .select("id, storage_path, status")
+    .select("id, storage_path, status, size_bytes, created_at")
     .eq("status", "completed")
     .order("created_at", { ascending: false });
-  if (!data || data.length <= keep) return;
-  const toDelete = data.slice(keep);
-  for (const row of toDelete) {
-    if (row.storage_path) {
-      await admin.storage.from(BACKUP_BUCKET).remove([row.storage_path]);
+  if (!data?.length) return;
+
+  let retainedCount = 0;
+  let retainedBytes = 0;
+  const toDelete: any[] = [];
+  for (const [index, row] of data.entries()) {
+    const size = Math.max(0, Number(row.size_bytes ?? 0));
+    const mustKeepLatest = index === 0;
+    const fits =
+      retainedCount < BACKUP_RETENTION_COUNT &&
+      retainedBytes + size <= BACKUP_RETENTION_BYTES;
+    if (mustKeepLatest || fits) {
+      retainedCount += 1;
+      retainedBytes += size;
+    } else {
+      toDelete.push(row);
     }
-    await admin.from("system_backups").delete().eq("id", row.id);
+  }
+
+  for (const row of toDelete) {
+    try {
+      await removeBackupFile(admin, row.storage_path as string | null);
+      await admin.from("system_backups").delete().eq("id", row.id);
+    } catch (error) {
+      console.error(`[backup] retention failed for ${row.id}:`, error);
+    }
+  }
+
+  const failedCutoff = new Date(Date.now() - FAILED_BACKUP_RETENTION_MS).toISOString();
+  const { data: obsoleteRows } = await admin
+    .from("system_backups")
+    .select("id, storage_path")
+    .in("status", ["failed", "cancelled"])
+    .lt("created_at", failedCutoff);
+  for (const row of obsoleteRows ?? []) {
+    try {
+      await removeBackupFile(admin, row.storage_path as string | null);
+      await admin.from("system_backups").delete().eq("id", row.id);
+    } catch (error) {
+      console.error(`[backup] obsolete cleanup failed for ${row.id}:`, error);
+    }
   }
 }
 
@@ -911,8 +965,7 @@ export const createBackupNow = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await cleanupStaleBackups(supabaseAdmin);
 
-    // Reutiliza uma linha pendente/em execução recente do mesmo usuário
-    // para evitar múltiplas linhas quando o cliente clica de novo.
+    // Um clique repetido acompanha a execução ativa, sem criar concorrência.
     const cutoffIso = new Date(Date.now() - STALE_BACKUP_MS).toISOString();
     const { data: existingRow } = await supabaseAdmin
       .from("system_backups")
@@ -926,6 +979,7 @@ export const createBackupNow = createServerFn({ method: "POST" })
 
     let backupId: string;
     let storagePath: string;
+    let shouldExecute = false;
     if (existingRow?.id && existingRow.storage_path) {
       backupId = existingRow.id as string;
       storagePath = existingRow.storage_path as string;
@@ -945,32 +999,7 @@ export const createBackupNow = createServerFn({ method: "POST" })
         .single();
       if (insErr || !rowIns) throw new Error(insErr?.message ?? "insert failed");
       backupId = rowIns.id as string;
-    }
-
-    const started = runBackup({
-      type: "manual",
-      createdBy: context.userId,
-      existing: { id: backupId, storagePath },
-    }).catch((err) => console.error("[backup] background run failed:", err));
-
-    // Sempre devolvemos rápido. Se o runtime expõe waitUntil, o job continua
-    // depois da resposta. Caso contrário, ainda disparamos fire-and-forget
-    // e a UI faz polling / retomada via resumeBackup para completar.
-    const deferred = deferWithWorkerContext(started);
-    if (!deferred) {
-      await appendBackupDebug(
-        supabaseAdmin,
-        backupId,
-        [
-          {
-            at: new Date().toISOString(),
-            level: "warn",
-            phase: "initializing",
-            message:
-              "Runtime sem waitUntil — job disparado sem garantia de continuidade; UI pode retomar automaticamente.",
-          },
-        ],
-      );
+      shouldExecute = true;
     }
 
     return {
@@ -978,8 +1007,34 @@ export const createBackupNow = createServerFn({ method: "POST" })
       storagePath,
       sizeBytes: null,
       queued: true,
-      deferred,
+      shouldExecute,
     };
+  });
+
+export const executeBackupNow = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string }) => input)
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row, error } = await supabaseAdmin
+      .from("system_backups")
+      .select("id, storage_path, status, created_by")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (error || !row) throw new Error(error?.message ?? "Backup não encontrado.");
+    if (row.created_by !== context.userId) throw new Error("Você não pode executar este backup.");
+    if (!row.storage_path) throw new Error("Caminho do backup inválido.");
+    if (row.status === "completed") return { id: row.id as string, status: "completed" as const };
+    if (row.status !== "pending") {
+      throw new Error(`Este backup não pode ser iniciado no estado ${row.status}.`);
+    }
+    await runBackup({
+      type: "manual",
+      createdBy: context.userId,
+      existing: { id: row.id as string, storagePath: row.storage_path as string },
+    });
+    return { id: row.id as string, status: "completed" as const };
   });
 
 // ---------------------------------------------------------------------------
@@ -1155,14 +1210,12 @@ export const resumeBackup = createServerFn({ method: "POST" })
       };
     }
 
-    const started = runBackup({
+    const result = await runBackup({
       type: "manual",
       createdBy: (row.created_by as string | null) ?? context.userId,
       existing: { id: row.id as string, storagePath: row.storage_path as string },
-    }).catch((err) => console.error("[backup] resume failed:", err));
-
-    const deferred = deferWithWorkerContext(started);
-    return { id: row.id as string, status: "running", queued: true, deferred };
+    });
+    return { id: result.id, status: "completed", queued: false };
   });
 
 // removido: implementação original de createBackupNow substituída acima

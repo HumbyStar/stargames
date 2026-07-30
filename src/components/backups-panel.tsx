@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import {
   createBackupNow,
+  executeBackupNow,
   deleteBackup,
   estimateBackup,
   getBackupDownloadUrl,
@@ -680,6 +681,7 @@ function BackupFailureModal({
 export function BackupsPanel() {
   const list = useServerFn(listBackups);
   const create = useServerFn(createBackupNow);
+  const execute = useServerFn(executeBackupNow);
   const resume = useServerFn(resumeBackup);
   const cancel = useServerFn(cancelBackup);
   const estimate = useServerFn(estimateBackup);
@@ -757,10 +759,6 @@ export function BackupsPanel() {
     if (!running || !activeBackupId) return;
     const started = Date.now();
     const MAX_MS = 20 * 60 * 1000;
-    const STALL_MS = 120 * 1000;
-    let lastProgressAt = Date.now();
-    let lastLogSignature = "";
-    let resumeAttempts = 0;
     let stopped = false;
     const poll = async () => {
       if (stopped) return;
@@ -796,30 +794,6 @@ export function BackupsPanel() {
           setActiveBackupId(null);
           return;
         }
-        if (row) {
-          const sig = `${row.status}:${row.updatedAt}:${row.debugLog.length}:${row.debugLog.at(-1)?.at ?? ""}`;
-          if (sig !== lastLogSignature) {
-            lastLogSignature = sig;
-            lastProgressAt = Date.now();
-          } else if (
-            resumeAttempts < 3 &&
-            Date.now() - lastProgressAt > STALL_MS
-          ) {
-            resumeAttempts += 1;
-            lastProgressAt = Date.now();
-            try {
-              const resumed = await resume({ data: { id: activeBackupId } });
-              if (resumed.queued) {
-                toast.loading(
-                  `Retomando backup (tentativa ${resumeAttempts})…`,
-                  { id: "backup-run" },
-                );
-              }
-            } catch (err) {
-              console.warn("[backup] resume failed:", err);
-            }
-          }
-        }
         if (Date.now() - started > MAX_MS) {
           toast.error("Tempo esgotado (20 min). Verifique o histórico.", { id: "backup-run" });
           setRunning(false);
@@ -836,10 +810,14 @@ export function BackupsPanel() {
       stopped = true;
       clearInterval(iv);
     };
-  }, [running, activeBackupId, list, resume]);
+  }, [running, activeBackupId, list]);
 
   const totalSize = useMemo(
-    () => rows.reduce((s, r) => s + (r.sizeBytes ?? 0), 0),
+    () => rows.reduce((s, r) => s + (r.status === "completed" ? (r.sizeBytes ?? 0) : 0), 0),
+    [rows],
+  );
+  const completedCount = useMemo(
+    () => rows.filter((row) => row.status === "completed").length,
     [rows],
   );
 
@@ -917,10 +895,11 @@ export function BackupsPanel() {
           });
           setActiveBackupId(res.id ?? null);
           await refresh();
-          if (!res.id) {
-            toast.success(`Backup gerado (${formatBytes(res.sizeBytes)}).`, { id: "backup-run" });
-            setRunning(false);
-            setRunningSince(null);
+          if (res.id && res.shouldExecute) {
+            void execute({ data: { id: res.id } }).catch((error: any) => {
+              console.error("[backup] execution request failed:", error);
+              void refresh();
+            });
           }
           return;
         } catch (err: any) {
@@ -933,8 +912,7 @@ export function BackupsPanel() {
             elapsedMs: Date.now() - startedAt,
             meta: { name: err?.name, status: err?.status },
           });
-          // Se o backend criou uma linha mesmo com erro de resposta (Worker cortou a
-          // request mas o job continuou), entramos em modo poll + auto-resume.
+          // Se o registro foi criado, o painel passa a acompanhar seu estado real.
           try {
             const rowsRes = await list();
             setRows(rowsRes);
@@ -944,7 +922,7 @@ export function BackupsPanel() {
             if (recent) {
               setActiveBackupId(recent.id);
               toast.loading(
-                "Resposta interrompida pelo servidor. Retomando backup em background…",
+                "Acompanhando a execução registrada no servidor…",
                 { id: "backup-run" },
               );
               return;
@@ -1156,9 +1134,9 @@ export function BackupsPanel() {
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
               <HardDrive className="size-3.5" /> Backups guardados
             </div>
-            <div className="text-2xl font-semibold tabular-nums">{rows.length}</div>
+            <div className="text-2xl font-semibold tabular-nums">{completedCount}</div>
             <div className="text-xs text-muted-foreground">
-              Retenção automática: últimos 14
+              Retenção: até 10 versões ou 1 GB
             </div>
           </div>
           <div className="rounded-lg border border-border bg-card/50 p-3">
@@ -1166,7 +1144,9 @@ export function BackupsPanel() {
               <Download className="size-3.5" /> Espaço utilizado
             </div>
             <div className="text-2xl font-semibold tabular-nums">{formatBytes(totalSize)}</div>
-            <div className="text-xs text-muted-foreground">Bucket privado system-backups</div>
+            <div className="text-xs text-muted-foreground">
+              O backup concluído mais recente é sempre preservado
+            </div>
           </div>
           <div className="rounded-lg border border-border bg-card/50 p-3">
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
