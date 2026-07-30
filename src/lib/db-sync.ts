@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isLocalMode } from "./local-mode";
 import type {
   Client,
   Product,
@@ -193,7 +194,7 @@ export async function fetchAllRows<T = Record<string, unknown>>(
   let from = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const res = await supabase
+    const res = await sb()
       .from(table)
       .select(columns)
       .range(from, from + pageSize - 1);
@@ -216,12 +217,60 @@ export interface DbSnapshot {
   uiState: Record<string, unknown>;
 }
 
+/**
+ * Cliente stub usado no Modo Local: qualquer chamada encadeada resolve vazio,
+ * sem tocar na rede. As gravações offline vivem no IndexedDB.
+ */
+function createOfflineBuilder(): any {
+  const result = { data: null, error: null, count: 0, status: 200, statusText: "OK" };
+  const target = function () {} as unknown as object;
+  const proxy: any = new Proxy(target, {
+    get(_t, prop) {
+      if (prop === "then") return (onOk: any, onErr: any) => Promise.resolve(result).then(onOk, onErr);
+      if (prop === "catch") return (onErr: any) => Promise.resolve(result).catch(onErr);
+      if (prop === "finally") return (cb: any) => Promise.resolve(result).finally(cb);
+      return () => proxy;
+    },
+    apply() {
+      return proxy;
+    },
+  });
+  return proxy;
+}
+
+const OFFLINE_CLIENT = {
+  from: () => createOfflineBuilder(),
+  rpc: () => createOfflineBuilder(),
+  storage: { from: () => createOfflineBuilder() },
+  channel: () => ({ on: () => ({ subscribe: () => ({}) }), subscribe: () => ({}) }),
+  removeChannel: () => {},
+} as unknown as typeof supabase;
+
+/** Supabase real quando online; stub inofensivo no Modo Local. */
+export function sb(): typeof supabase {
+  return isLocalMode() ? OFFLINE_CLIENT : supabase;
+}
+
+export interface RawSnapshotRows {
+  clients: Record<string, unknown>[];
+  products: Record<string, unknown>[];
+  importHistory: Record<string, unknown>[];
+  agreements: Record<string, unknown>[];
+  installments: Record<string, unknown>[];
+  settings: Record<string, unknown> | null;
+}
+
 export async function loadSnapshot(): Promise<DbSnapshot> {
+  if (isLocalMode()) {
+    const { loadLocalSnapshot } = await import("./local-package");
+    const local = await loadLocalSnapshot();
+    if (local) return local;
+  }
   const [clientsRes, productsRes, historyRes, settingsRes, agreementsRes, installmentsRes] = await Promise.all([
     fetchAllRows<Record<string, unknown>>("clients", "*"),
     fetchAllRows<Record<string, unknown>>("products", "*"),
-    supabase.from("import_history").select("*").order("date", { ascending: false }).limit(200),
-    supabase.from("app_settings").select("*").eq("id", "default").maybeSingle(),
+    sb().from("import_history").select("*").order("date", { ascending: false }).limit(200),
+    sb().from("app_settings").select("*").eq("id", "default").maybeSingle(),
     fetchAllRows<Record<string, unknown>>("mgmv_agreements", "*"),
     fetchAllRows<Record<string, unknown>>("mgmv_installments", "*"),
   ]);
@@ -232,14 +281,31 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
   if (agreementsRes.error) logErr("loadAgreements", agreementsRes.error);
   if (installmentsRes.error) logErr("loadInstallments", installmentsRes.error);
 
-  const settings = settingsRes.data;
+  return buildSnapshotFromRows({
+    clients: (clientsRes.data ?? []) as Record<string, unknown>[],
+    products: (productsRes.data ?? []) as Record<string, unknown>[],
+    importHistory: (historyRes.data ?? []) as Record<string, unknown>[],
+    agreements: (agreementsRes.data ?? []) as Record<string, unknown>[],
+    installments: (installmentsRes.data ?? []) as Record<string, unknown>[],
+    settings: (settingsRes.data ?? null) as Record<string, unknown> | null,
+  });
+}
+
+/**
+ * Monta o snapshot do app a partir das linhas cruas das tabelas.
+ * Usado tanto pelo carregamento na nuvem quanto pelo banco local (offline).
+ */
+export function buildSnapshotFromRows(raw: RawSnapshotRows): DbSnapshot {
+  const settings = raw.settings as
+    | { preferences?: unknown; rules?: unknown; security?: unknown; ui_state?: unknown }
+    | null;
 
   // Reconstrói cada acordo MGMV a partir das tabelas oficiais
   // (mgmv_agreements + mgmv_installments). Esta é a ÚNICA fonte de verdade
   // do MGMV — o jsonb legado em clients.mgmv é ignorado se não houver
   // registro relacional correspondente.
   const installmentsByAgreement = new Map<string, MGMVInstallment[]>();
-  for (const row of (installmentsRes.data ?? []) as Array<{
+  for (const row of (raw.installments ?? []) as unknown as Array<{
     agreement_id: string;
     installment_number: number;
     amount: number | string | null;
@@ -266,7 +332,7 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
     installmentsByAgreement.set(row.agreement_id, list);
   }
   const agreementsByClient = new Map<string, MGMVAgreement>();
-  for (const row of (agreementsRes.data ?? []) as Array<{
+  for (const row of (raw.agreements ?? []) as unknown as Array<{
     id: string;
     client_id: string;
     total_agreement_value: number | string | null;
@@ -297,7 +363,7 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
     });
   }
 
-  const clients = (clientsRes.data ?? []).map((r: Record<string, unknown>) => {
+  const clients = (raw.clients ?? []).map((r: Record<string, unknown>) => {
     const c = rowToClient(r as unknown as DbClientRow);
     const official = agreementsByClient.get(c.id);
     // Fonte oficial: tabela relacional. Sem registro relacional → sem mgmv.
@@ -306,10 +372,10 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
 
   return {
     clients,
-    products: (productsRes.data ?? []).map((r: Record<string, unknown>) =>
+    products: (raw.products ?? []).map((r: Record<string, unknown>) =>
       rowToProduct(r as unknown as DbProductRow),
     ),
-    importHistory: (historyRes.data ?? []).map((r: Record<string, unknown>) =>
+    importHistory: (raw.importHistory ?? []).map((r: Record<string, unknown>) =>
       rowToHistory(r as unknown as DbImportHistoryRow),
     ),
     preferences: (settings?.preferences as Partial<SystemPreferences>) ?? {},
@@ -322,13 +388,13 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
 // ============= Writers (background) =============
 
 export function dbUpsertClient(c: Client): void {
-  void supabase.from("clients").upsert(clientToRow(c)).then(({ error }) => {
+  void sb().from("clients").upsert(clientToRow(c)).then(({ error }) => {
     if (error) logErr("upsertClient", error);
   });
 }
 
 export function dbUpsertProduct(p: Product): void {
-  void supabase.from("products").upsert(productToRow(p)).then(({ error }) => {
+  void sb().from("products").upsert(productToRow(p)).then(({ error }) => {
     if (error) logErr("upsertProduct", error);
   });
 }
@@ -421,13 +487,13 @@ if (typeof window !== "undefined") {
 }
 
 export function dbInsertHistory(h: ImportHistoryEntry): void {
-  void supabase.from("import_history").upsert(historyToRow(h)).then(({ error }) => {
+  void sb().from("import_history").upsert(historyToRow(h)).then(({ error }) => {
     if (error) logErr("insertHistory", error);
   });
 }
 
 export async function dbUpsertHistoryAsync(h: ImportHistoryEntry): Promise<void> {
-  const { error } = await supabase.from("import_history").upsert(historyToRow(h));
+  const { error } = await sb().from("import_history").upsert(historyToRow(h));
   if (error) logErr("upsertHistoryAsync", error);
 }
 
@@ -436,7 +502,7 @@ export async function dbUpsertClientsAsync(clients: Client[]): Promise<void> {
   const rows = clients.map((c) => clientToRow(c));
   const CHUNK = 200;
   for (let i = 0; i < rows.length; i += CHUNK) {
-    const { error } = await supabase.from("clients").upsert(rows.slice(i, i + CHUNK));
+    const { error } = await sb().from("clients").upsert(rows.slice(i, i + CHUNK));
     if (error) logErr("upsertClientsAsync", error);
   }
 }
@@ -446,13 +512,13 @@ export async function dbUpsertProductsAsync(products: Product[]): Promise<void> 
   const rows = products.map((p) => productToRow(p));
   const CHUNK = 200;
   for (let i = 0; i < rows.length; i += CHUNK) {
-    const { error } = await supabase.from("products").upsert(rows.slice(i, i + CHUNK));
+    const { error } = await sb().from("products").upsert(rows.slice(i, i + CHUNK));
     if (error) logErr("upsertProductsAsync", error);
   }
 }
 
 export function dbDeleteHistoryAll(): void {
-  void supabase
+  void sb()
     .from("import_history")
     .delete()
     .gte("date", "1900-01-01")
@@ -462,12 +528,12 @@ export function dbDeleteHistoryAll(): void {
 }
 
 export async function dbDeleteHistoryAllAsync(): Promise<void> {
-  const { error } = await supabase.from("import_history").delete().gte("date", "1900-01-01");
+  const { error } = await sb().from("import_history").delete().gte("date", "1900-01-01");
   if (error) logErr("deleteHistoryAllAsync", error);
 }
 
 export function dbDeleteAllClients(): void {
-  void supabase
+  void sb()
     .from("clients")
     .delete()
     .not("id", "is", null)
@@ -477,12 +543,12 @@ export function dbDeleteAllClients(): void {
 }
 
 export async function dbDeleteAllClientsAsync(): Promise<void> {
-  const { error } = await supabase.from("clients").delete().not("id", "is", null);
+  const { error } = await sb().from("clients").delete().not("id", "is", null);
   if (error) logErr("deleteAllClientsAsync", error);
 }
 
 export function dbDeleteAllProducts(): void {
-  void supabase
+  void sb()
     .from("products")
     .delete()
     .not("id", "is", null)
@@ -492,20 +558,20 @@ export function dbDeleteAllProducts(): void {
 }
 
 export async function dbDeleteAllProductsAsync(): Promise<void> {
-  const { error } = await supabase.from("products").delete().not("id", "is", null);
+  const { error } = await sb().from("products").delete().not("id", "is", null);
   if (error) logErr("deleteAllProductsAsync", error);
 }
 
 /** Apaga acordos MGMV (parcelas caem em cascata via FK). */
 export function dbDeleteAllMGMV(): void {
-  void supabase
+  void sb()
     .from("mgmv_installments")
     .delete()
     .not("id", "is", null)
     .then(({ error }) => {
       if (error) logErr("deleteAllMGMVInstallments", error);
     });
-  void supabase
+  void sb()
     .from("mgmv_agreements")
     .delete()
     .not("id", "is", null)
@@ -515,9 +581,9 @@ export function dbDeleteAllMGMV(): void {
 }
 
 export async function dbDeleteAllMGMVAsync(): Promise<void> {
-  const installments = await supabase.from("mgmv_installments").delete().not("id", "is", null);
+  const installments = await sb().from("mgmv_installments").delete().not("id", "is", null);
   if (installments.error) logErr("deleteAllMGMVInstallmentsAsync", installments.error);
-  const agreements = await supabase.from("mgmv_agreements").delete().not("id", "is", null);
+  const agreements = await sb().from("mgmv_agreements").delete().not("id", "is", null);
   if (agreements.error) logErr("deleteAllMGMVAgreementsAsync", agreements.error);
 }
 
@@ -527,13 +593,13 @@ export async function dbDeleteAllMGMVAsync(): Promise<void> {
  * `user_roles` — esses são configurações de conta e permanecem entre resets.
  */
 export async function dbDeleteAllTeamAsync(): Promise<void> {
-  const comments = await supabase.from("team_task_comments").delete().not("id", "is", null);
+  const comments = await sb().from("team_task_comments").delete().not("id", "is", null);
   if (comments.error) logErr("deleteAllTeamTaskCommentsAsync", comments.error);
-  const activity = await supabase.from("team_task_activity").delete().not("id", "is", null);
+  const activity = await sb().from("team_task_activity").delete().not("id", "is", null);
   if (activity.error) logErr("deleteAllTeamTaskActivityAsync", activity.error);
-  const tasks = await supabase.from("team_tasks").delete().not("id", "is", null);
+  const tasks = await sb().from("team_tasks").delete().not("id", "is", null);
   if (tasks.error) logErr("deleteAllTeamTasksAsync", tasks.error);
-  const punches = await supabase.from("team_punch_entries").delete().not("id", "is", null);
+  const punches = await sb().from("team_punch_entries").delete().not("id", "is", null);
   if (punches.error) logErr("deleteAllTeamPunchEntriesAsync", punches.error);
 }
 
@@ -544,7 +610,7 @@ export function dbDeleteAllImportProgress(): void {
       const { data: userRes } = await supabase.auth.getUser();
       const uid = userRes.user?.id;
       if (!uid) return;
-      const { error } = await supabase
+      const { error } = await sb()
         .from("import_progress")
         .delete()
         .eq("user_id", uid);
@@ -560,7 +626,7 @@ export async function dbDeleteAllImportProgressAsync(): Promise<void> {
     const { data: userRes } = await supabase.auth.getUser();
     const uid = userRes.user?.id;
     if (!uid) return;
-    const { error } = await supabase.from("import_progress").delete().eq("user_id", uid);
+    const { error } = await sb().from("import_progress").delete().eq("user_id", uid);
     if (error) logErr("deleteAllImportProgressAsync", error);
   } catch (err) {
     logErr("deleteAllImportProgressAsync", err);
@@ -578,7 +644,7 @@ export async function dbReassignProductsClientAsync(
   const CHUNK = 100;
   for (let i = 0; i < fromIds.length; i += CHUNK) {
     const slice = fromIds.slice(i, i + CHUNK);
-    const { error } = await supabase
+    const { error } = await sb()
       .from("products")
       .update({ client_id: toId })
       .in("client_id", slice);
@@ -592,7 +658,7 @@ export async function dbReassignAgreementClientAsync(
   toId: string,
 ): Promise<void> {
   // Atualiza FK e o próprio id do acordo para manter a convenção 1:1 com o cliente.
-  const { error } = await supabase
+  const { error } = await sb()
     .from("mgmv_agreements")
     .update({ id: toId, client_id: toId })
     .eq("client_id", fromId);
@@ -605,7 +671,7 @@ export async function dbDeleteClientsByIdsAsync(ids: string[]): Promise<void> {
   const CHUNK = 100;
   for (let i = 0; i < ids.length; i += CHUNK) {
     const slice = ids.slice(i, i + CHUNK);
-    const { error } = await supabase.from("clients").delete().in("id", slice);
+    const { error } = await sb().from("clients").delete().in("id", slice);
     if (error) logErr("deleteClientsByIds", error);
   }
 }
@@ -620,59 +686,41 @@ export async function dbDeleteClientsByIdsAsync(ids: string[]): Promise<void> {
  *
  * Convenção: o id do acordo é IGUAL ao id do cliente (relação 1:1).
  */
-export async function dbSyncAgreementForClientAsync(client: Client): Promise<void> {
-  const agreementId = client.id;
-
-  if (!client.mgmv || client.mgmv.installments.length === 0) {
-    // Sem acordo → remove agreement (cascata apaga parcelas) e zera flags.
-    const del = await supabase.from("mgmv_agreements").delete().eq("id", agreementId);
-    if (del.error) logErr("syncAgreement.delete", del.error);
-    const resetFlags = await supabase
-      .from("products")
-      .update({
-        included_in_mgmv: false,
-        mgmv_agreement_id: null,
-        collection_eligible: true,
-      })
-      .eq("client_id", client.id);
-    if (resetFlags.error) logErr("syncAgreement.resetFlags", resetFlags.error);
-    return;
-  }
-
-  const ins = client.mgmv.installments;
-  const sorted = [...ins].sort((a, b) => a.number - b.number);
+/**
+ * Linha canônica de `mgmv_agreements` para um cliente com acordo.
+ * Pura: usada pelo sync na nuvem e pela exportação do banco local.
+ */
+export function buildAgreementRow(client: Client): Record<string, unknown> {
+  const mgmv = client.mgmv!;
+  const sorted = [...mgmv.installments].sort((a, b) => a.number - b.number);
   const paidCount = sorted.filter((i) => i.paid).length;
   const installmentValue = sorted[0]?.value ?? 0;
   const paidValue = sorted.filter((i) => i.paid).reduce((s, i) => s + (i.value || 0), 0);
-  const remainingValue = Math.max(0, (client.mgmv.totalDebt || 0) - paidValue);
+  const remainingValue = Math.max(0, (mgmv.totalDebt || 0) - paidValue);
   const nextUnpaid = sorted.find((i) => !i.paid);
   const firstDue = sorted[0]?.dueDate ?? null;
 
   // Validação matemática para o flag needs_review.
   const sumByInstallments = sorted.reduce((s, i) => s + (i.value || 0), 0);
-  const needsReview =
-    client.mgmv.totalDebt > 0 &&
-    Math.abs(sumByInstallments - client.mgmv.totalDebt) > 0.01;
-
+  const needsReview = mgmv.totalDebt > 0 && Math.abs(sumByInstallments - mgmv.totalDebt) > 0.01;
   const status = paidCount >= sorted.length ? "Quitado" : needsReview ? "Revisão necessária" : "Ativo";
 
   // Status de revisão (SEPARADO do status financeiro acima).
   // Preserva ai_reviewed/manually_reviewed quando já marcados; senão deriva
   // de needsReview (divergência matemática) ou cai em 'none'.
   const preservedReview =
-    client.mgmv.reviewStatus === "ai_reviewed" ||
-    client.mgmv.reviewStatus === "manually_reviewed"
-      ? client.mgmv.reviewStatus
+    mgmv.reviewStatus === "ai_reviewed" || mgmv.reviewStatus === "manually_reviewed"
+      ? mgmv.reviewStatus
       : null;
   const reviewStatus: NonNullable<MGMVAgreement["reviewStatus"]> =
     preservedReview ?? (needsReview ? "review_required" : "none");
 
-  const upAgreement = await supabase.from("mgmv_agreements").upsert({
-    id: agreementId,
+  return {
+    id: client.id,
     client_id: client.id,
     client_name: client.name,
     client_phone: client.phone ?? "",
-    total_agreement_value: client.mgmv.totalDebt,
+    total_agreement_value: mgmv.totalDebt,
     installments_count: sorted.length,
     installment_value: installmentValue,
     paid_installments: paidCount,
@@ -684,13 +732,53 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
     status,
     needs_review: needsReview,
     review_status: reviewStatus,
-    ai_reviewed: !!client.mgmv.aiReviewed,
-    ai_review_applied_at: client.mgmv.aiReviewAppliedAt ?? null,
-    ai_confidence: client.mgmv.aiConfidence ?? null,
-    ai_review_raw_result: (client.mgmv.aiReviewRawResult ?? null) as never,
+    ai_reviewed: !!mgmv.aiReviewed,
+    ai_review_applied_at: mgmv.aiReviewAppliedAt ?? null,
+    ai_confidence: mgmv.aiConfidence ?? null,
+    ai_review_raw_result: mgmv.aiReviewRawResult ?? null,
     source_folder: client.folder ?? null,
     original_notes: client.notes ?? null,
-  } as never);
+  };
+}
+
+/** Linhas canônicas de `mgmv_installments` para um cliente com acordo. */
+export function buildInstallmentRows(client: Client): Record<string, unknown>[] {
+  const sorted = [...(client.mgmv?.installments ?? [])].sort((a, b) => a.number - b.number);
+  return sorted.map((i) => ({
+    agreement_id: client.id,
+    installment_number: i.number,
+    amount: i.value,
+    due_date: i.dueDate,
+    paid_at: i.paid ? (i.paidAt ?? new Date().toISOString()) : null,
+    status: i.paid ? "Paga" : "Pendente",
+    paid_amount: i.paidAmount != null ? i.paidAmount : i.paid ? i.value : 0,
+    manual_partial: !!i.manualPartial,
+  }));
+}
+
+export async function dbSyncAgreementForClientAsync(client: Client): Promise<void> {
+  const agreementId = client.id;
+
+  if (!client.mgmv || client.mgmv.installments.length === 0) {
+    // Sem acordo → remove agreement (cascata apaga parcelas) e zera flags.
+    const del = await sb().from("mgmv_agreements").delete().eq("id", agreementId);
+    if (del.error) logErr("syncAgreement.delete", del.error);
+    const resetFlags = await sb()
+      .from("products")
+      .update({
+        included_in_mgmv: false,
+        mgmv_agreement_id: null,
+        collection_eligible: true,
+      })
+      .eq("client_id", client.id);
+    if (resetFlags.error) logErr("syncAgreement.resetFlags", resetFlags.error);
+    return;
+  }
+
+  const sorted = [...client.mgmv.installments].sort((a, b) => a.number - b.number);
+  const upAgreement = await sb()
+    .from("mgmv_agreements")
+    .upsert(buildAgreementRow(client) as never);
   if (upAgreement.error) {
     logErr("syncAgreement.upsert", upAgreement.error);
     return;
@@ -699,27 +787,13 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
   // Substitui parcelas (estratégia simples: delete + insert em lotes).
   // Acordos podem ter dezenas/centenas de parcelas — envia em lotes para
   // não estourar o payload do PostgREST e manter o sync resiliente.
-  const delIns = await supabase.from("mgmv_installments").delete().eq("agreement_id", agreementId);
+  const delIns = await sb().from("mgmv_installments").delete().eq("agreement_id", agreementId);
   if (delIns.error) logErr("syncAgreement.delInstallments", delIns.error);
   if (sorted.length > 0) {
-    const rows = sorted.map((i) => ({
-      agreement_id: agreementId,
-      installment_number: i.number,
-      amount: i.value,
-      due_date: i.dueDate,
-      paid_at: i.paid ? (i.paidAt ?? new Date().toISOString()) : null,
-      status: i.paid ? "Paga" : "Pendente",
-      paid_amount:
-        i.paidAmount != null
-          ? i.paidAmount
-          : i.paid
-            ? i.value
-            : 0,
-      manual_partial: !!i.manualPartial,
-    }));
+    const rows = buildInstallmentRows(client);
     const CHUNK = 200;
     for (let i = 0; i < rows.length; i += CHUNK) {
-      const insIns = await supabase
+      const insIns = await sb()
         .from("mgmv_installments")
         .insert(rows.slice(i, i + CHUNK) as never);
       if (insIns.error) logErr("syncAgreement.insertInstallments", insIns.error);
@@ -728,7 +802,7 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
 
   // Atualiza flags dos produtos do cliente: produtos com financialStatus
   // = 'MGMV' viram parte do acordo; demais saem do acordo.
-  const mgmvProducts = await supabase
+  const mgmvProducts = await sb()
     .from("products")
     .update({
       included_in_mgmv: true,
@@ -739,7 +813,7 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
     .eq("financial_status", "MGMV");
   if (mgmvProducts.error) logErr("syncAgreement.mgmvProducts", mgmvProducts.error);
 
-  const nonMgmvProducts = await supabase
+  const nonMgmvProducts = await sb()
     .from("products")
     .update({
       included_in_mgmv: false,
@@ -828,7 +902,7 @@ export async function dbInsertMgmvReviewAuditLog(input: {
       event: "Revisão IA aplicada ao acordo MGMV",
       clientId: input.clientId,
     };
-    const { error } = await supabase.from("audit_log").insert({
+    const { error } = await sb().from("audit_log").insert({
       table_name: "mgmv_agreements",
       action: "ai_review_applied",
       row_id: input.agreementId,
@@ -848,12 +922,12 @@ export async function dbFetchDiagnostics(): Promise<ImportDiagnostics> {
     (q.select("*", { count: "exact", head: true }) as unknown as Promise<{ count: number | null; error: unknown }>);
 
   const [c, p, a, i, mc, mp] = await Promise.all([
-    head(supabase.from("clients")),
-    head(supabase.from("products")),
-    head(supabase.from("mgmv_agreements")),
-    head(supabase.from("mgmv_installments")),
-    supabase.from("clients").select("id", { count: "exact", head: true }).eq("client_type", "mgmv"),
-    supabase
+    head(sb().from("clients")),
+    head(sb().from("products")),
+    head(sb().from("mgmv_agreements")),
+    head(sb().from("mgmv_installments")),
+    sb().from("clients").select("id", { count: "exact", head: true }).eq("client_type", "mgmv"),
+    sb()
       .from("products")
       .select("id", { count: "exact", head: true })
       .eq("included_in_mgmv", true)
@@ -865,8 +939,8 @@ export async function dbFetchDiagnostics(): Promise<ImportDiagnostics> {
   let mgmvClientsWithoutAgreement = 0;
   try {
     const [mgmvClients, allAgreements] = await Promise.all([
-      supabase.from("clients").select("id").eq("client_type", "mgmv"),
-      supabase.from("mgmv_agreements").select("client_id"),
+      sb().from("clients").select("id").eq("client_type", "mgmv"),
+      sb().from("mgmv_agreements").select("client_id"),
     ]);
     const setA = new Set(((allAgreements.data ?? []) as Array<{ client_id: string }>).map((r) => r.client_id));
     mgmvClientsWithoutAgreement = ((mgmvClients.data ?? []) as Array<{ id: string }>).filter(
@@ -881,7 +955,7 @@ export async function dbFetchDiagnostics(): Promise<ImportDiagnostics> {
     const { data: userRes } = await supabase.auth.getUser();
     const uid = userRes.user?.id;
     if (uid) {
-      const r = await supabase
+      const r = await sb()
         .from("import_progress")
         .select("id", { count: "exact", head: true })
         .eq("user_id", uid);
@@ -972,7 +1046,7 @@ export function dbSaveSettings(patch: {
   if (patch.rules !== undefined) update.rules = patch.rules;
   if (patch.security !== undefined) update.security = patch.security;
   if (patch.uiState !== undefined) update.ui_state = patch.uiState;
-  void supabase.from("app_settings").upsert(update as never).then(({ error }) => {
+  void sb().from("app_settings").upsert(update as never).then(({ error }) => {
     if (error) logErr("saveSettings", error);
   });
 }
@@ -1025,7 +1099,7 @@ export async function migrateLocalStorageOnce(snapshot: DbSnapshot): Promise<DbS
     id: "default",
     ui_state: mergedUiState,
   };
-  const { error: settingsErr } = await supabase
+  const { error: settingsErr } = await sb()
     .from("app_settings")
     .upsert(settingsPatch as never);
   if (settingsErr) logErr("migrate.settings", settingsErr);
@@ -1059,6 +1133,13 @@ export function isUiLoaded() {
   return uiLoaded;
 }
 
+/** Cópia do cache de ui_state (usada pela persistência local). */
+export function getUiStateSnapshot(): Record<string, unknown> {
+  const snapshot: Record<string, unknown> = {};
+  for (const [k, v] of uiCache.entries()) snapshot[k] = v;
+  return snapshot;
+}
+
 export function whenUiLoaded(cb: () => void) {
   if (uiLoaded) cb();
   else uiLoadWaiters.push(cb);
@@ -1088,7 +1169,7 @@ function scheduleFlush() {
     flushTimer = null;
     const snapshot: Record<string, unknown> = {};
     for (const [k, v] of uiCache.entries()) snapshot[k] = v;
-    void supabase
+    void sb()
       .from("app_settings")
       .upsert({ id: "default", ui_state: snapshot } as never)
       .then(({ error }) => {
@@ -1104,7 +1185,7 @@ export async function flushUiStateNow(): Promise<void> {
   }
   const snapshot: Record<string, unknown> = {};
   for (const [k, v] of uiCache.entries()) snapshot[k] = v;
-  const { error } = await supabase
+  const { error } = await sb()
     .from("app_settings")
     .upsert({ id: "default", ui_state: snapshot } as never);
   if (error) logErr("ui_state.flushNow", error);
@@ -1152,6 +1233,8 @@ export function suspendRealtimeRefresh(): () => void {
  * refresh a cada `MAX_WAIT_MS`, e nunca um por evento.
  */
 export function subscribeRealtimeSnapshot(onRefresh: () => void): () => void {
+  // No Modo Local não há conexão com o banco na nuvem.
+  if (isLocalMode()) return () => {};
   let timer: number | null = null;
   let firstEventAt = 0;
   const QUIET_MS = 800;
@@ -1194,7 +1277,7 @@ export function subscribeRealtimeSnapshot(onRefresh: () => void): () => void {
   if (typeof document !== "undefined") {
     document.addEventListener("visibilitychange", onVisible);
   }
-  const channel = supabase
+  const channel = sb()
     .channel("realtime-store")
     .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, schedule)
     .on("postgres_changes", { event: "*", schema: "public", table: "products" }, schedule)
