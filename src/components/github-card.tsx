@@ -112,6 +112,10 @@ export function GithubCard() {
   }, [repos, selectedRepo]);
 
   const handleSave = async () => {
+    if (!/^[^/\s]+\/[^/\s]+$/.test(selectedRepo.trim())) {
+      toast.error("Informe o repositório no formato dono/repositório.");
+      return;
+    }
     const [owner = "", name = ""] = selectedRepo.split("/");
     setSaving(true);
     try {
@@ -133,9 +137,29 @@ export function GithubCard() {
     }
   };
 
+  const ensureRepoSaved = async () => {
+    const repo = selectedRepo.trim();
+    if (!repo) {
+      throw new Error("Selecione ou digite um repositório (dono/repositório) antes de publicar.");
+    }
+    const savedRepo = status?.config.repoOwner
+      ? `${status.config.repoOwner}/${status.config.repoName}`
+      : "";
+    if (savedRepo === repo && (status?.config.branch ?? "") === branch.trim()) return;
+    const [owner = "", name = ""] = repo.split("/");
+    if (!owner || !name) {
+      throw new Error("Repositório inválido. Use o formato dono/repositório.");
+    }
+    await saveGithubConfig({
+      data: { repoOwner: owner, repoName: name, branch: branch.trim(), autoPushBackup },
+    });
+    await loadStatus();
+  };
+
   const runAction = async (key: string, fn: () => Promise<void>) => {
     setBusy(key);
     try {
+      await ensureRepoSaved();
       await fn();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Falha ao publicar no GitHub");
@@ -197,7 +221,7 @@ export function GithubCard() {
   }
 
   const hasRepo = Boolean(status?.repo);
-  const actionsDisabled = !status?.connected || !hasRepo || busy !== null;
+  const actionsDisabled = busy !== null;
 
   return (
     <div className="space-y-4">
@@ -292,7 +316,7 @@ export function GithubCard() {
               <Button
                 variant="outline"
                 onClick={() => void loadRepos()}
-                disabled={!status?.connected || reposLoading}
+                disabled={reposLoading}
               >
                 {reposLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -311,6 +335,16 @@ export function GithubCard() {
               placeholder="padrão do repositório"
             />
           </div>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          <Label htmlFor="gh-repo-manual">Ou digite o repositório manualmente</Label>
+          <Input
+            id="gh-repo-manual"
+            value={selectedRepo}
+            onChange={(e) => setSelectedRepo(e.target.value)}
+            placeholder="HumbyStar/stargames"
+          />
         </div>
 
         <div className="mt-4 flex items-center justify-between rounded-lg border border-border/60 bg-card/50 px-4 py-3">
@@ -400,7 +434,8 @@ export function GithubCard() {
 
         {!hasRepo && (
           <p className="mt-3 text-xs text-muted-foreground">
-            Selecione e salve um repositório para habilitar as publicações.
+            Informe o repositório (ex.: HumbyStar/stargames) — ele é salvo automaticamente ao
+            publicar.
           </p>
         )}
 
