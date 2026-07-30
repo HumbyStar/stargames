@@ -1540,20 +1540,67 @@ export interface RestoreResult {
 const restorePreviewSchema = z.object({
   backupId: z.string().uuid().optional(),
   uploadedZipBase64: z.string().optional(),
+  uploadedPath: z.string().optional(),
 });
 
 const restoreApplySchema = z.object({
   backupId: z.string().uuid().optional(),
   uploadedZipBase64: z.string().optional(),
+  uploadedPath: z.string().optional(),
   mode: z.enum(["merge", "replace"]),
   tables: z.array(z.string()).optional(),
   includeStorage: z.boolean().default(false),
   confirmReplace: z.string().optional(),
 });
 
+/** Prefixo dos ZIPs enviados pelo usuário (temporários). */
+const UPLOAD_PREFIX = "uploads/";
+/** Base64 continua aceito só para arquivos pequenos (compatibilidade). */
+const MAX_BASE64_BYTES = 8 * 1024 * 1024;
+
+function assertUploadPath(path: string) {
+  if (!path.startsWith(UPLOAD_PREFIX) || path.includes("..")) {
+    throw new Error("Caminho de upload inválido.");
+  }
+}
+
+/**
+ * Gera uma URL assinada para o navegador enviar o ZIP direto ao armazenamento.
+ * Evita trafegar o arquivo em base64 dentro da requisição (estourava memória).
+ */
+export const createBackupUploadUrl = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ fileName: z.string().min(1), size: z.number().int().positive() }).parse(d),
+  )
+  .handler(async ({ data, context }): Promise<{ path: string; token: string; bucket: string }> => {
+    await assertAdmin(context);
+    if (data.size > MAX_UPLOAD_BYTES) throw new Error("Arquivo maior que 500 MB.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const safe = data.fileName.replace(/[^\w.-]+/g, "_").slice(-80);
+    const path = `${UPLOAD_PREFIX}${context.userId}/${Date.now()}-${safe}`;
+    const { data: signed, error } = await supabaseAdmin.storage
+      .from(BACKUP_BUCKET)
+      .createSignedUploadUrl(path);
+    if (error || !signed) throw new Error(error?.message ?? "Falha ao preparar upload.");
+    return { path: signed.path, token: signed.token, bucket: BACKUP_BUCKET };
+  });
+
+/** Remove um ZIP temporário enviado pelo usuário. */
+export const discardUploadedBackup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ path: z.string().min(1) }).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    await assertAdmin(context);
+    assertUploadPath(data.path);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.storage.from(BACKUP_BUCKET).remove([data.path]);
+    return { ok: true };
+  });
+
 async function loadBackupZip(
   admin: any,
-  opts: { backupId?: string; uploadedZipBase64?: string },
+  opts: { backupId?: string; uploadedZipBase64?: string; uploadedPath?: string },
 ): Promise<{ zip: any; filename: string }> {
   const JSZip = (await import("jszip")).default;
   if (opts.backupId) {
@@ -1571,21 +1618,41 @@ async function loadBackupZip(
     const zip = await JSZip.loadAsync(buf);
     return { zip, filename: row.storage_path.split("/").pop() ?? "backup.zip" };
   }
+  if (opts.uploadedPath) {
+    assertUploadPath(opts.uploadedPath);
+    const { data: blob, error } = await admin.storage
+      .from(BACKUP_BUCKET)
+      .download(opts.uploadedPath);
+    if (error || !blob) {
+      throw new Error(error?.message ?? "Falha ao baixar o arquivo enviado.");
+    }
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    if (buf.byteLength > MAX_UPLOAD_BYTES) throw new Error("Arquivo maior que 500 MB.");
+    let zip: any;
+    try {
+      zip = await JSZip.loadAsync(buf);
+    } catch {
+      throw new Error("Arquivo inválido: não foi possível ler o ZIP enviado.");
+    }
+    return { zip, filename: opts.uploadedPath.split("/").pop() ?? "upload.zip" };
+  }
   if (opts.uploadedZipBase64) {
     const raw = opts.uploadedZipBase64.includes(",")
       ? opts.uploadedZipBase64.split(",", 2)[1]
       : opts.uploadedZipBase64;
-    if (raw.length * 0.75 > MAX_UPLOAD_BYTES + 1024) {
-      throw new Error("Arquivo maior que 500 MB.");
+    if (raw.length * 0.75 > MAX_BASE64_BYTES) {
+      throw new Error("Arquivo grande demais para envio direto — reenvie o ZIP pelo seletor.");
     }
     const bin = Uint8Array.from(atob(raw), (c) => c.charCodeAt(0));
-    if (bin.byteLength > MAX_UPLOAD_BYTES) {
-      throw new Error("Arquivo maior que 500 MB.");
+    let zip: any;
+    try {
+      zip = await JSZip.loadAsync(bin);
+    } catch {
+      throw new Error("Arquivo inválido: não foi possível ler o ZIP enviado.");
     }
-    const zip = await JSZip.loadAsync(bin);
     return { zip, filename: "upload.zip" };
   }
-  throw new Error("Informe um backupId ou faça upload do ZIP.");
+  throw new Error("Informe um backup salvo ou envie um ZIP.");
 }
 
 async function readManifest(zip: any): Promise<{
