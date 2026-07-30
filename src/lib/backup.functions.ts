@@ -1483,15 +1483,17 @@ export const getCurrentBusinessSummary = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<BusinessSummary> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // O resumo "ao vivo" precisa comparar com o mesmo ambiente do backup.
+    const env = await resolveTargetEnv(supabaseAdmin, context.userId);
     const [clients, products, agreements, installments, nfInvoices, teamTasks, punchEntries] =
       await Promise.all([
-        fetchAllRows(supabaseAdmin, "clients"),
-        fetchAllRows(supabaseAdmin, "products"),
-        fetchAllRows(supabaseAdmin, "mgmv_agreements"),
-        fetchAllRows(supabaseAdmin, "mgmv_installments"),
-        fetchAllRows(supabaseAdmin, "nf_invoices"),
-        fetchAllRows(supabaseAdmin, "team_tasks"),
-        fetchAllRows(supabaseAdmin, "team_punch_entries"),
+        fetchAllRows(supabaseAdmin, "clients", 1000, env),
+        fetchAllRows(supabaseAdmin, "products", 1000, env),
+        fetchAllRows(supabaseAdmin, "mgmv_agreements", 1000, env),
+        fetchAllRows(supabaseAdmin, "mgmv_installments", 1000, env),
+        fetchAllRows(supabaseAdmin, "nf_invoices", 1000, env),
+        fetchAllRows(supabaseAdmin, "team_tasks", 1000, env),
+        fetchAllRows(supabaseAdmin, "team_punch_entries", 1000, env),
       ]);
     return computeBusinessSummaryFromRows({
       clients,
