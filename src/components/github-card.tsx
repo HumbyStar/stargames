@@ -283,16 +283,16 @@ export function GithubCard() {
         } else {
           toast.success(`Acesso confirmado a ${res.repo.fullName}.`);
         }
-        return true;
+        return res.repo;
       }
       setAccessError({ message: res.error ?? "Repositório inacessível.", hints: res.hints ?? [] });
-      return false;
+      return null;
     } catch (err) {
       setAccessError({
         message: err instanceof Error ? err.message : "Falha ao verificar o repositório",
         hints: [],
       });
-      return false;
+      return null;
     } finally {
       setVerifying(false);
     }
