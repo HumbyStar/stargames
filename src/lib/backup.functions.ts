@@ -1328,6 +1328,7 @@ export interface BackupRow {
   createdBy: string | null;
   type: "manual" | "scheduled";
   status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  env: "producao" | "sandbox";
   cancelRequested: boolean;
   storagePath: string | null;
   sizeBytes: number | null;
@@ -1360,6 +1361,7 @@ export const listBackups = createServerFn({ method: "GET" })
       createdBy: r.created_by,
       type: r.type,
       status: r.status,
+      env: (r.env as "producao" | "sandbox") ?? "producao",
       cancelRequested: Boolean(r.cancel_requested),
       storagePath: r.storage_path,
       sizeBytes: r.size_bytes,
