@@ -513,7 +513,6 @@ function NavLinkImpl({
       </span>
     </a>
   );
-  if (!compact) return anchor;
   return (
     <Tooltip>
       <TooltipTrigger asChild>{anchor}</TooltipTrigger>

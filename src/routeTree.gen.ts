@@ -9,21 +9,21 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated.index'
-import { Route as AuthenticatedNikostartRouteImport } from './routes/_authenticated.nikostart'
-import { Route as AuthenticatedQaRouteImport } from './routes/_authenticated.qa'
 import { Route as AuthenticatedSandboxRouteImport } from './routes/_authenticated.sandbox'
+import { Route as AuthenticatedQaRouteImport } from './routes/_authenticated.qa'
+import { Route as AuthenticatedNikostartRouteImport } from './routes/_authenticated.nikostart'
 import { Route as ApiPublicHooksBackupRunRouteImport } from './routes/api/public/hooks/backup-run'
 
-const AuthenticatedRoute = AuthenticatedRouteImport.update({
-  id: '/_authenticated',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
@@ -31,9 +31,9 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedNikostartRoute = AuthenticatedNikostartRouteImport.update({
-  id: '/nikostart',
-  path: '/nikostart',
+const AuthenticatedSandboxRoute = AuthenticatedSandboxRouteImport.update({
+  id: '/sandbox',
+  path: '/sandbox',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedQaRoute = AuthenticatedQaRouteImport.update({
@@ -41,9 +41,9 @@ const AuthenticatedQaRoute = AuthenticatedQaRouteImport.update({
   path: '/qa',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedSandboxRoute = AuthenticatedSandboxRouteImport.update({
-  id: '/sandbox',
-  path: '/sandbox',
+const AuthenticatedNikostartRoute = AuthenticatedNikostartRouteImport.update({
+  id: '/nikostart',
+  path: '/nikostart',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const ApiPublicHooksBackupRunRoute = ApiPublicHooksBackupRunRouteImport.update({
@@ -114,18 +114,18 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/_authenticated': {
-      id: '/_authenticated'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/auth': {
       id: '/auth'
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/': {
@@ -135,11 +135,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/nikostart': {
-      id: '/_authenticated/nikostart'
-      path: '/nikostart'
-      fullPath: '/nikostart'
-      preLoaderRoute: typeof AuthenticatedNikostartRouteImport
+    '/_authenticated/sandbox': {
+      id: '/_authenticated/sandbox'
+      path: '/sandbox'
+      fullPath: '/sandbox'
+      preLoaderRoute: typeof AuthenticatedSandboxRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/qa': {
@@ -149,11 +149,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedQaRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/sandbox': {
-      id: '/_authenticated/sandbox'
-      path: '/sandbox'
-      fullPath: '/sandbox'
-      preLoaderRoute: typeof AuthenticatedSandboxRouteImport
+    '/_authenticated/nikostart': {
+      id: '/_authenticated/nikostart'
+      path: '/nikostart'
+      fullPath: '/nikostart'
+      preLoaderRoute: typeof AuthenticatedNikostartRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/api/public/hooks/backup-run': {
