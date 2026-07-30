@@ -30,9 +30,26 @@ let state: Metrics = {
   lastDrilldownRows: null,
 };
 
+// A notificação é coalescida em um frame: contar renders com `setState`
+// síncrono a cada render do Dashboard realimenta o ciclo de render do React
+// ("Maximum update depth exceeded"). Guardamos o estado imediatamente e
+// avisamos os assinantes no máximo uma vez por frame.
+let flushScheduled = false;
+function scheduleFlush() {
+  if (flushScheduled) return;
+  flushScheduled = true;
+  const run = () => {
+    flushScheduled = false;
+    const snapshot = state;
+    for (const l of listeners) l(snapshot);
+  };
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(run);
+  else setTimeout(run, 16);
+}
+
 function emit(next: Metrics) {
   state = next;
-  for (const l of listeners) l(next);
+  scheduleFlush();
 }
 
 export function reportDashboardPerf(ev: PerfEvent) {
