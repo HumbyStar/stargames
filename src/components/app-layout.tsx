@@ -1311,12 +1311,22 @@ export function AppLayout({ children }: { children?: ReactNode }) {
   // invalida todos os caches TanStack Query e força um refresh do snapshot,
   // para que sessões e modais reflitam os dados apagados sem reload.
   useEffect(() => {
+    let t: number | null = null;
     const onReset = () => {
-      queryClient.invalidateQueries();
-      void useStore.getState().refreshFromDb();
+      // Debounce: uma restauração/reset pode disparar vários eventos em
+      // sequência; um único ciclo de invalidação já cobre todos.
+      if (t) window.clearTimeout(t);
+      t = window.setTimeout(() => {
+        t = null;
+        queryClient.invalidateQueries();
+        void useStore.getState().refreshFromDb();
+      }, 300);
     };
     window.addEventListener("app:reset", onReset);
-    return () => window.removeEventListener("app:reset", onReset);
+    return () => {
+      if (t) window.clearTimeout(t);
+      window.removeEventListener("app:reset", onReset);
+    };
   }, [queryClient]);
   // Pré-aquece os chunks lazy das seções e modais em paralelo à
   // hidratação. O splash só desmonta quando `hydrated && warm`, então ao
