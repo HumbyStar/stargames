@@ -234,21 +234,27 @@ export const listGithubRepos = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context);
-    const { githubFetch } = await import("./github.server");
+    const { githubFetch, githubFetchWithMeta } = await import("./github.server");
     const collected: any[] = [];
     let complete = true;
     let pagesLoaded = 0;
+    let scopes: string[] | null = null;
 
     // 1) repositórios do usuário (todas as páginas, até 500)
-    for (let page = 1; page <= 5; page++) {
-      const batch = await githubFetch(
-        `/user/repos?per_page=100&page=${page}&sort=updated&affiliation=owner,collaborator,organization_member`,
-      );
-      if (!Array.isArray(batch) || batch.length === 0) break;
-      collected.push(...batch);
-      pagesLoaded = page;
-      if (batch.length < 100) break;
-      if (page === 5) complete = false; // pode haver mais páginas
+    try {
+      for (let page = 1; page <= 5; page++) {
+        const { data: batch, meta } = await githubFetchWithMeta(
+          `/user/repos?per_page=100&page=${page}&sort=updated&affiliation=owner,collaborator,organization_member`,
+        );
+        if (page === 1) scopes = meta.scopes;
+        if (!Array.isArray(batch) || batch.length === 0) break;
+        collected.push(...batch);
+        pagesLoaded = page;
+        if (batch.length < 100) break;
+        if (page === 5) complete = false; // pode haver mais páginas
+      }
+    } catch (err) {
+      throw new Error(describeGithubError(err));
     }
 
     // 2) fallback: tokens de GitHub App só enxergam repos via installations
@@ -273,7 +279,16 @@ export const listGithubRepos = createServerFn({ method: "GET" })
       updatedAt: (r.updated_at as string) ?? null,
     }));
 
-    return { repos, complete, pagesLoaded, total: repos.length };
+    const warnings: string[] = [];
+    const scopeWarning = scopeWarningFor(scopes);
+    if (scopeWarning) warnings.push(scopeWarning);
+    if (!complete) {
+      warnings.push(
+        "A lista pode estar incompleta (mais de 500 repositórios). Use a busca ou digite o repositório manualmente.",
+      );
+    }
+
+    return { repos, complete, pagesLoaded, total: repos.length, scopes, warnings };
   });
 
 export const pushBackupToGithub = createServerFn({ method: "POST" })
