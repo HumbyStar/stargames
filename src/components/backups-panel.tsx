@@ -1252,6 +1252,11 @@ export function BackupsPanel() {
                       </td>
                       <td className="px-2 py-2 capitalize">
                         {r.type === "manual" ? "Manual" : "Agendado"}
+                        {r.env === "sandbox" ? (
+                          <div className="mt-1 inline-flex rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium normal-case text-amber-600 dark:text-amber-400">
+                            Modo teste
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-2 py-2">
                         {statusBadge(r.status)}
