@@ -75,6 +75,7 @@ export function RestoreBackupModal({
   const list = useServerFn(listBackups);
   const preview = useServerFn(previewBackupRestore);
   const restore = useServerFn(restoreBackup);
+  const validate = useServerFn(validateBackupRestore);
 
   const [step, setStep] = useState<Step>("source");
   const [source, setSource] = useState<"existing" | "upload">(initialSource);
@@ -89,6 +90,7 @@ export function RestoreBackupModal({
   const [confirmText, setConfirmText] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<RestoreResult | null>(null);
+  const [report, setReport] = useState<ValidationReport | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -103,6 +105,7 @@ export function RestoreBackupModal({
     setIncludeStorage(false);
     setConfirmText("");
     setResult(null);
+    setReport(null);
     void list().then((rows) => {
       const completed = rows.filter((r) => r.status === "completed");
       setBackups(completed);
@@ -158,6 +161,71 @@ export function RestoreBackupModal({
   };
 
   const handleApply = async () => {
+    if (mode === "replace" && confirmText !== "REPLACE") {
+      toast.error('Digite "REPLACE" para confirmar a substituição.');
+      return;
+    }
+    setLoading(true);
+    toast.loading("Restaurando backup…", { id: "restore" });
+    try {
+      const res = await restore({
+        data: {
+          ...(source === "existing"
+            ? { backupId }
+            : { uploadedZipBase64: uploadedBase64 }),
+          mode,
+          tables: Array.from(selectedTables),
+          includeStorage,
+          confirmReplace: mode === "replace" ? confirmText : undefined,
+        },
+      });
+      setResult(res);
+      setStep("done");
+      toast.success("Restauração concluída.", { id: "restore" });
+      // Dispara reset em cache/realtime.
+      window.dispatchEvent(new CustomEvent("app:reset"));
+    } catch (err: any) {
+      toast.error(err?.message ?? "Falha ao restaurar.", { id: "restore" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleValidate = async () => {
+    setLoading(true);
+    toast.loading("Validando no Modo Teste…", { id: "validate" });
+    try {
+      const res = await validate({
+        data: {
+          ...(source === "existing"
+            ? { backupId }
+            : { uploadedZipBase64: uploadedBase64 }),
+          mode,
+          tables: Array.from(selectedTables),
+        },
+      });
+      setReport(res);
+      setStep("validation");
+      toast.success("Validação concluída — nada foi gravado.", { id: "validate" });
+    } catch (err: any) {
+      toast.error(err?.message ?? "Falha ao validar.", { id: "validate" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const downloadReport = () => {
+    if (!report) return;
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `validacao-${report.filename.replace(/\.zip$/i, "")}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const legacyApply = async () => {
     if (mode === "replace" && confirmText !== "REPLACE") {
       toast.error('Digite "REPLACE" para confirmar a substituição.');
       return;
