@@ -152,7 +152,10 @@ export const getGithubStatus = createServerFn({ method: "GET" })
       let repo: GithubStatus["repo"] = null;
       if (config.repoOwner && config.repoName) {
         try {
-          const r = await githubFetch(`/repos/${config.repoOwner}/${config.repoName}`);
+          // Quando temos o id, consultamos por id: imune a renomeação e caixa alta.
+          const r = config.repoId
+            ? await githubFetch(`/repositories/${config.repoId}`)
+            : await githubFetch(`/repos/${config.repoOwner}/${config.repoName}`);
           repo = {
             fullName: r.full_name,
             private: Boolean(r.private),
@@ -163,6 +166,8 @@ export const getGithubStatus = createServerFn({ method: "GET" })
           const raw = describeGithubError(err);
           const target = `${config.repoOwner}/${config.repoName}`;
           let message = raw;
+          const status404 = (err as { status?: number })?.status === 404;
+          const hints = status404 ? notFoundHints(target) : [];
           if ((err as { status?: number })?.status === 404) {
             // 404 no GitHub também significa "existe, mas o token não enxerga".
             let suggestion = "";
@@ -193,6 +198,8 @@ export const getGithubStatus = createServerFn({ method: "GET" })
             account: { login: me.login, name: me.name ?? null, avatarUrl: me.avatar_url ?? null },
             repo: null,
             error: message,
+            errorStatus: (err as { status?: number })?.status ?? null,
+            errorHints: hints,
             scopes,
             scopeWarning,
           };
@@ -205,6 +212,8 @@ export const getGithubStatus = createServerFn({ method: "GET" })
         account: { login: me.login, name: me.name ?? null, avatarUrl: me.avatar_url ?? null },
         repo,
         error: null,
+        errorStatus: null,
+        errorHints: [],
         scopes,
         scopeWarning,
       };
@@ -216,6 +225,8 @@ export const getGithubStatus = createServerFn({ method: "GET" })
         account: null,
         repo: null,
         error: describeGithubError(err),
+        errorStatus: (err as { status?: number })?.status ?? null,
+        errorHints: [],
         scopes: null,
         scopeWarning: null,
       };
@@ -227,7 +238,83 @@ const configSchema = z.object({
   repoName: z.string().trim().max(120).regex(/^[A-Za-z0-9-_.]*$/, "Nome de repositório inválido"),
   branch: z.string().trim().max(120).default(""),
   autoPushBackup: z.boolean(),
+  repoId: z.number().int().positive().nullable().default(null),
 });
+
+/**
+ * Confirma que o token realmente enxerga o repositório antes de salvar a seleção.
+ * Consulta por id quando disponível (à prova de renomeação) e cai para dono/nome.
+ */
+export const verifyGithubRepoAccess = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        fullName: z.string().trim().min(3).max(240),
+        repoId: z.number().int().positive().nullable().default(null),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { githubFetch } = await import("./github.server");
+    const [owner = "", name = ""] = data.fullName.split("/");
+    if (!owner || !name) {
+      return {
+        ok: false as const,
+        repo: null,
+        status: 400,
+        error: "Formato inválido. Use dono/repositório.",
+        hints: [],
+      };
+    }
+    try {
+      const r = data.repoId
+        ? await githubFetch(`/repositories/${data.repoId}`)
+        : await githubFetch(`/repos/${owner}/${name}`);
+      return {
+        ok: true as const,
+        repo: {
+          id: r.id as number,
+          fullName: r.full_name as string,
+          owner: r.owner?.login as string,
+          name: r.name as string,
+          private: Boolean(r.private),
+          htmlUrl: r.html_url as string,
+          defaultBranch: (r.default_branch as string) ?? "main",
+          canPush: Boolean(r.permissions?.push),
+        },
+        status: 200,
+        error: null,
+        hints: [] as string[],
+      };
+    } catch (err) {
+      const status = (err as { status?: number })?.status ?? 0;
+      let message = describeGithubError(err);
+      let hints: string[] = [];
+      if (status === 404) {
+        hints = notFoundHints(data.fullName);
+        let suggestion = "";
+        try {
+          const mine = await githubFetch(
+            "/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member",
+          );
+          const match = (Array.isArray(mine) ? mine : []).find(
+            (r: any) =>
+              String(r.full_name).toLowerCase() === data.fullName.toLowerCase() ||
+              String(r.name).toLowerCase() === name.toLowerCase(),
+          );
+          if (match && match.full_name !== data.fullName) {
+            suggestion = ` Existe um repositório acessível com nome parecido: ${match.full_name} — selecione exatamente esse.`;
+          }
+        } catch {
+          /* sugestão é opcional */
+        }
+        message = `O GitHub retornou 404 para "${data.fullName}" — o token não enxerga esse repositório.${suggestion}`;
+      }
+      return { ok: false as const, repo: null, status, error: message, hints };
+    }
+  });
 
 export const saveGithubConfig = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
