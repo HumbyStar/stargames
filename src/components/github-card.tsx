@@ -54,6 +54,53 @@ function formatBytes(bytes: number) {
 
 const LS_REPO = "stargames.github.repo";
 const LS_BRANCH = "stargames.github.branch";
+const LS_REPOS_CACHE = "stargames.github.repos.cache";
+const CACHE_TTL_MS = 30 * 60 * 1000;
+
+type ReposCache = {
+  login: string;
+  savedAt: number;
+  complete: boolean;
+  repos: RepoOption[];
+};
+
+function readReposCache(): ReposCache | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(LS_REPOS_CACHE);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ReposCache;
+    if (!Array.isArray(parsed?.repos) || typeof parsed.savedAt !== "number") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeReposCache(cache: ReposCache) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LS_REPOS_CACHE, JSON.stringify(cache));
+  } catch {
+    /* storage indisponível */
+  }
+}
+
+function clearReposCache() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(LS_REPOS_CACHE);
+  } catch {
+    /* storage indisponível */
+  }
+}
+
+function minutesAgo(ts: number) {
+  const mins = Math.max(0, Math.round((Date.now() - ts) / 60000));
+  if (mins < 1) return "agora mesmo";
+  if (mins === 1) return "há 1 minuto";
+  return `há ${mins} minutos`;
+}
 
 function readLocalPref(key: string): string {
   if (typeof window === "undefined") return "";
@@ -85,6 +132,9 @@ export function GithubCard() {
   const [repoSearch, setRepoSearch] = useState("");
   const [selectedRepo, setSelectedRepo] = useState("");
   const [branch, setBranch] = useState("");
+  const [reposWarnings, setReposWarnings] = useState<string[]>([]);
+  const [cacheInfo, setCacheInfo] = useState<{ savedAt: number; fromCache: boolean } | null>(null);
+  const [branchTouched, setBranchTouched] = useState(false);
   const [autoPushBackup, setAutoPushBackup] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
