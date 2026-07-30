@@ -1005,6 +1005,7 @@ export const createBackupNow = createServerFn({ method: "POST" })
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await cleanupStaleBackups(supabaseAdmin);
+    const backupEnv = await resolveTargetEnv(supabaseAdmin, context.userId);
 
     // Um clique repetido acompanha a execução ativa, sem criar concorrência.
     const cutoffIso = new Date(Date.now() - STALE_BACKUP_MS).toISOString();
@@ -1035,6 +1036,7 @@ export const createBackupNow = createServerFn({ method: "POST" })
           type: "manual",
           status: "pending",
           storage_path: storagePath,
+          env: backupEnv,
         })
         .select("id")
         .single();
@@ -1060,7 +1062,7 @@ export const executeBackupNow = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await supabaseAdmin
       .from("system_backups")
-      .select("id, storage_path, status, created_by")
+      .select("id, storage_path, status, created_by, env")
       .eq("id", data.id)
       .maybeSingle();
     if (error || !row) throw new Error(error?.message ?? "Backup não encontrado.");
@@ -1073,6 +1075,7 @@ export const executeBackupNow = createServerFn({ method: "POST" })
     await runBackup({
       type: "manual",
       createdBy: context.userId,
+      env: (row.env as "producao" | "sandbox" | null) ?? "producao",
       existing: { id: row.id as string, storagePath: row.storage_path as string },
     });
     return { id: row.id as string, status: "completed" as const };
@@ -1254,6 +1257,7 @@ export const resumeBackup = createServerFn({ method: "POST" })
     const result = await runBackup({
       type: "manual",
       createdBy: (row.created_by as string | null) ?? context.userId,
+      env: (row.env as "producao" | "sandbox" | null) ?? "producao",
       existing: { id: row.id as string, storagePath: row.storage_path as string },
     });
     return { id: result.id, status: "completed", queued: false };
