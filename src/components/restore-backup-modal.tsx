@@ -1,7 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, Upload, Database, AlertTriangle, CheckCircle2 } from "lucide-react";
+import {
+  Loader2,
+  Upload,
+  Database,
+  AlertTriangle,
+  CheckCircle2,
+  ShieldCheck,
+  FlaskConical,
+  Download,
+  Info,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,14 +35,16 @@ import {
   listBackups,
   previewBackupRestore,
   restoreBackup,
+  validateBackupRestore,
   type BackupRow,
   type RestorePreview,
   type RestoreResult,
+  type ValidationReport,
 } from "@/lib/backup.functions";
 import { formatDateBR } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
-type Step = "source" | "preview" | "done";
+type Step = "source" | "preview" | "validation" | "done";
 
 const MAX_UPLOAD_MB = 500;
 
