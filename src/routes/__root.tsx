@@ -88,6 +88,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "stargamesmgmv" },
       { name: "description", content: "Star Games — Gestão Operacional" },
+      { name: "google", content: "notranslate" },
       { name: "author", content: "Lovable" },
       { property: "og:title", content: "stargamesmgmv" },
       { property: "og:description", content: "Star Games — Gestão Operacional" },
