@@ -1094,6 +1094,7 @@ export interface BackupEstimate {
   storageBytes: number;
   storageListingTruncated: boolean;
   estimatedZipBytes: number;
+  env: "producao" | "sandbox";
   limits: {
     storageMaxFiles: number;
     storageMaxBytes: number;
@@ -1108,14 +1109,19 @@ export const estimateBackup = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<BackupEstimate> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // A prévia precisa refletir exatamente o que será exportado: apenas o
+    // ambiente atual do usuário (produção ou teste).
+    const backupEnv = await resolveTargetEnv(supabaseAdmin, context.userId);
 
     const tables: { name: string; rows: number }[] = [];
     let totalRows = 0;
     for (const t of BACKUP_TABLES) {
       try {
-        const { count, error } = await supabaseAdmin
+        let counter = (supabaseAdmin as any)
           .from(t)
           .select("*", { count: "exact", head: true });
+        if (ENV_SCOPED_TABLES.has(t)) counter = counter.eq("env", backupEnv);
+        const { count, error } = await counter;
         if (error) throw error;
         const rows = count ?? 0;
         tables.push({ name: t, rows });
