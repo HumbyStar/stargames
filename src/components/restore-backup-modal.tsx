@@ -321,6 +321,7 @@ export function RestoreBackupModal({
       return;
     }
     setLoading(true);
+    setErrorInfo(null);
     toast.loading(
       sandboxTarget ? "Zerando ambiente de teste e restaurando…" : "Restaurando backup…",
       { id: "restore" },
@@ -339,7 +340,17 @@ export function RestoreBackupModal({
       });
       setResult(res);
       setStep("done");
-      toast.success("Restauração concluída.", { id: "restore" });
+      if (res.errors && res.errors.length > 0) {
+        setErrorInfo({
+          stage: `Gravação (${res.errors[0].table})`,
+          message: res.errors[0].message,
+          hint: "Normalmente indica incompatibilidade de schema entre o backup e o banco atual (coluna ou tipo diferente).",
+          file: res.filename,
+        });
+        toast.error("Restauração concluída com erros em algumas tabelas.", { id: "restore" });
+      } else {
+        toast.success("Restauração concluída.", { id: "restore" });
+      }
       // Remove o ZIP temporário enviado.
       if (uploadedPath) {
         void discardUpload({ data: { path: uploadedPath } }).catch(() => {});
@@ -348,6 +359,12 @@ export function RestoreBackupModal({
       // Dispara reset em cache/realtime.
       window.dispatchEvent(new CustomEvent("app:reset"));
     } catch (err: any) {
+      setErrorInfo({
+        stage: "Restauração",
+        message: err?.message ?? "Falha ao restaurar.",
+        hint: "Nenhuma alteração parcial fica no ambiente de teste: refaça a operação após corrigir a causa acima.",
+        file: uploadFile?.name,
+      });
       toast.error(err?.message ?? "Falha ao restaurar.", { id: "restore" });
     } finally {
       setLoading(false);
@@ -356,6 +373,7 @@ export function RestoreBackupModal({
 
   const handleValidate = async () => {
     setLoading(true);
+    setErrorInfo(null);
     toast.loading("Validando no Modo Teste…", { id: "validate" });
     try {
       const res = await validate({
@@ -371,6 +389,11 @@ export function RestoreBackupModal({
       setStep("validation");
       toast.success("Validação concluída — nada foi gravado.", { id: "validate" });
     } catch (err: any) {
+      setErrorInfo({
+        stage: "Validação (sem gravar)",
+        message: err?.message ?? "Falha ao validar.",
+        file: uploadFile?.name,
+      });
       toast.error(err?.message ?? "Falha ao validar.", { id: "validate" });
     } finally {
       setLoading(false);
