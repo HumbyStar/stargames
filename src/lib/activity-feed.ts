@@ -592,6 +592,7 @@ const LOCAL_CATEGORY: Record<AppLocalEvent["category"], ActivityCategory> = {
   local: "sistema",
   sistema: "sistema",
   importacao: "importacao",
+  github: "sistema",
 };
 
 const MAX_EVENTS = 200;
