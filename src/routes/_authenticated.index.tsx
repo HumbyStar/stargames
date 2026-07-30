@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_authenticated/")({
 function OnePage() {
   return (
     <AppLayout>
-      <OnePageBody />
+      <div>TESTE</div>
     </AppLayout>
   );
 }
