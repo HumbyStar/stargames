@@ -189,7 +189,7 @@ export function RestoreBackupModal({
         data: {
           ...(source === "existing"
             ? { backupId }
-            : { uploadedZipBase64: uploadedBase64 }),
+            : { uploadedPath }),
           mode: sandboxTarget ? "replace" : mode,
           tables: Array.from(selectedTables),
           includeStorage,
@@ -199,6 +199,11 @@ export function RestoreBackupModal({
       setResult(res);
       setStep("done");
       toast.success("Restauração concluída.", { id: "restore" });
+      // Remove o ZIP temporário enviado.
+      if (uploadedPath) {
+        void discardUpload({ data: { path: uploadedPath } }).catch(() => {});
+        setUploadedPath("");
+      }
       // Dispara reset em cache/realtime.
       window.dispatchEvent(new CustomEvent("app:reset"));
     } catch (err: any) {
@@ -216,7 +221,7 @@ export function RestoreBackupModal({
         data: {
           ...(source === "existing"
             ? { backupId }
-            : { uploadedZipBase64: uploadedBase64 }),
+            : { uploadedPath }),
           mode,
           tables: Array.from(selectedTables),
         },
