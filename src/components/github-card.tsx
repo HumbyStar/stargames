@@ -31,6 +31,7 @@ import {
   getGithubStatus,
   saveGithubConfig,
   listGithubRepos,
+  verifyGithubRepoAccess,
   pushBackupToGithub,
   pushExportsToGithub,
   pushChangelogToGithub,
@@ -40,6 +41,7 @@ import { listBackups } from "@/lib/backup.functions";
 import { emitAppEvent } from "@/lib/app-events";
 
 type RepoOption = {
+  id?: number;
   fullName: string;
   owner: string;
   name: string;
@@ -55,6 +57,7 @@ function formatBytes(bytes: number) {
 
 const LS_REPO = "stargames.github.repo";
 const LS_BRANCH = "stargames.github.branch";
+const LS_REPO_ID = "stargames.github.repoId";
 const LS_REPOS_CACHE = "stargames.github.repos.cache";
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
@@ -132,6 +135,9 @@ export function GithubCard() {
   const [reposError, setReposError] = useState<string | null>(null);
   const [repoSearch, setRepoSearch] = useState("");
   const [selectedRepo, setSelectedRepo] = useState("");
+  const [selectedRepoId, setSelectedRepoId] = useState<number | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [accessError, setAccessError] = useState<{ message: string; hints: string[] } | null>(null);
   const [branch, setBranch] = useState("");
   const [reposWarnings, setReposWarnings] = useState<string[]>([]);
   const [cacheInfo, setCacheInfo] = useState<{ savedAt: number; fromCache: boolean } | null>(null);
@@ -154,6 +160,10 @@ export function GithubCard() {
       const localRepo = readLocalPref(LS_REPO);
       const localBranch = readLocalPref(LS_BRANCH);
       setSelectedRepo(savedRepo || localRepo || "");
+      const localId = Number(readLocalPref(LS_REPO_ID));
+      setSelectedRepoId(
+        s.config.repoId ?? (savedRepo ? null : Number.isFinite(localId) && localId > 0 ? localId : null),
+      );
       const restoredBranch = s.config.branch || (savedRepo ? "" : localBranch) || "";
       setBranch(restoredBranch);
       setBranchTouched(Boolean(restoredBranch));
@@ -251,6 +261,58 @@ export function GithubCard() {
       : null;
   }, [status?.repo, selectedRepo]);
 
+  /** Confirma com a API que o token enxerga o repositório antes de fixar a seleção. */
+  const verifyRepo = async (fullName: string, repoId: number | null) => {
+    setVerifying(true);
+    setAccessError(null);
+    try {
+      const res = await verifyGithubRepoAccess({ data: { fullName, repoId } });
+      if (res.ok && res.repo) {
+        setSelectedRepo(res.repo.fullName);
+        setSelectedRepoId(res.repo.id);
+        if (!branchTouched) setBranch(res.repo.defaultBranch);
+        if (!res.repo.canPush) {
+          setAccessError({
+            message: `O token enxerga ${res.repo.fullName}, mas não tem permissão de escrita (push).`,
+            hints: [
+              "Token clássico: use o escopo 'repo' completo.",
+              "Token fine-grained: dê permissão de Contents = Read and write.",
+              "Confirme que a conta do token é colaboradora com papel Write ou superior.",
+            ],
+          });
+        } else {
+          toast.success(`Acesso confirmado a ${res.repo.fullName}.`);
+        }
+        return res.repo;
+      }
+      setAccessError({ message: res.error ?? "Repositório inacessível.", hints: res.hints ?? [] });
+      return null;
+    } catch (err) {
+      setAccessError({
+        message: err instanceof Error ? err.message : "Falha ao verificar o repositório",
+        hints: [],
+      });
+      return null;
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleSelectRepo = (value: string) => {
+    const option = repos.find((r) => r.fullName === value);
+    setSelectedRepo(value);
+    setSelectedRepoId(option?.id ?? null);
+    void verifyRepo(value, option?.id ?? null);
+  };
+
+  const handleRetryVerify = () => {
+    if (!/^[^/\s]+\/[^/\s]+$/.test(selectedRepo.trim())) {
+      toast.error("Informe o repositório no formato dono/repositório.");
+      return;
+    }
+    void verifyRepo(selectedRepo.trim(), selectedRepoId);
+  };
+
   // Carrega a lista de repositórios assim que a conexão estiver validada.
   useEffect(() => {
     if (status?.connected && repos.length === 0 && !reposLoading) {
@@ -283,17 +345,32 @@ export function GithubCard() {
   useEffect(() => {
     writeLocalPref(LS_BRANCH, branch);
   }, [branch]);
+  useEffect(() => {
+    writeLocalPref(LS_REPO_ID, selectedRepoId ? String(selectedRepoId) : "");
+  }, [selectedRepoId]);
 
   const handleSave = async () => {
     if (!/^[^/\s]+\/[^/\s]+$/.test(selectedRepo.trim())) {
       toast.error("Informe o repositório no formato dono/repositório.");
       return;
     }
-    const [owner = "", name = ""] = selectedRepo.split("/");
     setSaving(true);
     try {
+      const verified = await verifyRepo(selectedRepo.trim(), selectedRepoId);
+      if (!verified) {
+        toast.error("O token não tem acesso a esse repositório — veja as verificações abaixo.");
+        return;
+      }
+      const owner = verified.owner;
+      const name = verified.name;
       await saveGithubConfig({
-        data: { repoOwner: owner, repoName: name, branch: branch.trim(), autoPushBackup },
+        data: {
+          repoOwner: owner,
+          repoName: name,
+          branch: branch.trim(),
+          autoPushBackup,
+          repoId: verified.id,
+        },
       });
       toast.success("Configuração do GitHub salva.");
       emitAppEvent({
@@ -323,8 +400,20 @@ export function GithubCard() {
     if (!owner || !name) {
       throw new Error("Repositório inválido. Use o formato dono/repositório.");
     }
+    const verified = await verifyRepo(repo, selectedRepoId);
+    if (!verified) {
+      throw new Error(
+        "O token não tem acesso a esse repositório. Veja as verificações no bloco de erro e escolha o repositório pela lista.",
+      );
+    }
     await saveGithubConfig({
-      data: { repoOwner: owner, repoName: name, branch: branch.trim(), autoPushBackup },
+      data: {
+        repoOwner: verified.owner,
+        repoName: verified.name,
+        branch: branch.trim(),
+        autoPushBackup,
+        repoId: verified.id,
+      },
     });
     await loadStatus();
   };
@@ -465,6 +554,29 @@ export function GithubCard() {
           {status?.hasToken && status.connected && status.error && (
             <p className="mt-3 text-sm text-destructive">{status.error}</p>
           )}
+          {status?.connected && (status.errorHints?.length ?? 0) > 0 && (
+            <div className="mt-2 space-y-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+              <p className="font-medium">Verifique nesta ordem:</p>
+              <ul className="list-disc space-y-1 pl-5">
+                {status.errorHints!.map((h) => (
+                  <li key={h}>{h}</li>
+                ))}
+              </ul>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void loadRepos(false, true)}
+                  disabled={reposLoading}
+                >
+                  <RefreshCw className="mr-2 h-3.5 w-3.5" /> Atualizar lista
+                </Button>
+                <Button size="sm" variant="outline" onClick={handleRetryVerify} disabled={verifying}>
+                  <RefreshCw className="mr-2 h-3.5 w-3.5" /> Tentar novamente
+                </Button>
+              </div>
+            </div>
+          )}
           {status?.connected && status.scopeWarning && (
             <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600 dark:text-amber-400">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -485,7 +597,7 @@ export function GithubCard() {
           <div className="space-y-2">
             <Label>Repositório</Label>
             <div className="flex gap-2">
-              <Select value={selectedRepo} onValueChange={setSelectedRepo}>
+              <Select value={selectedRepo} onValueChange={handleSelectRepo}>
                 <SelectTrigger className="flex-1">
                   <SelectValue
                     placeholder={
@@ -587,6 +699,51 @@ export function GithubCard() {
                 <span>{reposError}</span>
               </div>
             )}
+            {verifying && (
+              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Verificando acesso ao repositório...
+              </p>
+            )}
+            {accessError && (
+              <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span className="font-medium">{accessError.message}</span>
+                </div>
+                {accessError.hints.length > 0 && (
+                  <>
+                    <p className="font-medium">Verifique nesta ordem:</p>
+                    <ul className="list-disc space-y-1 pl-5">
+                      {accessError.hints.map((h) => (
+                        <li key={h}>{h}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void loadRepos(false, true)}
+                    disabled={reposLoading}
+                  >
+                    <RefreshCw className="mr-2 h-3.5 w-3.5" /> Atualizar lista
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={handleRetryVerify} disabled={verifying}>
+                    {verifying ? (
+                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                    )}
+                    Tentar novamente
+                  </Button>
+                </div>
+                <p className="text-[11px] opacity-80">
+                  Dica: escolha o repositório pela lista suspensa — assim o nome e o id vêm direto da
+                  API e não há risco de divergência de digitação.
+                </p>
+              </div>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="gh-branch">Branch (opcional)</Label>
@@ -624,7 +781,16 @@ export function GithubCard() {
           <Input
             id="gh-repo-manual"
             value={selectedRepo}
-            onChange={(e) => setSelectedRepo(e.target.value)}
+            onChange={(e) => {
+              setSelectedRepo(e.target.value);
+              setSelectedRepoId(null);
+              setAccessError(null);
+            }}
+            onBlur={() => {
+              if (/^[^/\s]+\/[^/\s]+$/.test(selectedRepo.trim())) {
+                void verifyRepo(selectedRepo.trim(), null);
+              }
+            }}
             placeholder="HumbyStar/stargames"
           />
         </div>
