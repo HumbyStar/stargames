@@ -331,6 +331,14 @@ function describeSettingPath(section: string, path: string): { area?: string; la
 }
 
 /** Frase objetiva do que foi alterado nas configurações. */
+/** "a, b e c" — sem cortes tipo "+1", que confundem. */
+function joinList(items: string[]): string {
+  const list = items.filter(Boolean);
+  if (list.length === 0) return "";
+  if (list.length === 1) return list[0];
+  return `${list.slice(0, -1).join(", ")} e ${list[list.length - 1]}`;
+}
+
 function describeSettingsChange(
   actorLabel: string,
   prev: Record<string, unknown> | null,
