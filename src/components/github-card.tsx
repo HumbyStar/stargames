@@ -574,7 +574,7 @@ export function GithubCard() {
           <div className="space-y-2">
             <Label>Repositório</Label>
             <div className="flex gap-2">
-              <Select value={selectedRepo} onValueChange={setSelectedRepo}>
+              <Select value={selectedRepo} onValueChange={handleSelectRepo}>
                 <SelectTrigger className="flex-1">
                   <SelectValue
                     placeholder={
@@ -674,6 +674,51 @@ export function GithubCard() {
               <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>{reposError}</span>
+              </div>
+            )}
+            {verifying && (
+              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Verificando acesso ao repositório...
+              </p>
+            )}
+            {accessError && (
+              <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span className="font-medium">{accessError.message}</span>
+                </div>
+                {accessError.hints.length > 0 && (
+                  <>
+                    <p className="font-medium">Verifique nesta ordem:</p>
+                    <ul className="list-disc space-y-1 pl-5">
+                      {accessError.hints.map((h) => (
+                        <li key={h}>{h}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void loadRepos(false, true)}
+                    disabled={reposLoading}
+                  >
+                    <RefreshCw className="mr-2 h-3.5 w-3.5" /> Atualizar lista
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={handleRetryVerify} disabled={verifying}>
+                    {verifying ? (
+                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                    )}
+                    Tentar novamente
+                  </Button>
+                </div>
+                <p className="text-[11px] opacity-80">
+                  Dica: escolha o repositório pela lista suspensa — assim o nome e o id vêm direto da
+                  API e não há risco de divergência de digitação.
+                </p>
               </div>
             )}
           </div>
