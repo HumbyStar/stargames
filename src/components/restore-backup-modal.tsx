@@ -51,8 +51,110 @@ type Step = "source" | "preview" | "validation" | "done";
 
 const MAX_UPLOAD_MB = 500;
 
+/** Tabelas mínimas que um backup Star Games precisa conter. */
+const REQUIRED_TABLES = ["clients", "products"];
+
+interface ZipPrecheck {
+  fileName: string;
+  sizeMB: number;
+  schemaVersion: number | null;
+  generatedAt: string | null;
+  tables: Array<{ table: string; rows: number }>;
+  errors: string[];
+  warnings: string[];
+}
+
+interface ErrorInfo {
+  stage: string;
+  message: string;
+  hint?: string;
+  file?: string;
+}
+
 function fmt(n: number): string {
   return (n ?? 0).toLocaleString("pt-BR");
+}
+
+/**
+ * Lê o ZIP no próprio navegador ANTES de enviar: confere manifesto, versão de
+ * schema e a presença dos arquivos de dados. Evita subir centenas de MB de um
+ * arquivo que o servidor recusaria depois.
+ */
+async function precheckZip(file: File): Promise<ZipPrecheck> {
+  const out: ZipPrecheck = {
+    fileName: file.name,
+    sizeMB: file.size / 1024 / 1024,
+    schemaVersion: null,
+    generatedAt: null,
+    tables: [],
+    errors: [],
+    warnings: [],
+  };
+  if (!/\.zip$/i.test(file.name)) {
+    out.errors.push("O arquivo precisa ter extensão .zip.");
+    return out;
+  }
+  let zip: any;
+  try {
+    const JSZip = (await import("jszip")).default;
+    zip = await JSZip.loadAsync(file);
+  } catch {
+    out.errors.push("Não foi possível abrir o ZIP — arquivo corrompido ou incompleto.");
+    return out;
+  }
+  const mf = zip.file("manifest.json");
+  if (!mf) {
+    out.errors.push(
+      "manifest.json ausente na raiz do ZIP — este arquivo não é um backup Star Games.",
+    );
+    return out;
+  }
+  let manifest: any;
+  try {
+    manifest = JSON.parse(await mf.async("string"));
+  } catch {
+    out.errors.push("manifest.json ilegível (JSON inválido).");
+    return out;
+  }
+  out.schemaVersion = Number(manifest.schemaVersion ?? 1);
+  out.generatedAt = manifest.generatedAt ?? null;
+  if (!Number.isFinite(out.schemaVersion) || out.schemaVersion < 1) {
+    out.errors.push(`Versão de schema inválida no manifesto: ${manifest.schemaVersion}`);
+  }
+
+  const dataFiles = Object.keys(zip.files).filter(
+    (n) => n.startsWith("database/data/") && n.endsWith(".jsonl"),
+  );
+  if (dataFiles.length === 0) {
+    out.errors.push("Pasta database/data ausente — o backup não contém dados de tabelas.");
+    return out;
+  }
+  const counts: Record<string, number> = manifest.rowCounts ?? {};
+  out.tables = dataFiles
+    .map((n) => {
+      const table = n.replace("database/data/", "").replace(/\.jsonl$/, "");
+      return { table, rows: Number(counts[table] ?? 0) };
+    })
+    .sort((a, b) => b.rows - a.rows);
+
+  const present = new Set(out.tables.map((t) => t.table));
+  const missing = REQUIRED_TABLES.filter((t) => !present.has(t));
+  if (missing.length > 0) {
+    out.errors.push(`Tabelas obrigatórias ausentes no backup: ${missing.join(", ")}.`);
+  }
+  for (const t of out.tables) {
+    const declared = Number(counts[t.table] ?? 0);
+    const entry = zip.file(`database/data/${t.table}.jsonl`);
+    if (declared > 0 && entry && (entry as any)._data?.uncompressedSize === 0) {
+      out.warnings.push(
+        `${t.table}: o manifesto declara ${fmt(declared)} registro(s), mas o arquivo está vazio.`,
+      );
+    }
+  }
+  if (out.tables.every((t) => t.rows === 0)) {
+    out.warnings.push("O manifesto não informa contagens — os totais só aparecerão na análise.");
+  }
+  return out;
 }
 
 export function RestoreBackupModal({
