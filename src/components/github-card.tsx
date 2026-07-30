@@ -11,6 +11,7 @@ import {
   Loader2,
   RefreshCw,
   Save,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +57,10 @@ export function GithubCard() {
   const [loading, setLoading] = useState(true);
   const [repos, setRepos] = useState<RepoOption[]>([]);
   const [reposLoading, setReposLoading] = useState(false);
+  const [reposLoaded, setReposLoaded] = useState(false);
+  const [reposComplete, setReposComplete] = useState(true);
+  const [reposError, setReposError] = useState<string | null>(null);
+  const [repoSearch, setRepoSearch] = useState("");
   const [selectedRepo, setSelectedRepo] = useState("");
   const [branch, setBranch] = useState("");
   const [autoPushBackup, setAutoPushBackup] = useState(false);
@@ -68,12 +73,15 @@ export function GithubCard() {
     try {
       const s = await getGithubStatus();
       setStatus(s);
-      setSelectedRepo(
+      const savedRepo =
         s.config.repoOwner && s.config.repoName
           ? `${s.config.repoOwner}/${s.config.repoName}`
-          : "",
-      );
-      setBranch(s.config.branch ?? "");
+          : "";
+      // Restaura a última escolha local quando ainda não há config salva.
+      const localRepo = readLocalPref(LS_REPO);
+      const localBranch = readLocalPref(LS_BRANCH);
+      setSelectedRepo(savedRepo || localRepo || "");
+      setBranch(s.config.branch || (savedRepo ? "" : localBranch) || "");
       setAutoPushBackup(s.config.autoPushBackup);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Falha ao carregar o status do GitHub");
@@ -89,16 +97,26 @@ export function GithubCard() {
 
   const loadRepos = async (silent = false) => {
     setReposLoading(true);
+    setReposError(null);
     try {
-      const list = await listGithubRepos();
-      setRepos(list);
-      if (list.length === 0 && !silent) {
-        toast.info("Nenhum repositório acessível com esse token.");
+      const result = await listGithubRepos();
+      setRepos(result.repos);
+      setReposComplete(result.complete);
+      setReposLoaded(true);
+      if (result.repos.length === 0) {
+        setReposError(
+          "Nenhum repositório acessível com esse token. Verifique se o token tem o escopo 'repo' (clássico) ou permissão de leitura em Contents/Metadata (fine-grained), se ele não expirou e se a organização autorizou o token via SSO.",
+        );
+      } else if (!silent) {
+        toast.success(
+          `${result.repos.length} repositório(s) carregados${result.complete ? "" : " (lista parcial)"}.`,
+        );
       }
     } catch (err) {
-      if (!silent) {
-        toast.error(err instanceof Error ? err.message : "Falha ao listar repositórios");
-      }
+      const message = err instanceof Error ? err.message : "Falha ao listar repositórios";
+      setReposError(message);
+      setReposLoaded(true);
+      if (!silent) toast.error(message);
     } finally {
       setReposLoading(false);
     }
@@ -122,6 +140,20 @@ export function GithubCard() {
     }
     return repos;
   }, [repos, selectedRepo]);
+
+  const filteredRepoOptions = useMemo(() => {
+    const term = repoSearch.trim().toLowerCase();
+    if (!term) return repoOptions;
+    return repoOptions.filter((r) => r.fullName.toLowerCase().includes(term));
+  }, [repoOptions, repoSearch]);
+
+  // Persiste localmente a última escolha para não precisar selecionar de novo.
+  useEffect(() => {
+    writeLocalPref(LS_REPO, selectedRepo);
+  }, [selectedRepo]);
+  useEffect(() => {
+    writeLocalPref(LS_BRANCH, branch);
+  }, [branch]);
 
   const handleSave = async () => {
     if (!/^[^/\s]+\/[^/\s]+$/.test(selectedRepo.trim())) {
