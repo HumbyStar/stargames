@@ -580,7 +580,7 @@ async function runBackup(opts: {
   existing?: { id: string; storagePath: string };
 }): Promise<{ id: string; storagePath: string; sizeBytes: number }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const JSZip = (await import("jszip")).default;
+  const { buildStoreZip, toZipBytes } = await import("@/lib/zip-store-writer");
 
   await cleanupStaleBackups(supabaseAdmin);
 
@@ -658,7 +658,12 @@ async function runBackup(opts: {
   try {
     pushDebug("info", "zip:create", "Preparando arquivo ZIP");
     await persistBackupDebug(supabaseAdmin, backupId, debugLog);
-    const zip = new JSZip();
+    const zipEntries: Array<{ path: string; data: Uint8Array }> = [];
+    const zip = {
+      file: (path: string, data: string | Uint8Array | ArrayBuffer) => {
+        zipEntries.push({ path, data: toZipBytes(data) });
+      },
+    };
     const rowCounts: Record<string, number> = {};
     const tableRows: Record<string, any[]> = {};
     // Somente tabelas necessárias ao resumo permanecem em memória; as
@@ -777,25 +782,38 @@ async function runBackup(opts: {
       business_summary: businessSummary as any,
     });
     let lastZipProgressAt = 0;
-    const zipBuf = await zip.generateAsync(
-      {
-        type: "uint8array",
-        compression: "STORE",
-        streamFiles: true,
-      },
-      (metadata) => {
+    let lastZipCancelCheckAt = Date.now();
+    const zipBuf = await buildStoreZip(zipEntries, {
+      modifiedAt: now,
+      onEntry: async ({ index, total, path: entryPath, percent }) => {
         const nowMs = Date.now();
-        if (nowMs - lastZipProgressAt < 3000 && metadata.percent < 100) return;
+        // Cancelamento responsivo durante a compactação.
+        if (nowMs - lastZipCancelCheckAt >= 1200) {
+          lastZipCancelCheckAt = nowMs;
+          if (await isCancellationRequested(supabaseAdmin, backupId)) {
+            throw new BackupCancelledError();
+          }
+        }
+        if (nowMs - lastZipProgressAt < 1500 && index + 1 < total) return;
         lastZipProgressAt = nowMs;
-        pushDebug("info", "zip:generate", "Gerando conteúdo final do ZIP", {
-          percent: Math.round(metadata.percent),
-          currentFile: metadata.currentFile ?? null,
+        pushDebug("info", "zip:generate", "Compactando arquivos do backup", {
+          percent,
+          entries: total,
+          currentFile: entryPath,
         });
-        void persistBackupDebug(supabaseAdmin, backupId, debugLog, {
+        await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
           business_summary: businessSummary as any,
         });
       },
-    );
+    });
+    pushDebug("info", "zip:generate", "ZIP gerado", {
+      percent: 100,
+      entries: zipEntries.length,
+      sizeBytes: zipBuf.byteLength,
+    });
+    await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
+      business_summary: businessSummary as any,
+    });
 
     pushDebug("info", "storage:upload", "Enviando ZIP para o armazenamento privado", {
       sizeBytes: zipBuf.byteLength,
@@ -1253,12 +1271,19 @@ export const cancelBackup = createServerFn({ method: "POST" })
         .eq("id", data.id);
       return { ok: true, status: "cancelled", alreadyFinished: false };
     }
-    // Em execução: apenas sinaliza; o loop encerra na próxima checagem.
+    // Em execução: marca como cancelado imediatamente (a UI reage na hora) e
+    // sinaliza o job, que encerra na próxima checagem e limpa o parcial.
     await supabaseAdmin
       .from("system_backups")
-      .update({ cancel_requested: true } as any)
+      .update({
+        status: "cancelled",
+        cancel_requested: true,
+        error: "Cancelado pelo usuário",
+        error_details: { message: "Backup cancelado pelo usuário.", phase: "cancelled" } as any,
+        finished_at: nowIso,
+      } as any)
       .eq("id", data.id);
-    return { ok: true, status: "cancelling", alreadyFinished: false };
+    return { ok: true, status: "cancelled", alreadyFinished: false };
   });
 
 export interface BackupRow {
