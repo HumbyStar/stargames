@@ -520,6 +520,50 @@ export function RestoreBackupModal({
                     />
                   </div>
                 )}
+
+                {precheck && precheck.errors.length === 0 && (
+                  <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-[11px] text-emerald-700 dark:text-emerald-300">
+                    <div className="flex items-center gap-1.5 font-semibold">
+                      <CheckCircle2 className="size-3.5" /> Estrutura do ZIP validada
+                    </div>
+                    <div className="mt-1 text-muted-foreground">
+                      Schema v{precheck.schemaVersion} ·{" "}
+                      {precheck.generatedAt
+                        ? new Date(precheck.generatedAt).toLocaleString("pt-BR")
+                        : "data desconhecida"}{" "}
+                      · {precheck.tables.length} tabela(s)
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {precheck.tables.slice(0, 12).map((t) => (
+                        <span
+                          key={t.table}
+                          className="rounded-full border border-border bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground"
+                        >
+                          {t.table}
+                          {t.rows > 0 ? ` · ${fmt(t.rows)}` : ""}
+                        </span>
+                      ))}
+                    </div>
+                    {precheck.warnings.map((w) => (
+                      <div key={w} className="mt-1 text-amber-600 dark:text-amber-400">
+                        Atenção: {w}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {errorInfo && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-[11px] text-destructive">
+                <div className="font-semibold">Falha na etapa: {errorInfo.stage}</div>
+                {errorInfo.file ? (
+                  <div className="mt-0.5 text-muted-foreground">Arquivo: {errorInfo.file}</div>
+                ) : null}
+                <div className="mt-1 break-words">{errorInfo.message}</div>
+                {errorInfo.hint ? (
+                  <div className="mt-1 text-muted-foreground">Como resolver: {errorInfo.hint}</div>
+                ) : null}
               </div>
             )}
 
