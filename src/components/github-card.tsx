@@ -434,7 +434,8 @@ export function GithubCard() {
 
         {!hasRepo && (
           <p className="mt-3 text-xs text-muted-foreground">
-            Selecione e salve um repositório para habilitar as publicações.
+            Informe o repositório (ex.: HumbyStar/stargames) — ele é salvo automaticamente ao
+            publicar.
           </p>
         )}
 
