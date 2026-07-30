@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { FlaskConical, Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, ShieldCheck } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
 import { OnePageBody } from "@/components/one-page";
 import { useSandbox } from "@/lib/use-sandbox";
