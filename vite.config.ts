@@ -30,6 +30,7 @@ function pwaClientOnly() {
         registerType: "autoUpdate",
         injectRegister: null,
         filename: "sw.js",
+        outDir: "dist/client",
         devOptions: { enabled: false },
         manifest: {
           id: "/",
