@@ -400,8 +400,20 @@ export function GithubCard() {
     if (!owner || !name) {
       throw new Error("Repositório inválido. Use o formato dono/repositório.");
     }
+    const verified = await verifyRepo(repo, selectedRepoId);
+    if (!verified) {
+      throw new Error(
+        "O token não tem acesso a esse repositório. Veja as verificações no bloco de erro e escolha o repositório pela lista.",
+      );
+    }
     await saveGithubConfig({
-      data: { repoOwner: owner, repoName: name, branch: branch.trim(), autoPushBackup },
+      data: {
+        repoOwner: verified.owner,
+        repoName: verified.name,
+        branch: branch.trim(),
+        autoPushBackup,
+        repoId: verified.id,
+      },
     });
     await loadStatus();
   };
