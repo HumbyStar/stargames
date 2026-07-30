@@ -1504,6 +1504,36 @@ const CONFLICT_TARGET: Record<string, string> = {
   sandbox_state: "user_id",
 };
 
+// Chaves efetivas usadas para consolidar um lote antes do UPSERT. Isso evita
+// que duas linhas do mesmo ZIP atinjam a mesma linha do banco no mesmo comando.
+const RESTORE_KEY_COLUMNS: Record<string, string[]> = {
+  app_settings: ["id", "env"],
+  ai_training_profile: ["user_id", "env"],
+  team_punch_entries: ["user_id", "day", "kind"],
+};
+
+function restoreRowKey(table: string, row: Record<string, unknown>): string | null {
+  const columns = RESTORE_KEY_COLUMNS[table] ?? ["id"];
+  const values = columns.map((column) => row[column]);
+  if (values.some((value) => value === null || value === undefined || value === "")) return null;
+  return values.map((value) => String(value)).join("\u0000");
+}
+
+function dedupeRestoreRows(
+  table: string,
+  rows: Array<Record<string, unknown>>,
+): { rows: Array<Record<string, unknown>>; removed: number } {
+  const unique = new Map<string, Record<string, unknown>>();
+  const withoutKey: Array<Record<string, unknown>> = [];
+  for (const row of rows) {
+    const key = restoreRowKey(table, row);
+    if (key === null) withoutKey.push(row);
+    else unique.set(key, row); // mantém deterministicamente a última versão do backup
+  }
+  const deduped = [...unique.values(), ...withoutKey];
+  return { rows: deduped, removed: rows.length - deduped.length };
+}
+
 const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
 
 /**
@@ -1857,7 +1887,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
       for (const table of [...tablesToWipe].reverse()) {
         // Conta antes de apagar para relatar quantos registros saíram.
         try {
-          let counter = (supabaseAdmin as any).from(table).select("id", { count: "exact", head: true });
+          let counter = (supabaseAdmin as any).from(table).select("*", { count: "exact", head: true });
           if (ENV_SCOPED_TABLES.has(table)) counter = counter.eq("env", targetEnv);
           const { count } = await counter;
           deletedByTable[table] = count ?? 0;
@@ -1875,8 +1905,12 @@ export const restoreBackup = createServerFn({ method: "POST" })
         if (table === "user_roles" || table === "profiles") {
           query = query.neq("user_id" as any, context.userId).neq("id" as any, context.userId);
         }
-        // .delete() do PostgREST exige um filtro; usa neq id impossível como fallback.
-        const { error } = await query.neq("id" as any, "00000000-0000-0000-0000-000000000000");
+        // Tabelas de ambiente já possuem o filtro obrigatório acima. O fallback
+        // por `id` só é usado em tabelas globais que realmente possuem essa coluna.
+        const deletion = ENV_SCOPED_TABLES.has(table)
+          ? query
+          : query.neq("id" as any, "00000000-0000-0000-0000-000000000000");
+        const { error } = await deletion;
         if (error) {
           console.warn(`[restore] delete ${table}:`, error.message);
           deletedByTable[table] = 0;
@@ -1908,6 +1942,31 @@ export const restoreBackup = createServerFn({ method: "POST" })
         );
       }
 
+      // Consolida chaves repetidas depois de aplicar o ambiente de destino. É
+      // nessa etapa que duas linhas produção/sandbox do ZIP podem convergir.
+      const deduped = dedupeRestoreRows(table, payload);
+      payload = deduped.rows;
+
+      // `team_punch_entries` tem uma chave de negócio histórica sem `env`.
+      // Nunca disputa essa chave com a produção: no sandbox, ignora somente as
+      // batidas já existentes e mantém intacta a linha real.
+      let businessKeySkipped = deduped.removed;
+      if (targetEnv === "sandbox" && table === "team_punch_entries" && payload.length > 0) {
+        const { data: productionPunches, error: punchReadError } = await (supabaseAdmin as any)
+          .from("team_punch_entries")
+          .select("user_id,day,kind")
+          .eq("env", "producao");
+        if (punchReadError) {
+          throw new Error(`[restore] team_punch_entries: não foi possível conferir colisões: ${punchReadError.message}`);
+        }
+        const productionKeys = new Set(
+          (productionPunches ?? []).map((row: Record<string, unknown>) => restoreRowKey(table, row)),
+        );
+        const beforeCollisionFilter = payload.length;
+        payload = payload.filter((row) => !productionKeys.has(restoreRowKey(table, row)));
+        businessKeySkipped += beforeCollisionFilter - payload.length;
+      }
+
       // Trava final: nada é gravado se alguma linha não estiver carimbada com
       // o ambiente de destino (ou, no sandbox, se algum id não foi regerado).
       if (ENV_SCOPED_TABLES.has(table)) {
@@ -1924,7 +1983,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
       }
 
       let inserted = 0;
-      let skipped = 0;
+      let skipped = businessKeySkipped;
       const CHUNK = 500;
       expectedByTable[table] = payload.length;
       const useInsert = targetEnv === "sandbox" && Boolean(cloneTable?.idColumn);
@@ -1997,9 +2056,9 @@ export const restoreBackup = createServerFn({ method: "POST" })
       const expected = expectedByTable[table] ?? 0;
       let actual = -1;
       try {
-        let counter = (supabaseAdmin as any)
+          let counter = (supabaseAdmin as any)
           .from(table)
-          .select("id", { count: "exact", head: true });
+            .select("*", { count: "exact", head: true });
         if (ENV_SCOPED_TABLES.has(table)) counter = counter.eq("env", targetEnv);
         const { count, error } = await counter;
         if (!error) actual = count ?? 0;
@@ -2291,11 +2350,17 @@ export const validateBackupRestore = createServerFn({ method: "POST" })
 
     for (const table of selected) {
       const rows = backupRows[table] ?? [];
-      const ids = rows.map((r) => r?.id).filter(Boolean);
-      if (ids.length > 0 && new Set(ids).size !== ids.length) {
+      const normalizedRows = rows.map((row) =>
+        ENV_SCOPED_TABLES.has(table) ? { ...row, env: "sandbox" } : row,
+      );
+      const keyedRows = normalizedRows
+        .map((row) => restoreRowKey(table, row))
+        .filter((key): key is string => key !== null);
+      if (keyedRows.length > 0 && new Set(keyedRows).size !== keyedRows.length) {
+        const keyLabel = (RESTORE_KEY_COLUMNS[table] ?? ["id"]).join(" + ");
         issues.push({
-          level: "error",
-          message: `${table}: existem identificadores repetidos dentro do backup.`,
+          level: "warn",
+          message: `${table}: existem linhas repetidas pela chave ${keyLabel}; a restauração consolidará essas versões antes de gravar.`,
         });
       }
       if (rows.length === 0 && (manifest.rowCounts?.[table] ?? 0) > 0) {
