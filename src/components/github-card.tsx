@@ -517,7 +517,7 @@ export function GithubCard() {
               </Select>
               <Button
                 variant="outline"
-                onClick={() => void loadRepos()}
+                onClick={() => void loadRepos(false, true)}
                 disabled={reposLoading}
               >
                 {reposLoading ? (
@@ -526,6 +526,24 @@ export function GithubCard() {
                   <RefreshCw className="mr-2 h-4 w-4" />
                 )}
                 Atualizar lista
+              </Button>
+              <Button variant="ghost" onClick={handleClearCache} disabled={reposLoading}>
+                <Trash2 className="mr-2 h-4 w-4" /> Limpar cache
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                asChild={Boolean(repoUrl)}
+                disabled={!repoUrl}
+                title="Abrir no GitHub"
+              >
+                {repoUrl ? (
+                  <a href={repoUrl} target="_blank" rel="noreferrer" aria-label="Abrir no GitHub">
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                ) : (
+                  <ExternalLink className="h-4 w-4" />
+                )}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -536,7 +554,21 @@ export function GithubCard() {
                     ? `${repos.length} repositório(s) — lista completa carregada.`
                     : `${repos.length} repositório(s) carregados — pode haver mais páginas, clique em "Atualizar lista".`
                   : "A lista carrega automaticamente após validar o token."}
+              {cacheInfo &&
+                (cacheInfo.fromCache
+                  ? ` Lista em cache — atualizada ${minutesAgo(cacheInfo.savedAt)}.`
+                  : " Lista carregada agora do GitHub.")}
             </p>
+            {reposWarnings.length > 0 && (
+              <div className="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600 dark:text-amber-400">
+                {reposWarnings.map((w) => (
+                  <div key={w} className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>{w}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             {reposError && (
               <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -549,9 +581,29 @@ export function GithubCard() {
             <Input
               id="gh-branch"
               value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-              placeholder="padrão do repositório"
+              onChange={(e) => {
+                setBranchTouched(true);
+                setBranch(e.target.value);
+              }}
+              placeholder={detectedBranch || "padrão do repositório"}
             />
+            {detectedBranch && (
+              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                Branch padrão detectada: <code>{detectedBranch}</code>
+                {branch !== detectedBranch && (
+                  <button
+                    type="button"
+                    className="text-primary underline-offset-4 hover:underline"
+                    onClick={() => {
+                      setBranch(detectedBranch);
+                      setBranchTouched(false);
+                    }}
+                  >
+                    usar padrão
+                  </button>
+                )}
+              </p>
+            )}
           </div>
         </div>
 
