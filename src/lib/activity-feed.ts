@@ -335,7 +335,7 @@ function describeSettingsChange(
   actorLabel: string,
   prev: Record<string, unknown> | null,
   next: Record<string, unknown> | null,
-): { title: string; description?: string } {
+): { title: string; description?: string; changes: ActivityChange[] } {
   const sections = ["preferences", "rules", "security", "ui_state"];
   const changes: SettingChange[] = [];
   for (const s of sections) {
@@ -343,8 +343,18 @@ function describeSettingsChange(
   }
 
   if (changes.length === 0) {
-    return { title: `${actorLabel} salvou as configurações do sistema` };
+    return { title: `${actorLabel} salvou as configurações do sistema`, changes: [] };
   }
+
+  const detailed: ActivityChange[] = changes.map((c) => {
+    const { area, label } = describeSettingPath(c.section, c.path);
+    return {
+      scope: area ?? SECTION_LABELS[c.section] ?? c.section,
+      label,
+      from: formatSettingValue(c.from),
+      to: formatSettingValue(c.to),
+    };
+  });
 
   const sectionsTouched = Array.from(new Set(changes.map((c) => c.section)));
   const areasTouched = Array.from(
@@ -360,7 +370,15 @@ function describeSettingsChange(
       ? areasTouched.slice(0, 2).join(" e ") + (areasTouched.length > 2 ? " +" + (areasTouched.length - 2) : "")
       : sectionsTouched.map((s) => SECTION_LABELS[s] ?? s).join(", ");
 
-  const title = `${actorLabel} alterou ${escopo} nas configurações`;
+  // O que exatamente mudou (nomes dos ajustes), para o título ficar autoexplicativo.
+  const ajustes = Array.from(new Set(detailed.map((d) => d.label))).filter(Boolean);
+  const oQue =
+    ajustes.length === 0
+      ? "as configurações"
+      : ajustes.slice(0, 2).join(" e ") +
+        (ajustes.length > 2 ? ` +${ajustes.length - 2}` : "");
+
+  const title = `${actorLabel} alterou ${oQue} em ${escopo}`;
 
   const detalhes = changes.slice(0, 4).map((c) => {
     const { area, label } = describeSettingPath(c.section, c.path);
@@ -369,7 +387,7 @@ function describeSettingsChange(
   });
   if (changes.length > 4) detalhes.push(`e mais ${changes.length - 4} ajuste(s)`);
 
-  return { title, description: detalhes.join(" · ") };
+  return { title, description: detalhes.join(" · "), changes: detailed };
 }
 
 /** Converte um registro de auditoria em um evento legível. */
