@@ -285,7 +285,7 @@ export function GithubCard() {
                   {repoOptions.map((r) => (
                     <SelectItem key={r.fullName} value={r.fullName}>
                       {r.fullName}
-                ețí                    </SelectItem>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
