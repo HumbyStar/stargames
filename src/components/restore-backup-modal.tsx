@@ -502,12 +502,188 @@ export function RestoreBackupModal({
                 Voltar
               </Button>
               <Button
+                variant="secondary"
+                disabled={
+                  loading ||
+                  selectedTables.size === 0 ||
+                  previewData.targetEnv !== "sandbox"
+                }
+                title={
+                  previewData.targetEnv !== "sandbox"
+                    ? "Disponível apenas no Modo Teste — entre no sandbox para validar sem escrever."
+                    : undefined
+                }
+                onClick={() => void handleValidate()}
+              >
+                {loading ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <FlaskConical className="mr-2 size-4" />
+                )}
+                Validar no sandbox (não aplica)
+              </Button>
+              <Button
                 variant={mode === "replace" ? "destructive" : "default"}
                 disabled={loading || selectedTables.size === 0}
                 onClick={() => void handleApply()}
               >
                 {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                 {mode === "replace" ? "Substituir tudo agora" : "Aplicar merge"}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+
+        {step === "validation" && report && (
+          <div className="space-y-4">
+            <div
+              className={cn(
+                "flex items-start gap-2 rounded-md border p-3 text-xs",
+                report.productionUntouched
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                  : "border-destructive/40 bg-destructive/10 text-destructive",
+              )}
+            >
+              <ShieldCheck className="mt-0.5 size-4 shrink-0" />
+              <div>
+                <div className="font-semibold">
+                  {report.productionUntouched
+                    ? "Produção intacta — nenhuma escrita realizada"
+                    : "Atenção: as contagens de produção mudaram durante a validação"}
+                </div>
+                <div className="mt-0.5 opacity-80">
+                  Simulação no Modo Teste em {(report.durationMs / 1000).toFixed(1)}s ·{" "}
+                  {report.mode === "replace" ? "Substituir tudo" : "Merge"} · {report.filename}
+                </div>
+              </div>
+            </div>
+
+            <div className="max-h-56 overflow-y-auto rounded-md border border-border">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-card">
+                  <tr className="border-b border-border/60 text-left uppercase tracking-wide text-muted-foreground">
+                    <th className="px-2 py-1">Tabela</th>
+                    <th className="px-2 py-1 text-right">Backup</th>
+                    <th className="px-2 py-1 text-right">Sandbox hoje</th>
+                    <th className="px-2 py-1 text-right">Inserir</th>
+                    <th className="px-2 py-1 text-right">Remover</th>
+                    <th className="px-2 py-1 text-right">Projetado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.tables.map((t) => (
+                    <tr key={t.table} className="border-b border-border/40 last:border-b-0">
+                      <td className="px-2 py-1">{t.table}</td>
+                      <td className="px-2 py-1 text-right tabular-nums">{fmt(t.inBackup)}</td>
+                      <td className="px-2 py-1 text-right tabular-nums">{fmt(t.currentSandbox)}</td>
+                      <td className="px-2 py-1 text-right tabular-nums text-emerald-600">
+                        +{fmt(t.toInsert)}
+                      </td>
+                      <td
+                        className={cn(
+                          "px-2 py-1 text-right tabular-nums",
+                          t.toDelete > 0 && "text-destructive",
+                        )}
+                      >
+                        {t.toDelete > 0 ? `-${fmt(t.toDelete)}` : "—"}
+                      </td>
+                      <td className="px-2 py-1 text-right font-semibold tabular-nums">
+                        {fmt(t.projected)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 rounded-md border border-border bg-card/50 p-3 text-xs sm:grid-cols-4">
+              <Metric
+                label="Clientes"
+                b={report.projectedSummary.clients.total}
+                c={report.currentSummary.clients.total}
+              />
+              <Metric
+                label="Produtos"
+                b={report.projectedSummary.products.total}
+                c={report.currentSummary.products.total}
+              />
+              <Metric
+                label="Acordos MGMV"
+                b={report.projectedSummary.mgmv.agreements}
+                c={report.currentSummary.mgmv.agreements}
+              />
+              <Metric
+                label="Parcelas pendentes"
+                b={report.projectedSummary.mgmv.installmentsPending}
+                c={report.currentSummary.mgmv.installmentsPending}
+                invert
+              />
+              <Metric
+                label="NFs"
+                b={report.projectedSummary.nfInvoices.total}
+                c={report.currentSummary.nfInvoices.total}
+              />
+              <Metric
+                label="Inadimplência (R$)"
+                b={Math.round(report.projectedSummary.financeiro.overdueCents / 100)}
+                c={Math.round(report.currentSummary.financeiro.overdueCents / 100)}
+                invert
+              />
+              <Metric
+                label="A receber (R$)"
+                b={Math.round(report.projectedSummary.financeiro.receivableCents / 100)}
+                c={Math.round(report.currentSummary.financeiro.receivableCents / 100)}
+              />
+              <Metric
+                label="Recebido (R$)"
+                b={Math.round(report.projectedSummary.financeiro.receivedCents / 100)}
+                c={Math.round(report.currentSummary.financeiro.receivedCents / 100)}
+              />
+            </div>
+
+            {report.issues.length > 0 ? (
+              <div className="space-y-1 rounded-md border border-border p-3 text-xs">
+                <div className="mb-1 font-semibold">Pontos de atenção</div>
+                {report.issues.map((i, idx) => (
+                  <div
+                    key={idx}
+                    className={cn(
+                      "flex items-start gap-2",
+                      i.level === "error" && "text-destructive",
+                      i.level === "warn" && "text-amber-600 dark:text-amber-400",
+                      i.level === "info" && "text-muted-foreground",
+                    )}
+                  >
+                    {i.level === "info" ? (
+                      <Info className="mt-0.5 size-3 shrink-0" />
+                    ) : (
+                      <AlertTriangle className="mt-0.5 size-3 shrink-0" />
+                    )}
+                    <span>{i.message}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-700 dark:text-emerald-300">
+                <CheckCircle2 className="size-4" /> Nenhum problema de integridade encontrado.
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setStep("preview")}>
+                Voltar
+              </Button>
+              <Button variant="secondary" onClick={downloadReport}>
+                <Download className="mr-2 size-4" />
+                Baixar relatório
+              </Button>
+              <Button
+                variant={mode === "replace" ? "destructive" : "default"}
+                disabled={loading}
+                onClick={() => void handleApply()}
+              >
+                {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                Aplicar no sandbox
               </Button>
             </DialogFooter>
           </div>
