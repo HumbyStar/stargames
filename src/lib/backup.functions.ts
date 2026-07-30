@@ -462,6 +462,7 @@ async function fetchRowsForBackup(
   opts: {
     batchSize?: number;
     keepRows?: boolean;
+    env?: "producao" | "sandbox";
     onBatch?: (rowCount: number) => Promise<void>;
   } = {},
 ): Promise<{ rowCount: number; jsonl: string; rows?: any[] }> {
@@ -472,9 +473,13 @@ async function fetchRowsForBackup(
   let rowCount = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const { data, error } = await admin
-      .from(table)
-      .select("*")
+    let query = admin.from(table).select("*");
+    // O backup é sempre de UM ambiente (produção ou teste). Sem este filtro,
+    // as tabelas com coluna `env` sairiam somadas (produção + sandbox).
+    if (opts.env && ENV_SCOPED_TABLES.has(table)) query = query.eq("env", opts.env);
+    // Paginação sem ordenação pode repetir/pular linhas em tabelas grandes.
+    const { data, error } = await query
+      .order(orderKeyFor(table), { ascending: true })
       .range(from, from + batchSize - 1);
     if (error) throw new Error(`[${table}] ${error.message}`);
     if (!data || data.length === 0) break;
