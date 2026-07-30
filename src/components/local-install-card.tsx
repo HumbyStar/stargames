@@ -345,6 +345,14 @@ export function LocalInstallCard() {
             Exportar alterações (.zip)
           </Button>
 
+          <Button variant="outline" onClick={() => downloadWindowsShortcut()}>
+            <FolderDown className="size-4" /> Baixar atalho (.url)
+          </Button>
+
+          <Button variant="outline" onClick={() => window.open(appUrl(), "_blank", "noopener")}>
+            <ExternalLink className="size-4" /> Abrir sistema
+          </Button>
+
           <Button
             variant="ghost"
             className="text-destructive hover:text-destructive"
@@ -356,6 +364,26 @@ export function LocalInstallCard() {
         </div>
 
         <div className="space-y-1.5 rounded-xl border border-border bg-muted/30 p-3">
+          {lastFiles.length > 0 && (
+            <div className="mb-2 rounded-lg border border-border bg-background p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Arquivos baixados agora
+              </p>
+              <ul className="mt-1 space-y-0.5 text-xs">
+                {lastFiles.map((f) => (
+                  <li key={f} className="truncate">
+                    <span className="font-medium">{f}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                Estão na pasta <span className="font-medium">Downloads</span> do seu PC (Ctrl+J no
+                Chrome/Edge). Dê dois cliques em <span className="font-medium">Star Games.url</span>{" "}
+                para abrir o sistema — pode arrastá-lo para a Área de Trabalho. O .zip é a cópia dos
+                dados para restaurar no Modo Teste se precisar.
+              </p>
+            </div>
+          )}
           {!installable && !isStandaloneInstall() && (
             <p className="pb-1 text-[11px] text-muted-foreground">
               O atalho automático fica disponível apenas no endereço publicado do sistema, aberto
