@@ -161,6 +161,8 @@ export const listGithubRepos = createServerFn({ method: "GET" })
     await assertAdmin(context);
     const { githubFetch } = await import("./github.server");
     const collected: any[] = [];
+    let complete = true;
+    let pagesLoaded = 0;
 
     // 1) repositórios do usuário (todas as páginas, até 500)
     for (let page = 1; page <= 5; page++) {
@@ -169,7 +171,9 @@ export const listGithubRepos = createServerFn({ method: "GET" })
       );
       if (!Array.isArray(batch) || batch.length === 0) break;
       collected.push(...batch);
+      pagesLoaded = page;
       if (batch.length < 100) break;
+      if (page === 5) complete = false; // pode haver mais páginas
     }
 
     // 2) fallback: tokens de GitHub App só enxergam repos via installations
@@ -185,7 +189,7 @@ export const listGithubRepos = createServerFn({ method: "GET" })
     const unique = new Map<string, any>();
     for (const r of collected) if (r?.full_name) unique.set(r.full_name, r);
 
-    return Array.from(unique.values()).map((r: any) => ({
+    const repos = Array.from(unique.values()).map((r: any) => ({
       fullName: r.full_name as string,
       owner: r.owner?.login as string,
       name: r.name as string,
@@ -193,6 +197,8 @@ export const listGithubRepos = createServerFn({ method: "GET" })
       defaultBranch: (r.default_branch as string) ?? "main",
       updatedAt: (r.updated_at as string) ?? null,
     }));
+
+    return { repos, complete, pagesLoaded, total: repos.length };
   });
 
 export const pushBackupToGithub = createServerFn({ method: "POST" })
