@@ -1558,6 +1558,7 @@ export const previewBackupRestore = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<RestorePreview> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const targetEnv = await resolveTargetEnv(supabaseAdmin, context.userId);
     const { zip, filename } = await loadBackupZip(supabaseAdmin, data);
     const manifest = await readManifest(zip);
 
@@ -1585,16 +1586,16 @@ export const previewBackupRestore = createServerFn({ method: "POST" })
       });
     }
 
-    // Estado atual do banco vivo
+    // Estado atual do banco vivo — escopado ao ambiente de destino.
     const [clients, products, agreements, installments, nfInvoices, teamTasks, punchEntries] =
       await Promise.all([
-        fetchAllRows(supabaseAdmin, "clients"),
-        fetchAllRows(supabaseAdmin, "products"),
-        fetchAllRows(supabaseAdmin, "mgmv_agreements"),
-        fetchAllRows(supabaseAdmin, "mgmv_installments"),
-        fetchAllRows(supabaseAdmin, "nf_invoices"),
-        fetchAllRows(supabaseAdmin, "team_tasks"),
-        fetchAllRows(supabaseAdmin, "team_punch_entries"),
+        fetchAllRows(supabaseAdmin, "clients", 1000, targetEnv),
+        fetchAllRows(supabaseAdmin, "products", 1000, targetEnv),
+        fetchAllRows(supabaseAdmin, "mgmv_agreements", 1000, targetEnv),
+        fetchAllRows(supabaseAdmin, "mgmv_installments", 1000, targetEnv),
+        fetchAllRows(supabaseAdmin, "nf_invoices", 1000, targetEnv),
+        fetchAllRows(supabaseAdmin, "team_tasks", 1000, targetEnv),
+        fetchAllRows(supabaseAdmin, "team_punch_entries", 1000, targetEnv),
       ]);
     const current = computeBusinessSummaryFromRows({
       clients,
@@ -1606,7 +1607,10 @@ export const previewBackupRestore = createServerFn({ method: "POST" })
       punchEntries,
     });
 
-    const availableTables = RESTORABLE_TABLES.filter((t) => Boolean(zip.file(`database/data/${t}.jsonl`)));
+    const inZip = RESTORABLE_TABLES.filter((t) => Boolean(zip.file(`database/data/${t}.jsonl`)));
+    const availableTables =
+      targetEnv === "sandbox" ? inZip.filter((t) => !GLOBAL_TABLES.has(t)) : inZip;
+    const skippedTables = inZip.filter((t) => !availableTables.includes(t));
 
     return {
       ok: true,
@@ -1619,6 +1623,8 @@ export const previewBackupRestore = createServerFn({ method: "POST" })
       businessSummary: summary,
       current,
       availableTables,
+      targetEnv,
+      skippedTables,
     };
   });
 
