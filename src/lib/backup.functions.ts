@@ -1401,6 +1401,40 @@ const RESTORABLE_TABLES = BACKUP_TABLES.filter(
   (t) => t !== "audit_log" && t !== "import_progress",
 );
 
+// Tabelas que possuem a coluna `env` (produção x sandbox).
+const ENV_SCOPED_TABLES = new Set<string>(SANDBOX_TABLES);
+
+// Tabelas globais (usuários, papéis, permissões) — nunca são tocadas quando o
+// destino é o sandbox, para que um teste jamais altere acesso real.
+const GLOBAL_TABLES = new Set<string>([
+  "profiles",
+  "user_roles",
+  "role_permissions",
+  "user_responsibilities",
+]);
+
+const CLONE_BY_TABLE: Record<string, CloneTable> = Object.fromEntries(
+  CLONE_ORDER.map((t) => [t.name, t]),
+);
+
+const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
+
+/**
+ * O ambiente de destino é SEMPRE decidido no servidor a partir do estado de
+ * sandbox do usuário — nunca vem do navegador.
+ */
+async function resolveTargetEnv(
+  admin: any,
+  userId: string,
+): Promise<"producao" | "sandbox"> {
+  const { data } = await admin
+    .from("sandbox_state")
+    .select("active")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return data?.active ? "sandbox" : "producao";
+}
+
 export interface RestorePreview {
   ok: true;
   source: "backup" | "upload";
@@ -1412,11 +1446,14 @@ export interface RestorePreview {
   businessSummary: BusinessSummary | null;
   current: BusinessSummary;
   availableTables: string[];
+  targetEnv: "producao" | "sandbox";
+  skippedTables: string[];
 }
 
 export interface RestoreResult {
   ok: true;
   mode: "merge" | "replace";
+  targetEnv: "producao" | "sandbox";
   tablesRestored: Array<{ table: string; inserted: number; skipped: number; deleted: number }>;
   storageFilesRestored: number;
   durationMs: number;
