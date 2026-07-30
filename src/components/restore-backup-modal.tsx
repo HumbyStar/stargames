@@ -68,13 +68,16 @@ export function RestoreBackupModal({
   const preview = useServerFn(previewBackupRestore);
   const restore = useServerFn(restoreBackup);
   const validate = useServerFn(validateBackupRestore);
+  const makeUploadUrl = useServerFn(createBackupUploadUrl);
+  const discardUpload = useServerFn(discardUploadedBackup);
 
   const [step, setStep] = useState<Step>("source");
   const [source, setSource] = useState<"existing" | "upload">(initialSource);
   const [backups, setBackups] = useState<BackupRow[]>([]);
   const [backupId, setBackupId] = useState<string>("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadedBase64, setUploadedBase64] = useState<string>("");
+  const [uploadedPath, setUploadedPath] = useState<string>("");
+  const [uploadPct, setUploadPct] = useState(0);
   const [previewData, setPreviewData] = useState<RestorePreview | null>(null);
   const [selectedTables, setSelectedTables] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<"merge" | "replace">("merge");
@@ -90,7 +93,8 @@ export function RestoreBackupModal({
     setSource(initialSource);
     setBackupId("");
     setUploadFile(null);
-    setUploadedBase64("");
+    setUploadedPath("");
+    setUploadPct(0);
     setPreviewData(null);
     setSelectedTables(new Set());
     setMode("merge");
@@ -107,27 +111,42 @@ export function RestoreBackupModal({
 
   const canPreview = useMemo(() => {
     if (source === "existing") return Boolean(backupId);
-    return Boolean(uploadedBase64);
-  }, [source, backupId, uploadedBase64]);
+    return Boolean(uploadedPath);
+  }, [source, backupId, uploadedPath]);
 
   const handleFile = async (file: File | null) => {
     setUploadFile(file);
+    setUploadPct(0);
     if (!file) {
-      setUploadedBase64("");
+      setUploadedPath("");
       return;
     }
     if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
       setUploadFile(null);
-      setUploadedBase64("");
+      setUploadedPath("");
       toast.error(`Arquivo maior que ${MAX_UPLOAD_MB} MB.`);
       return;
     }
     setLoading(true);
+    toast.loading("Enviando arquivo…", { id: "upload-zip" });
     try {
-      const b64 = await fileToBase64(file);
-      setUploadedBase64(b64);
+      // Envio direto ao armazenamento: o ZIP não passa pela requisição do app,
+      // por isso backups grandes (dezenas/centenas de MB) não estouram memória.
+      const { path, token, bucket } = await makeUploadUrl({
+        data: { fileName: file.name, size: file.size },
+      });
+      setUploadPct(10);
+      const { error } = await supabase.storage
+        .from(bucket)
+        .uploadToSignedUrl(path, token, file, { contentType: "application/zip" });
+      if (error) throw new Error(error.message);
+      setUploadPct(100);
+      setUploadedPath(path);
+      toast.success("Arquivo enviado.", { id: "upload-zip" });
     } catch (err: any) {
-      toast.error(err?.message ?? "Falha ao ler arquivo.");
+      setUploadedPath("");
+      setUploadPct(0);
+      toast.error(err?.message ?? "Falha ao enviar o arquivo.", { id: "upload-zip" });
     } finally {
       setLoading(false);
     }
@@ -135,18 +154,20 @@ export function RestoreBackupModal({
 
   const handlePreview = async () => {
     setLoading(true);
+    toast.loading("Analisando backup…", { id: "preview-zip" });
     try {
       const res = await preview({
         data:
           source === "existing"
             ? { backupId }
-            : { uploadedZipBase64: uploadedBase64 },
+            : { uploadedPath },
       });
       setPreviewData(res);
       setSelectedTables(new Set(res.availableTables));
       setStep("preview");
+      toast.dismiss("preview-zip");
     } catch (err: any) {
-      toast.error(err?.message ?? "Falha ao ler backup.");
+      toast.error(err?.message ?? "Falha ao ler backup.", { id: "preview-zip" });
     } finally {
       setLoading(false);
     }
