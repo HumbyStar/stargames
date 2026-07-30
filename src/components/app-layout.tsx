@@ -18,6 +18,10 @@ import {
   KanbanSquare,
 } from "lucide-react";
 import { SandboxProvider, useSandbox } from "@/lib/use-sandbox";
+import { WifiOff } from "lucide-react";
+import { initLocalMode, isLocalMode, subscribeLocalMode } from "@/lib/local-mode";
+import { startLocalPersistence } from "@/lib/local-persistence";
+import { initInstallPrompt, registerServiceWorker } from "@/lib/pwa";
 import { useEffect, useMemo, useRef, useState, lazy, memo, Suspense, type ReactNode } from "react";
 import type { ComponentType, SVGProps } from "react";
 import { cn } from "@/lib/utils";
@@ -1127,6 +1131,7 @@ function _FloatingNavbarImpl() {
 
         <div className="ml-auto flex items-center gap-1.5 md:gap-2 md:pl-2">
           <SandboxPill />
+          <LocalModePill />
           {visibleIds.map((iconId) => {
             const meta = getIconMeta(iconId);
             if (!meta) return null;
@@ -1374,6 +1379,43 @@ export function AppLayout({ children }: { children?: ReactNode }) {
 }
 
 function SandboxPill() {
+  return <SandboxPillInner />;
+}
+
+/** Aviso de que o app está lendo/gravando no banco local deste computador. */
+function LocalModePill() {
+  const [active, setActive] = useState(false);
+  useEffect(() => {
+    const sync = () => setActive(isLocalMode());
+    sync();
+    const offInit = initLocalMode();
+    const offMode = subscribeLocalMode(sync);
+    const offPersist = startLocalPersistence();
+    const offPrompt = initInstallPrompt();
+    registerServiceWorker();
+    return () => {
+      offInit();
+      offMode();
+      offPersist();
+      offPrompt();
+    };
+  }, []);
+  if (!active) return null;
+  return (
+    <div
+      title="Modo Local — usando os dados salvos neste computador"
+      className="flex items-center gap-1.5 rounded-full border-2 border-dashed border-sky-500/60 bg-sky-500/10 px-2 py-1 text-[11px] font-semibold text-sky-700 dark:text-sky-300"
+    >
+      <WifiOff className="size-3.5 shrink-0" />
+      <span className="hidden sm:inline">MODO LOCAL</span>
+      <span className="hidden xl:inline font-normal text-sky-700/80 dark:text-sky-300/80">
+        — dados deste computador
+      </span>
+    </div>
+  );
+}
+
+function SandboxPillInner() {
   const { state, setActive } = useSandbox();
   const [leaving, setLeaving] = useState(false);
   if (!state.active) return null;

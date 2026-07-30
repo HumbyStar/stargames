@@ -29,6 +29,7 @@ import {
   LogOut,
   HelpCircle,
 } from "lucide-react";
+import { MonitorDown } from "lucide-react";
 import { Card, PageHeader, Tag } from "@/components/ui-bits";
 import { AiTrainingModal } from "@/components/ai-training-modal";
 import { Button } from "@/components/ui/button";
@@ -72,6 +73,7 @@ import { NavbarSettingsCard } from "@/components/navbar-settings-card";
 import { BackupsPanel } from "@/components/backups-panel";
 import { SandboxSettingsCard } from "@/components/sandbox-settings-card";
 import { SandboxAuditCard } from "@/components/sandbox-audit-card";
+import { LocalInstallCard } from "@/components/local-install-card";
 import { RestoreBackupModal } from "@/components/restore-backup-modal";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -88,6 +90,7 @@ type View =
   | "duplicates"
   | "backups"
   | "sandbox"
+  | "local"
   | "danger";
 
 function DiagBox({
@@ -776,6 +779,13 @@ export function ConfiguracoesSection() {
               onOpen={() => setView("sandbox")}
             />
             <SecondaryCard
+              icon={MonitorDown}
+              title="Instalar sistema (Windows)"
+              summary="Instala o sistema no computador com uma cópia atualizada dos dados para trabalhar mesmo sem internet."
+              status="Offline"
+              onOpen={() => setView("local")}
+            />
+            <SecondaryCard
               icon={Brain}
               title="Treinar I.A"
               summary="Onboarding guiado + análise do sistema para gerar automações Python que reduzem o uso de IA."
@@ -1409,6 +1419,16 @@ export function ConfiguracoesSection() {
           />
           <SandboxSettingsCard />
           <SandboxAuditCard />
+        </>
+      )}
+
+      {view === "local" && (
+        <>
+          <DetailHeader
+            title="Instalar sistema (Windows)"
+            description="Cópia local do sistema e dos dados para usar offline."
+          />
+          <LocalInstallCard />
         </>
       )}
 
