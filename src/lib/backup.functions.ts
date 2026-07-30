@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { deferWithWorkerContext } from "@/lib/worker-context";
+import { CLONE_ORDER, SANDBOX_TABLES, remapRow, type CloneTable } from "@/lib/sandbox-clone";
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
@@ -430,15 +431,15 @@ async function fetchAllRows(
   admin: any,
   table: BackupTable,
   batchSize = 1000,
+  env?: "producao" | "sandbox",
 ): Promise<any[]> {
   const out: any[] = [];
   let from = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const { data, error } = await admin
-      .from(table)
-      .select("*")
-      .range(from, from + batchSize - 1);
+    let query = admin.from(table).select("*");
+    if (env && ENV_SCOPED_TABLES.has(table)) query = query.eq("env", env);
+    const { data, error } = await query.range(from, from + batchSize - 1);
     if (error) throw new Error(`[${table}] ${error.message}`);
     if (!data || data.length === 0) break;
     out.push(...data);
@@ -1400,6 +1401,40 @@ const RESTORABLE_TABLES = BACKUP_TABLES.filter(
   (t) => t !== "audit_log" && t !== "import_progress",
 );
 
+// Tabelas que possuem a coluna `env` (produção x sandbox).
+const ENV_SCOPED_TABLES = new Set<string>(SANDBOX_TABLES);
+
+// Tabelas globais (usuários, papéis, permissões) — nunca são tocadas quando o
+// destino é o sandbox, para que um teste jamais altere acesso real.
+const GLOBAL_TABLES = new Set<string>([
+  "profiles",
+  "user_roles",
+  "role_permissions",
+  "user_responsibilities",
+]);
+
+const CLONE_BY_TABLE: Record<string, CloneTable> = Object.fromEntries(
+  CLONE_ORDER.map((t) => [t.name, t]),
+);
+
+const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
+
+/**
+ * O ambiente de destino é SEMPRE decidido no servidor a partir do estado de
+ * sandbox do usuário — nunca vem do navegador.
+ */
+async function resolveTargetEnv(
+  admin: any,
+  userId: string,
+): Promise<"producao" | "sandbox"> {
+  const { data } = await admin
+    .from("sandbox_state")
+    .select("active")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return data?.active ? "sandbox" : "producao";
+}
+
 export interface RestorePreview {
   ok: true;
   source: "backup" | "upload";
@@ -1411,11 +1446,14 @@ export interface RestorePreview {
   businessSummary: BusinessSummary | null;
   current: BusinessSummary;
   availableTables: string[];
+  targetEnv: "producao" | "sandbox";
+  skippedTables: string[];
 }
 
 export interface RestoreResult {
   ok: true;
   mode: "merge" | "replace";
+  targetEnv: "producao" | "sandbox";
   tablesRestored: Array<{ table: string; inserted: number; skipped: number; deleted: number }>;
   storageFilesRestored: number;
   durationMs: number;
@@ -1459,9 +1497,12 @@ async function loadBackupZip(
     const raw = opts.uploadedZipBase64.includes(",")
       ? opts.uploadedZipBase64.split(",", 2)[1]
       : opts.uploadedZipBase64;
+    if (raw.length * 0.75 > MAX_UPLOAD_BYTES + 1024) {
+      throw new Error("Arquivo maior que 500 MB.");
+    }
     const bin = Uint8Array.from(atob(raw), (c) => c.charCodeAt(0));
-    if (bin.byteLength > 250 * 1024 * 1024) {
-      throw new Error("Arquivo maior que 250 MB.");
+    if (bin.byteLength > MAX_UPLOAD_BYTES) {
+      throw new Error("Arquivo maior que 500 MB.");
     }
     const zip = await JSZip.loadAsync(bin);
     return { zip, filename: "upload.zip" };
@@ -1517,6 +1558,7 @@ export const previewBackupRestore = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<RestorePreview> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const targetEnv = await resolveTargetEnv(supabaseAdmin, context.userId);
     const { zip, filename } = await loadBackupZip(supabaseAdmin, data);
     const manifest = await readManifest(zip);
 
@@ -1544,16 +1586,16 @@ export const previewBackupRestore = createServerFn({ method: "POST" })
       });
     }
 
-    // Estado atual do banco vivo
+    // Estado atual do banco vivo — escopado ao ambiente de destino.
     const [clients, products, agreements, installments, nfInvoices, teamTasks, punchEntries] =
       await Promise.all([
-        fetchAllRows(supabaseAdmin, "clients"),
-        fetchAllRows(supabaseAdmin, "products"),
-        fetchAllRows(supabaseAdmin, "mgmv_agreements"),
-        fetchAllRows(supabaseAdmin, "mgmv_installments"),
-        fetchAllRows(supabaseAdmin, "nf_invoices"),
-        fetchAllRows(supabaseAdmin, "team_tasks"),
-        fetchAllRows(supabaseAdmin, "team_punch_entries"),
+        fetchAllRows(supabaseAdmin, "clients", 1000, targetEnv),
+        fetchAllRows(supabaseAdmin, "products", 1000, targetEnv),
+        fetchAllRows(supabaseAdmin, "mgmv_agreements", 1000, targetEnv),
+        fetchAllRows(supabaseAdmin, "mgmv_installments", 1000, targetEnv),
+        fetchAllRows(supabaseAdmin, "nf_invoices", 1000, targetEnv),
+        fetchAllRows(supabaseAdmin, "team_tasks", 1000, targetEnv),
+        fetchAllRows(supabaseAdmin, "team_punch_entries", 1000, targetEnv),
       ]);
     const current = computeBusinessSummaryFromRows({
       clients,
@@ -1565,7 +1607,10 @@ export const previewBackupRestore = createServerFn({ method: "POST" })
       punchEntries,
     });
 
-    const availableTables = RESTORABLE_TABLES.filter((t) => Boolean(zip.file(`database/data/${t}.jsonl`)));
+    const inZip = RESTORABLE_TABLES.filter((t) => Boolean(zip.file(`database/data/${t}.jsonl`)));
+    const availableTables =
+      targetEnv === "sandbox" ? inZip.filter((t) => !GLOBAL_TABLES.has(t)) : inZip;
+    const skippedTables = inZip.filter((t) => !availableTables.includes(t));
 
     return {
       ok: true,
@@ -1578,6 +1623,8 @@ export const previewBackupRestore = createServerFn({ method: "POST" })
       businessSummary: summary,
       current,
       availableTables,
+      targetEnv,
+      skippedTables,
     };
   });
 
@@ -1591,6 +1638,8 @@ export const restoreBackup = createServerFn({ method: "POST" })
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const started = Date.now();
+    // Destino decidido no servidor. O navegador não escolhe ambiente.
+    const targetEnv = await resolveTargetEnv(supabaseAdmin, context.userId);
     const { zip } = await loadBackupZip(supabaseAdmin, data);
     await readManifest(zip);
 
@@ -1598,14 +1647,31 @@ export const restoreBackup = createServerFn({ method: "POST" })
       ? new Set(data.tables)
       : new Set(RESTORABLE_TABLES);
 
-    const tablesToProcess = RESTORABLE_TABLES.filter((t) => requested.has(t));
+    const tablesToProcess = (
+      targetEnv === "sandbox"
+        ? // No sandbox seguimos a ordem de dependência da clonagem para que as
+          // chaves estrangeiras já estejam remapeadas quando forem usadas, e
+          // nunca tocamos tabelas globais (perfis, papéis, permissões).
+          (CLONE_ORDER.map((t) => t.name) as string[]).filter(
+            (t) => RESTORABLE_TABLES.includes(t as any) && !GLOBAL_TABLES.has(t),
+          )
+        : (RESTORABLE_TABLES as unknown as string[])
+    ).filter((t) => requested.has(t));
 
     const results: RestoreResult["tablesRestored"] = [];
+    // Mapa de ids originais -> novos ids (somente sandbox).
+    const idMaps: Record<string, Record<string, string>> = {};
 
     // REPLACE: apaga em ordem reversa (dependentes primeiro)
     if (data.mode === "replace") {
       for (const table of [...tablesToProcess].reverse()) {
-        let query = supabaseAdmin.from(table).delete();
+        let query = (supabaseAdmin as any).from(table).delete();
+        // Exclusão SEMPRE escopada ao ambiente de destino.
+        if (ENV_SCOPED_TABLES.has(table)) {
+          query = query.eq("env" as any, targetEnv);
+        } else if (targetEnv === "sandbox") {
+          continue; // tabela global: nunca apagada em teste
+        }
         // Protege o admin logado
         if (table === "user_roles" || table === "profiles") {
           query = query.neq("user_id" as any, context.userId).neq("id" as any, context.userId);
@@ -1627,15 +1693,47 @@ export const restoreBackup = createServerFn({ method: "POST" })
       } else if (table === "profiles") {
         filtered = rows.filter((r) => r.id !== context.userId);
       }
+
+      const cloneTable = CLONE_BY_TABLE[table];
+      let payload: any[];
+      if (targetEnv === "sandbox" && cloneTable) {
+        // Regenera todos os ids e reescreve as FKs — nenhum id do backup entra
+        // como está, então é impossível sobrescrever uma linha de produção.
+        idMaps[table] = idMaps[table] ?? {};
+        payload = filtered.map((row) => remapRow(cloneTable, row, idMaps));
+      } else {
+        payload = filtered.map((row) =>
+          ENV_SCOPED_TABLES.has(table) ? { ...row, env: targetEnv } : { ...row },
+        );
+      }
+
+      // Trava final: nada é gravado se alguma linha não estiver carimbada com
+      // o ambiente de destino (ou, no sandbox, se algum id não foi regerado).
+      if (ENV_SCOPED_TABLES.has(table)) {
+        const bad = payload.find((r) => r.env !== targetEnv);
+        if (bad) throw new Error(`[restore] ${table}: linha fora do ambiente ${targetEnv}. Abortado.`);
+      }
+      if (targetEnv === "sandbox" && cloneTable?.idColumn) {
+        const map = idMaps[table] ?? {};
+        const collision = payload.find((r) => {
+          const id = r[cloneTable.idColumn as string];
+          return typeof id === "string" && map[id] !== undefined;
+        });
+        if (collision) throw new Error(`[restore] ${table}: id não remapeado. Abortado.`);
+      }
+
       let inserted = 0;
       let skipped = 0;
       const CHUNK = 500;
-      for (let i = 0; i < filtered.length; i += CHUNK) {
-        const chunk = filtered.slice(i, i + CHUNK);
-        const { error } = await supabaseAdmin.from(table).upsert(chunk, {
-          onConflict: "id",
-          ignoreDuplicates: false,
-        } as any);
+      const useInsert = targetEnv === "sandbox" && Boolean(cloneTable?.idColumn);
+      for (let i = 0; i < payload.length; i += CHUNK) {
+        const chunk = payload.slice(i, i + CHUNK);
+        const { error } = useInsert
+          ? await (supabaseAdmin as any).from(table).insert(chunk as any)
+          : await (supabaseAdmin as any).from(table).upsert(chunk as any, {
+              onConflict: "id",
+              ignoreDuplicates: false,
+            } as any);
         if (error) {
           console.warn(`[restore] upsert ${table} (chunk ${i}):`, error.message);
           skipped += chunk.length;
@@ -1646,9 +1744,9 @@ export const restoreBackup = createServerFn({ method: "POST" })
       results.push({ table, inserted, skipped, deleted: data.mode === "replace" ? rows.length : 0 });
     }
 
-    // Storage: reenvia arquivos originais
+    // Storage: reenvia arquivos originais (o acervo é único; em teste é só leitura)
     let storageFilesRestored = 0;
-    if (data.includeStorage) {
+    if (data.includeStorage && targetEnv === "producao") {
       const storageFiles = Object.values(zip.files).filter(
         (f: any) => !f.dir && f.name.startsWith("storage/notion-html-originals/"),
       );
@@ -1672,6 +1770,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
         products_added: 0,
         errors: results.reduce((s, r) => s + r.skipped, 0),
         status: "success",
+        env: targetEnv,
       } as any);
     } catch (err) {
       console.warn("[restore] import_history log failed:", err);
@@ -1680,6 +1779,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
     return {
       ok: true,
       mode: data.mode,
+      targetEnv,
       tablesRestored: results,
       storageFilesRestored,
       durationMs: Date.now() - started,

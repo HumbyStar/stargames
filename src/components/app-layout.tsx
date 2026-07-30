@@ -1,4 +1,4 @@
-import { Outlet } from "@tanstack/react-router";
+import { Outlet, useRouterState } from "@tanstack/react-router";
 import {
   Search,
   FlaskConical,
@@ -1367,7 +1367,9 @@ export function AppLayout({ children }: { children?: ReactNode }) {
 function SandboxBanner() {
   const { state, setActive } = useSandbox();
   const [leaving, setLeaving] = useState(false);
-  if (!state.active) return null;
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  // Na página dedicada /sandbox a moldura já avisa; evita aviso duplicado.
+  if (!state.active || pathname.startsWith("/sandbox")) return null;
   return (
     <div className="sticky top-0 z-50 flex flex-wrap items-center justify-center gap-2 border-b border-amber-500/40 bg-amber-500/15 px-4 py-2 text-xs font-medium text-amber-700 backdrop-blur dark:text-amber-300">
       <FlaskConical className="size-3.5" />

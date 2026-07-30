@@ -34,6 +34,8 @@ import { cn } from "@/lib/utils";
 
 type Step = "source" | "preview" | "done";
 
+const MAX_UPLOAD_MB = 500;
+
 function fmt(n: number): string {
   return (n ?? 0).toLocaleString("pt-BR");
 }
@@ -105,6 +107,12 @@ export function RestoreBackupModal({
     setUploadFile(file);
     if (!file) {
       setUploadedBase64("");
+      return;
+    }
+    if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
+      setUploadFile(null);
+      setUploadedBase64("");
+      toast.error(`Arquivo maior que ${MAX_UPLOAD_MB} MB.`);
       return;
     }
     setLoading(true);
@@ -263,7 +271,11 @@ export function RestoreBackupModal({
                   <div className="text-[11px] text-muted-foreground">
                     {uploadFile.name} · {(uploadFile.size / 1024 / 1024).toFixed(1)} MB
                   </div>
-                ) : null}
+                ) : (
+                  <div className="text-[11px] text-muted-foreground">
+                    Até {MAX_UPLOAD_MB} MB.
+                  </div>
+                )}
               </div>
             )}
 
@@ -281,6 +293,28 @@ export function RestoreBackupModal({
 
         {step === "preview" && previewData && (
           <div className="space-y-4">
+            <div
+              className={cn(
+                "rounded-md border p-3 text-xs",
+                previewData.targetEnv === "sandbox"
+                  ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                  : "border-border bg-muted/40",
+              )}
+            >
+              <div className="font-semibold">
+                Destino: {previewData.targetEnv === "sandbox" ? "SANDBOX (Modo Teste)" : "PRODUÇÃO"}
+              </div>
+              <div className="mt-0.5">
+                {previewData.targetEnv === "sandbox"
+                  ? "Todos os registros recebem novos identificadores e ficam isolados. A produção não será alterada."
+                  : "Os dados serão gravados no ambiente real."}
+              </div>
+              {previewData.skippedTables.length > 0 && (
+                <div className="mt-1 opacity-80">
+                  Não importadas em teste: {previewData.skippedTables.join(", ")}
+                </div>
+              )}
+            </div>
             <div className="rounded-md border border-border bg-card/50 p-3 text-xs">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
