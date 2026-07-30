@@ -31,6 +31,7 @@ import {
   getGithubStatus,
   saveGithubConfig,
   listGithubRepos,
+  verifyGithubRepoAccess,
   pushBackupToGithub,
   pushExportsToGithub,
   pushChangelogToGithub,
