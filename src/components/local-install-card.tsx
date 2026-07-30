@@ -274,19 +274,20 @@ export function LocalInstallCard() {
           ) : (
             <Button
               variant="outline"
-              disabled={!installable}
               onClick={() => {
                 void promptInstall().then((r) => {
                   if (r === "unavailable") {
-                    toast.info(
-                      "Use o menu do navegador (⋮) → “Instalar Star Games” para criar o atalho no Windows.",
-                    );
+                    toast.info("Instale pelo navegador", {
+                      description:
+                        "O Windows só libera o atalho automático no site publicado (stargames.lovable.app), fora da janela de pré-visualização. Lá, use o ícone de instalar na barra de endereço ou o menu ⋮ → “Instalar Star Games”.",
+                      duration: 9000,
+                    });
                   }
                 });
               }}
             >
               <HardDrive className="size-4" />
-              Instalar atalho no Windows
+              {installable ? "Instalar atalho no Windows" : "Como instalar no Windows"}
             </Button>
           )}
 
