@@ -1126,6 +1126,7 @@ function _FloatingNavbarImpl() {
         </div>
 
         <div className="ml-auto flex items-center gap-1.5 md:gap-2 md:pl-2">
+          <SandboxPill />
           {visibleIds.map((iconId) => {
             const meta = getIconMeta(iconId);
             if (!meta) return null;
@@ -1353,7 +1354,6 @@ export function AppLayout({ children }: { children?: ReactNode }) {
   return (
     <SandboxProvider>
       <div className="min-h-screen bg-background bg-gradient-to-b from-background via-background to-accent/30">
-        <SandboxBanner />
         <FloatingNavbar />
         <main className="page-container">{children ?? <Outlet />}</main>
         <GlobalModals />
@@ -1363,16 +1363,20 @@ export function AppLayout({ children }: { children?: ReactNode }) {
   );
 }
 
-function SandboxBanner() {
+function SandboxPill() {
   const { state, setActive } = useSandbox();
   const [leaving, setLeaving] = useState(false);
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  // Na página dedicada /sandbox a moldura já avisa; evita aviso duplicado.
-  if (!state.active || pathname.startsWith("/sandbox")) return null;
+  if (!state.active) return null;
   return (
-    <div className="sticky top-0 z-50 flex flex-wrap items-center justify-center gap-2 border-b border-amber-500/40 bg-amber-500/15 px-4 py-2 text-xs font-medium text-amber-700 backdrop-blur dark:text-amber-300">
-      <FlaskConical className="size-3.5" />
-      MODO TESTE — você está em um ambiente isolado. Nada aqui afeta os dados reais.
+    <div
+      title="Modo Teste — produção intocada"
+      className="flex items-center gap-1.5 rounded-full border-2 border-dashed border-amber-500/60 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300"
+    >
+      <FlaskConical className="size-3.5 shrink-0" />
+      <span className="hidden sm:inline">MODO TESTE</span>
+      <span className="hidden xl:inline font-normal text-amber-700/80 dark:text-amber-300/80">
+        — produção intocada
+      </span>
       <button
         type="button"
         disabled={leaving}
@@ -1386,7 +1390,7 @@ function SandboxBanner() {
         }}
         className="rounded-full border border-amber-500/50 px-2 py-0.5 transition-colors hover:bg-amber-500/20 disabled:opacity-60"
       >
-        {leaving ? "Saindo…" : "Sair"}
+        {leaving ? "Saindo…" : <><span className="hidden lg:inline">Sair do Modo Teste</span><span className="lg:hidden">Sair</span></>}
       </button>
     </div>
   );
