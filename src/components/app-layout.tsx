@@ -1,4 +1,4 @@
-import { Outlet } from "@tanstack/react-router";
+import { Outlet, useRouterState } from "@tanstack/react-router";
 import {
   Search,
   FlaskConical,
