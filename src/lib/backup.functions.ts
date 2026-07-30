@@ -1583,6 +1583,18 @@ export const createBackupUploadUrl = createServerFn({ method: "POST" })
       .from(BACKUP_BUCKET)
       .createSignedUploadUrl(path);
     if (error || !signed) throw new Error(error?.message ?? "Falha ao preparar upload.");
+    // Limpa sobras antigas de uploads deste usuário (> 24h).
+    try {
+      const { data: old } = await supabaseAdmin.storage
+        .from(BACKUP_BUCKET)
+        .list(`${UPLOAD_PREFIX}${context.userId}`, { limit: 100 });
+      const stale = (old ?? [])
+        .filter((o: any) => Date.now() - new Date(o.created_at ?? 0).getTime() > 86_400_000)
+        .map((o: any) => `${UPLOAD_PREFIX}${context.userId}/${o.name}`);
+      if (stale.length > 0) await supabaseAdmin.storage.from(BACKUP_BUCKET).remove(stale);
+    } catch {
+      /* limpeza é best-effort */
+    }
     return { path: signed.path, token: signed.token, bucket: BACKUP_BUCKET };
   });
 
