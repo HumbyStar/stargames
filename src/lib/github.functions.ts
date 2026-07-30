@@ -121,6 +121,18 @@ function scopeWarningFor(scopes: string[] | null | undefined): string | null {
   return null;
 }
 
+/** Checklist mostrado quando o GitHub responde 404 para um repositório. */
+function notFoundHints(target: string): string[] {
+  return [
+    `O nome precisa ser exatamente o do GitHub (maiúsculas/minúsculas contam): confira "${target}".`,
+    "Token fine-grained limitado a repositórios selecionados: inclua este repositório em Repository access.",
+    'Token clássico sem o escopo "repo": repositórios privados retornam 404 em vez de 403.',
+    "Repositório de organização com SSO: autorize o token em Configure SSO na página de tokens do GitHub.",
+    "A conta do token precisa ser dona ou colaboradora do repositório (convite pendente também causa 404).",
+    "Prefira escolher o repositório pela lista suspensa — assim o nome e o id vêm direto da API.",
+  ];
+}
+
 export const getGithubStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<GithubStatus> => {
