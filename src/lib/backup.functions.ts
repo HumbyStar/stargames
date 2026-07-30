@@ -1497,9 +1497,12 @@ async function loadBackupZip(
     const raw = opts.uploadedZipBase64.includes(",")
       ? opts.uploadedZipBase64.split(",", 2)[1]
       : opts.uploadedZipBase64;
+    if (raw.length * 0.75 > MAX_UPLOAD_BYTES + 1024) {
+      throw new Error("Arquivo maior que 500 MB.");
+    }
     const bin = Uint8Array.from(atob(raw), (c) => c.charCodeAt(0));
-    if (bin.byteLength > 250 * 1024 * 1024) {
-      throw new Error("Arquivo maior que 250 MB.");
+    if (bin.byteLength > MAX_UPLOAD_BYTES) {
+      throw new Error("Arquivo maior que 500 MB.");
     }
     const zip = await JSZip.loadAsync(bin);
     return { zip, filename: "upload.zip" };
