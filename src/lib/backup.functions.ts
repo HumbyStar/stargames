@@ -593,6 +593,7 @@ async function mirrorBucket(
 async function runBackup(opts: {
   type: "manual" | "scheduled";
   createdBy: string | null;
+  env?: "producao" | "sandbox";
   existing?: { id: string; storagePath: string };
 }): Promise<{ id: string; storagePath: string; sizeBytes: number }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -600,6 +601,9 @@ async function runBackup(opts: {
 
   await cleanupStaleBackups(supabaseAdmin);
 
+  // Backup sempre pertence a um único ambiente. Sem ambiente explícito
+  // (cron), assume produção.
+  const backupEnv: "producao" | "sandbox" = opts.env ?? "producao";
   const now = new Date();
   const filename = formatFilename(now);
   const storagePath = opts.existing?.storagePath ?? storagePathFor(now, filename);
@@ -655,6 +659,7 @@ async function runBackup(opts: {
     pushDebug("info", "initializing", "Backup iniciado", {
       type: opts.type,
       mode: "new",
+      env: backupEnv,
     });
     const { data: rowIns, error: insErr } = await supabaseAdmin
       .from("system_backups")
@@ -664,6 +669,7 @@ async function runBackup(opts: {
         status: "running",
         storage_path: storagePath,
         debug_log: debugLog,
+        env: backupEnv,
       } as any)
       .select("id")
       .single();
@@ -706,6 +712,7 @@ async function runBackup(opts: {
       let lastBatchLogAt = 0;
       const exported = await fetchRowsForBackup(supabaseAdmin, table, {
         keepRows,
+        env: backupEnv,
         onBatch: async (rows) => {
           if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
           const nowMs = Date.now();
