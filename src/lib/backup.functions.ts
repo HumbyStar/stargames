@@ -434,6 +434,12 @@ No destino, recrie os usuários via Auth Admin API e envie link de redefinição
 de senha.
 `;
 
+/** Coluna estável usada para ordenar a paginação de cada tabela. */
+function orderKeyFor(table: string): string {
+  if (table === "ai_training_profile") return "user_id";
+  return "id";
+}
+
 async function fetchAllRows(
   admin: any,
   table: BackupTable,
@@ -446,7 +452,9 @@ async function fetchAllRows(
   while (true) {
     let query = admin.from(table).select("*");
     if (env && ENV_SCOPED_TABLES.has(table)) query = query.eq("env", env);
-    const { data, error } = await query.range(from, from + batchSize - 1);
+    const { data, error } = await query
+      .order(orderKeyFor(table), { ascending: true })
+      .range(from, from + batchSize - 1);
     if (error) throw new Error(`[${table}] ${error.message}`);
     if (!data || data.length === 0) break;
     out.push(...data);
@@ -462,6 +470,7 @@ async function fetchRowsForBackup(
   opts: {
     batchSize?: number;
     keepRows?: boolean;
+    env?: "producao" | "sandbox";
     onBatch?: (rowCount: number) => Promise<void>;
   } = {},
 ): Promise<{ rowCount: number; jsonl: string; rows?: any[] }> {
@@ -472,9 +481,13 @@ async function fetchRowsForBackup(
   let rowCount = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const { data, error } = await admin
-      .from(table)
-      .select("*")
+    let query = admin.from(table).select("*");
+    // O backup é sempre de UM ambiente (produção ou teste). Sem este filtro,
+    // as tabelas com coluna `env` sairiam somadas (produção + sandbox).
+    if (opts.env && ENV_SCOPED_TABLES.has(table)) query = query.eq("env", opts.env);
+    // Paginação sem ordenação pode repetir/pular linhas em tabelas grandes.
+    const { data, error } = await query
+      .order(orderKeyFor(table), { ascending: true })
       .range(from, from + batchSize - 1);
     if (error) throw new Error(`[${table}] ${error.message}`);
     if (!data || data.length === 0) break;
@@ -582,6 +595,7 @@ async function mirrorBucket(
 async function runBackup(opts: {
   type: "manual" | "scheduled";
   createdBy: string | null;
+  env?: "producao" | "sandbox";
   existing?: { id: string; storagePath: string };
 }): Promise<{ id: string; storagePath: string; sizeBytes: number }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -589,6 +603,9 @@ async function runBackup(opts: {
 
   await cleanupStaleBackups(supabaseAdmin);
 
+  // Backup sempre pertence a um único ambiente. Sem ambiente explícito
+  // (cron), assume produção.
+  const backupEnv: "producao" | "sandbox" = opts.env ?? "producao";
   const now = new Date();
   const filename = formatFilename(now);
   const storagePath = opts.existing?.storagePath ?? storagePathFor(now, filename);
@@ -644,6 +661,7 @@ async function runBackup(opts: {
     pushDebug("info", "initializing", "Backup iniciado", {
       type: opts.type,
       mode: "new",
+      env: backupEnv,
     });
     const { data: rowIns, error: insErr } = await supabaseAdmin
       .from("system_backups")
@@ -653,6 +671,7 @@ async function runBackup(opts: {
         status: "running",
         storage_path: storagePath,
         debug_log: debugLog,
+        env: backupEnv,
       } as any)
       .select("id")
       .single();
@@ -695,6 +714,7 @@ async function runBackup(opts: {
       let lastBatchLogAt = 0;
       const exported = await fetchRowsForBackup(supabaseAdmin, table, {
         keepRows,
+        env: backupEnv,
         onBatch: async (rows) => {
           if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
           const nowMs = Date.now();
@@ -987,6 +1007,7 @@ export const createBackupNow = createServerFn({ method: "POST" })
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await cleanupStaleBackups(supabaseAdmin);
+    const backupEnv = await resolveTargetEnv(supabaseAdmin, context.userId);
 
     // Um clique repetido acompanha a execução ativa, sem criar concorrência.
     const cutoffIso = new Date(Date.now() - STALE_BACKUP_MS).toISOString();
@@ -1017,6 +1038,7 @@ export const createBackupNow = createServerFn({ method: "POST" })
           type: "manual",
           status: "pending",
           storage_path: storagePath,
+          env: backupEnv,
         })
         .select("id")
         .single();
@@ -1042,7 +1064,7 @@ export const executeBackupNow = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await supabaseAdmin
       .from("system_backups")
-      .select("id, storage_path, status, created_by")
+      .select("id, storage_path, status, created_by, env")
       .eq("id", data.id)
       .maybeSingle();
     if (error || !row) throw new Error(error?.message ?? "Backup não encontrado.");
@@ -1055,6 +1077,7 @@ export const executeBackupNow = createServerFn({ method: "POST" })
     await runBackup({
       type: "manual",
       createdBy: context.userId,
+      env: (row.env as "producao" | "sandbox" | null) ?? "producao",
       existing: { id: row.id as string, storagePath: row.storage_path as string },
     });
     return { id: row.id as string, status: "completed" as const };
@@ -1073,6 +1096,7 @@ export interface BackupEstimate {
   storageBytes: number;
   storageListingTruncated: boolean;
   estimatedZipBytes: number;
+  env: "producao" | "sandbox";
   limits: {
     storageMaxFiles: number;
     storageMaxBytes: number;
@@ -1087,14 +1111,19 @@ export const estimateBackup = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<BackupEstimate> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // A prévia precisa refletir exatamente o que será exportado: apenas o
+    // ambiente atual do usuário (produção ou teste).
+    const backupEnv = await resolveTargetEnv(supabaseAdmin, context.userId);
 
     const tables: { name: string; rows: number }[] = [];
     let totalRows = 0;
     for (const t of BACKUP_TABLES) {
       try {
-        const { count, error } = await supabaseAdmin
+        let counter = (supabaseAdmin as any)
           .from(t)
           .select("*", { count: "exact", head: true });
+        if (ENV_SCOPED_TABLES.has(t)) counter = counter.eq("env", backupEnv);
+        const { count, error } = await counter;
         if (error) throw error;
         const rows = count ?? 0;
         tables.push({ name: t, rows });
@@ -1191,6 +1220,7 @@ export const estimateBackup = createServerFn({ method: "GET" })
       storageBytes,
       storageListingTruncated,
       estimatedZipBytes,
+      env: backupEnv,
       limits: {
         storageMaxFiles: STORAGE_MIRROR_MAX_FILES,
         storageMaxBytes: STORAGE_MIRROR_MAX_BYTES,
@@ -1213,7 +1243,7 @@ export const resumeBackup = createServerFn({ method: "POST" })
 
     const { data: row, error } = await supabaseAdmin
       .from("system_backups")
-      .select("id, storage_path, status, updated_at, created_by")
+      .select("id, storage_path, status, updated_at, created_by, env")
       .eq("id", data.id)
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -1236,6 +1266,7 @@ export const resumeBackup = createServerFn({ method: "POST" })
     const result = await runBackup({
       type: "manual",
       createdBy: (row.created_by as string | null) ?? context.userId,
+      env: (row.env as "producao" | "sandbox" | null) ?? "producao",
       existing: { id: row.id as string, storagePath: row.storage_path as string },
     });
     return { id: result.id, status: "completed", queued: false };
@@ -1299,6 +1330,7 @@ export interface BackupRow {
   createdBy: string | null;
   type: "manual" | "scheduled";
   status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  env: "producao" | "sandbox";
   cancelRequested: boolean;
   storagePath: string | null;
   sizeBytes: number | null;
@@ -1331,6 +1363,7 @@ export const listBackups = createServerFn({ method: "GET" })
       createdBy: r.created_by,
       type: r.type,
       status: r.status,
+      env: (r.env as "producao" | "sandbox") ?? "producao",
       cancelRequested: Boolean(r.cancel_requested),
       storagePath: r.storage_path,
       sizeBytes: r.size_bytes,
@@ -1452,15 +1485,17 @@ export const getCurrentBusinessSummary = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<BusinessSummary> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // O resumo "ao vivo" precisa comparar com o mesmo ambiente do backup.
+    const env = await resolveTargetEnv(supabaseAdmin, context.userId);
     const [clients, products, agreements, installments, nfInvoices, teamTasks, punchEntries] =
       await Promise.all([
-        fetchAllRows(supabaseAdmin, "clients"),
-        fetchAllRows(supabaseAdmin, "products"),
-        fetchAllRows(supabaseAdmin, "mgmv_agreements"),
-        fetchAllRows(supabaseAdmin, "mgmv_installments"),
-        fetchAllRows(supabaseAdmin, "nf_invoices"),
-        fetchAllRows(supabaseAdmin, "team_tasks"),
-        fetchAllRows(supabaseAdmin, "team_punch_entries"),
+        fetchAllRows(supabaseAdmin, "clients", 1000, env),
+        fetchAllRows(supabaseAdmin, "products", 1000, env),
+        fetchAllRows(supabaseAdmin, "mgmv_agreements", 1000, env),
+        fetchAllRows(supabaseAdmin, "mgmv_installments", 1000, env),
+        fetchAllRows(supabaseAdmin, "nf_invoices", 1000, env),
+        fetchAllRows(supabaseAdmin, "team_tasks", 1000, env),
+        fetchAllRows(supabaseAdmin, "team_punch_entries", 1000, env),
       ]);
     return computeBusinessSummaryFromRows({
       clients,

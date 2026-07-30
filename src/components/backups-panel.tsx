@@ -435,6 +435,18 @@ function BackupPreflightModal({
           </div>
         ) : estimate ? (
           <div className="space-y-4">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span
+                className={
+                  estimate.env === "sandbox"
+                    ? "rounded-full bg-amber-500/10 px-2 py-0.5 font-medium text-amber-600 dark:text-amber-400"
+                    : "rounded-full bg-emerald-500/10 px-2 py-0.5 font-medium text-emerald-600 dark:text-emerald-400"
+                }
+              >
+                {estimate.env === "sandbox" ? "Ambiente: Modo teste" : "Ambiente: Produção"}
+              </span>
+              Os números abaixo contam apenas os dados deste ambiente.
+            </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-lg border border-border bg-card/50 p-3">
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Linhas totais</div>
@@ -959,6 +971,7 @@ export function BackupsPanel() {
         createdBy: null,
         type: "manual",
         status: "failed",
+        env: "producao",
         cancelRequested: false,
         storagePath: null,
         sizeBytes: null,
@@ -1239,6 +1252,11 @@ export function BackupsPanel() {
                       </td>
                       <td className="px-2 py-2 capitalize">
                         {r.type === "manual" ? "Manual" : "Agendado"}
+                        {r.env === "sandbox" ? (
+                          <div className="mt-1 inline-flex rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium normal-case text-amber-600 dark:text-amber-400">
+                            Modo teste
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-2 py-2">
                         {statusBadge(r.status)}
