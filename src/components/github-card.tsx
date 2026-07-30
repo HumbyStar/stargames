@@ -758,7 +758,16 @@ export function GithubCard() {
           <Input
             id="gh-repo-manual"
             value={selectedRepo}
-            onChange={(e) => setSelectedRepo(e.target.value)}
+            onChange={(e) => {
+              setSelectedRepo(e.target.value);
+              setSelectedRepoId(null);
+              setAccessError(null);
+            }}
+            onBlur={() => {
+              if (/^[^/\s]+\/[^/\s]+$/.test(selectedRepo.trim())) {
+                void verifyRepo(selectedRepo.trim(), null);
+              }
+            }}
             placeholder="HumbyStar/stargames"
           />
         </div>
