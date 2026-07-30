@@ -955,6 +955,36 @@ export function RestoreBackupModal({
                 ? ` ${result.storageFilesRestored} arquivo(s) originais reenviados.`
                 : ""}
             </div>
+
+            {result.targetEnv === "sandbox" && (
+              <div
+                className={cn(
+                  "rounded-md border p-3 text-[11px]",
+                  result.productionUntouched === false
+                    ? "border-destructive/40 bg-destructive/10 text-destructive"
+                    : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+                )}
+              >
+                <strong>Isolamento:</strong>{" "}
+                {result.productionUntouched === false
+                  ? "as contagens de produção mudaram durante a operação — verifique o registro de auditoria."
+                  : "produção conferida antes e depois com contagens idênticas. Nada da produção foi alterado."}
+              </div>
+            )}
+
+            {result.errors && result.errors.length > 0 && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-[11px] text-destructive">
+                <div className="font-semibold">Erros durante a importação</div>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  {result.errors.map((e, i) => (
+                    <li key={i} className="break-words">
+                      <strong>{e.table}</strong> ({e.stage}): {e.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="max-h-64 overflow-y-auto rounded-md border border-border">
               <table className="w-full text-xs">
                 <thead>
@@ -962,10 +992,14 @@ export function RestoreBackupModal({
                     <th className="px-2 py-1">Tabela</th>
                     <th className="px-2 py-1 text-right">Inseridas</th>
                     <th className="px-2 py-1 text-right">Ignoradas</th>
+                    <th className="px-2 py-1 text-right">No banco</th>
+                    <th className="px-2 py-1 text-right">Divergência</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {result.tablesRestored.map((r) => (
+                  {result.tablesRestored.map((r) => {
+                    const v = result.verification?.find((x) => x.table === r.table);
+                    return (
                     <tr key={r.table} className="border-b border-border/40 last:border-b-0">
                       <td className="px-2 py-1">{r.table}</td>
                       <td className="px-2 py-1 text-right tabular-nums">{fmt(r.inserted)}</td>
@@ -977,11 +1011,27 @@ export function RestoreBackupModal({
                       >
                         {fmt(r.skipped)}
                       </td>
+                      <td className="px-2 py-1 text-right tabular-nums">
+                        {v && v.actual >= 0 ? fmt(v.actual) : "—"}
+                      </td>
+                      <td
+                        className={cn(
+                          "px-2 py-1 text-right tabular-nums",
+                          v && v.diff !== 0 ? "text-destructive" : "text-muted-foreground",
+                        )}
+                      >
+                        {v && v.actual >= 0 ? (v.diff > 0 ? `+${v.diff}` : v.diff) : "—"}
+                      </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
+            <p className="text-[10px] text-muted-foreground">
+              “No banco” é a contagem real feita após a restauração no ambiente de destino;
+              divergência diferente de zero indica registros recusados ou pré-existentes.
+            </p>
             <DialogFooter>
               <Button onClick={onClose}>Fechar</Button>
             </DialogFooter>
