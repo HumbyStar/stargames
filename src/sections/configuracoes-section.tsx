@@ -30,6 +30,7 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { MonitorDown } from "lucide-react";
+import { Activity } from "lucide-react";
 import { Card, PageHeader, Tag } from "@/components/ui-bits";
 import { AiTrainingModal } from "@/components/ai-training-modal";
 import { Button } from "@/components/ui/button";
@@ -75,6 +76,7 @@ import { SandboxSettingsCard } from "@/components/sandbox-settings-card";
 import { SandboxAuditCard } from "@/components/sandbox-audit-card";
 import { LocalInstallCard } from "@/components/local-install-card";
 import { RestoreBackupModal } from "@/components/restore-backup-modal";
+import { RealtimeUpdatesCard } from "@/components/realtime-updates-card";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -91,6 +93,7 @@ type View =
   | "backups"
   | "sandbox"
   | "local"
+  | "activity"
   | "danger";
 
 function DiagBox({
@@ -786,6 +789,13 @@ export function ConfiguracoesSection() {
               onOpen={() => setView("local")}
             />
             <SecondaryCard
+              icon={Activity}
+              title="Atualizações em tempo real"
+              summary="Acompanhe ao vivo quem está editando, importando, gerando backups e alterando configurações."
+              status="Ao vivo"
+              onOpen={() => setView("activity")}
+            />
+            <SecondaryCard
               icon={Brain}
               title="Treinar I.A"
               summary="Onboarding guiado + análise do sistema para gerar automações Python que reduzem o uso de IA."
@@ -1429,6 +1439,16 @@ export function ConfiguracoesSection() {
             description="Cópia local do sistema e dos dados para usar offline."
           />
           <LocalInstallCard />
+        </>
+      )}
+
+      {view === "activity" && (
+        <>
+          <DetailHeader
+            title="Atualizações em tempo real"
+            description="Acompanhamento ao vivo de tudo que acontece no sistema e de quem fez cada ação."
+          />
+          <RealtimeUpdatesCard />
         </>
       )}
 
