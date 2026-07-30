@@ -15,6 +15,22 @@ export type ActivityCategory =
 
 export type ActivitySeverity = "info" | "success" | "warning" | "danger";
 
+export interface ActivityChange {
+  /** Escopo (ex.: "Clientes", "Regras de negócio"). */
+  scope?: string;
+  label: string;
+  from: string;
+  to: string;
+}
+
+export interface ActivityEntity {
+  table: string;
+  tableLabel: string;
+  rowId?: string | null;
+  recordLabel?: string;
+  action: "INSERT" | "UPDATE" | "DELETE";
+}
+
 export interface ActivityEvent {
   id: string;
   category: ActivityCategory;
@@ -25,6 +41,9 @@ export interface ActivityEvent {
   actorId?: string | null;
   actorLabel: string;
   local?: boolean;
+  /** Lista completa de alterações campo a campo. */
+  changes?: ActivityChange[];
+  entity?: ActivityEntity;
 }
 
 export const activityCategoryLabels: Record<ActivityCategory, string> = {
@@ -66,6 +85,23 @@ const TABLE_CATEGORY: Record<string, ActivityCategory> = {
   role_permissions: "seguranca",
   ai_automations: "sistema",
   sandbox_state: "sistema",
+};
+
+const TABLE_LABELS: Record<string, string> = {
+  clients: "Cliente",
+  products: "Produto",
+  mgmv_agreements: "Acordo MGMV",
+  mgmv_installments: "Parcela MGMV",
+  import_history: "Importação",
+  system_backups: "Backup",
+  nf_invoices: "Nota fiscal",
+  team_tasks: "Tarefa",
+  app_settings: "Configurações",
+  saved_filters: "Filtro salvo",
+  user_roles: "Papel de usuário",
+  role_permissions: "Permissões",
+  ai_automations: "Automação",
+  sandbox_state: "Modo Teste",
 };
 
 const str = (v: unknown): string | undefined =>
@@ -124,6 +160,53 @@ function describeChanges(fields: string[]): string | undefined {
   if (fields.length === 0) return undefined;
   const shown = fields.slice(0, 3).map(labelField).join(", ");
   return fields.length > 3 ? `${shown} +${fields.length - 3}` : shown;
+}
+
+/** Formata qualquer valor de coluna para exibição. */
+function formatCell(v: unknown): string {
+  if (v === undefined || v === null) return "vazio";
+  if (typeof v === "boolean") return v ? "sim" : "não";
+  if (typeof v === "number") return String(v);
+  if (typeof v === "string") {
+    const t = v.trim();
+    if (!t) return "vazio";
+    if (/^\d{4}-\d{2}-\d{2}T/.test(t)) {
+      const d = new Date(t);
+      if (!Number.isNaN(+d)) return d.toLocaleString("pt-BR");
+    }
+    return t.length > 160 ? `${t.slice(0, 160)}…` : t;
+  }
+  if (Array.isArray(v)) return v.length === 0 ? "nenhum item" : `${v.length} item(ns)`;
+  try {
+    const s = JSON.stringify(v);
+    return s.length > 160 ? `${s.slice(0, 160)}…` : s;
+  } catch {
+    return "atualizado";
+  }
+}
+
+/** Lista completa de alterações campo a campo de uma linha auditada. */
+function rowChanges(
+  action: string,
+  oldData: Record<string, unknown> | null,
+  newData: Record<string, unknown> | null,
+): ActivityChange[] {
+  const skip = new Set(["updated_at", "created_at", "id", "env"]);
+  if (action === "UPDATE") {
+    return changedFields(oldData, newData).map((f) => ({
+      label: labelField(f),
+      from: formatCell(oldData?.[f]),
+      to: formatCell(newData?.[f]),
+    }));
+  }
+  const data = (action === "DELETE" ? oldData : newData) ?? {};
+  return Object.keys(data)
+    .filter((k) => !skip.has(k) && data[k] !== null && data[k] !== undefined)
+    .map((k) => ({
+      label: labelField(k),
+      from: action === "DELETE" ? formatCell(data[k]) : "—",
+      to: action === "DELETE" ? "removido" : formatCell(data[k]),
+    }));
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +335,7 @@ function describeSettingsChange(
   actorLabel: string,
   prev: Record<string, unknown> | null,
   next: Record<string, unknown> | null,
-): { title: string; description?: string } {
+): { title: string; description?: string; changes: ActivityChange[] } {
   const sections = ["preferences", "rules", "security", "ui_state"];
   const changes: SettingChange[] = [];
   for (const s of sections) {
@@ -260,8 +343,18 @@ function describeSettingsChange(
   }
 
   if (changes.length === 0) {
-    return { title: `${actorLabel} salvou as configurações do sistema` };
+    return { title: `${actorLabel} salvou as configurações do sistema`, changes: [] };
   }
+
+  const detailed: ActivityChange[] = changes.map((c) => {
+    const { area, label } = describeSettingPath(c.section, c.path);
+    return {
+      scope: area ?? SECTION_LABELS[c.section] ?? c.section,
+      label,
+      from: formatSettingValue(c.from),
+      to: formatSettingValue(c.to),
+    };
+  });
 
   const sectionsTouched = Array.from(new Set(changes.map((c) => c.section)));
   const areasTouched = Array.from(
@@ -277,7 +370,15 @@ function describeSettingsChange(
       ? areasTouched.slice(0, 2).join(" e ") + (areasTouched.length > 2 ? " +" + (areasTouched.length - 2) : "")
       : sectionsTouched.map((s) => SECTION_LABELS[s] ?? s).join(", ");
 
-  const title = `${actorLabel} alterou ${escopo} nas configurações`;
+  // O que exatamente mudou (nomes dos ajustes), para o título ficar autoexplicativo.
+  const ajustes = Array.from(new Set(detailed.map((d) => d.label))).filter(Boolean);
+  const oQue =
+    ajustes.length === 0
+      ? "as configurações"
+      : ajustes.slice(0, 2).join(" e ") +
+        (ajustes.length > 2 ? ` +${ajustes.length - 2}` : "");
+
+  const title = `${actorLabel} alterou ${oQue} em ${escopo}`;
 
   const detalhes = changes.slice(0, 4).map((c) => {
     const { area, label } = describeSettingPath(c.section, c.path);
@@ -286,7 +387,7 @@ function describeSettingsChange(
   });
   if (changes.length > 4) detalhes.push(`e mais ${changes.length - 4} ajuste(s)`);
 
-  return { title, description: detalhes.join(" · ") };
+  return { title, description: detalhes.join(" · "), changes: detailed };
 }
 
 /** Converte um registro de auditoria em um evento legível. */
@@ -304,10 +405,13 @@ export function mapAuditRow(
   let title = `${actorLabel} ${verb} um registro em ${row.table_name}`;
   let description: string | undefined;
   let severity: ActivitySeverity = action === "DELETE" ? "warning" : "info";
+  let changes: ActivityChange[] = rowChanges(action, row.old_data, row.new_data);
+  let recordLabel: string | undefined;
 
   switch (row.table_name) {
     case "clients": {
       const nome = str(data.name) ?? "cliente";
+      recordLabel = nome;
       title = `${actorLabel} ${verb} o cliente ${nome}`;
       description = action === "UPDATE"
         ? describeChanges(changedFields(prev, row.new_data))
@@ -316,6 +420,7 @@ export function mapAuditRow(
     }
     case "products": {
       const nome = str(data.name) ?? "produto";
+      recordLabel = nome;
       title =
         action === "INSERT"
           ? `${actorLabel} adicionou o produto ${nome}`
@@ -331,6 +436,7 @@ export function mapAuditRow(
     }
     case "mgmv_agreements": {
       const nome = str(data.client_name) ?? "cliente";
+      recordLabel = nome;
       title =
         action === "INSERT"
           ? `${actorLabel} criou o acordo MGMV de ${nome}`
@@ -349,6 +455,7 @@ export function mapAuditRow(
     case "mgmv_installments": {
       const n = num(data.installment_number);
       const st = str(data.status);
+      recordLabel = `Parcela ${n ?? "?"}`;
       const virouPaga = str(prev.status) !== st && st === "Paga";
       title = virouPaga
         ? `${actorLabel} marcou a parcela ${n ?? "?"} como paga`
@@ -360,6 +467,7 @@ export function mapAuditRow(
     }
     case "import_history": {
       const arquivo = str(data.file) ?? "arquivo";
+      recordLabel = arquivo;
       const erros = num(data.errors) ?? 0;
       title = `${actorLabel} executou uma importação — ${arquivo}`;
       description = `${num(data.clients_created) ?? 0} clientes, ${num(data.products_added) ?? 0} produtos${erros > 0 ? `, ${erros} erro(s)` : ""}`;
@@ -390,6 +498,7 @@ export function mapAuditRow(
     }
     case "team_tasks": {
       const t = str(data.title) ?? "tarefa";
+      recordLabel = t;
       title = `${actorLabel} ${verb} a tarefa "${t}"`;
       description =
         action === "UPDATE"
@@ -405,10 +514,13 @@ export function mapAuditRow(
       );
       title = detalhado.title;
       description = detalhado.description;
+      changes = detalhado.changes;
+      recordLabel = "Configurações do sistema";
       break;
     }
     case "saved_filters": {
-      title = `${actorLabel} ${verb} o filtro salvo "${str(data.name) ?? ""}"`;
+      recordLabel = str(data.name);
+      title = `${actorLabel} ${verb} o filtro salvo "${recordLabel ?? ""}"`;
       break;
     }
     case "user_roles": {
@@ -451,6 +563,14 @@ export function mapAuditRow(
     at: row.changed_at,
     actorId: row.user_id,
     actorLabel,
+    changes,
+    entity: {
+      table: row.table_name,
+      tableLabel: TABLE_LABELS[row.table_name] ?? row.table_name,
+      rowId: row.row_id,
+      recordLabel,
+      action: (action as ActivityEntity["action"]) ?? "UPDATE",
+    },
   };
 }
 
