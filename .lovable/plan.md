@@ -1,34 +1,33 @@
-## Objetivo
-Quando o Modo Teste estiver ativo, o aviso não deve existir só na página `/sandbox`: **todas as seções e todos os modais** ganham a mesma moldura tracejada laranja, e o bloco “MODO TESTE — produção intocada / Sair do Modo Teste” passa a viver **dentro da navbar flutuante**.
+## Diagnóstico
+- No upload de ZIP, o arquivo inteiro é convertido em **base64 no navegador** (`fileToBase64` em `src/components/restore-backup-modal.tsx`) e enviado como um único campo de texto (`uploadedZipBase64`) para `previewBackupRestore` / `restoreBackup`.
+- Um backup real do sistema tem ~94 MB → vira uma string de ~125 MB, que ainda é serializada na chamada RPC e depois decodificada com `atob` no servidor (`loadBackupZip`, `src/lib/backup.functions.ts`), gerando outra cópia em memória.
+- É por isso que o erro do tipo “cannot fit …” aparece **na etapa de analisar/prévia** e apenas no upload de ZIP: o payload não cabe no limite de memória/corpo de requisição do runtime. Confirmado também que a auditoria do Modo Teste (`sandbox_import_audit`) está vazia — a execução nunca chega à restauração.
 
-## Como será feito
+## Solução: parar de trafegar o ZIP em base64
+O arquivo passa a ir direto para o armazenamento e o servidor lê de lá.
 
-### 1. Marcador global de ambiente
-- O provedor de sandbox passa a marcar o documento (atributo em `<html>`, ex. `data-env="sandbox"`) sempre que o modo teste estiver ativo, e remove ao sair.
-- Isso vale tanto na rota dedicada `/sandbox` quanto em qualquer outra tela com o modo ligado — um único sinal para toda a interface.
+### 1. Envio direto para o armazenamento
+- Nova função de servidor (somente admin) que devolve uma **URL assinada de upload** para um caminho temporário no bucket de backups, ex.: `uploads/<user>/<timestamp>-<nome>.zip`.
+- O modal envia o arquivo binário direto para essa URL (com barra de progresso real), sem base64 e sem passar pelo servidor da aplicação.
+- Em vez de `uploadedZipBase64`, o modal passa apenas o **caminho** do arquivo enviado.
 
-### 2. Estilo tracejado laranja em seções e modais
-- Em `src/styles.css`, com o marcador ativo:
-  - cada seção da one-page (`.one-page-section` e o bloco de clientes) recebe borda tracejada âmbar, cantos arredondados e fundo âmbar bem suave — idêntico ao que hoje existe só na moldura do `/sandbox`;
-  - todo conteúdo de diálogo (`[role="dialog"]`, cobrindo Dialog, AlertDialog, Sheet, Command e todos os modais listados) recebe a mesma borda tracejada âmbar;
-  - cada modal exibe um selo discreto “MODO TESTE” no topo, via pseudo-elemento, sem precisar editar 20 arquivos de modal.
-- Cores vindas de tokens/utilitários já usados no projeto (âmbar), com contraste válido em tema claro e escuro.
+### 2. Prévia, validação e restauração lendo do armazenamento
+- `loadBackupZip` ganha um terceiro caminho de entrada: `uploadedPath`, baixando o ZIP do bucket como bytes (mesmo mecanismo já usado para “backup salvo”, que hoje funciona).
+- `previewBackupRestore`, `validateBackupRestore` e `restoreBackup` aceitam esse caminho; o base64 continua aceito apenas para arquivos pequenos (limite baixo, ex. 8 MB), como compatibilidade.
+- Após concluir (ou falhar), o arquivo temporário do upload é removido do bucket; sobras antigas de `uploads/` são limpas junto com a retenção de backups.
 
-### 3. Bloco de saída dentro da navbar
-- O bloco marcado hoje renderizado acima da one-page em `/sandbox` sai dali e vira um componente “pílula de Modo Teste” montado **dentro da navbar flutuante** (`FloatingNavbar`), à direita dos controles, visível em qualquer rota enquanto o modo estiver ativo.
-- Conteúdo: ícone de frasco, texto “MODO TESTE” (com a explicação “produção intocada” em telas maiores) e o botão “Sair do Modo Teste”, que continua desligando o ambiente e recarregando os dados.
-- No modo compacto/mobile a pílula reduz para ícone + “Sair”, sem quebrar o layout da navbar.
-- A faixa `SandboxBanner` atual (topo da página) é removida para não duplicar o aviso.
+### 3. Isolamento do Modo Teste preservado
+- Nenhuma mudança nas regras de isolamento: destino continua decidido no servidor, o ambiente de teste continua sendo zerado antes da carga, ids são regerados, tabelas globais nunca são tocadas e a auditoria com contagens de produção antes/depois continua sendo gravada.
 
-### 4. Ajuste da página `/sandbox`
-- A moldura tracejada da rota deixa de ser um caso especial: ela passa a usar o mesmo estilo global, e o cabeçalho interno com o botão de sair é retirado, já que essa função vai para a navbar.
+### 4. Mensagens de erro úteis
+- Erros de leitura do ZIP passam a exibir a causa real (arquivo inválido, manifesto ausente, falha de download) em vez de estourar um erro de memória genérico.
+- Estados claros no modal: “Enviando arquivo… x%”, “Analisando backup…”, “Restaurando…”.
 
 ## Verificação
-- Com o modo teste ligado: navbar mostra a pílula com “Sair do Modo Teste”; todas as seções (dashboard, clientes, MGMV, cobrança, importação, equipe, configurações) e todos os modais (finanças, cliente, backups, restauração, NF, IA etc.) aparecem com a borda tracejada laranja.
-- Com o modo teste desligado: nenhuma borda âmbar, nenhuma pílula, layout idêntico ao atual.
+- Enviar um backup completo real (~94 MB) no Modo Teste: upload conclui, prévia mostra tabelas e resumo, restauração termina com sucesso.
+- Conferir que os dados aparecem nas seções em modo teste e que as contagens de produção antes/depois no registro de auditoria ficam idênticas.
+- Repetir com um ZIP pequeno e com a opção “usar backup salvo” para garantir que os dois caminhos continuam funcionando.
 
 ## Arquivos principais
-- `src/lib/use-sandbox.tsx` — marcador global de ambiente.
-- `src/styles.css` — regras tracejadas para seções e diálogos.
-- `src/components/app-layout.tsx` — pílula na navbar, remoção da faixa antiga.
-- `src/routes/_authenticated.sandbox.tsx` — simplificação da moldura da rota.
+- `src/lib/backup.functions.ts` — URL assinada de upload, `loadBackupZip` por caminho, limpeza do temporário.
+- `src/components/restore-backup-modal.tsx` — upload direto com progresso, sem base64.
