@@ -97,6 +97,7 @@ export function LocalInstallCard() {
   const [busy, setBusy] = useState<null | "package" | "export" | "clear">(null);
   const [step, setStep] = useState("");
   const [progress, setProgress] = useState(0);
+  const [lastFiles, setLastFiles] = useState<string[]>([]);
 
   const clients = useStore((s) => s.clients);
   const products = useStore((s) => s.products);
@@ -178,6 +179,12 @@ export function LocalInstallCard() {
       if (!res.ok) throw new Error(`Falha no download (${res.status}).`);
       const blob = await res.blob();
 
+      // Grava o pacote também como arquivo no PC, para ficar visível na pasta
+      // Downloads do navegador (e servir de cópia de segurança offline).
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      const zipName = `star-games-dados-${stamp}.zip`;
+      saveFile(blob, zipName);
+
       setStep("Instalando os dados neste computador…");
       setProgress(60);
       const installed = await installLocalPackageFromZip(blob, {
@@ -189,9 +196,18 @@ export function LocalInstallCard() {
       });
       setMeta(installed);
       setLocalPackageInstalled(true);
+      downloadWindowsShortcut();
+      setLastFiles([zipName, "Star Games.url"]);
       setProgress(100);
       setStep("Pacote local atualizado.");
-      toast.success("Sistema instalado localmente com os dados atualizados.");
+      toast.success("Sistema instalado localmente.", {
+        description: `Dois arquivos foram baixados: “${zipName}” (cópia dos dados) e “Star Games.url” (atalho para abrir o sistema).`,
+        duration: 10000,
+        action: {
+          label: "Abrir sistema",
+          onClick: () => window.open(appUrl(), "_blank", "noopener"),
+        },
+      });
     } catch (error) {
       toast.error("Não foi possível preparar a instalação local.", {
         description: error instanceof Error ? error.message : String(error),
