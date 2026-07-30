@@ -1118,20 +1118,82 @@ export function setUiValue(key: string, value: unknown) {
 }
 
 /**
+ * Suspensão temporária dos refreshes disparados por Realtime. Durante uma
+ * restauração de backup (milhares de linhas gravadas em lote) o Postgres
+ * emite uma torrente de eventos; sem isso a UI do Modo Teste dispararia
+ * dezenas de `loadSnapshot()` completos e travaria.
+ */
+let realtimeSuspended = 0;
+let missedWhileSuspended = false;
+const realtimeListeners = new Set<() => void>();
+
+export function suspendRealtimeRefresh(): () => void {
+  realtimeSuspended += 1;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    realtimeSuspended = Math.max(0, realtimeSuspended - 1);
+    if (realtimeSuspended === 0 && missedWhileSuspended) {
+      missedWhileSuspended = false;
+      for (const fn of realtimeListeners) fn();
+    }
+  };
+}
+
+/**
  * Assina eventos Realtime nas tabelas de negócio (clients/products/MGMV) e
  * dispara `onRefresh` com debounce curto quando qualquer linha muda. Usado
  * pelo AppLayout para manter o store espelhado com o banco em tempo real —
  * o modal Finanças e demais telas re-renderizam automaticamente.
+ *
+ * O debounce tem "max wait": em rajadas longas (importação/restauração) os
+ * eventos continuam reiniciando o timer curto, mas garantimos no máximo um
+ * refresh a cada `MAX_WAIT_MS`, e nunca um por evento.
  */
 export function subscribeRealtimeSnapshot(onRefresh: () => void): () => void {
   let timer: number | null = null;
-  const schedule = () => {
-    if (timer) window.clearTimeout(timer);
-    timer = window.setTimeout(() => {
+  let firstEventAt = 0;
+  const QUIET_MS = 800;
+  const MAX_WAIT_MS = 6000;
+  const run = () => {
+    if (timer) {
+      window.clearTimeout(timer);
       timer = null;
-      onRefresh();
-    }, 600);
+    }
+    firstEventAt = 0;
+    if (realtimeSuspended > 0) {
+      missedWhileSuspended = true;
+      return;
+    }
+    if (typeof document !== "undefined" && document.hidden) {
+      // Aba em segundo plano: adia até o usuário voltar.
+      missedWhileSuspended = true;
+      return;
+    }
+    onRefresh();
   };
+  const schedule = () => {
+    const now = Date.now();
+    if (!firstEventAt) firstEventAt = now;
+    if (now - firstEventAt >= MAX_WAIT_MS) {
+      run();
+      return;
+    }
+    if (timer) window.clearTimeout(timer);
+    const wait = Math.min(QUIET_MS, MAX_WAIT_MS - (now - firstEventAt));
+    timer = window.setTimeout(run, wait);
+  };
+  realtimeListeners.add(run);
+  const onVisible = () => {
+    if (!document.hidden && missedWhileSuspended && realtimeSuspended === 0) {
+      missedWhileSuspended = false;
+      onRefresh();
+    }
+  };
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onVisible);
+  }
   const channel = supabase
     .channel("realtime-store")
     .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, schedule)
@@ -1141,6 +1203,10 @@ export function subscribeRealtimeSnapshot(onRefresh: () => void): () => void {
     .subscribe();
   return () => {
     if (timer) window.clearTimeout(timer);
+    realtimeListeners.delete(run);
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", onVisible);
+    }
     supabase.removeChannel(channel);
   };
 }
