@@ -1026,14 +1026,22 @@ export const useStore = create<State>()((set, get) => ({
         } catch {
           productionBefore = {};
         }
-        await Promise.all([
-          dbUpsertClientsAsync(clients),
-          dbUpsertProductsAsync(products),
-          dbUpsertHistoryAsync(history),
-          mgmvClients.length > 0
-            ? dbSyncAgreementsBulkAsync(mgmvClients)
-            : Promise.resolve(),
-        ]);
+        // Suspende os refreshes de Realtime durante a gravação em lote: sem
+        // isso cada chunk gravado dispararia um `loadSnapshot()` completo e
+        // a UI (sobretudo no Modo Teste) travaria até o fim da importação.
+        const resumeRealtime = suspendRealtimeRefresh();
+        try {
+          await Promise.all([
+            dbUpsertClientsAsync(clients),
+            dbUpsertProductsAsync(products),
+            dbUpsertHistoryAsync(history),
+            mgmvClients.length > 0
+              ? dbSyncAgreementsBulkAsync(mgmvClients)
+              : Promise.resolve(),
+          ]);
+        } finally {
+          resumeRealtime();
+        }
         // Auditoria do Modo Teste (ignorada silenciosamente em produção).
         if (Object.keys(productionBefore).length > 0) {
           try {
