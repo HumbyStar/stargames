@@ -1,32 +1,34 @@
 ## Objetivo
-Garantir que, no Modo Teste, toda restauração de backup comece de um ambiente completamente zerado — sem restos da restauração anterior e sem qualquer conflito com a produção.
+Quando o Modo Teste estiver ativo, o aviso não deve existir só na página `/sandbox`: **todas as seções e todos os modais** ganham a mesma moldura tracejada laranja, e o bloco “MODO TESTE — produção intocada / Sair do Modo Teste” passa a viver **dentro da navbar flutuante**.
 
-## Situação atual (verificada no código)
-- A restauração no sandbox só apaga dados quando o usuário escolhe "Substituir tudo" e digita REPLACE; o padrão é "mesclar", então importações sucessivas acumulam dados.
-- Mesmo em "Substituir tudo", a limpeza cobre apenas as tabelas presentes no ZIP/selecionadas — tabelas fora dessa lista continuam com dados antigos do teste.
-- O isolamento em si já está correto: destino decidido no servidor, ids regerados, tabelas globais (perfis/papéis) nunca tocadas, produção nunca apagada.
+## Como será feito
 
-## Implementação
+### 1. Marcador global de ambiente
+- O provedor de sandbox passa a marcar o documento (atributo em `<html>`, ex. `data-env="sandbox"`) sempre que o modo teste estiver ativo, e remove ao sair.
+- Isso vale tanto na rota dedicada `/sandbox` quanto em qualquer outra tela com o modo ligado — um único sinal para toda a interface.
 
-### 1. Limpeza total automática no sandbox
-- Quando o destino for SANDBOX, apagar **todas** as tabelas com dados de teste antes de inserir, independentemente do que existe no ZIP ou da seleção de tabelas.
-- A limpeza segue a ordem inversa de dependências (dependentes primeiro) e é sempre restrita ao ambiente de teste.
-- Nunca tocar em produção, perfis, papéis, permissões e auditoria.
+### 2. Estilo tracejado laranja em seções e modais
+- Em `src/styles.css`, com o marcador ativo:
+  - cada seção da one-page (`.one-page-section` e o bloco de clientes) recebe borda tracejada âmbar, cantos arredondados e fundo âmbar bem suave — idêntico ao que hoje existe só na moldura do `/sandbox`;
+  - todo conteúdo de diálogo (`[role="dialog"]`, cobrindo Dialog, AlertDialog, Sheet, Command e todos os modais listados) recebe a mesma borda tracejada âmbar;
+  - cada modal exibe um selo discreto “MODO TESTE” no topo, via pseudo-elemento, sem precisar editar 20 arquivos de modal.
+- Cores vindas de tokens/utilitários já usados no projeto (âmbar), com contraste válido em tema claro e escuro.
 
-### 2. Modo de aplicação simplificado em teste
-- No sandbox, "mesclar" deixa de existir na prática: toda aplicação é "ambiente zerado + carga do backup".
-- Remover a exigência de digitar REPLACE quando o destino é o teste (não há risco real), mantendo a exigência integral na produção.
-- Ajustar os textos do modal para deixar claro: "O ambiente de teste será zerado antes de carregar este backup".
+### 3. Bloco de saída dentro da navbar
+- O bloco marcado hoje renderizado acima da one-page em `/sandbox` sai dali e vira um componente “pílula de Modo Teste” montado **dentro da navbar flutuante** (`FloatingNavbar`), à direita dos controles, visível em qualquer rota enquanto o modo estiver ativo.
+- Conteúdo: ícone de frasco, texto “MODO TESTE” (com a explicação “produção intocada” em telas maiores) e o botão “Sair do Modo Teste”, que continua desligando o ambiente e recarregando os dados.
+- No modo compacto/mobile a pílula reduz para ícone + “Sair”, sem quebrar o layout da navbar.
+- A faixa `SandboxBanner` atual (topo da página) é removida para não duplicar o aviso.
 
-### 3. Importação manual de clientes no teste
-- Manter o mesmo comportamento de isolamento já existente, e oferecer no painel do Modo Teste um botão explícito de "Zerar ambiente de teste" para começar uma comparação limpa antes de uma importação manual (lista/ZIP de clientes).
+### 4. Ajuste da página `/sandbox`
+- A moldura tracejada da rota deixa de ser um caso especial: ela passa a usar o mesmo estilo global, e o cabeçalho interno com o botão de sair é retirado, já que essa função vai para a navbar.
 
-### 4. Verificação
-- Aplicar o mesmo backup duas vezes seguidas no teste e confirmar contagens idênticas (sem duplicação).
-- Aplicar backups diferentes em sequência e confirmar que não restam registros do anterior.
-- Conferir no registro de auditoria que as contagens de produção permanecem inalteradas antes e depois.
+## Verificação
+- Com o modo teste ligado: navbar mostra a pílula com “Sair do Modo Teste”; todas as seções (dashboard, clientes, MGMV, cobrança, importação, equipe, configurações) e todos os modais (finanças, cliente, backups, restauração, NF, IA etc.) aparecem com a borda tracejada laranja.
+- Com o modo teste desligado: nenhuma borda âmbar, nenhuma pílula, layout idêntico ao atual.
 
 ## Arquivos principais
-- `src/lib/backup.functions.ts` — limpeza total do ambiente de teste antes da carga.
-- `src/components/restore-backup-modal.tsx` — modo e textos no destino SANDBOX.
-- `src/components/sandbox-settings-card.tsx` — ação de zerar o ambiente de teste.
+- `src/lib/use-sandbox.tsx` — marcador global de ambiente.
+- `src/styles.css` — regras tracejadas para seções e diálogos.
+- `src/components/app-layout.tsx` — pílula na navbar, remoção da faixa antiga.
+- `src/routes/_authenticated.sandbox.tsx` — simplificação da moldura da rota.
