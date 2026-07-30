@@ -29,6 +29,7 @@ import {
   dbReassignAgreementClientAsync,
   dbDeleteClientsByIdsAsync,
 } from "./db-sync";
+import { suspendRealtimeRefresh } from "./db-sync";
 import type { ImportDiagnostics } from "./db-sync";
 export type { ImportDiagnostics } from "./db-sync";
 import { recalcPendingDueDates } from "./mgmv-schedule";
@@ -624,6 +625,9 @@ const defaultSecurity: SecuritySettings = {
 };
 
 let hydratePromise: Promise<void> | null = null;
+// Coalescência de refreshes do snapshot (Realtime, app:reset, modais).
+let refreshInFlight: Promise<void> | null = null;
+let refreshQueued = false;
 
 export const RESET_VERSION_KEY = "import.resetVersion";
 export function getResetVersion(): string {
@@ -675,20 +679,36 @@ export const useStore = create<State>()((set, get) => ({
         await hydratePromise;
       },
       refreshFromDb: async () => {
-        try {
-          const snap = await loadSnapshot();
-          set({
-            clients: snap.clients,
-            products: snap.products.map((p) =>
-              p.financialStatus === "MGMV" && p.situation === "Em Aberto"
-                ? { ...p, situation: "Resolvido" as Situation }
-                : p,
-            ),
-            importHistory: snap.importHistory,
-          });
-        } catch (err) {
-          console.warn("refreshFromDb failed", err);
+        // Coalesce: chamadas concorrentes (Realtime + app:reset + modais)
+        // compartilham o mesmo `loadSnapshot()` em voo; se algo chegar
+        // durante o fetch, agenda exatamente UM refresh extra ao final.
+        if (refreshInFlight) {
+          refreshQueued = true;
+          return refreshInFlight;
         }
+        refreshInFlight = (async () => {
+          try {
+            const snap = await loadSnapshot();
+            set({
+              clients: snap.clients,
+              products: snap.products.map((p) =>
+                p.financialStatus === "MGMV" && p.situation === "Em Aberto"
+                  ? { ...p, situation: "Resolvido" as Situation }
+                  : p,
+              ),
+              importHistory: snap.importHistory,
+            });
+          } catch (err) {
+            console.warn("refreshFromDb failed", err);
+          } finally {
+            refreshInFlight = null;
+          }
+          if (refreshQueued) {
+            refreshQueued = false;
+            await get().refreshFromDb();
+          }
+        })();
+        await refreshInFlight;
       },
       reset: () => {
         hydratePromise = null;
@@ -1007,14 +1027,22 @@ export const useStore = create<State>()((set, get) => ({
         } catch {
           productionBefore = {};
         }
-        await Promise.all([
-          dbUpsertClientsAsync(clients),
-          dbUpsertProductsAsync(products),
-          dbUpsertHistoryAsync(history),
-          mgmvClients.length > 0
-            ? dbSyncAgreementsBulkAsync(mgmvClients)
-            : Promise.resolve(),
-        ]);
+        // Suspende os refreshes de Realtime durante a gravação em lote: sem
+        // isso cada chunk gravado dispararia um `loadSnapshot()` completo e
+        // a UI (sobretudo no Modo Teste) travaria até o fim da importação.
+        const resumeRealtime = suspendRealtimeRefresh();
+        try {
+          await Promise.all([
+            dbUpsertClientsAsync(clients),
+            dbUpsertProductsAsync(products),
+            dbUpsertHistoryAsync(history),
+            mgmvClients.length > 0
+              ? dbSyncAgreementsBulkAsync(mgmvClients)
+              : Promise.resolve(),
+          ]);
+        } finally {
+          resumeRealtime();
+        }
         // Auditoria do Modo Teste (ignorada silenciosamente em produção).
         if (Object.keys(productionBefore).length > 0) {
           try {
