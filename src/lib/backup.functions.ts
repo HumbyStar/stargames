@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { deferWithWorkerContext } from "@/lib/worker-context";
+import { CLONE_ORDER, SANDBOX_TABLES, remapRow, type CloneTable } from "@/lib/sandbox-clone";
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
@@ -430,15 +431,15 @@ async function fetchAllRows(
   admin: any,
   table: BackupTable,
   batchSize = 1000,
+  env?: "producao" | "sandbox",
 ): Promise<any[]> {
   const out: any[] = [];
   let from = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const { data, error } = await admin
-      .from(table)
-      .select("*")
-      .range(from, from + batchSize - 1);
+    let query = admin.from(table).select("*");
+    if (env && ENV_SCOPED_TABLES.has(table)) query = query.eq("env", env);
+    const { data, error } = await query.range(from, from + batchSize - 1);
     if (error) throw new Error(`[${table}] ${error.message}`);
     if (!data || data.length === 0) break;
     out.push(...data);
