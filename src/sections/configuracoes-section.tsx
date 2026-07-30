@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { MonitorDown } from "lucide-react";
 import { Activity } from "lucide-react";
+import { Github } from "lucide-react";
 import { Card, PageHeader, Tag } from "@/components/ui-bits";
 import { AiTrainingModal } from "@/components/ai-training-modal";
 import { Button } from "@/components/ui/button";
@@ -75,6 +76,7 @@ import { BackupsPanel } from "@/components/backups-panel";
 import { SandboxSettingsCard } from "@/components/sandbox-settings-card";
 import { SandboxAuditCard } from "@/components/sandbox-audit-card";
 import { LocalInstallCard } from "@/components/local-install-card";
+import { GithubCard } from "@/components/github-card";
 import { RestoreBackupModal } from "@/components/restore-backup-modal";
 import { RealtimeUpdatesCard } from "@/components/realtime-updates-card";
 import { cn } from "@/lib/utils";
@@ -94,6 +96,7 @@ type View =
   | "sandbox"
   | "local"
   | "activity"
+  | "github"
   | "danger";
 
 function DiagBox({
@@ -796,6 +799,13 @@ export function ConfiguracoesSection() {
               onOpen={() => setView("activity")}
             />
             <SecondaryCard
+              icon={Github}
+              title="Conectar conta GitHub"
+              summary="Publique backups, exports e o changelog do sistema em um repositório e libere acesso a quem precisar."
+              status="Somente admin"
+              onOpen={() => setView("github")}
+            />
+            <SecondaryCard
               icon={Brain}
               title="Treinar I.A"
               summary="Onboarding guiado + análise do sistema para gerar automações Python que reduzem o uso de IA."
@@ -1449,6 +1459,16 @@ export function ConfiguracoesSection() {
             description="Acompanhamento ao vivo de tudo que acontece no sistema e de quem fez cada ação."
           />
           <RealtimeUpdatesCard />
+        </>
+      )}
+
+      {view === "github" && (
+        <>
+          <DetailHeader
+            title="Conectar conta GitHub"
+            description="Repositório central para backups, exports e histórico de alterações do sistema."
+          />
+          <GithubCard />
         </>
       )}
 

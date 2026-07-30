@@ -4,7 +4,8 @@ export type AppEventCategory =
   | "sandbox"
   | "local"
   | "sistema"
-  | "importacao";
+  | "importacao"
+  | "github";
 
 export interface AppLocalEvent {
   id: string;
