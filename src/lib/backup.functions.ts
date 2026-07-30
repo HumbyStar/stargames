@@ -452,7 +452,9 @@ async function fetchAllRows(
   while (true) {
     let query = admin.from(table).select("*");
     if (env && ENV_SCOPED_TABLES.has(table)) query = query.eq("env", env);
-    const { data, error } = await query.range(from, from + batchSize - 1);
+    const { data, error } = await query
+      .order(orderKeyFor(table), { ascending: true })
+      .range(from, from + batchSize - 1);
     if (error) throw new Error(`[${table}] ${error.message}`);
     if (!data || data.length === 0) break;
     out.push(...data);
