@@ -189,9 +189,8 @@ export const pushBackupToGithub = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row?.storage_path) throw new Error("Backup sem arquivo disponível.");
-    if (row.status !== "concluido" && row.status !== "concluído" && row.status !== "done") {
-      // Não bloqueia: alguns status legados usam grafias diferentes.
-      console.warn(`[github] enviando backup com status "${row.status}"`);
+    if (row.status !== "completed") {
+      throw new Error("Só é possível publicar backups concluídos.");
     }
     if ((row.size_bytes ?? 0) > MAX_PUSH_BYTES) {
       throw new Error(
