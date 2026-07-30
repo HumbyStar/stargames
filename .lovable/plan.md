@@ -1,55 +1,37 @@
-## Objetivo
+## O que está acontecendo
 
-Um card em Configurações chamado **Atualizações em tempo real**: um feed ao vivo de tudo que acontece no sistema (edições de clientes/produtos, acordos MGMV, importações, backups, notas fiscais, tarefas da equipe, mudanças de configurações e permissões), mostrando **quem** fez cada ação, atualizando sozinho, sem recarregar a página.
+Confirmei no banco a causa exata da divergência:
 
-## Estado atual verificado
+| tabela | produção | modo teste | soma |
+|---|---|---|---|
+| clients | 2.723 | 2.724 | **5.447** |
+| products | 23.352 | 23.351 | **46.703** |
 
-- Existe a tabela `audit_log` (tabela, ação, id da linha, usuário, e-mail, dados antigos/novos, data), somente leitura para usuários autenticados. Ela já grava `user_id` e `user_email` de quem executou a ação.
-- Hoje o registro automático só existe em 3 tabelas: `app_settings`, `import_history`, `saved_filters`. Clientes, produtos, MGMV, backups, NF, tarefas e papéis **não** são registrados.
-- O Realtime está ligado para `clients`, `products`, `mgmv_agreements`, `mgmv_installments` — mas **não** para `audit_log`, então o feed não chegaria sozinho.
-- Existe a tabela `profiles` com `display_name` e `avatar_url`, e `active_sessions` com quem está online agora.
+Os números da prévia do backup (5.447 clientes, 46.703 produtos) são exatamente **produção + modo teste somados**. Não é duplicação de dados nem erro do sistema local: o backup simplesmente não separa os dois ambientes.
 
-## O que será feito
+Motivo técnico: em `src/lib/backup.functions.ts` tanto a estimativa (`estimateBackup`) quanto a exportação real (`fetchRowsForBackup`) leem as tabelas inteiras, sem aplicar o filtro `env` — que já existe e já é usado na restauração. Como o ambiente de teste é um clone completo da produção, tudo aparece em dobro.
 
-### 1. Banco (migração)
-- Adicionar o gatilho de auditoria já existente às tabelas relevantes: `clients`, `products`, `mgmv_agreements`, `mgmv_installments`, `system_backups`, `nf_invoices`, `team_tasks`, `user_roles`, `role_permissions`, `ai_automations`, `sandbox_state`.
-- Publicar `audit_log` no Realtime para o feed chegar instantaneamente.
-- Índice por data para carregar rápido os eventos recentes.
-- Sem mudança de permissão: o feed continua legível apenas por usuários autenticados; dados brutos sensíveis não são exibidos.
+## O que vou fazer
 
-### 2. Identificação de quem fez a ação
-- Cada evento mostra **nome do usuário** (do perfil) com avatar/iniciais; se não houver nome, mostra o e-mail; se a ação foi automática (rotina agendada, gatilho do sistema), mostra "Sistema".
-- Os nomes vêm de um mapa carregado uma vez de `profiles` e completado sob demanda, para não fazer uma consulta por evento.
-- Filtro "somente minhas ações" e filtro por pessoa.
-- Faixa **"Ativos agora"** no topo do card, listando quem está com sessão aberta (via `active_sessions`), atualizada ao vivo — assim dá para acompanhar quem está mexendo no sistema no momento.
+1. **Backup passa a ser por ambiente**
+   - A prévia e a exportação passam a filtrar pelo ambiente atual do usuário (produção, ou teste quando o sandbox estiver ativo) em todas as tabelas que têm essa separação.
+   - Tabelas globais (papéis, permissões, auditoria, perfis) continuam saindo inteiras, como hoje.
+   - Resultado esperado: a prévia mostrará 2.723 clientes e 23.352 produtos, batendo com a tela inicial.
 
-### 3. Tradução dos eventos para linguagem humana
-Novo módulo que converte cada registro técnico em uma frase com autor, ícone e categoria:
-- "**Ana** atualizou o cliente Fulano — telefone alterado"
-- "**Carlos** adicionou um produto a Fulano"
-- "**Ana** marcou a parcela 3/10 como paga"
-- "**Carlos** concluiu uma importação — 12 clientes, 40 produtos"
-- "**Sistema** finalizou o backup completo (24 MB)"
-- "**Ana** gerou nota fiscal para Fulano"
-- "**Carlos** alterou as preferências do sistema"
-- "**Ana** concedeu o papel gerente a um usuário"
+2. **Registro do ambiente no backup**
+   - O ambiente de origem já é gravado no registro do backup; vou exibi-lo na prévia, no card do backup e no resumo, para nunca mais haver dúvida sobre "de onde veio" o arquivo.
 
-Cada evento traz categoria (Clientes, MGMV, Importação, Backup, Financeiro, Equipe, Configurações, Segurança) e severidade.
+3. **Resumo de negócio corrigido**
+   - Os totais do resumo (clientes, acordos, parcelas, notas) são calculados a partir das linhas exportadas, então passam automaticamente a refletir só o ambiente correto.
 
-### 4. Card na interface
-- Lista dos eventos mais recentes (últimos ~50, com "carregar mais"), do mais novo para o mais antigo, com hora relativa ("agora", "há 3 min") e autor destacado.
-- Indicador "ao vivo" pulsante quando conectado; novos eventos entram no topo com destaque suave.
-- Filtros por categoria (chips), por pessoa e "somente minhas ações".
-- Botão de pausar/retomar o feed.
-- Estados de carregamento e vazio no padrão visual da OnePage (mesmo `Card`, tokens e badges já usados).
+4. **Correção de leitura instável (bug latente)**
+   - A leitura em blocos de 1.000 linhas hoje é feita sem ordenação definida, o que pode repetir ou pular linhas em tabelas grandes. Vou ordenar por chave estável na paginação, garantindo contagem exata em cada tabela.
 
-### 5. Eventos locais do próprio app
-Além do banco, o feed recebe eventos do cliente que não passam por tabela: progresso e conclusão de backup, restauração no Sandbox, entrada/saída do Modo Teste e Modo Local e reset do sistema — via o mesmo barramento já usado hoje (`app:reset`), padronizado num pequeno emissor de eventos, sempre atribuídos ao usuário logado.
+5. **Verificação**
+   - Rodo a prévia e confiro que os números batem com o dashboard, e gero um backup de teste para confirmar que a contagem final e o resumo ficam idênticos.
 
 ## Detalhes técnicos
 
-- Novo `src/lib/activity-feed.ts`: tipos, mapeamento `audit_log` → evento legível com autor resolvido, hook `useActivityFeed()` com carga inicial via Supabase, assinatura Realtime em `postgres_changes` de `audit_log` (canal criado/derrubado em `useEffect`), buffer limitado (200 itens) e coalescência para não pesar durante importações/restaurações em massa.
-- Novo `src/components/realtime-updates-card.tsx`, montado em `src/sections/configuracoes-section.tsx`.
-- Emissor local em `src/lib/app-events.ts`, com disparos nos pontos de backup/sandbox/local existentes.
-- Presença ("Ativos agora") lida de `active_sessions` com assinatura Realtime, considerando apenas sessões recentes.
-- Respeita o ambiente ativo (produção vs. sandbox) para tabelas com coluna `env`.
+- `src/lib/backup.functions.ts`: resolver `env` do usuário (`resolveTargetEnv`) no início de `estimateBackup` e do fluxo de geração; aplicar `.eq("env", env)` em `fetchRowsForBackup` e na contagem `head: true` para tabelas em `ENV_SCOPED_TABLES`; adicionar `.order(<pk>, { ascending: true })` antes do `.range()`.
+- UI (`backup-preview-modal`, `backups-panel`, `backup-summary-modal`): badge com o ambiente de origem do backup.
+- Sem migração de banco — nada muda no esquema.
