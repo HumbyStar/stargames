@@ -58,6 +58,16 @@ export function SandboxProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
+  // Marca o documento inteiro quando o Modo Teste está ativo: seções e modais
+  // usam esse sinal para exibir a moldura tracejada laranja.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    if (state.active) root.setAttribute("data-env", "sandbox");
+    else root.removeAttribute("data-env");
+    return () => root.removeAttribute("data-env");
+  }, [state.active]);
+
   const setActive = useCallback(
     async (active: boolean) => {
       const next = await setMode({ data: { active } });
