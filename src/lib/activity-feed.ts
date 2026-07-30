@@ -331,6 +331,14 @@ function describeSettingPath(section: string, path: string): { area?: string; la
 }
 
 /** Frase objetiva do que foi alterado nas configurações. */
+/** "a, b e c" — sem cortes tipo "+1", que confundem. */
+function joinList(items: string[]): string {
+  const list = items.filter(Boolean);
+  if (list.length === 0) return "";
+  if (list.length === 1) return list[0];
+  return `${list.slice(0, -1).join(", ")} e ${list[list.length - 1]}`;
+}
+
 function describeSettingsChange(
   actorLabel: string,
   prev: Record<string, unknown> | null,
@@ -367,16 +375,12 @@ function describeSettingsChange(
 
   const escopo =
     areasTouched.length > 0 && sectionsTouched.every((s) => s === "ui_state")
-      ? areasTouched.slice(0, 2).join(" e ") + (areasTouched.length > 2 ? " +" + (areasTouched.length - 2) : "")
-      : sectionsTouched.map((s) => SECTION_LABELS[s] ?? s).join(", ");
+      ? joinList(areasTouched)
+      : joinList(sectionsTouched.map((s) => SECTION_LABELS[s] ?? s));
 
   // O que exatamente mudou (nomes dos ajustes), para o título ficar autoexplicativo.
   const ajustes = Array.from(new Set(detailed.map((d) => d.label))).filter(Boolean);
-  const oQue =
-    ajustes.length === 0
-      ? "as configurações"
-      : ajustes.slice(0, 2).join(" e ") +
-        (ajustes.length > 2 ? ` +${ajustes.length - 2}` : "");
+  const oQue = ajustes.length === 0 ? "as configurações" : joinList(ajustes);
 
   const title = `${actorLabel} alterou ${oQue} em ${escopo}`;
 
