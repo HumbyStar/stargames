@@ -15,6 +15,22 @@ export type ActivityCategory =
 
 export type ActivitySeverity = "info" | "success" | "warning" | "danger";
 
+export interface ActivityChange {
+  /** Escopo (ex.: "Clientes", "Regras de negócio"). */
+  scope?: string;
+  label: string;
+  from: string;
+  to: string;
+}
+
+export interface ActivityEntity {
+  table: string;
+  tableLabel: string;
+  rowId?: string | null;
+  recordLabel?: string;
+  action: "INSERT" | "UPDATE" | "DELETE";
+}
+
 export interface ActivityEvent {
   id: string;
   category: ActivityCategory;
@@ -25,6 +41,9 @@ export interface ActivityEvent {
   actorId?: string | null;
   actorLabel: string;
   local?: boolean;
+  /** Lista completa de alterações campo a campo. */
+  changes?: ActivityChange[];
+  entity?: ActivityEntity;
 }
 
 export const activityCategoryLabels: Record<ActivityCategory, string> = {
@@ -66,6 +85,23 @@ const TABLE_CATEGORY: Record<string, ActivityCategory> = {
   role_permissions: "seguranca",
   ai_automations: "sistema",
   sandbox_state: "sistema",
+};
+
+const TABLE_LABELS: Record<string, string> = {
+  clients: "Cliente",
+  products: "Produto",
+  mgmv_agreements: "Acordo MGMV",
+  mgmv_installments: "Parcela MGMV",
+  import_history: "Importação",
+  system_backups: "Backup",
+  nf_invoices: "Nota fiscal",
+  team_tasks: "Tarefa",
+  app_settings: "Configurações",
+  saved_filters: "Filtro salvo",
+  user_roles: "Papel de usuário",
+  role_permissions: "Permissões",
+  ai_automations: "Automação",
+  sandbox_state: "Modo Teste",
 };
 
 const str = (v: unknown): string | undefined =>
