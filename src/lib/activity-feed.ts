@@ -162,6 +162,53 @@ function describeChanges(fields: string[]): string | undefined {
   return fields.length > 3 ? `${shown} +${fields.length - 3}` : shown;
 }
 
+/** Formata qualquer valor de coluna para exibição. */
+function formatCell(v: unknown): string {
+  if (v === undefined || v === null) return "vazio";
+  if (typeof v === "boolean") return v ? "sim" : "não";
+  if (typeof v === "number") return String(v);
+  if (typeof v === "string") {
+    const t = v.trim();
+    if (!t) return "vazio";
+    if (/^\d{4}-\d{2}-\d{2}T/.test(t)) {
+      const d = new Date(t);
+      if (!Number.isNaN(+d)) return d.toLocaleString("pt-BR");
+    }
+    return t.length > 160 ? `${t.slice(0, 160)}…` : t;
+  }
+  if (Array.isArray(v)) return v.length === 0 ? "nenhum item" : `${v.length} item(ns)`;
+  try {
+    const s = JSON.stringify(v);
+    return s.length > 160 ? `${s.slice(0, 160)}…` : s;
+  } catch {
+    return "atualizado";
+  }
+}
+
+/** Lista completa de alterações campo a campo de uma linha auditada. */
+function rowChanges(
+  action: string,
+  oldData: Record<string, unknown> | null,
+  newData: Record<string, unknown> | null,
+): ActivityChange[] {
+  const skip = new Set(["updated_at", "created_at", "id", "env"]);
+  if (action === "UPDATE") {
+    return changedFields(oldData, newData).map((f) => ({
+      label: labelField(f),
+      from: formatCell(oldData?.[f]),
+      to: formatCell(newData?.[f]),
+    }));
+  }
+  const data = (action === "DELETE" ? oldData : newData) ?? {};
+  return Object.keys(data)
+    .filter((k) => !skip.has(k) && data[k] !== null && data[k] !== undefined)
+    .map((k) => ({
+      label: labelField(k),
+      from: action === "DELETE" ? formatCell(data[k]) : "—",
+      to: action === "DELETE" ? "removido" : formatCell(data[k]),
+    }));
+}
+
 // ---------------------------------------------------------------------------
 // Configurações (app_settings) — descrição detalhada do que mudou
 // ---------------------------------------------------------------------------
