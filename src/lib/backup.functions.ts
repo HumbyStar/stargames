@@ -1880,7 +1880,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
         userEmail: (context as any)?.claims?.email ?? null,
         source: data.backupId ? "backup-salvo" : "upload-zip",
         fileName: zipName,
-        mode: data.mode,
+        mode: targetEnv === "sandbox" ? "reset+carga" : data.mode,
         tables: tablesToProcess,
         rowCounts: Object.fromEntries(results.map((r) => [r.table, r.inserted])),
         durationMs: Date.now() - started,
@@ -1893,7 +1893,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
 
     return {
       ok: true,
-      mode: data.mode,
+      mode: effectiveMode,
       targetEnv,
       tablesRestored: results,
       storageFilesRestored,
