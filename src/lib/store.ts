@@ -997,6 +997,16 @@ export const useStore = create<State>()((set, get) => ({
         const mgmvClients = clients.filter(
           (c) => c.mgmv && c.mgmv.installments.length > 0,
         );
+        // Prova de isolamento: contagens de produção antes da gravação.
+        // Em produção o servidor devolve {} e nada é auditado.
+        let productionBefore: Record<string, number> = {};
+        const startedAt = Date.now();
+        try {
+          const { snapshotProductionCounts } = await import("@/lib/backup.functions");
+          productionBefore = await snapshotProductionCounts();
+        } catch {
+          productionBefore = {};
+        }
         await Promise.all([
           dbUpsertClientsAsync(clients),
           dbUpsertProductsAsync(products),
@@ -1005,6 +1015,29 @@ export const useStore = create<State>()((set, get) => ({
             ? dbSyncAgreementsBulkAsync(mgmvClients)
             : Promise.resolve(),
         ]);
+        // Auditoria do Modo Teste (ignorada silenciosamente em produção).
+        if (Object.keys(productionBefore).length > 0) {
+          try {
+            const { recordSandboxImport } = await import("@/lib/backup.functions");
+            await recordSandboxImport({
+              data: {
+                source: history?.source ?? "importacao",
+                fileName: history?.file ?? null,
+                mode: "import",
+                tables: ["clients", "products", "mgmv_agreements", "import_history"],
+                rowCounts: {
+                  clients: clients.length,
+                  products: products.length,
+                  mgmv_agreements: mgmvClients.length,
+                },
+                durationMs: Date.now() - startedAt,
+                productionBefore,
+              },
+            });
+          } catch (err) {
+            console.warn("[sandbox-audit] falha ao registrar importação:", err);
+          }
+        }
       },
       executeDangerAction: async (action) => {
         clearImportRuntimeState();
