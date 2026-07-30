@@ -11,6 +11,8 @@ import {
   HardDrive,
   FileArchive,
   CheckCircle2,
+  ExternalLink,
+  FolderDown,
 } from "lucide-react";
 import { Card } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -60,6 +62,33 @@ function fmtDate(iso: string | null | undefined) {
   return iso ? new Date(iso).toLocaleString("pt-BR") : "—";
 }
 
+/** Endereço publicado do sistema (usado no atalho do Windows). */
+function appUrl(): string {
+  if (typeof window === "undefined") return "https://stargames.lovable.app/";
+  const host = window.location.hostname;
+  const isPreview = host.includes("lovableproject") || host.includes("lovable.app") === false;
+  return isPreview ? "https://stargames.lovable.app/" : window.location.origin + "/";
+}
+
+/** Dispara um download real (o arquivo aparece em Downloads do navegador). */
+function saveFile(blob: Blob, filename: string) {
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 4000);
+}
+
+/** Atalho do Windows (.url) que abre o sistema instalado com dois cliques. */
+function downloadWindowsShortcut() {
+  const content = `[InternetShortcut]\r\nURL=${appUrl()}\r\nIconIndex=0\r\n`;
+  saveFile(new Blob([content], { type: "application/internet-shortcut" }), "Star Games.url");
+}
+
 export function LocalInstallCard() {
   const [meta, setMeta] = useState<LocalPackageMeta | null>(null);
   const [pref, setPref] = useState<LocalModePreference>("auto");
@@ -68,6 +97,7 @@ export function LocalInstallCard() {
   const [busy, setBusy] = useState<null | "package" | "export" | "clear">(null);
   const [step, setStep] = useState("");
   const [progress, setProgress] = useState(0);
+  const [lastFiles, setLastFiles] = useState<string[]>([]);
 
   const clients = useStore((s) => s.clients);
   const products = useStore((s) => s.products);
@@ -149,6 +179,12 @@ export function LocalInstallCard() {
       if (!res.ok) throw new Error(`Falha no download (${res.status}).`);
       const blob = await res.blob();
 
+      // Grava o pacote também como arquivo no PC, para ficar visível na pasta
+      // Downloads do navegador (e servir de cópia de segurança offline).
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      const zipName = `star-games-dados-${stamp}.zip`;
+      saveFile(blob, zipName);
+
       setStep("Instalando os dados neste computador…");
       setProgress(60);
       const installed = await installLocalPackageFromZip(blob, {
@@ -160,9 +196,18 @@ export function LocalInstallCard() {
       });
       setMeta(installed);
       setLocalPackageInstalled(true);
+      downloadWindowsShortcut();
+      setLastFiles([zipName, "Star Games.url"]);
       setProgress(100);
       setStep("Pacote local atualizado.");
-      toast.success("Sistema instalado localmente com os dados atualizados.");
+      toast.success("Sistema instalado localmente.", {
+        description: `Dois arquivos foram baixados: “${zipName}” (cópia dos dados) e “Star Games.url” (atalho para abrir o sistema).`,
+        duration: 10000,
+        action: {
+          label: "Abrir sistema",
+          onClick: () => window.open(appUrl(), "_blank", "noopener"),
+        },
+      });
     } catch (error) {
       toast.error("Não foi possível preparar a instalação local.", {
         description: error instanceof Error ? error.message : String(error),
@@ -300,6 +345,14 @@ export function LocalInstallCard() {
             Exportar alterações (.zip)
           </Button>
 
+          <Button variant="outline" onClick={() => downloadWindowsShortcut()}>
+            <FolderDown className="size-4" /> Baixar atalho (.url)
+          </Button>
+
+          <Button variant="outline" onClick={() => window.open(appUrl(), "_blank", "noopener")}>
+            <ExternalLink className="size-4" /> Abrir sistema
+          </Button>
+
           <Button
             variant="ghost"
             className="text-destructive hover:text-destructive"
@@ -311,6 +364,26 @@ export function LocalInstallCard() {
         </div>
 
         <div className="space-y-1.5 rounded-xl border border-border bg-muted/30 p-3">
+          {lastFiles.length > 0 && (
+            <div className="mb-2 rounded-lg border border-border bg-background p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Arquivos baixados agora
+              </p>
+              <ul className="mt-1 space-y-0.5 text-xs">
+                {lastFiles.map((f) => (
+                  <li key={f} className="truncate">
+                    <span className="font-medium">{f}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                Estão na pasta <span className="font-medium">Downloads</span> do seu PC (Ctrl+J no
+                Chrome/Edge). Dê dois cliques em <span className="font-medium">Star Games.url</span>{" "}
+                para abrir o sistema — pode arrastá-lo para a Área de Trabalho. O .zip é a cópia dos
+                dados para restaurar no Modo Teste se precisar.
+              </p>
+            </div>
+          )}
           {!installable && !isStandaloneInstall() && (
             <p className="pb-1 text-[11px] text-muted-foreground">
               O atalho automático fica disponível apenas no endereço publicado do sistema, aberto
