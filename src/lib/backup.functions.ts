@@ -1917,6 +1917,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
       let inserted = 0;
       let skipped = 0;
       const CHUNK = 500;
+      expectedByTable[table] = payload.length;
       const useInsert = targetEnv === "sandbox" && Boolean(cloneTable?.idColumn);
       for (let i = 0; i < payload.length; i += CHUNK) {
         const chunk = payload.slice(i, i + CHUNK);
