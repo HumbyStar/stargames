@@ -221,7 +221,7 @@ export function GithubCard() {
   }
 
   const hasRepo = Boolean(status?.repo);
-  const actionsDisabled = !status?.connected || !hasRepo || busy !== null;
+  const actionsDisabled = busy !== null;
 
   return (
     <div className="space-y-4">
@@ -316,7 +316,7 @@ export function GithubCard() {
               <Button
                 variant="outline"
                 onClick={() => void loadRepos()}
-                disabled={!status?.connected || reposLoading}
+                disabled={reposLoading}
               >
                 {reposLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -335,6 +335,16 @@ export function GithubCard() {
               placeholder="padrão do repositório"
             />
           </div>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          <Label htmlFor="gh-repo-manual">Ou digite o repositório manualmente</Label>
+          <Input
+            id="gh-repo-manual"
+            value={selectedRepo}
+            onChange={(e) => setSelectedRepo(e.target.value)}
+            placeholder="HumbyStar/stargames"
+          />
         </div>
 
         <div className="mt-4 flex items-center justify-between rounded-lg border border-border/60 bg-card/50 px-4 py-3">
