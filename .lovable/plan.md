@@ -1,79 +1,39 @@
-## Objetivo
+## Resposta curta sobre a página própria
 
-Criar um "Modo Teste" (sandbox): o mesmo sistema, com uma cópia dos dados reais, onde tudo que o admin fizer — importar, editar, apagar, reprocessar MGMV, gerar backup, emitir NF — não toca nos dados de produção.
+Vale a pena — mas por clareza, não por segurança. O isolamento real vem do banco (coluna de ambiente + regras de acesso + ids regerados), e ele funciona igual estando na mesma tela ou em outra. O ganho de uma página própria `/sandbox` é operacional: URL diferente, layout com moldura de aviso permanente, impossível "esquecer" que está no teste, e dá para deixar duas abas do navegador abertas (uma produção, uma teste) sem confundir. Recomendo fazer: página própria **e** o isolamento reforçado no servidor.
 
-## Como funciona (visão geral)
+## Escopo
 
-Cada linha do banco passa a ter um marcador de ambiente: `producao` ou `sandbox`. Enquanto o admin está em Modo Teste, o banco só enxerga as linhas `sandbox`; tudo que ele criar nasce já marcado como `sandbox`. Ao sair do modo, volta a enxergar apenas produção. O isolamento é garantido pelo próprio banco (regras de acesso), não pelas telas — então nenhuma parte do sistema pode "vazar" para produção por esquecimento.
+### 1. Limite de envio 500 MB
+- ZIP enviado direto na importação por backup passa de 250 MB para 500 MB, com validação no cliente e no servidor, e mensagem clara quando exceder.
+- Backups já salvos na nuvem continuam sem limite (não passam pelo navegador).
 
-```text
-Admin normal      ──▶  linhas env='producao'   (dados reais)
-Admin em teste    ──▶  linhas env='sandbox'    (cópia descartável)
-Demais usuários   ──▶  sempre env='producao'
-```
+### 2. Página própria do Modo Teste (`/sandbox`)
+- Nova rota `src/routes/_authenticated.sandbox.tsx` (admin/admin_master; quem não for é redirecionado).
+- Layout próprio com moldura/faixa fixa "MODO TESTE — produção intocada" sempre visível, e o app inteiro (Clientes, MGMV, Collection, Finanças, Equipe, Importação, Backups) renderizado dentro dela sobre os dados de teste.
+- Em Configurações, o card atual vira o ponto de entrada: "Abrir Modo Teste" leva para `/sandbox`; "Sair" volta para `/`.
+- Entrar/sair da página liga/desliga o modo no servidor e dispara a recarga em tempo real (sem F5).
+- Se alguém abrir `/sandbox` sem o modo ativo, a própria página ativa; ao sair da página, o modo é desligado — não fica ligado por acidente.
 
-## Entrada pelo Configurações
+### 3. Importação exclusiva por backup/ZIP, com isolamento total
 
-A ativação fica **exclusivamente** em Configurações, num card dedicado "Ambiente de Teste (Sandbox)" — não há toggle na navbar.
+Novo card "Importar de backup (ZIP)" na seção Importação, disponível nos dois ambientes.
 
-O card mostra:
-- Status atual (Produção / Modo Teste) com badge.
-- Data da última clonagem e contagem de linhas por tabela no sandbox.
-- Botão "Entrar no Modo Teste" (com diálogo de confirmação explicando o que muda).
-- Botões "Clonar dados de produção" (com barra de progresso) e "Resetar sandbox".
-- Botão "Sair do Modo Teste" quando ativo.
+Garantias (o núcleo da entrega):
+1. **Destino decidido no servidor**, a partir do estado de sandbox do usuário. Não existe parâmetro de ambiente vindo do navegador.
+2. **No sandbox, todos os ids são regerados** e as ligações entre tabelas (cliente → acordo → parcelas → produtos → NF → tarefas) reescritas com o mesmo mecanismo da clonagem. Nenhum id do backup entra como está, então é impossível sobrescrever uma linha de produção.
+3. **Toda gravação carimba o ambiente de destino** — o ambiente gravado no ZIP é descartado.
+4. **Exclusões sempre filtradas por ambiente**: "substituir tudo" no sandbox apaga só o sandbox.
+5. **Trava final antes de cada lote**: o servidor confere que todas as linhas têm o ambiente de destino e que nenhum id colide com produção; divergência aborta sem gravar nada.
+6. **Modo padrão é mesclar**, preservando o que já existe no sandbox.
+7. Papéis, perfis e log de auditoria não são tocados quando o destino é sandbox.
 
-Visível apenas para admin/admin_master. Enquanto o Modo Teste estiver ativo, uma faixa fixa no topo avisa "MODO TESTE — nada afeta a produção", com atalho para voltar ao card em Configurações.
-
-## Fluxo para o usuário
-
-1. Configurações → card Ambiente de Teste → "Entrar no Modo Teste".
-2. Se o sandbox estiver vazio, o próprio diálogo oferece clonar a produção na hora.
-3. Todas as seções (Clientes, MGMV, Collection, Finanças, Equipe, Importação, Backups) funcionam igual, só que sobre os dados de teste.
-4. "Resetar sandbox" limpa tudo; "Reclonar" refaz a cópia da produção.
-5. Ao sair, o sistema recarrega os dados em tempo real (sem F5) e o sandbox fica guardado para a próxima vez.
-
-## Escopo dos dados
-
-Entram na cópia: clientes, produtos, acordos MGMV, parcelas, histórico de importação, notas fiscais, tarefas/comentários/atividades da equipe, pontos, filtros salvos, configurações do app, automações e perfil de treino da IA.
-
-Não são copiados: usuários, papéis/permissões, log de auditoria, sessões ativas e backups. Papéis continuam valendo em ambos os ambientes (você é o mesmo usuário).
-
-Arquivos HTML originais do Notion não são duplicados no storage; o sandbox aponta para os mesmos arquivos em modo somente leitura (evita duplicar armazenamento).
-
-## Backup no Modo Teste
-
-O backup roda igual, com os dados do sandbox, gera o arquivo real e permite download. Os registros ficam marcados como "teste" e são listados numa aba separada, com badge, para não se confundirem com os oficiais. Restaurar um backup em Modo Teste só reescreve linhas sandbox.
+UI do card: upload de `.zip` (até 500 MB) ou escolha de backup salvo, selo de destino calculado no servidor ("Destino: SANDBOX — produção não será alterada"), prévia com contagem por tabela e comparação com o estado atual, escolha mesclar/substituir com confirmação digitada, progresso por tabela e atualização em tempo real ao final.
 
 ## Detalhes técnicos
 
-**Banco**
-- Novo tipo `app_env` (`producao` | `sandbox`) e coluna `env app_env NOT NULL DEFAULT public.current_env()` em todas as tabelas de dados listadas acima.
-- Tabela `public.sandbox_state (user_id, active bool, cloned_at, updated_at)` + GRANTs; cada usuário controla o próprio modo. Só admin/admin_master pode ativar (checado por `has_role` no server fn e por policy).
-- Função `public.current_env()` (STABLE, SECURITY DEFINER): retorna `sandbox` se existe `sandbox_state` ativo para `auth.uid()`, senão `producao`.
-- Policies dessas tabelas ganham `AND env = public.current_env()` no `USING` e no `WITH CHECK`. Esse é o coração do isolamento: as ~200 chamadas `.from(...)` existentes passam a ser filtradas automaticamente, sem alterar o código de consulta.
-- Índices compostos `(env, ...)` nas colunas mais consultadas; chaves únicas hoje globais passam a incluir `env`.
-
-**Clonagem**
-- Server fn `cloneProductionToSandbox` (admin-only, roda com service role após verificar o papel): apaga o sandbox atual e copia a produção em lotes, na ordem de dependência (clients → products → mgmv_agreements → mgmv_installments → nf_invoices → team_* → demais).
-- Como as linhas ficam na mesma tabela, os UUIDs são regerados: mantém-se um mapa `id_producao → id_sandbox` por tabela e as chaves estrangeiras são reescritas na inserção. Progresso persistido para barra e retomada, no mesmo padrão já usado pelo backup.
-- Server fns auxiliares: `getSandboxState`, `setSandboxMode`, `resetSandbox`, `getSandboxCounts`.
-
-**Frontend**
-- `src/lib/use-sandbox.tsx`: contexto com estado do modo, montado no `_authenticated`.
-- `src/components/sandbox-settings-card.tsx`: card em Configurações (único ponto de entrada).
-- Faixa de aviso no `app-layout.tsx` quando ativo (tokens semânticos, sem cores fixas).
-- Ao alternar: `queryClient.clear()` + o evento `app:reset` já existente, para recarregar tudo sem F5.
-
-**Pontos de atenção**
-- Código que usa o cliente admin (backup, restauração, integridade, tarefas do concierge) ignora as policies — nesses pontos aplica-se `eq("env", ...)` explícito, com o ambiente resolvido pelo usuário chamador.
-- A assinatura de realtime passa a filtrar por ambiente.
-- O cron de backup automático permanece apenas em produção.
-
-## Ordem de execução
-
-1. Migração: tipo, coluna `env`, `sandbox_state`, `current_env()`, policies, índices.
-2. Server fns de estado, contagem e clonagem.
-3. Contexto de sandbox + card em Configurações + faixa de aviso.
-4. Ajuste dos caminhos com cliente admin (backup/restauração/integridade) e do realtime.
-5. Verificação ponta a ponta: clonar → editar no teste → conferir produção intacta → gerar backup de teste.
+- `src/lib/backup.functions.ts`: destino por ambiente, remapeamento de ids reutilizando `CLONE_ORDER`/`remapRow`, delete filtrado por ambiente, verificação pré-gravação, limite 500 MB.
+- Novo `src/components/backup-import-card.tsx`; integração em `src/sections/import-section.tsx`.
+- Nova rota `src/routes/_authenticated.sandbox.tsx` + ajuste em `src/components/sandbox-settings-card.tsx` e `src/components/app-layout.tsx` (faixa passa a viver na página).
+- O painel de Backups em Configurações passa a usar a mesma rotina segura, eliminando o caminho antigo sem filtro de ambiente.
+- Sem alteração de schema no banco.
