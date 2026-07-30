@@ -160,10 +160,32 @@ export const listGithubRepos = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     await assertAdmin(context);
     const { githubFetch } = await import("./github.server");
-    const repos = await githubFetch(
-      "/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member",
-    );
-    return (repos ?? []).map((r: any) => ({
+    const collected: any[] = [];
+
+    // 1) repositórios do usuário (todas as páginas, até 500)
+    for (let page = 1; page <= 5; page++) {
+      const batch = await githubFetch(
+        `/user/repos?per_page=100&page=${page}&sort=updated&affiliation=owner,collaborator,organization_member`,
+      );
+      if (!Array.isArray(batch) || batch.length === 0) break;
+      collected.push(...batch);
+      if (batch.length < 100) break;
+    }
+
+    // 2) fallback: tokens de GitHub App só enxergam repos via installations
+    if (collected.length === 0) {
+      try {
+        const inst = await githubFetch("/installation/repositories?per_page=100");
+        if (Array.isArray(inst?.repositories)) collected.push(...inst.repositories);
+      } catch {
+        /* token clássico/fine-grained: rota indisponível */
+      }
+    }
+
+    const unique = new Map<string, any>();
+    for (const r of collected) if (r?.full_name) unique.set(r.full_name, r);
+
+    return Array.from(unique.values()).map((r: any) => ({
       fullName: r.full_name as string,
       owner: r.owner?.login as string,
       name: r.name as string,
