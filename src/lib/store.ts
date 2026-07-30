@@ -675,20 +675,36 @@ export const useStore = create<State>()((set, get) => ({
         await hydratePromise;
       },
       refreshFromDb: async () => {
-        try {
-          const snap = await loadSnapshot();
-          set({
-            clients: snap.clients,
-            products: snap.products.map((p) =>
-              p.financialStatus === "MGMV" && p.situation === "Em Aberto"
-                ? { ...p, situation: "Resolvido" as Situation }
-                : p,
-            ),
-            importHistory: snap.importHistory,
-          });
-        } catch (err) {
-          console.warn("refreshFromDb failed", err);
+        // Coalesce: chamadas concorrentes (Realtime + app:reset + modais)
+        // compartilham o mesmo `loadSnapshot()` em voo; se algo chegar
+        // durante o fetch, agenda exatamente UM refresh extra ao final.
+        if (refreshInFlight) {
+          refreshQueued = true;
+          return refreshInFlight;
         }
+        refreshInFlight = (async () => {
+          try {
+            const snap = await loadSnapshot();
+            set({
+              clients: snap.clients,
+              products: snap.products.map((p) =>
+                p.financialStatus === "MGMV" && p.situation === "Em Aberto"
+                  ? { ...p, situation: "Resolvido" as Situation }
+                  : p,
+              ),
+              importHistory: snap.importHistory,
+            });
+          } catch (err) {
+            console.warn("refreshFromDb failed", err);
+          } finally {
+            refreshInFlight = null;
+          }
+          if (refreshQueued) {
+            refreshQueued = false;
+            await get().refreshFromDb();
+          }
+        })();
+        await refreshInFlight;
       },
       reset: () => {
         hydratePromise = null;
