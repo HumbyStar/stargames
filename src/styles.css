@@ -475,27 +475,50 @@ html[data-env="sandbox"] [role="alertdialog"] .one-page-section {
   margin-bottom: 0;
 }
 
+/* Diálogos: moldura tracejada por OUTLINE (não altera largura, padding nem o
+   alinhamento interno do modal) + selo posicionado sem sobrepor o conteúdo. */
 html[data-env="sandbox"] [role="dialog"],
 html[data-env="sandbox"] [role="alertdialog"] {
-  border: 2px dashed color-mix(in oklch, oklch(0.75 0.15 75) 60%, transparent) !important;
+  outline: 2px dashed color-mix(in oklch, oklch(0.75 0.15 75) 60%, transparent);
+  outline-offset: -8px;
 }
 html[data-env="sandbox"] [role="dialog"]::before,
 html[data-env="sandbox"] [role="alertdialog"]::before {
   content: "MODO TESTE";
   position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  top: 96px;
+  left: 24px;
   z-index: 1;
   padding: 2px 10px;
   border-radius: 9999px;
-  border: 1px solid color-mix(in oklch, oklch(0.75 0.15 75) 60%, transparent);
-  background: var(--color-popover, var(--color-background));
+  border: 1px dashed color-mix(in oklch, oklch(0.75 0.15 75) 60%, transparent);
+  background: color-mix(in oklch, oklch(0.75 0.15 75) 12%, var(--color-background));
   color: oklch(0.62 0.14 75);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.08em;
+  line-height: 1.4;
   pointer-events: none;
+}
+@media (min-width: 640px) {
+  html[data-env="sandbox"] [role="dialog"],
+  html[data-env="sandbox"] [role="alertdialog"] {
+    outline-offset: -10px;
+  }
+  html[data-env="sandbox"] [role="dialog"]::before,
+  html[data-env="sandbox"] [role="alertdialog"]::before {
+    top: 18px;
+    left: 24px;
+  }
+}
+/* Espaço extra para o selo não encostar no cabeçalho do modal. */
+html[data-env="sandbox"] .dialog-as-section {
+  padding-top: 132px;
+}
+@media (min-width: 640px) {
+  html[data-env="sandbox"] .dialog-as-section {
+    padding-top: 3.25rem;
+  }
 }
 
 /* Tabela dentro de uma seção one-page:
