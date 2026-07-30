@@ -16,8 +16,8 @@ export const Route = createFileRoute("/_authenticated/")({
 
 function OnePage() {
   return (
-    <AppLayout>
+    <><div>TESTE-NOLAYOUT</div>{false && <AppLayout>
       <div>TESTE</div>
-    </AppLayout>
+    </AppLayout>}</>
   );
 }
