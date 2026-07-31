@@ -1921,6 +1921,8 @@ export const previewBackupRestore = createServerFn({ method: "POST" })
       current,
       availableTables,
       targetEnv,
+      sourceEnv: manifest.sourceEnv,
+      envMismatch: Boolean(manifest.sourceEnv && manifest.sourceEnv !== targetEnv),
       skippedTables,
     };
   });
