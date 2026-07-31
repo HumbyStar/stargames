@@ -466,6 +466,7 @@ de senha.
 /** Coluna estável usada para ordenar a paginação de cada tabela. */
 function orderKeyFor(table: string): string {
   if (table === "ai_training_profile") return "user_id";
+  if (table === "active_sessions" || table === "sandbox_state") return "user_id";
   return "id";
 }
 
@@ -569,8 +570,11 @@ async function fetchRowsForBackup(
       query = query.gte(dateColumn, since);
     }
     // Paginação sem ordenação pode repetir/pular linhas em tabelas grandes.
+    const useDateOrder = Boolean(limit?.days && dateColumn);
     const { data, error } = await query
-      .order(dateColumn ?? orderKeyFor(table), { ascending: !dateColumn })
+      .order(useDateOrder ? (dateColumn as string) : orderKeyFor(table), {
+        ascending: !useDateOrder,
+      })
       .range(from, from + batchSize - 1);
     if (error) throw new Error(`[${table}] ${error.message}`);
     if (!data || data.length === 0) break;
