@@ -390,14 +390,21 @@ function pad(n: number, w = 2) {
   return String(n).padStart(w, "0");
 }
 
-function formatFilename(now = new Date()): string {
-  return `backup-${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(
+function formatFilename(now = new Date(), env: "producao" | "sandbox" = "producao"): string {
+  const label = env === "sandbox" ? "teste" : "producao";
+  return `stargames-${label}-${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(
     now.getUTCDate(),
   )}-${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}.zip`;
 }
 
-function storagePathFor(now: Date, filename: string): string {
-  return `${now.getUTCFullYear()}/${pad(now.getUTCMonth() + 1)}/${filename}`;
+// Cada ambiente grava em sua própria pasta: um backup de teste nunca fica
+// misturado com os de produção no armazenamento.
+function storagePathFor(
+  now: Date,
+  filename: string,
+  env: "producao" | "sandbox" = "producao",
+): string {
+  return `${env}/${now.getUTCFullYear()}/${pad(now.getUTCMonth() + 1)}/${filename}`;
 }
 
 const RESTORE_MD = `# Restaurar este backup em um Supabase próprio
