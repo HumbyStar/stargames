@@ -1397,17 +1397,22 @@ export interface BackupRow {
 
 export const listBackups = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<BackupRow[]> => {
+  .inputValidator((input?: { env?: "producao" | "sandbox" }) => input ?? {})
+  .handler(async ({ context, data }): Promise<BackupRow[]> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await cleanupStaleBackups(supabaseAdmin);
-    const { data, error } = await supabaseAdmin
+    // Cada ambiente tem seu próprio histórico: por padrão mostramos apenas o
+    // ambiente em que o usuário está.
+    const listEnv = data?.env ?? (await resolveTargetEnv(supabaseAdmin, context.userId));
+    const { data: rows, error } = await supabaseAdmin
       .from("system_backups")
       .select("*")
+      .eq("env", listEnv)
       .order("created_at", { ascending: false })
       .limit(100);
     if (error) throw new Error(error.message);
-    return (data ?? []).map((r: any) => ({
+    return (rows ?? []).map((r: any) => ({
       id: r.id,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
