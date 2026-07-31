@@ -690,6 +690,35 @@ function BackupFailureModal({
   );
 }
 
+const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** Converte um horário local (HH:MM + dia da semana) para UTC. */
+function localToUtc(time: string, weekday: number) {
+  const [h, m] = time.split(":").map((v) => Number(v) || 0);
+  const ref = new Date();
+  // Ajusta a data para o dia da semana escolhido, mantendo o horário local.
+  ref.setDate(ref.getDate() + ((weekday - ref.getDay() + 7) % 7));
+  ref.setHours(h, m, 0, 0);
+  return {
+    hour: ref.getUTCHours(),
+    minute: ref.getUTCMinutes(),
+    weekday: ref.getUTCDay(),
+  };
+}
+
+/** Converte o horário UTC do cron de volta para o fuso do usuário. */
+function utcToLocal(hourUtc: number, minuteUtc: number, weekdayUtc: number) {
+  const ref = new Date();
+  ref.setUTCHours(hourUtc, minuteUtc, 0, 0);
+  ref.setUTCDate(ref.getUTCDate() + ((weekdayUtc - ref.getUTCDay() + 7) % 7));
+  return {
+    time: `${pad2(ref.getHours())}:${pad2(ref.getMinutes())}`,
+    weekday: ref.getDay(),
+  };
+}
+
 export function BackupsPanel() {
   const list = useServerFn(listBackups);
   const create = useServerFn(createBackupNow);
