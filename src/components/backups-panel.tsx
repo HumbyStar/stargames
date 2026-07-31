@@ -691,8 +691,6 @@ function BackupFailureModal({
 }
 
 export function BackupsPanel() {
-  // helpers de horário: o cron roda em UTC, mas o usuário escolhe no fuso dele.
-
   const list = useServerFn(listBackups);
   const create = useServerFn(createBackupNow);
   const execute = useServerFn(executeBackupNow);
