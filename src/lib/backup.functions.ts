@@ -390,14 +390,21 @@ function pad(n: number, w = 2) {
   return String(n).padStart(w, "0");
 }
 
-function formatFilename(now = new Date()): string {
-  return `backup-${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(
+function formatFilename(now = new Date(), env: "producao" | "sandbox" = "producao"): string {
+  const label = env === "sandbox" ? "teste" : "producao";
+  return `stargames-${label}-${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(
     now.getUTCDate(),
   )}-${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}.zip`;
 }
 
-function storagePathFor(now: Date, filename: string): string {
-  return `${now.getUTCFullYear()}/${pad(now.getUTCMonth() + 1)}/${filename}`;
+// Cada ambiente grava em sua própria pasta: um backup de teste nunca fica
+// misturado com os de produção no armazenamento.
+function storagePathFor(
+  now: Date,
+  filename: string,
+  env: "producao" | "sandbox" = "producao",
+): string {
+  return `${env}/${now.getUTCFullYear()}/${pad(now.getUTCMonth() + 1)}/${filename}`;
 }
 
 const RESTORE_MD = `# Restaurar este backup em um Supabase próprio
@@ -627,8 +634,8 @@ async function runBackup(opts: {
   // (cron), assume produção.
   const backupEnv: "producao" | "sandbox" = opts.env ?? "producao";
   const now = new Date();
-  const filename = formatFilename(now);
-  const storagePath = opts.existing?.storagePath ?? storagePathFor(now, filename);
+  const filename = formatFilename(now, backupEnv);
+  const storagePath = opts.existing?.storagePath ?? storagePathFor(now, filename, backupEnv);
   const startedAt = Date.now();
   const debugLog: BackupDebugEntry[] = [];
   let phase = "initializing";
@@ -770,9 +777,22 @@ async function runBackup(opts: {
 
     // Storage: notion-html-originals
     let storageObjectCount = 0;
-    try {
-      if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
-      pushDebug("info", "storage:notion-html-originals", "Espelhando arquivos originais", {
+    let storageSkippedReason: string | null = null;
+    if (backupEnv === "sandbox") {
+      // No Modo Teste o acervo de arquivos é o mesmo da produção e só de
+      // leitura — espelhar de novo só inflaria o backup sem trazer dado novo.
+      storageSkippedReason = "sandbox";
+      pushDebug(
+        "info",
+        "storage:notion-html-originals",
+        "Arquivos originais não incluídos: no Modo Teste o acervo é compartilhado e somente leitura",
+        { skipped: true },
+      );
+      await persistBackupDebug(supabaseAdmin, backupId, debugLog);
+    } else {
+      try {
+        if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
+        pushDebug("info", "storage:notion-html-originals", "Espelhando arquivos originais", {
         maxFiles: STORAGE_MIRROR_MAX_FILES,
         maxBytes: STORAGE_MIRROR_MAX_BYTES,
       });
@@ -792,14 +812,15 @@ async function runBackup(opts: {
       await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
         storage_object_count: storageObjectCount,
       });
-    } catch (err) {
-      if (err instanceof BackupCancelledError) throw err;
-      // Se o bucket não existir, seguimos com o resto do backup.
-      console.warn("[backup] mirror bucket failed:", err);
-      pushDebug("warn", "storage:notion-html-originals", "Falha ao espelhar arquivos originais; backup seguirá sem esse espelho", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-      await persistBackupDebug(supabaseAdmin, backupId, debugLog);
+      } catch (err) {
+        if (err instanceof BackupCancelledError) throw err;
+        // Se o bucket não existir, seguimos com o resto do backup.
+        console.warn("[backup] mirror bucket failed:", err);
+        pushDebug("warn", "storage:notion-html-originals", "Falha ao espelhar arquivos originais; backup seguirá sem esse espelho", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        await persistBackupDebug(supabaseAdmin, backupId, debugLog);
+      }
     }
 
     pushDebug("info", "summary", "Calculando resumo de negócio");
@@ -819,10 +840,12 @@ async function runBackup(opts: {
       schemaVersion: BACKUP_SCHEMA_VERSION,
       generatedAt: now.toISOString(),
       type: opts.type,
+      env: backupEnv,
       rowCounts,
       storageObjectCount,
+      storageSkippedReason,
       tables: BACKUP_TABLES,
-      buckets: ["notion-html-originals"],
+      buckets: storageSkippedReason ? [] : ["notion-html-originals"],
       businessSummary,
     };
     zip.file("manifest.json", JSON.stringify(manifest, null, 2));
@@ -1043,6 +1066,7 @@ export const createBackupNow = createServerFn({ method: "POST" })
       .from("system_backups")
       .select("id, storage_path, status, updated_at")
       .eq("created_by", context.userId)
+      .eq("env", backupEnv)
       .in("status", ["pending", "running"])
       .gte("updated_at", cutoffIso)
       .order("created_at", { ascending: false })
@@ -1057,8 +1081,8 @@ export const createBackupNow = createServerFn({ method: "POST" })
       storagePath = existingRow.storage_path as string;
     } else {
       const now = new Date();
-      const filename = formatFilename(now);
-      storagePath = storagePathFor(now, filename);
+      const filename = formatFilename(now, backupEnv);
+      storagePath = storagePathFor(now, filename, backupEnv);
       const { data: rowIns, error: insErr } = await supabaseAdmin
         .from("system_backups")
         .insert({
@@ -1373,17 +1397,22 @@ export interface BackupRow {
 
 export const listBackups = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<BackupRow[]> => {
+  .inputValidator((input?: { env?: "producao" | "sandbox" }) => input ?? {})
+  .handler(async ({ context, data }): Promise<BackupRow[]> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await cleanupStaleBackups(supabaseAdmin);
-    const { data, error } = await supabaseAdmin
+    // Cada ambiente tem seu próprio histórico: por padrão mostramos apenas o
+    // ambiente em que o usuário está.
+    const listEnv = data?.env ?? (await resolveTargetEnv(supabaseAdmin, context.userId));
+    const { data: rows, error } = await supabaseAdmin
       .from("system_backups")
       .select("*")
+      .eq("env", listEnv)
       .order("created_at", { ascending: false })
       .limit(100);
     if (error) throw new Error(error.message);
-    return (data ?? []).map((r: any) => ({
+    return (rows ?? []).map((r: any) => ({
       id: r.id,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
@@ -1623,6 +1652,10 @@ export interface RestorePreview {
   current: BusinessSummary;
   availableTables: string[];
   targetEnv: "producao" | "sandbox";
+  /** Ambiente de origem gravado no manifesto (null em backups antigos). */
+  sourceEnv: "producao" | "sandbox" | null;
+  /** true quando o arquivo veio de um ambiente diferente do destino. */
+  envMismatch: boolean;
   skippedTables: string[];
 }
 
@@ -1776,6 +1809,7 @@ async function loadBackupZip(
 async function readManifest(zip: any): Promise<{
   schemaVersion: number;
   generatedAt: string | null;
+  sourceEnv: "producao" | "sandbox" | null;
   rowCounts: Record<string, number>;
   storageObjectCount: number;
   businessSummary: BusinessSummary | null;
@@ -1791,6 +1825,10 @@ async function readManifest(zip: any): Promise<{
   return {
     schemaVersion: version,
     generatedAt: parsed.generatedAt ?? null,
+    sourceEnv:
+      parsed.env === "sandbox" || parsed.env === "producao"
+        ? (parsed.env as "producao" | "sandbox")
+        : null,
     rowCounts: parsed.rowCounts ?? {},
     storageObjectCount: Number(parsed.storageObjectCount ?? 0),
     businessSummary: parsed.businessSummary ?? null,
@@ -1887,6 +1925,8 @@ export const previewBackupRestore = createServerFn({ method: "POST" })
       current,
       availableTables,
       targetEnv,
+      sourceEnv: manifest.sourceEnv,
+      envMismatch: Boolean(manifest.sourceEnv && manifest.sourceEnv !== targetEnv),
       skippedTables,
     };
   });

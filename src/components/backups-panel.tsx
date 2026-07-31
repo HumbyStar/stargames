@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui-bits";
+import { useSandbox } from "@/lib/use-sandbox";
 import {
   Dialog,
   DialogContent,
@@ -720,6 +721,8 @@ function utcToLocal(hourUtc: number, minuteUtc: number, weekdayUtc: number) {
 }
 
 export function BackupsPanel() {
+  const { state: sandboxState } = useSandbox();
+  const currentEnv: "producao" | "sandbox" = sandboxState.active ? "sandbox" : "producao";
   const list = useServerFn(listBackups);
   const create = useServerFn(createBackupNow);
   const execute = useServerFn(executeBackupNow);
@@ -732,6 +735,8 @@ export function BackupsPanel() {
   const putSchedule = useServerFn(setBackupSchedule);
 
   const [rows, setRows] = useState<BackupRow[]>([]);
+  // Histórico é sempre de um ambiente por vez; começa no ambiente atual.
+  const [listEnv, setListEnv] = useState<"producao" | "sandbox">(currentEnv);
   const [schedule, setSchedule] = useState<BackupScheduleInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
@@ -770,7 +775,10 @@ export function BackupsPanel() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [rowsRes, schedRes] = await Promise.all([list(), getSchedule()]);
+      const [rowsRes, schedRes] = await Promise.all([
+        list({ data: { env: listEnv } }),
+        getSchedule(),
+      ]);
       setRows(rowsRes);
       setSchedule(schedRes);
       if (schedRes.frequency !== "off") {
@@ -783,7 +791,7 @@ export function BackupsPanel() {
     } finally {
       setLoading(false);
     }
-  }, [list, getSchedule]);
+  }, [list, getSchedule, listEnv]);
 
   useEffect(() => {
     void refresh();
@@ -1315,9 +1323,28 @@ export function BackupsPanel() {
       </Card>
 
       <Card title="Histórico de backups">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Ambiente:</span>
+          <Select value={listEnv} onValueChange={(v) => setListEnv(v as "producao" | "sandbox")}>
+            <SelectTrigger className="h-8 w-44 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="producao">Produção</SelectItem>
+              <SelectItem value="sandbox">Modo teste</SelectItem>
+            </SelectContent>
+          </Select>
+          {listEnv !== currentEnv ? (
+            <span className="text-[11px] text-amber-600 dark:text-amber-400">
+              Visualizando outro ambiente — novos backups continuam sendo gerados em{" "}
+              {currentEnv === "sandbox" ? "Modo teste" : "Produção"}.
+            </span>
+          ) : null}
+        </div>
         {rows.length === 0 ? (
           <div className="rounded-md border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
-            Nenhum backup gerado ainda. Clique em <b>Gerar backup agora</b> para criar o primeiro.
+            Nenhum backup de {listEnv === "sandbox" ? "Modo teste" : "Produção"} ainda. Clique em{" "}
+            <b>Gerar backup agora</b> para criar o primeiro.
           </div>
         ) : (
           <div className="overflow-x-auto">

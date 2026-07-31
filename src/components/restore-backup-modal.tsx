@@ -185,6 +185,8 @@ export function RestoreBackupModal({
   const [previewData, setPreviewData] = useState<RestorePreview | null>(null);
   const [selectedTables, setSelectedTables] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<"merge" | "replace">("merge");
+  // Confirmação extra quando o backup vem de um ambiente diferente do destino.
+  const [envMismatchAck, setEnvMismatchAck] = useState(false);
   const [includeStorage, setIncludeStorage] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -302,6 +304,7 @@ export function RestoreBackupModal({
       setPreviewData(res);
       setSelectedTables(new Set(res.availableTables));
       setStep("preview");
+      setEnvMismatchAck(false);
       toast.dismiss("preview-zip");
     } catch (err: any) {
       setErrorInfo({
@@ -616,6 +619,26 @@ export function RestoreBackupModal({
                 </div>
               )}
             </div>
+            {previewData.envMismatch && (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive">
+                <div className="font-semibold">Origem diferente do destino</div>
+                <div className="mt-0.5">
+                  Este arquivo foi gerado no{" "}
+                  <b>{previewData.sourceEnv === "sandbox" ? "Modo Teste" : "ambiente de Produção"}</b>{" "}
+                  e você está prestes a aplicá-lo em{" "}
+                  <b>{previewData.targetEnv === "sandbox" ? "Modo Teste" : "Produção"}</b>.
+                </div>
+                <label className="mt-2 flex items-center gap-2 font-medium">
+                  <input
+                    type="checkbox"
+                    checked={envMismatchAck}
+                    onChange={(e) => setEnvMismatchAck(e.target.checked)}
+                    className="size-3.5 accent-current"
+                  />
+                  Entendo a origem do arquivo e quero continuar mesmo assim.
+                </label>
+              </div>
+            )}
             <div className="rounded-md border border-border bg-card/50 p-3 text-xs">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
@@ -790,7 +813,11 @@ export function RestoreBackupModal({
                     ? "destructive"
                     : "default"
                 }
-                disabled={loading || selectedTables.size === 0}
+                disabled={
+                  loading ||
+                  selectedTables.size === 0 ||
+                  (previewData.envMismatch && !envMismatchAck)
+                }
                 onClick={() => void handleApply()}
               >
                 {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
