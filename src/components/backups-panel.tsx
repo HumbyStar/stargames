@@ -1228,7 +1228,7 @@ export function BackupsPanel() {
             </div>
             <div className="text-xs text-muted-foreground">
               {schedule?.frequency && schedule.frequency !== "off"
-                ? "Executa às 03:00 UTC"
+                ? `Executa ${schedule.frequency === "weekly" ? `${WEEKDAYS[localWeekday]} ` : ""}às ${localTime} (seu horário)`
                 : "Ative para rodar automaticamente"}
             </div>
           </div>
@@ -1251,7 +1251,7 @@ export function BackupsPanel() {
             <Undo2 className="mr-2 size-4" />
             Restaurar backup
           </Button>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground">Agendamento:</span>
             <Select
               value={schedule?.frequency ?? "off"}
@@ -1263,10 +1263,53 @@ export function BackupsPanel() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="off">Desligado</SelectItem>
-                <SelectItem value="daily">Diário (03:00 UTC)</SelectItem>
-                <SelectItem value="weekly">Semanal (dom, 03:00 UTC)</SelectItem>
+                <SelectItem value="daily">Diário</SelectItem>
+                <SelectItem value="weekly">Semanal</SelectItem>
               </SelectContent>
             </Select>
+            {schedule?.frequency === "weekly" ? (
+              <Select
+                value={String(localWeekday)}
+                onValueChange={(v) => {
+                  setLocalWeekday(Number(v));
+                  void applySchedule("weekly", localTime, Number(v));
+                }}
+                disabled={savingSchedule || running}
+              >
+                <SelectTrigger className="h-8 w-32 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {WEEKDAYS.map((d, i) => (
+                    <SelectItem key={d} value={String(i)}>
+                      {d}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+            {schedule?.frequency && schedule.frequency !== "off" ? (
+              <>
+                <input
+                  type="time"
+                  value={localTime}
+                  onChange={(e) => setLocalTime(e.target.value)}
+                  disabled={savingSchedule || running}
+                  className="h-8 rounded-md border border-border bg-background px-2 text-xs tabular-nums"
+                  aria-label="Horário do backup automático"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  disabled={savingSchedule || running}
+                  onClick={() => void applySchedule(schedule.frequency, localTime, localWeekday)}
+                >
+                  {savingSchedule ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+                  Salvar horário
+                </Button>
+              </>
+            ) : null}
           </div>
         </div>
       </Card>
