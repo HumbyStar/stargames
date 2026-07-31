@@ -1502,6 +1502,16 @@ export function ConfiguracoesSection() {
         </>
       )}
 
+      {view === "maintenance" && (
+        <>
+          <DetailHeader
+            title="Modo Manutenção"
+            description="Bloqueia o acesso de usuários comuns durante a migração do banco de dados."
+          />
+          <MaintenanceCard />
+        </>
+      )}
+
       {view === "danger" && (
         <>
           <DetailHeader
