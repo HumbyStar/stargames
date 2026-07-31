@@ -1,44 +1,40 @@
-## Objetivo
+## Situação atual (verificada no código)
 
-Deixar o card GitHub (Configurações) mais rápido e transparente: lista em cache controlável, erros de token explicados, branch padrão detectada sozinha e acesso rápido ao repositório.
+O que **já funciona**: quando você gera um backup, o sistema descobre no servidor se você está em Produção ou no Modo Teste e copia apenas as linhas daquele ambiente. As tabelas com marcação de ambiente (clientes, produtos, acordos MGMV, parcelas, notas, tarefas, ponto, configurações, etc.) já saem filtradas — não há soma dos dois ambientes dentro de um mesmo arquivo.
 
-## 1. Cache de repositórios com expiração
+O que **ainda não está separado**:
+1. O **histórico de backups** lista os dois ambientes misturados na mesma tabela.
+2. O **arquivo salvo** vai para a mesma pasta (`ano/mês/`) com o mesmo padrão de nome, sem indicar o ambiente.
+3. O **manifesto interno** do ZIP não registra de qual ambiente ele veio, então na hora de restaurar nada avisa se você está prestes a jogar dados de teste na produção.
+4. O backup do Modo Teste ainda espelha os arquivos originais (acervo HTML), que são compartilhados e somente leitura no teste — peso desnecessário.
 
-- Guardar a lista carregada em `localStorage` (`stargames.github.repos.cache`) junto com o timestamp e o login da conta conectada.
-- TTL de 30 minutos: ao abrir o card, se o cache for válido e da mesma conta, a lista aparece instantaneamente sem chamar o GitHub.
-- Rodapé indicando a origem: "Lista em cache — atualizada há X min" ou "Lista carregada agora do GitHub".
-- Dois botões: **Atualizar lista** (força busca nova e regrava o cache) e **Limpar cache** (apaga o armazenamento local, zera a lista e mostra o estado "não carregado").
-- Cache invalidado automaticamente quando a conta conectada muda de login.
+## O que será feito
 
-## 2. Validação de permissões e erros detalhados
+### 1. Histórico separado por ambiente
+- A lista de backups passa a mostrar apenas os backups do ambiente em que você está.
+- Um seletor no card permite ver "Produção" ou "Modo teste" quando quiser conferir os dois.
+- O contador e o botão "Gerar backup" continuam agindo somente sobre o ambiente atual.
 
-- Na resposta do GitHub, ler o cabeçalho `x-oauth-scopes` (tokens clássicos) e expor os escopos no status.
-- Mapear os erros por status com mensagens em português:
-  - **401** — token inválido ou expirado; instrução para gerar outro e salvá-lo novamente.
-  - **403** — sem permissão / rate limit / autorização SSO da organização pendente; se houver `x-ratelimit-remaining: 0`, informar o horário de liberação.
-  - **404** — repositório inexistente ou fora do alcance do token (já implementado; mantém a sugestão de nome parecido).
-- Aviso quando um token clássico não tem o escopo `repo`: alerta explicando que repositórios privados não aparecerão na lista.
-- Aviso de lista incompleta (mais de 5 páginas) com sugestão de usar a busca ou o campo manual.
-- Todos esses avisos ficam em um bloco de diagnóstico dentro do card, não só em toast.
+### 2. Arquivos separados no armazenamento
+- Caminho passa a ser `producao/ano/mês/...` e `sandbox/ano/mês/...`.
+- O nome do arquivo ganha o prefixo do ambiente (`stargames-producao-...zip` / `stargames-teste-...zip`), então nunca há dúvida ao baixar.
+- Backups antigos continuam funcionando (leitura pelo caminho já gravado no registro).
 
-## 3. Branch default automática
+### 3. Manifesto e proteção na restauração
+- O manifesto do ZIP passa a gravar o ambiente de origem.
+- Ao restaurar, se a origem do arquivo for diferente do ambiente atual, aparece um aviso claro exigindo confirmação explícita ("este arquivo veio do Modo Teste — confirmar aplicação em Produção?").
+- A regra atual continua valendo: o destino é sempre decidido no servidor pelo seu estado de sandbox, nunca pelo navegador.
 
-- Cada item da lista já traz `default_branch`; ao selecionar um repositório pelo select, preencher automaticamente o campo Branch com essa branch quando o usuário ainda não tiver digitado uma branch própria.
-- Para repositório digitado manualmente, buscar a branch padrão via status ao validar o repositório.
-- Placeholder passa a mostrar a branch detectada; um botão pequeno "usar padrão" restaura a branch detectada caso o usuário tenha editado.
+### 4. Backup do Modo Teste mais leve
+- No Modo Teste, o espelhamento dos arquivos originais é ignorado (o acervo é único e só de leitura lá), reduzindo drasticamente tamanho e tempo.
+- O manifesto registra que os arquivos não foram incluídos, para não parecer perda de dados.
 
-## 4. Link "Abrir no GitHub"
-
-- Ao lado do select, botão-ícone com link externo apontando para `https://github.com/{owner}/{repo}` (usando `htmlUrl` real quando o status já validou o repositório), abrindo em nova aba.
-- Desabilitado enquanto não houver repositório em formato `dono/repositório` válido.
+### 5. Verificação após implementar
+- Conferir por consulta ao banco a contagem de linhas por ambiente e comparar com o `row_counts` gravado no backup gerado, garantindo que nenhum registro do outro ambiente entrou.
 
 ## Detalhes técnicos
 
-- `src/lib/github.server.ts`: `githubFetch` passa a retornar também os headers relevantes (`x-oauth-scopes`, `x-ratelimit-*`) através de uma variante `githubFetchWithMeta`, sem alterar as chamadas existentes.
-- `src/lib/github.functions.ts`:
-  - `listGithubRepos` retorna `{ repos, complete, total, scopes, warnings }`.
-  - `getGithubStatus` inclui `scopes` e mensagens específicas para 401/403.
-  - Nenhuma mudança de schema no banco; a configuração continua em `app_settings` (`id = 'github'`).
-- `src/components/github-card.tsx`: estados novos para cache (`cachedAt`, origem da lista), diagnóstico e branch detectada; helpers de leitura/escrita no `localStorage` já existentes são estendidos.
-
-Nada muda no fluxo de publicação (backup, exports, changelog) nem no sync nativo do código-fonte.
+- `src/lib/backup.functions.ts`: `storagePathFor` e `formatFilename` recebem o ambiente; `manifest` ganha o campo `env`; `listBackups` aceita e filtra por `env`; `mirrorBucket` é pulado quando `backupEnv === "sandbox"`; `readManifest` expõe o `env` de origem.
+- `src/components/backups-panel.tsx`: seletor de ambiente na listagem e aviso de origem divergente no fluxo de restauração.
+- Tabelas globais (perfis, papéis, permissões, responsabilidades, logs de auditoria e de acesso) não possuem coluna de ambiente e continuam presentes nos dois backups — elas são únicas do sistema, não pertencem a um ambiente.
+- Sem alteração de schema: nada de migração necessária.
