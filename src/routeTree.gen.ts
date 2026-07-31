@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ManutencaoRouteImport } from './routes/manutencao'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated.index'
@@ -17,6 +18,11 @@ import { Route as AuthenticatedQaRouteImport } from './routes/_authenticated.qa'
 import { Route as AuthenticatedNikostartRouteImport } from './routes/_authenticated.nikostart'
 import { Route as ApiPublicHooksBackupRunRouteImport } from './routes/api/public/hooks/backup-run'
 
+const ManutencaoRoute = ManutencaoRouteImport.update({
+  id: '/manutencao',
+  path: '/manutencao',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -55,6 +61,7 @@ const ApiPublicHooksBackupRunRoute = ApiPublicHooksBackupRunRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
+  '/manutencao': typeof ManutencaoRoute
   '/nikostart': typeof AuthenticatedNikostartRoute
   '/qa': typeof AuthenticatedQaRoute
   '/sandbox': typeof AuthenticatedSandboxRoute
@@ -62,6 +69,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
+  '/manutencao': typeof ManutencaoRoute
   '/nikostart': typeof AuthenticatedNikostartRoute
   '/qa': typeof AuthenticatedQaRoute
   '/sandbox': typeof AuthenticatedSandboxRoute
@@ -72,6 +80,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/auth': typeof AuthRoute
+  '/manutencao': typeof ManutencaoRoute
   '/_authenticated/nikostart': typeof AuthenticatedNikostartRoute
   '/_authenticated/qa': typeof AuthenticatedQaRoute
   '/_authenticated/sandbox': typeof AuthenticatedSandboxRoute
@@ -83,6 +92,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/manutencao'
     | '/nikostart'
     | '/qa'
     | '/sandbox'
@@ -90,6 +100,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
+    | '/manutencao'
     | '/nikostart'
     | '/qa'
     | '/sandbox'
@@ -99,6 +110,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_authenticated'
     | '/auth'
+    | '/manutencao'
     | '/_authenticated/nikostart'
     | '/_authenticated/qa'
     | '/_authenticated/sandbox'
@@ -109,11 +121,19 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ManutencaoRoute: typeof ManutencaoRoute
   ApiPublicHooksBackupRunRoute: typeof ApiPublicHooksBackupRunRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/manutencao': {
+      id: '/manutencao'
+      path: '/manutencao'
+      fullPath: '/manutencao'
+      preLoaderRoute: typeof ManutencaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -187,6 +207,7 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   AuthRoute: AuthRoute,
+  ManutencaoRoute: ManutencaoRoute,
   ApiPublicHooksBackupRunRoute: ApiPublicHooksBackupRunRoute,
 }
 export const routeTree = rootRouteImport
