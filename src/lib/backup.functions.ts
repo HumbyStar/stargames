@@ -483,21 +483,27 @@ async function fetchRowsForBackup(
     env?: "producao" | "sandbox";
     onBatch?: (rowCount: number) => Promise<void>;
   } = {},
-): Promise<{ rowCount: number; jsonl: string; rows?: any[] }> {
-  const batchSize = opts.batchSize ?? 1000;
+): Promise<{ rowCount: number; jsonl: string; rows?: any[]; truncated?: boolean }> {
+  const limit = LOG_TABLE_LIMITS[table];
+  const batchSize = Math.min(opts.batchSize ?? 1000, limit?.maxRows ?? 1000);
   const rowsToKeep: any[] | undefined = opts.keepRows ? [] : undefined;
   const chunks: string[] = [];
   let from = 0;
   let rowCount = 0;
+  let truncated = false;
   // eslint-disable-next-line no-constant-condition
   while (true) {
     let query = admin.from(table).select("*");
     // O backup é sempre de UM ambiente (produção ou teste). Sem este filtro,
     // as tabelas com coluna `env` sairiam somadas (produção + sandbox).
     if (opts.env && ENV_SCOPED_TABLES.has(table)) query = query.eq("env", opts.env);
+    if (limit) {
+      const since = new Date(Date.now() - limit.days * 24 * 60 * 60 * 1000).toISOString();
+      query = query.gte(limit.column, since);
+    }
     // Paginação sem ordenação pode repetir/pular linhas em tabelas grandes.
     const { data, error } = await query
-      .order(orderKeyFor(table), { ascending: true })
+      .order(limit ? limit.column : orderKeyFor(table), { ascending: !limit })
       .range(from, from + batchSize - 1);
     if (error) throw new Error(`[${table}] ${error.message}`);
     if (!data || data.length === 0) break;
@@ -508,9 +514,13 @@ async function fetchRowsForBackup(
     rowCount += data.length;
     if (opts.onBatch) await opts.onBatch(rowCount);
     if (data.length < batchSize) break;
+    if (limit && rowCount >= limit.maxRows) {
+      truncated = true;
+      break;
+    }
     from += batchSize;
   }
-  return { rowCount, jsonl: chunks.join(""), rows: rowsToKeep };
+  return { rowCount, jsonl: chunks.join(""), rows: rowsToKeep, truncated };
 }
 
 async function cleanupStaleBackups(admin: any) {
