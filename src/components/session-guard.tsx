@@ -3,6 +3,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { claimSession, heartbeatSession } from "@/lib/session-guard.functions";
+import { useServerFn } from "@tanstack/react-start";
+import { getMaintenanceState } from "@/lib/maintenance.functions";
 
 export const SESSION_ID_KEY = "sg_active_session_id";
 
