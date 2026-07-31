@@ -81,8 +81,10 @@ import { GithubCard } from "@/components/github-card";
 import { RestoreBackupModal } from "@/components/restore-backup-modal";
 import { DbMigrationCard } from "@/components/db-migration-card";
 import { RealtimeUpdatesCard } from "@/components/realtime-updates-card";
+import { MaintenanceCard } from "@/components/maintenance-card";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { Wrench } from "lucide-react";
 
 type View =
   | "home"
@@ -100,6 +102,7 @@ type View =
   | "activity"
   | "github"
   | "migration"
+  | "maintenance"
   | "danger";
 
 function DiagBox({
@@ -816,6 +819,13 @@ export function ConfiguracoesSection() {
               onOpen={() => setView("migration")}
             />
             <SecondaryCard
+              icon={Wrench}
+              title="Modo Manutenção"
+              summary="Bloqueia usuários comuns enquanto o banco é migrado para a nova conta Supabase. Admins continuam com acesso total."
+              status="Somente admin"
+              onOpen={() => setView("maintenance")}
+            />
+            <SecondaryCard
               icon={Brain}
               title="Treinar I.A"
               summary="Onboarding guiado + análise do sistema para gerar automações Python que reduzem o uso de IA."
@@ -1489,6 +1499,16 @@ export function ConfiguracoesSection() {
             description="Pacotes prontos para clonar o sistema em outra conta ou provedor de nuvem."
           />
           <DbMigrationCard />
+        </>
+      )}
+
+      {view === "maintenance" && (
+        <>
+          <DetailHeader
+            title="Modo Manutenção"
+            description="Bloqueia o acesso de usuários comuns durante a migração do banco de dados."
+          />
+          <MaintenanceCard />
         </>
       )}
 
