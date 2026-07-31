@@ -451,11 +451,37 @@ function orderKeyFor(table: string): string {
 // sozinho passa de 80 MB). Backup completo delas estourava a memória do
 // Worker e o processo morria no meio da exportação. Guardamos apenas a
 // janela recente — os dados de negócio continuam íntegros.
-const LOG_TABLE_LIMITS: Record<string, { maxRows: number; days: number; column: string }> = {
-  audit_log: { maxRows: 3000, days: 30, column: "changed_at" },
-  notion_html_access_log: { maxRows: 3000, days: 30, column: "created_at" },
-  team_task_activity: { maxRows: 5000, days: 180, column: "created_at" },
+//
+// `columns` é uma lista de candidatas: cada tabela de log usa um nome
+// diferente para a data (audit_log usa changed_at, as demais created_at) e o
+// nome pode mudar em migrações futuras. O backup detecta em tempo de execução
+// qual existe e, se nenhuma existir, ainda assim exporta a tabela limitada
+// por quantidade — nunca falha o backup inteiro por causa de um log.
+const LOG_TABLE_LIMITS: Record<string, { maxRows: number; days: number; columns: string[] }> = {
+  audit_log: { maxRows: 3000, days: 30, columns: ["changed_at", "created_at"] },
+  notion_html_access_log: { maxRows: 3000, days: 30, columns: ["created_at"] },
+  team_task_activity: { maxRows: 5000, days: 180, columns: ["created_at"] },
 };
+
+const logColumnCache = new Map<string, string | null>();
+
+/** Descobre qual coluna de data existe na tabela de log (ou null). */
+async function resolveLogColumn(
+  admin: any,
+  table: string,
+  candidates: string[],
+): Promise<string | null> {
+  if (logColumnCache.has(table)) return logColumnCache.get(table) ?? null;
+  for (const column of candidates) {
+    const { error } = await admin.from(table).select(column).limit(1);
+    if (!error) {
+      logColumnCache.set(table, column);
+      return column;
+    }
+  }
+  logColumnCache.set(table, null);
+  return null;
+}
 
 async function fetchAllRows(
   admin: any,
@@ -490,8 +516,18 @@ async function fetchRowsForBackup(
     env?: "producao" | "sandbox";
     onBatch?: (rowCount: number) => Promise<void>;
   } = {},
-): Promise<{ rowCount: number; jsonl: string; rows?: any[]; truncated?: boolean }> {
+): Promise<{
+  rowCount: number;
+  jsonl: string;
+  rows?: any[];
+  truncated?: boolean;
+  windowSkipped?: boolean;
+}> {
   const limit = LOG_TABLE_LIMITS[table];
+  // Sem coluna de data válida, a janela por período é ignorada e a tabela sai
+  // limitada só por quantidade — o backup segue em frente.
+  const dateColumn = limit ? await resolveLogColumn(admin, table, limit.columns) : null;
+  const windowSkipped = Boolean(limit) && !dateColumn;
   const batchSize = Math.min(opts.batchSize ?? 1000, limit?.maxRows ?? 1000);
   const rowsToKeep: any[] | undefined = opts.keepRows ? [] : undefined;
   const chunks: string[] = [];
@@ -504,13 +540,13 @@ async function fetchRowsForBackup(
     // O backup é sempre de UM ambiente (produção ou teste). Sem este filtro,
     // as tabelas com coluna `env` sairiam somadas (produção + sandbox).
     if (opts.env && ENV_SCOPED_TABLES.has(table)) query = query.eq("env", opts.env);
-    if (limit) {
+    if (limit && dateColumn) {
       const since = new Date(Date.now() - limit.days * 24 * 60 * 60 * 1000).toISOString();
-      query = query.gte(limit.column, since);
+      query = query.gte(dateColumn, since);
     }
     // Paginação sem ordenação pode repetir/pular linhas em tabelas grandes.
     const { data, error } = await query
-      .order(limit ? limit.column : orderKeyFor(table), { ascending: !limit })
+      .order(dateColumn ?? orderKeyFor(table), { ascending: !dateColumn })
       .range(from, from + batchSize - 1);
     if (error) throw new Error(`[${table}] ${error.message}`);
     if (!data || data.length === 0) break;
@@ -527,7 +563,7 @@ async function fetchRowsForBackup(
     }
     from += batchSize;
   }
-  return { rowCount, jsonl: chunks.join(""), rows: rowsToKeep, truncated };
+  return { rowCount, jsonl: chunks.join(""), rows: rowsToKeep, truncated, windowSkipped };
 }
 
 async function cleanupStaleBackups(admin: any) {
@@ -739,10 +775,10 @@ async function runBackup(opts: {
       await persistBackupDebug(supabaseAdmin, backupId, debugLog, { row_counts: rowCounts });
       const keepRows = KEEP_FOR_SUMMARY.has(table);
       let lastBatchLogAt = 0;
-      const exported = await fetchRowsForBackup(supabaseAdmin, table, {
+      const fetchOptions = {
         keepRows,
         env: backupEnv,
-        onBatch: async (rows) => {
+        onBatch: async (rows: number) => {
           if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
           const nowMs = Date.now();
           if (nowMs - lastBatchLogAt < 2500) return;
@@ -753,11 +789,36 @@ async function runBackup(opts: {
           });
           await persistBackupDebug(supabaseAdmin, backupId, debugLog, { row_counts: rowCounts });
         },
-      });
+      };
+      let exported: Awaited<ReturnType<typeof fetchRowsForBackup>>;
+      try {
+        exported = await fetchRowsForBackup(supabaseAdmin, table, fetchOptions);
+      } catch (err) {
+        if (err instanceof BackupCancelledError) throw err;
+        // Tabelas de log/diagnóstico nunca podem derrubar o backup inteiro:
+        // o que importa são os dados de negócio.
+        if (!LOG_TABLE_LIMITS[table]) throw err;
+        const message = err instanceof Error ? err.message : String(err);
+        pushDebug(
+          "warn",
+          `database:${table}`,
+          `Não foi possível exportar o histórico ${table}; o backup segue sem essa tabela (${message})`,
+          { skipped: true },
+        );
+        exported = { rowCount: 0, jsonl: "" };
+      }
       rowCounts[table] = exported.rowCount;
       zip.file(`database/data/${table}.jsonl`, exported.jsonl);
       if (keepRows) {
         tableRows[table] = exported.rows ?? [];
+      }
+      if (exported.windowSkipped) {
+        pushDebug(
+          "warn",
+          `database:${table}`,
+          `Histórico ${table} exportado sem recorte por período (coluna de data não encontrada)`,
+          { windowSkipped: true },
+        );
       }
       pushDebug("info", `database:${table}`, `Tabela ${table} exportada`, {
         rows: exported.rowCount,
