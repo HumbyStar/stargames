@@ -819,6 +819,13 @@ export function ConfiguracoesSection() {
               onOpen={() => setView("migration")}
             />
             <SecondaryCard
+              icon={Wrench}
+              title="Modo Manutenção"
+              summary="Bloqueia usuários comuns enquanto o banco é migrado para a nova conta Supabase. Admins continuam com acesso total."
+              status="Somente admin"
+              onOpen={() => setView("maintenance")}
+            />
+            <SecondaryCard
               icon={Brain}
               title="Treinar I.A"
               summary="Onboarding guiado + análise do sistema para gerar automações Python que reduzem o uso de IA."
