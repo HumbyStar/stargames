@@ -770,7 +770,10 @@ export function BackupsPanel() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [rowsRes, schedRes] = await Promise.all([list(), getSchedule()]);
+      const [rowsRes, schedRes] = await Promise.all([
+        list({ data: { env: listEnv } }),
+        getSchedule(),
+      ]);
       setRows(rowsRes);
       setSchedule(schedRes);
       if (schedRes.frequency !== "off") {
@@ -783,7 +786,7 @@ export function BackupsPanel() {
     } finally {
       setLoading(false);
     }
-  }, [list, getSchedule]);
+  }, [list, getSchedule, listEnv]);
 
   useEffect(() => {
     void refresh();
