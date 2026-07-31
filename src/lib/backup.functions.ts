@@ -778,21 +778,21 @@ async function runBackup(opts: {
     // Storage: notion-html-originals
     let storageObjectCount = 0;
     let storageSkippedReason: string | null = null;
-    try {
-      if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
-      if (backupEnv === "sandbox") {
-        // No Modo Teste o acervo de arquivos é o mesmo da produção e só de
-        // leitura — espelhar de novo só inflaria o backup sem trazer dado novo.
-        storageSkippedReason = "sandbox";
-        pushDebug(
-          "info",
-          "storage:notion-html-originals",
-          "Arquivos originais não incluídos: no Modo Teste o acervo é compartilhado e somente leitura",
-          { skipped: true },
-        );
-        throw new StorageSkipped();
-      }
-      pushDebug("info", "storage:notion-html-originals", "Espelhando arquivos originais", {
+    if (backupEnv === "sandbox") {
+      // No Modo Teste o acervo de arquivos é o mesmo da produção e só de
+      // leitura — espelhar de novo só inflaria o backup sem trazer dado novo.
+      storageSkippedReason = "sandbox";
+      pushDebug(
+        "info",
+        "storage:notion-html-originals",
+        "Arquivos originais não incluídos: no Modo Teste o acervo é compartilhado e somente leitura",
+        { skipped: true },
+      );
+      await persistBackupDebug(supabaseAdmin, backupId, debugLog);
+    } else {
+      try {
+        if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
+        pushDebug("info", "storage:notion-html-originals", "Espelhando arquivos originais", {
         maxFiles: STORAGE_MIRROR_MAX_FILES,
         maxBytes: STORAGE_MIRROR_MAX_BYTES,
       });
@@ -812,14 +812,15 @@ async function runBackup(opts: {
       await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
         storage_object_count: storageObjectCount,
       });
-    } catch (err) {
-      if (err instanceof BackupCancelledError) throw err;
-      // Se o bucket não existir, seguimos com o resto do backup.
-      console.warn("[backup] mirror bucket failed:", err);
-      pushDebug("warn", "storage:notion-html-originals", "Falha ao espelhar arquivos originais; backup seguirá sem esse espelho", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-      await persistBackupDebug(supabaseAdmin, backupId, debugLog);
+      } catch (err) {
+        if (err instanceof BackupCancelledError) throw err;
+        // Se o bucket não existir, seguimos com o resto do backup.
+        console.warn("[backup] mirror bucket failed:", err);
+        pushDebug("warn", "storage:notion-html-originals", "Falha ao espelhar arquivos originais; backup seguirá sem esse espelho", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        await persistBackupDebug(supabaseAdmin, backupId, debugLog);
+      }
     }
 
     pushDebug("info", "summary", "Calculando resumo de negócio");
@@ -839,10 +840,12 @@ async function runBackup(opts: {
       schemaVersion: BACKUP_SCHEMA_VERSION,
       generatedAt: now.toISOString(),
       type: opts.type,
+      env: backupEnv,
       rowCounts,
       storageObjectCount,
+      storageSkippedReason,
       tables: BACKUP_TABLES,
-      buckets: ["notion-html-originals"],
+      buckets: storageSkippedReason ? [] : ["notion-html-originals"],
       businessSummary,
     };
     zip.file("manifest.json", JSON.stringify(manifest, null, 2));
