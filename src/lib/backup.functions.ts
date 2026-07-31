@@ -1460,6 +1460,11 @@ export interface BackupScheduleInfo {
   frequency: "off" | "daily" | "weekly";
   cron: string | null;
   jobId: number | null;
+  /** Hora/minuto em UTC extraídos do cron. */
+  hourUtc: number;
+  minuteUtc: number;
+  /** 0 = domingo (apenas para semanal). */
+  weekday: number;
 }
 
 export const getBackupSchedule = createServerFn({ method: "GET" })
@@ -1467,27 +1472,40 @@ export const getBackupSchedule = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<BackupScheduleInfo> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const off: BackupScheduleInfo = {
+      active: false,
+      frequency: "off",
+      cron: null,
+      jobId: null,
+      hourUtc: 3,
+      minuteUtc: 0,
+      weekday: 0,
+    };
     const { data, error } = await (supabaseAdmin as any).rpc("get_system_backup_schedule");
-    if (error) {
-      // função ainda não existe (primeira execução)
-      return { active: false, frequency: "off", cron: null, jobId: null };
-    }
+    if (error) return off; // função ainda não existe (primeira execução)
     const row = Array.isArray(data) ? data[0] : data;
-    if (!row) return { active: false, frequency: "off", cron: null, jobId: null };
+    if (!row) return off;
     const cron: string = row.schedule ?? "";
-    let frequency: BackupScheduleInfo["frequency"] = "off";
-    if (/^0 3 \* \* \*$/.test(cron)) frequency = "daily";
-    else if (/^0 3 \* \* 0$/.test(cron)) frequency = "weekly";
+    const parts = cron.trim().split(/\s+/);
+    if (parts.length !== 5) return off;
+    const [min, hour, , , dow] = parts;
+    const frequency: BackupScheduleInfo["frequency"] = dow === "*" ? "daily" : "weekly";
     return {
       active: Boolean(row.active),
       frequency,
       cron: cron || null,
       jobId: row.jobid ?? null,
+      hourUtc: Number.isFinite(Number(hour)) ? Number(hour) : 3,
+      minuteUtc: Number.isFinite(Number(min)) ? Number(min) : 0,
+      weekday: Number.isFinite(Number(dow)) ? Number(dow) : 0,
     };
   });
 
 const scheduleSchema = z.object({
   frequency: z.enum(["off", "daily", "weekly"]),
+  hourUtc: z.number().int().min(0).max(23).default(3),
+  minuteUtc: z.number().int().min(0).max(59).default(0),
+  weekday: z.number().int().min(0).max(6).default(0),
 });
 
 export const setBackupSchedule = createServerFn({ method: "POST" })
@@ -1499,6 +1517,9 @@ export const setBackupSchedule = createServerFn({ method: "POST" })
     const { error } = await (supabaseAdmin as any).rpc("set_system_backup_schedule", {
       _frequency: data.frequency,
       _job_name: JOB_NAME,
+      _hour: data.hourUtc,
+      _minute: data.minuteUtc,
+      _weekday: data.weekday,
     });
     if (error) throw new Error(error.message);
     return { ok: true };
