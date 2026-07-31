@@ -634,8 +634,8 @@ async function runBackup(opts: {
   // (cron), assume produção.
   const backupEnv: "producao" | "sandbox" = opts.env ?? "producao";
   const now = new Date();
-  const filename = formatFilename(now);
-  const storagePath = opts.existing?.storagePath ?? storagePathFor(now, filename);
+  const filename = formatFilename(now, backupEnv);
+  const storagePath = opts.existing?.storagePath ?? storagePathFor(now, filename, backupEnv);
   const startedAt = Date.now();
   const debugLog: BackupDebugEntry[] = [];
   let phase = "initializing";
@@ -1080,8 +1080,8 @@ export const createBackupNow = createServerFn({ method: "POST" })
       storagePath = existingRow.storage_path as string;
     } else {
       const now = new Date();
-      const filename = formatFilename(now);
-      storagePath = storagePathFor(now, filename);
+      const filename = formatFilename(now, backupEnv);
+      storagePath = storagePathFor(now, filename, backupEnv);
       const { data: rowIns, error: insErr } = await supabaseAdmin
         .from("system_backups")
         .insert({
