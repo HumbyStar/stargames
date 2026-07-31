@@ -1,44 +1,60 @@
-# Migrar Banco de Dados (Configurações)
+# Migrar para a sua própria conta Supabase
 
-Novo card em Configurações que gera um **pacote de migração** pronto para subir em outra conta/projeto de nuvem — para clonar o Star Games para sócios ou para sair do Lovable Cloud quando quiser.
+Objetivo: sair do banco gerenciado pelo Lovable Cloud e passar a rodar no **seu** projeto Supabase, sem perder dados e sem ninguém alterando dados durante a virada.
 
-## O que o usuário vê
+Ao aprovar, eu registro na memória do projeto a decisão da migração e o combinado abaixo, para retomar exatamente daqui quando você criar e conectar o projeto. Repetir isso para outra conta/organização Supabase no futuro é só gerar um novo pacote pelo card **Migrar banco de dados** e conectar a nova conta no Lovable.
 
-Card "Migrar banco de dados" (somente admin / admin master), com:
+## Como funciona a virada
 
-1. **Destino** — 5 opções, cada uma com ícone, descrição e o que gera:
-   - **Supabase / Postgres** — `schema.sql` (tabelas, enums, funções, RLS, GRANTs, triggers) + `data.sql` (INSERTs em lote) + `README-supabase.md` com o passo a passo.
-   - **Neon / Postgres puro** — mesmo SQL, sem as partes específicas do Supabase (auth, storage, `auth.uid()` substituído por comentário/parâmetro), para rodar em qualquer Postgres.
-   - **Firebase (Firestore)** — JSON de coleções no formato aceito pelo `firebase-import` / Admin SDK, com relacionamentos convertidos em subcoleções ou campos de referência.
-   - **AWS (RDS + DynamoDB)** — pasta `rds/` com o SQL Postgres e pasta `dynamodb/` com arquivos `BatchWriteItem` (25 itens por lote) + definição de tabelas/índices.
-   - **MongoDB Atlas** — arquivos `.json` por coleção prontos para `mongoimport`, mais um script `mongoimport.sh`.
+A troca é feita **conectando a sua conta Supabase** ao projeto (Connectors → Supabase). A partir daí o app aponta para o seu projeto e o banco atual fica só como cópia histórica. Nenhuma tela precisa ser reescrita: o app já usa o cliente Supabase padrão.
 
-2. **Conteúdo** — seletor: *Clone completo* (estrutura + dados + segurança) ou *Somente estrutura* (projeto novo em branco para o sócio).
+Não viajam automaticamente (tratamos passo a passo): contas de login, arquivos de storage e os agendamentos automáticos.
 
-3. **Ambiente** — sempre o ambiente ativo (produção ou modo teste), igual ao backup, exibido de forma clara no card e no nome do arquivo.
+## Etapa 1 — Modo Manutenção (bloqueio de não-admins)
 
-4. **Pré-validação** — antes de liberar o download, roda uma checagem e mostra um relatório:
-   - contagem de linhas por tabela e tamanho estimado do pacote;
-   - referências órfãs (ex.: produto sem cliente) que quebrariam a importação com chave estrangeira;
-   - campos incompatíveis com o destino escolhido (ex.: `uuid`, `numeric`, arrays e `jsonb` em Firestore/DynamoDB, limite de 400 KB por documento, nomes reservados);
-   - avisos sobre o que **não** é migrado (usuários do auth, arquivos de storage, agendamentos cron) com instruções de como recriar.
-   Resultado: **OK**, **Avisos** (segue com ressalvas) ou **Bloqueado** (mostra como corrigir).
+- Novo card em Configurações: **Modo Manutenção / Migração**, visível e acionável só por admin e admin master.
+- Ligado: quem não é admin/admin master cai numa página amigável ("Estamos migrando o sistema — voltamos em instantes"), com o mascote e o horário de início.
+- Bloqueio validado no servidor (papel conferido no banco) e reforçado por política de banco, para que nem uma aba já aberta ou chamada direta consiga gravar.
+- Sessões abertas recebem o aviso em tempo real, sem recarregar a página.
 
-5. **Download** — ZIP único com `manifest.json` (origem, ambiente, versão, data, contagens), a pasta do destino escolhido, `README.md` com passo a passo de importação e `CHECKLIST.md` pós-migração.
+## Etapa 2 — Pacote de migração fiel
 
-## Como funciona por baixo
+Reaproveita o card **Migrar banco de dados** já existente:
 
-- Novo `src/lib/db-migration.functions.ts` (server functions, autenticadas com verificação de papel admin) reaproveitando a leitura paginada por tabela que o backup já usa, com o mesmo filtro por `env`.
-- Novo `src/lib/db-migration-formats.ts` com um *adapter* por destino: recebe `{ tabela, linhas, schema }` e devolve os arquivos daquele formato. Adicionar um sexto destino no futuro é criar um adapter.
-- O `schema.sql` é gerado a partir do catálogo real do banco (tabelas, colunas, defaults, enums, funções, policies, grants, triggers), não escrito à mão — assim continua correto quando o schema mudar.
-- Geração em streaming/lotes e ZIP com o mesmo mecanismo do backup, com barra de progresso e log em tempo real, para não estourar memória (aprendizado do backup do `audit_log`).
-- Tabelas de log (`audit_log`, `notion_html_access_log`, `team_task_activity`) entram opcionalmente e com janela recente, já que não são dados de negócio.
-- Novo `src/components/db-migration-card.tsx` + modal de relatório de validação, montado na tela de Configurações ao lado dos cards de Backup e GitHub.
+- Gerar o pacote **Supabase / Postgres** de produção: `01-schema.sql`, `02-data.sql`, `03-security.sql` e o snapshot do schema.
+- Acrescentar ao pacote um **relatório de contagem por tabela** (conferência pós-importação).
+- Acrescentar o inventário/exportação dos buckets (`notion-html-originals`, `system-backups`) e a lista de usuários do login.
 
-## Correção incluída
+## Etapa 3 — Criar e preparar o seu projeto Supabase
 
-Erro atual no preview: uma consulta ordena `audit_log` por `created_at`, mas a coluna correta é `changed_at`. Será corrigido no mesmo trabalho.
+1. Você cria o projeto na sua conta (região São Paulo).
+2. Você conecta a conta no Lovable e seleciona esse projeto.
+3. Eu aplico o schema: tabelas, enums, funções, políticas de acesso, GRANTs e triggers idênticos.
+4. Eu importo os dados em lotes e confiro tabela a tabela contra o relatório.
+5. Recriamos os buckets e subimos os arquivos.
+6. Recriamos o agendamento de backup apontando para a nova URL.
 
-## Fora do escopo (explicado no README gerado)
+## Etapa 4 — Usuários e acesso
 
-Contas de usuário do auth e arquivos do storage não vão no pacote SQL — o README traz o procedimento recomendado para cada nuvem (convite de usuários / cópia de bucket).
+- Recriamos as contas mantendo o mesmo e-mail e o mesmo `id`, para preservar vínculos (tarefas, pontos, papéis); cada pessoa define a senha por e-mail de redefinição no primeiro acesso.
+- Papéis e permissões vêm junto nas tabelas, então os acessos continuam iguais.
+- Login com Google reativado no novo projeto, se estiver em uso.
+
+## Etapa 5 — Conferência e retorno
+
+- Checklist: contagem origem × destino, leitura de cada seção, teste de escrita, backup manual e restauração.
+- Só com o checklist verde eu desligo o Modo Manutenção.
+- O banco antigo permanece intacto; nada é apagado.
+
+## Detalhes técnicos
+
+- Novo `src/lib/maintenance.functions.ts` (server functions autenticadas) com a flag em `app_settings`, papel verificado via `has_role`.
+- Guarda em `src/routes/_authenticated.tsx` → nova rota `src/routes/manutencao.tsx` para não-admins.
+- Ajustes em `src/lib/db-migration.functions.ts` para incluir relatório de contagens e inventário de storage no ZIP.
+- Memória do projeto atualizada com a decisão de migração e o estado do processo.
+
+## O que preciso de você
+
+1. Criar o projeto na sua conta Supabase.
+2. Conectar a conta Supabase no Lovable e escolher o projeto.
+3. Confirmar quando eu puder ligar o Modo Manutenção.
