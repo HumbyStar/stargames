@@ -390,11 +390,29 @@ function pad(n: number, w = 2) {
   return String(n).padStart(w, "0");
 }
 
-function formatFilename(now = new Date(), env: "producao" | "sandbox" = "producao"): string {
+/** Data/hora no fuso de Brasília, para nomes de arquivo legíveis. */
+function brParts(date: Date) {
+  const br = new Date(date.getTime() - 3 * 60 * 60 * 1000);
+  return {
+    dia: pad(br.getUTCDate()),
+    mes: pad(br.getUTCMonth() + 1),
+    ano: String(br.getUTCFullYear()),
+    hora: pad(br.getUTCHours()),
+    min: pad(br.getUTCMinutes()),
+  };
+}
+
+/**
+ * Nome legível: `stargames-producao-31-07-2026-as-03h33.zip`
+ * (data e hora de Brasília em que o backup foi gerado).
+ */
+export function formatFilename(
+  now = new Date(),
+  env: "producao" | "sandbox" = "producao",
+): string {
   const label = env === "sandbox" ? "teste" : "producao";
-  return `stargames-${label}-${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(
-    now.getUTCDate(),
-  )}-${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}.zip`;
+  const { dia, mes, ano, hora, min } = brParts(now);
+  return `stargames-${label}-${dia}-${mes}-${ano}-as-${hora}h${min}.zip`;
 }
 
 // Cada ambiente grava em sua própria pasta: um backup de teste nunca fica
@@ -1508,16 +1526,25 @@ export const getBackupDownloadUrl = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await supabaseAdmin
       .from("system_backups")
-      .select("storage_path")
+      .select("storage_path, created_at, env")
       .eq("id", data.id)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row?.storage_path) throw new Error("Backup sem arquivo disponível.");
+    // Mesmo backups antigos (nome com números corridos) baixam com nome legível.
+    const envLabel: "producao" | "sandbox" =
+      (row as any).env === "sandbox" || row.storage_path.startsWith("sandbox/")
+        ? "sandbox"
+        : "producao";
+    const downloadName = formatFilename(
+      new Date((row as any).created_at ?? Date.now()),
+      envLabel,
+    );
     const { data: signed, error: signErr } = await supabaseAdmin.storage
       .from(BACKUP_BUCKET)
-      .createSignedUrl(row.storage_path, 60 * 10);
+      .createSignedUrl(row.storage_path, 60 * 10, { download: downloadName });
     if (signErr || !signed) throw new Error(signErr?.message ?? "sign failed");
-    return { url: signed.signedUrl };
+    return { url: signed.signedUrl, filename: downloadName };
   });
 
 export const deleteBackup = createServerFn({ method: "POST" })
