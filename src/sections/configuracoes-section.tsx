@@ -102,6 +102,7 @@ type View =
   | "activity"
   | "github"
   | "migration"
+  | "maintenance"
   | "danger";
 
 function DiagBox({
