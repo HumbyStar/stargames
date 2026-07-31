@@ -757,6 +757,14 @@ async function runBackup(opts: {
         completed: true,
         keptForSummary: keepRows,
       });
+      if (exported.truncated) {
+        pushDebug(
+          "warn",
+          `database:${table}`,
+          `Tabela de log ${table} limitada às ${exported.rowCount.toLocaleString("pt-BR")} entradas mais recentes para o backup não estourar memória`,
+          { truncated: true, rows: exported.rowCount },
+        );
+      }
       await persistBackupDebug(supabaseAdmin, backupId, debugLog, { row_counts: rowCounts });
     }
 
