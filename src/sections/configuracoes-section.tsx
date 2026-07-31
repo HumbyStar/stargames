@@ -81,8 +81,10 @@ import { GithubCard } from "@/components/github-card";
 import { RestoreBackupModal } from "@/components/restore-backup-modal";
 import { DbMigrationCard } from "@/components/db-migration-card";
 import { RealtimeUpdatesCard } from "@/components/realtime-updates-card";
+import { MaintenanceCard } from "@/components/maintenance-card";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { Wrench } from "lucide-react";
 
 type View =
   | "home"
