@@ -32,6 +32,7 @@ import {
 import { MonitorDown } from "lucide-react";
 import { Activity } from "lucide-react";
 import { Github } from "lucide-react";
+import { DatabaseZap } from "lucide-react";
 import { Card, PageHeader, Tag } from "@/components/ui-bits";
 import { AiTrainingModal } from "@/components/ai-training-modal";
 import { Button } from "@/components/ui/button";
@@ -78,6 +79,7 @@ import { SandboxAuditCard } from "@/components/sandbox-audit-card";
 import { LocalInstallCard } from "@/components/local-install-card";
 import { GithubCard } from "@/components/github-card";
 import { RestoreBackupModal } from "@/components/restore-backup-modal";
+import { DbMigrationCard } from "@/components/db-migration-card";
 import { RealtimeUpdatesCard } from "@/components/realtime-updates-card";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -97,6 +99,7 @@ type View =
   | "local"
   | "activity"
   | "github"
+  | "migration"
   | "danger";
 
 function DiagBox({
@@ -806,6 +809,13 @@ export function ConfiguracoesSection() {
               onOpen={() => setView("github")}
             />
             <SecondaryCard
+              icon={DatabaseZap}
+              title="Migrar banco de dados"
+              summary="Exporte estrutura e dados em pacotes prontos para Supabase, Neon, AWS, Firebase ou MongoDB — ideal para clonar o sistema para sócios."
+              status="Somente admin"
+              onOpen={() => setView("migration")}
+            />
+            <SecondaryCard
               icon={Brain}
               title="Treinar I.A"
               summary="Onboarding guiado + análise do sistema para gerar automações Python que reduzem o uso de IA."
@@ -1469,6 +1479,16 @@ export function ConfiguracoesSection() {
             description="Repositório central para backups, exports e histórico de alterações do sistema."
           />
           <GithubCard />
+        </>
+      )}
+
+      {view === "migration" && (
+        <>
+          <DetailHeader
+            title="Migrar banco de dados"
+            description="Pacotes prontos para clonar o sistema em outra conta ou provedor de nuvem."
+          />
+          <DbMigrationCard />
         </>
       )}
 
