@@ -1526,16 +1526,25 @@ export const getBackupDownloadUrl = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await supabaseAdmin
       .from("system_backups")
-      .select("storage_path")
+      .select("storage_path, created_at, env")
       .eq("id", data.id)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row?.storage_path) throw new Error("Backup sem arquivo disponível.");
+    // Mesmo backups antigos (nome com números corridos) baixam com nome legível.
+    const envLabel: "producao" | "sandbox" =
+      (row as any).env === "sandbox" || row.storage_path.startsWith("sandbox/")
+        ? "sandbox"
+        : "producao";
+    const downloadName = formatFilename(
+      new Date((row as any).created_at ?? Date.now()),
+      envLabel,
+    );
     const { data: signed, error: signErr } = await supabaseAdmin.storage
       .from(BACKUP_BUCKET)
-      .createSignedUrl(row.storage_path, 60 * 10);
+      .createSignedUrl(row.storage_path, 60 * 10, { download: downloadName });
     if (signErr || !signed) throw new Error(signErr?.message ?? "sign failed");
-    return { url: signed.signedUrl };
+    return { url: signed.signedUrl, filename: downloadName };
   });
 
 export const deleteBackup = createServerFn({ method: "POST" })
