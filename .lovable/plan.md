@@ -1,60 +1,43 @@
-# Migrar para a sua própria conta Supabase
+## Diagnóstico (verificado no banco e no código)
 
-Objetivo: sair do banco gerenciado pelo Lovable Cloud e passar a rodar no **seu** projeto Supabase, sem perder dados e sem ninguém alterando dados durante a virada.
+Conferi o banco e o fluxo de backup/restauração. O que encontrei:
 
-Ao aprovar, eu registro na memória do projeto a decisão da migração e o combinado abaixo, para retomar exatamente daqui quando você criar e conectar o projeto. Repetir isso para outra conta/organização Supabase no futuro é só gerar um novo pacote pelo card **Migrar banco de dados** e conectar a nova conta no Lovable.
+1. **A tela mostra só 12 tabelas**: o ZIP realmente traz as 21, mas o card "Estrutura do ZIP validada" corta a lista em 12 chips (`slice(0, 12)`) e esconde as tabelas com 0 registro.
+2. **Ponto da equipe some no Modo Teste**: produção tem 36 batidas, o teste ficou com **0**. Causa: o índice único `uniq_punch_user_day_kind (user_id, day, kind)` não considera o ambiente, então a restauração descarta toda batida que já existe na produção.
+3. **Logs são cortados no backup**: `audit_log` sai limitado a 3.000 linhas / 30 dias (o banco tem ~69 mil), `notion_html_access_log` e `team_task_activity` idem. E `audit_log` **nunca** é restaurado.
+4. **Tabelas fora do backup**: `sandbox_import_audit`, `system_backups`, `sandbox_state`, `active_sessions` não entram em nenhum backup — e nada avisa quando uma tabela nova é criada no banco e fica de fora.
+5. **Finanças "zeradas" no teste não é perda de dados**: conferi as contagens por ambiente e o teste está idêntico à produção (2.728 clientes, 23.428 produtos, 77 acordos, 508 parcelas, todos os vínculos preenchidos). O que está realmente vazio nos dois ambientes é `nf_invoices`, `saved_filters`, `team_task_comments`. Ou seja: o card de finanças precisa ser reconferido depois das correções acima — se ainda vier zerado, é leitura de tela, não backup.
+6. **Separação por ambiente já está correta**: o backup filtra `env` e a restauração escreve só no ambiente de destino. Isso será preservado integralmente.
 
-## Como funciona a virada
+## O que será feito
 
-A troca é feita **conectando a sua conta Supabase** ao projeto (Connectors → Supabase). A partir daí o app aponta para o seu projeto e o banco atual fica só como cópia histórica. Nenhuma tela precisa ser reescrita: o app já usa o cliente Supabase padrão.
+### 1. Cobertura total das tabelas
+- Lista de tabelas do backup passa a ser conferida contra a lista real do banco (via `export_db_schema_snapshot`): qualquer tabela nova entra automaticamente e aparece no log do backup.
+- Incluir `sandbox_import_audit`, `system_backups` e `sandbox_state` no pacote. `active_sessions` entra como dado histórico, mas fica marcada como **não restaurável** (sessões ativas não podem ser sobrescritas).
+- O manifesto passa a registrar a lista completa e o motivo de qualquer tabela pulada.
 
-Não viajam automaticamente (tratamos passo a passo): contas de login, arquivos de storage e os agendamentos automáticos.
+### 2. Fim do corte dos históricos
+- Remover o limite de 3.000 linhas / 30 dias dos logs. Exportação passa a ser paginada e gravada em blocos no ZIP (sem acumular tudo em memória), com um teto de segurança bem alto e aviso claro só se ele for atingido.
+- `audit_log` e `notion_html_access_log` entram na restauração (no ambiente de destino, sem tocar no outro).
 
-## Etapa 1 — Modo Manutenção (bloqueio de não-admins)
+### 3. Ponto da equipe no Modo Teste
+- Migração: substituir o índice único `(user_id, day, kind)` por `(user_id, day, kind, env)`.
+- Remover o filtro de colisão contra produção na restauração — deixa de ser necessário, e as 36 batidas passam a aparecer no teste.
 
-- Novo card em Configurações: **Modo Manutenção / Migração**, visível e acionável só por admin e admin master.
-- Ligado: quem não é admin/admin master cai numa página amigável ("Estamos migrando o sistema — voltamos em instantes"), com o mascote e o horário de início.
-- Bloqueio validado no servidor (papel conferido no banco) e reforçado por política de banco, para que nem uma aba já aberta ou chamada direta consiga gravar.
-- Sessões abertas recebem o aviso em tempo real, sem recarregar a página.
+### 4. Restauração cobrindo tudo
+- A restauração no teste deixa de seguir apenas a lista de clonagem: passa a percorrer todas as tabelas do ZIP que tenham coluna `env`, na ordem de dependência, mantendo o remapeamento de IDs.
+- Tabelas globais compartilhadas (perfis, papéis, permissões, responsabilidades) continuam intocadas — elas já são visíveis nos dois ambientes, então a equipe aparece sem risco de alterar acesso real.
 
-## Etapa 2 — Pacote de migração fiel
+### 5. Tela de análise mais honesta
+- Mostrar **todas** as tabelas do ZIP (sem corte em 12), com contagem explícita, e "0" em vez de esconder.
+- Separar visualmente "com dados" e "vazias no backup".
+- Após restaurar, a conferência já existente (esperado x gravado) passa a listar todas as tabelas processadas, inclusive as vazias.
 
-Reaproveita o card **Migrar banco de dados** já existente:
-
-- Gerar o pacote **Supabase / Postgres** de produção: `01-schema.sql`, `02-data.sql`, `03-security.sql` e o snapshot do schema.
-- Acrescentar ao pacote um **relatório de contagem por tabela** (conferência pós-importação).
-- Acrescentar o inventário/exportação dos buckets (`notion-html-originals`, `system-backups`) e a lista de usuários do login.
-
-## Etapa 3 — Criar e preparar o seu projeto Supabase
-
-1. Você cria o projeto na sua conta (região São Paulo).
-2. Você conecta a conta no Lovable e seleciona esse projeto.
-3. Eu aplico o schema: tabelas, enums, funções, políticas de acesso, GRANTs e triggers idênticos.
-4. Eu importo os dados em lotes e confiro tabela a tabela contra o relatório.
-5. Recriamos os buckets e subimos os arquivos.
-6. Recriamos o agendamento de backup apontando para a nova URL.
-
-## Etapa 4 — Usuários e acesso
-
-- Recriamos as contas mantendo o mesmo e-mail e o mesmo `id`, para preservar vínculos (tarefas, pontos, papéis); cada pessoa define a senha por e-mail de redefinição no primeiro acesso.
-- Papéis e permissões vêm junto nas tabelas, então os acessos continuam iguais.
-- Login com Google reativado no novo projeto, se estiver em uso.
-
-## Etapa 5 — Conferência e retorno
-
-- Checklist: contagem origem × destino, leitura de cada seção, teste de escrita, backup manual e restauração.
-- Só com o checklist verde eu desligo o Modo Manutenção.
-- O banco antigo permanece intacto; nada é apagado.
+### 6. Conferência final
+- Rodar um backup de produção e um do teste, comparar contagens tabela a tabela com o banco, e confirmar que nenhum backup mistura os dois ambientes.
 
 ## Detalhes técnicos
-
-- Novo `src/lib/maintenance.functions.ts` (server functions autenticadas) com a flag em `app_settings`, papel verificado via `has_role`.
-- Guarda em `src/routes/_authenticated.tsx` → nova rota `src/routes/manutencao.tsx` para não-admins.
-- Ajustes em `src/lib/db-migration.functions.ts` para incluir relatório de contagens e inventário de storage no ZIP.
-- Memória do projeto atualizada com a decisão de migração e o estado do processo.
-
-## O que preciso de você
-
-1. Criar o projeto na sua conta Supabase.
-2. Conectar a conta Supabase no Lovable e escolher o projeto.
-3. Confirmar quando eu puder ligar o Modo Manutenção.
+- `src/lib/backup.functions.ts`: `BACKUP_TABLES` dinâmico, remoção de `LOG_TABLE_LIMITS`, exportação em blocos, `RESTORABLE_TABLES` ampliado, `tablesToProcess` do sandbox baseado nas tabelas com `env`.
+- Migração: `uniq_punch_user_day_kind` → inclui `env`.
+- `src/lib/backup-restore-keys.ts`: chave de `team_punch_entries` passa a incluir `env`.
+- `src/components/restore-backup-modal.tsx`: remoção do `slice(0, 12)` e novo agrupamento das tabelas.
