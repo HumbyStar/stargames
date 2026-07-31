@@ -1139,6 +1139,7 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["app_env"]
       }
+      export_db_schema_snapshot: { Args: never; Returns: Json }
       get_system_backup_schedule: {
         Args: never
         Returns: {
