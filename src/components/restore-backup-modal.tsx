@@ -185,6 +185,8 @@ export function RestoreBackupModal({
   const [previewData, setPreviewData] = useState<RestorePreview | null>(null);
   const [selectedTables, setSelectedTables] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<"merge" | "replace">("merge");
+  // Confirmação extra quando o backup vem de um ambiente diferente do destino.
+  const [envMismatchAck, setEnvMismatchAck] = useState(false);
   const [includeStorage, setIncludeStorage] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -302,6 +304,7 @@ export function RestoreBackupModal({
       setPreviewData(res);
       setSelectedTables(new Set(res.availableTables));
       setStep("preview");
+      setEnvMismatchAck(false);
       toast.dismiss("preview-zip");
     } catch (err: any) {
       setErrorInfo({
