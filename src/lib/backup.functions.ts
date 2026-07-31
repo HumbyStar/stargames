@@ -452,7 +452,7 @@ function orderKeyFor(table: string): string {
 // Worker e o processo morria no meio da exportação. Guardamos apenas a
 // janela recente — os dados de negócio continuam íntegros.
 const LOG_TABLE_LIMITS: Record<string, { maxRows: number; days: number; column: string }> = {
-  audit_log: { maxRows: 3000, days: 30, column: "created_at" },
+  audit_log: { maxRows: 3000, days: 30, column: "changed_at" },
   notion_html_access_log: { maxRows: 3000, days: 30, column: "created_at" },
   team_task_activity: { maxRows: 5000, days: 180, column: "created_at" },
 };
