@@ -1323,9 +1323,28 @@ export function BackupsPanel() {
       </Card>
 
       <Card title="Histórico de backups">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Ambiente:</span>
+          <Select value={listEnv} onValueChange={(v) => setListEnv(v as "producao" | "sandbox")}>
+            <SelectTrigger className="h-8 w-44 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="producao">Produção</SelectItem>
+              <SelectItem value="sandbox">Modo teste</SelectItem>
+            </SelectContent>
+          </Select>
+          {listEnv !== currentEnv ? (
+            <span className="text-[11px] text-amber-600 dark:text-amber-400">
+              Visualizando outro ambiente — novos backups continuam sendo gerados em{" "}
+              {currentEnv === "sandbox" ? "Modo teste" : "Produção"}.
+            </span>
+          ) : null}
+        </div>
         {rows.length === 0 ? (
           <div className="rounded-md border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
-            Nenhum backup gerado ainda. Clique em <b>Gerar backup agora</b> para criar o primeiro.
+            Nenhum backup de {listEnv === "sandbox" ? "Modo teste" : "Produção"} ainda. Clique em{" "}
+            <b>Gerar backup agora</b> para criar o primeiro.
           </div>
         ) : (
           <div className="overflow-x-auto">
