@@ -773,6 +773,11 @@ export function BackupsPanel() {
       const [rowsRes, schedRes] = await Promise.all([list(), getSchedule()]);
       setRows(rowsRes);
       setSchedule(schedRes);
+      if (schedRes.frequency !== "off") {
+        const local = utcToLocal(schedRes.hourUtc, schedRes.minuteUtc, schedRes.weekday);
+        setLocalTime(local.time);
+        setLocalWeekday(local.weekday);
+      }
     } catch (err: any) {
       toast.error(err?.message ?? "Falha ao carregar backups.");
     } finally {
