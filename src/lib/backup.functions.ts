@@ -1652,6 +1652,10 @@ export interface RestorePreview {
   current: BusinessSummary;
   availableTables: string[];
   targetEnv: "producao" | "sandbox";
+  /** Ambiente de origem gravado no manifesto (null em backups antigos). */
+  sourceEnv: "producao" | "sandbox" | null;
+  /** true quando o arquivo veio de um ambiente diferente do destino. */
+  envMismatch: boolean;
   skippedTables: string[];
 }
 
