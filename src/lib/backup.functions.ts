@@ -440,6 +440,16 @@ function orderKeyFor(table: string): string {
   return "id";
 }
 
+// Tabelas de log crescem indefinidamente e são muito pesadas (o audit_log
+// sozinho passa de 80 MB). Backup completo delas estourava a memória do
+// Worker e o processo morria no meio da exportação. Guardamos apenas a
+// janela recente — os dados de negócio continuam íntegros.
+const LOG_TABLE_LIMITS: Record<string, { maxRows: number; days: number; column: string }> = {
+  audit_log: { maxRows: 3000, days: 30, column: "created_at" },
+  notion_html_access_log: { maxRows: 3000, days: 30, column: "created_at" },
+  team_task_activity: { maxRows: 5000, days: 180, column: "created_at" },
+};
+
 async function fetchAllRows(
   admin: any,
   table: BackupTable,
