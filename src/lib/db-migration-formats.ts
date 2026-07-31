@@ -282,9 +282,7 @@ export function buildPostgresSecuritySql(snapshot: SchemaSnapshot): string {
       const roles = p.roles?.length ? ` TO ${p.roles.join(", ")}` : "";
       const using = p.using ? ` USING (${p.using})` : "";
       const check = p.check ? ` WITH CHECK (${p.check})` : "";
-      out.push(
-        `CREATE POLICY ${quoteLiteral(p.name).slice(1, -1).length ? `"${p.name.replace(/"/g, '""')}"` : quoteIdent(p.name)} ON ${ident} FOR ${cmd}${roles}${using}${check};`,
-      );
+      out.push(`CREATE POLICY ${quoteIdent(p.name)} ON ${ident} FOR ${cmd}${roles}${using}${check};`);
     }
     out.push("");
   }
