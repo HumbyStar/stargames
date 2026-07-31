@@ -390,11 +390,29 @@ function pad(n: number, w = 2) {
   return String(n).padStart(w, "0");
 }
 
-function formatFilename(now = new Date(), env: "producao" | "sandbox" = "producao"): string {
+/** Data/hora no fuso de Brasília, para nomes de arquivo legíveis. */
+function brParts(date: Date) {
+  const br = new Date(date.getTime() - 3 * 60 * 60 * 1000);
+  return {
+    dia: pad(br.getUTCDate()),
+    mes: pad(br.getUTCMonth() + 1),
+    ano: String(br.getUTCFullYear()),
+    hora: pad(br.getUTCHours()),
+    min: pad(br.getUTCMinutes()),
+  };
+}
+
+/**
+ * Nome legível: `stargames-producao-31-07-2026-as-03h33.zip`
+ * (data e hora de Brasília em que o backup foi gerado).
+ */
+export function formatFilename(
+  now = new Date(),
+  env: "producao" | "sandbox" = "producao",
+): string {
   const label = env === "sandbox" ? "teste" : "producao";
-  return `stargames-${label}-${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(
-    now.getUTCDate(),
-  )}-${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}.zip`;
+  const { dia, mes, ano, hora, min } = brParts(now);
+  return `stargames-${label}-${dia}-${mes}-${ano}-as-${hora}h${min}.zip`;
 }
 
 // Cada ambiente grava em sua própria pasta: um backup de teste nunca fica
