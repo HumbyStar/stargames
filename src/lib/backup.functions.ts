@@ -777,8 +777,21 @@ async function runBackup(opts: {
 
     // Storage: notion-html-originals
     let storageObjectCount = 0;
+    let storageSkippedReason: string | null = null;
     try {
       if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
+      if (backupEnv === "sandbox") {
+        // No Modo Teste o acervo de arquivos é o mesmo da produção e só de
+        // leitura — espelhar de novo só inflaria o backup sem trazer dado novo.
+        storageSkippedReason = "sandbox";
+        pushDebug(
+          "info",
+          "storage:notion-html-originals",
+          "Arquivos originais não incluídos: no Modo Teste o acervo é compartilhado e somente leitura",
+          { skipped: true },
+        );
+        throw new StorageSkipped();
+      }
       pushDebug("info", "storage:notion-html-originals", "Espelhando arquivos originais", {
         maxFiles: STORAGE_MIRROR_MAX_FILES,
         maxBytes: STORAGE_MIRROR_MAX_BYTES,
