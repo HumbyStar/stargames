@@ -147,5 +147,45 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
     };
   }, [navigate]);
 
+  // ---- Modo Manutenção: bloqueia não-admins em tempo real ----
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkMaintenance() {
+      if (cancelled || maintenanceKickedRef.current) return;
+      // Só há motivo de checar se há sessão ativa.
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) return;
+      } catch {
+        return;
+      }
+      try {
+        const m = await getMaintenance();
+        if (!cancelled && m.active && !m.isAdmin && !maintenanceKickedRef.current) {
+          maintenanceKickedRef.current = true;
+          toast.info("Sistema em manutenção", {
+            description:
+              "O banco de dados está sendo migrado. Você será redirecionado para a página de manutenção.",
+            duration: 8000,
+          });
+          navigate({ to: "/manutencao", replace: true });
+        }
+      } catch {
+        // erro transient: tenta de novo no próximo ciclo
+      }
+    }
+
+    void checkMaintenance();
+    const id = window.setInterval(checkMaintenance, 30_000);
+    const onFocus = () => void checkMaintenance();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [getMaintenance, navigate]);
+
   return <>{children}</>;
 }
