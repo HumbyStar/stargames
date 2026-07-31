@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui-bits";
+import { useSandbox } from "@/lib/use-sandbox";
 import {
   Dialog,
   DialogContent,
