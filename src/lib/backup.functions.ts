@@ -775,10 +775,10 @@ async function runBackup(opts: {
       await persistBackupDebug(supabaseAdmin, backupId, debugLog, { row_counts: rowCounts });
       const keepRows = KEEP_FOR_SUMMARY.has(table);
       let lastBatchLogAt = 0;
-      const exported = await fetchRowsForBackup(supabaseAdmin, table, {
+      const fetchOptions = {
         keepRows,
         env: backupEnv,
-        onBatch: async (rows) => {
+        onBatch: async (rows: number) => {
           if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
           const nowMs = Date.now();
           if (nowMs - lastBatchLogAt < 2500) return;
@@ -789,11 +789,36 @@ async function runBackup(opts: {
           });
           await persistBackupDebug(supabaseAdmin, backupId, debugLog, { row_counts: rowCounts });
         },
-      });
+      };
+      let exported: Awaited<ReturnType<typeof fetchRowsForBackup>>;
+      try {
+        exported = await fetchRowsForBackup(supabaseAdmin, table, fetchOptions);
+      } catch (err) {
+        if (err instanceof BackupCancelledError) throw err;
+        // Tabelas de log/diagnóstico nunca podem derrubar o backup inteiro:
+        // o que importa são os dados de negócio.
+        if (!LOG_TABLE_LIMITS[table]) throw err;
+        const message = err instanceof Error ? err.message : String(err);
+        pushDebug(
+          "warn",
+          `database:${table}`,
+          `Não foi possível exportar o histórico ${table}; o backup segue sem essa tabela (${message})`,
+          { skipped: true },
+        );
+        exported = { rowCount: 0, jsonl: "" };
+      }
       rowCounts[table] = exported.rowCount;
       zip.file(`database/data/${table}.jsonl`, exported.jsonl);
       if (keepRows) {
         tableRows[table] = exported.rows ?? [];
+      }
+      if (exported.windowSkipped) {
+        pushDebug(
+          "warn",
+          `database:${table}`,
+          `Histórico ${table} exportado sem recorte por período (coluna de data não encontrada)`,
+          { windowSkipped: true },
+        );
       }
       pushDebug("info", `database:${table}`, `Tabela ${table} exportada`, {
         rows: exported.rowCount,
