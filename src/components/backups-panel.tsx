@@ -1067,25 +1067,42 @@ export function BackupsPanel() {
     }
   };
 
-  const handleScheduleChange = async (freq: "off" | "daily" | "weekly") => {
+  const applySchedule = async (
+    freq: "off" | "daily" | "weekly",
+    time = localTime,
+    weekday = localWeekday,
+  ) => {
     setSavingSchedule(true);
     try {
-      await putSchedule({ data: { frequency: freq } });
+      const utc = localToUtc(time, weekday);
+      await putSchedule({
+        data: {
+          frequency: freq,
+          hourUtc: utc.hour,
+          minuteUtc: utc.minute,
+          weekday: utc.weekday,
+        },
+      });
       toast.success(
         freq === "off"
           ? "Agendamento automático desativado."
           : freq === "daily"
-            ? "Backup diário agendado (03:00 UTC)."
-            : "Backup semanal agendado (domingos 03:00 UTC).",
+            ? `Backup diário agendado para ${time} (seu horário).`
+            : `Backup semanal agendado: ${WEEKDAYS[weekday]} às ${time} (seu horário).`,
       );
       const s = await getSchedule();
       setSchedule(s);
+      const local = utcToLocal(s.hourUtc, s.minuteUtc, s.weekday);
+      setLocalTime(local.time);
+      setLocalWeekday(local.weekday);
     } catch (err: any) {
       toast.error(err?.message ?? "Falha ao alterar agenda.");
     } finally {
       setSavingSchedule(false);
     }
   };
+
+  const handleScheduleChange = (freq: "off" | "daily" | "weekly") => void applySchedule(freq);
 
   return (
     <div className="space-y-4">
