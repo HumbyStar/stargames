@@ -547,19 +547,40 @@ export function RestoreBackupModal({
                       {precheck.generatedAt
                         ? new Date(precheck.generatedAt).toLocaleString("pt-BR")
                         : "data desconhecida"}{" "}
-                      · {precheck.tables.length} tabela(s)
+                      · {precheck.tables.length} tabela(s) ·{" "}
+                      {precheck.tables.filter((t) => t.rows > 0).length} com dados
                     </div>
                     <div className="mt-1 flex flex-wrap gap-1">
-                      {precheck.tables.slice(0, 12).map((t) => (
-                        <span
-                          key={t.table}
-                          className="rounded-full border border-border bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground"
-                        >
-                          {t.table}
-                          {t.rows > 0 ? ` · ${fmt(t.rows)}` : ""}
-                        </span>
-                      ))}
+                      {precheck.tables
+                        .filter((t) => t.rows > 0)
+                        .map((t) => (
+                          <span
+                            key={t.table}
+                            className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-700 dark:text-emerald-300"
+                          >
+                            {t.table} · {fmt(t.rows)}
+                          </span>
+                        ))}
                     </div>
+                    {precheck.tables.some((t) => t.rows === 0) && (
+                      <>
+                        <div className="mt-2 text-muted-foreground">
+                          Vazias neste backup (sem registros no ambiente exportado):
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {precheck.tables
+                            .filter((t) => t.rows === 0)
+                            .map((t) => (
+                              <span
+                                key={t.table}
+                                className="rounded-full border border-border bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground"
+                              >
+                                {t.table} · 0
+                              </span>
+                            ))}
+                        </div>
+                      </>
+                    )}
                     {precheck.warnings.map((w) => (
                       <div key={w} className="mt-1 text-amber-600 dark:text-amber-400">
                         Atenção: {w}
