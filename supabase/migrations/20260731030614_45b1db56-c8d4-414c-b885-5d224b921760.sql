@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.set_system_backup_schedule(text, text);

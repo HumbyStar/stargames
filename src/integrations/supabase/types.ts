@@ -1162,21 +1162,16 @@ export type Database = {
         }
         Returns: boolean
       }
-      set_system_backup_schedule:
-        | {
-            Args: { _frequency: string; _job_name: string }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              _frequency: string
-              _hour?: number
-              _job_name: string
-              _minute?: number
-              _weekday?: number
-            }
-            Returns: undefined
-          }
+      set_system_backup_schedule: {
+        Args: {
+          _frequency: string
+          _hour?: number
+          _job_name: string
+          _minute?: number
+          _weekday?: number
+        }
+        Returns: undefined
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
     }
