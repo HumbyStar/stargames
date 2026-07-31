@@ -440,6 +440,16 @@ function orderKeyFor(table: string): string {
   return "id";
 }
 
+// Tabelas de log crescem indefinidamente e são muito pesadas (o audit_log
+// sozinho passa de 80 MB). Backup completo delas estourava a memória do
+// Worker e o processo morria no meio da exportação. Guardamos apenas a
+// janela recente — os dados de negócio continuam íntegros.
+const LOG_TABLE_LIMITS: Record<string, { maxRows: number; days: number; column: string }> = {
+  audit_log: { maxRows: 3000, days: 30, column: "created_at" },
+  notion_html_access_log: { maxRows: 3000, days: 30, column: "created_at" },
+  team_task_activity: { maxRows: 5000, days: 180, column: "created_at" },
+};
+
 async function fetchAllRows(
   admin: any,
   table: BackupTable,
@@ -473,21 +483,27 @@ async function fetchRowsForBackup(
     env?: "producao" | "sandbox";
     onBatch?: (rowCount: number) => Promise<void>;
   } = {},
-): Promise<{ rowCount: number; jsonl: string; rows?: any[] }> {
-  const batchSize = opts.batchSize ?? 1000;
+): Promise<{ rowCount: number; jsonl: string; rows?: any[]; truncated?: boolean }> {
+  const limit = LOG_TABLE_LIMITS[table];
+  const batchSize = Math.min(opts.batchSize ?? 1000, limit?.maxRows ?? 1000);
   const rowsToKeep: any[] | undefined = opts.keepRows ? [] : undefined;
   const chunks: string[] = [];
   let from = 0;
   let rowCount = 0;
+  let truncated = false;
   // eslint-disable-next-line no-constant-condition
   while (true) {
     let query = admin.from(table).select("*");
     // O backup é sempre de UM ambiente (produção ou teste). Sem este filtro,
     // as tabelas com coluna `env` sairiam somadas (produção + sandbox).
     if (opts.env && ENV_SCOPED_TABLES.has(table)) query = query.eq("env", opts.env);
+    if (limit) {
+      const since = new Date(Date.now() - limit.days * 24 * 60 * 60 * 1000).toISOString();
+      query = query.gte(limit.column, since);
+    }
     // Paginação sem ordenação pode repetir/pular linhas em tabelas grandes.
     const { data, error } = await query
-      .order(orderKeyFor(table), { ascending: true })
+      .order(limit ? limit.column : orderKeyFor(table), { ascending: !limit })
       .range(from, from + batchSize - 1);
     if (error) throw new Error(`[${table}] ${error.message}`);
     if (!data || data.length === 0) break;
@@ -498,9 +514,13 @@ async function fetchRowsForBackup(
     rowCount += data.length;
     if (opts.onBatch) await opts.onBatch(rowCount);
     if (data.length < batchSize) break;
+    if (limit && rowCount >= limit.maxRows) {
+      truncated = true;
+      break;
+    }
     from += batchSize;
   }
-  return { rowCount, jsonl: chunks.join(""), rows: rowsToKeep };
+  return { rowCount, jsonl: chunks.join(""), rows: rowsToKeep, truncated };
 }
 
 async function cleanupStaleBackups(admin: any) {
@@ -737,6 +757,14 @@ async function runBackup(opts: {
         completed: true,
         keptForSummary: keepRows,
       });
+      if (exported.truncated) {
+        pushDebug(
+          "warn",
+          `database:${table}`,
+          `Tabela de log ${table} limitada às ${exported.rowCount.toLocaleString("pt-BR")} entradas mais recentes para o backup não estourar memória`,
+          { truncated: true, rows: exported.rowCount },
+        );
+      }
       await persistBackupDebug(supabaseAdmin, backupId, debugLog, { row_counts: rowCounts });
     }
 
@@ -1432,6 +1460,11 @@ export interface BackupScheduleInfo {
   frequency: "off" | "daily" | "weekly";
   cron: string | null;
   jobId: number | null;
+  /** Hora/minuto em UTC extraídos do cron. */
+  hourUtc: number;
+  minuteUtc: number;
+  /** 0 = domingo (apenas para semanal). */
+  weekday: number;
 }
 
 export const getBackupSchedule = createServerFn({ method: "GET" })
@@ -1439,27 +1472,40 @@ export const getBackupSchedule = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<BackupScheduleInfo> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const off: BackupScheduleInfo = {
+      active: false,
+      frequency: "off",
+      cron: null,
+      jobId: null,
+      hourUtc: 3,
+      minuteUtc: 0,
+      weekday: 0,
+    };
     const { data, error } = await (supabaseAdmin as any).rpc("get_system_backup_schedule");
-    if (error) {
-      // função ainda não existe (primeira execução)
-      return { active: false, frequency: "off", cron: null, jobId: null };
-    }
+    if (error) return off; // função ainda não existe (primeira execução)
     const row = Array.isArray(data) ? data[0] : data;
-    if (!row) return { active: false, frequency: "off", cron: null, jobId: null };
+    if (!row) return off;
     const cron: string = row.schedule ?? "";
-    let frequency: BackupScheduleInfo["frequency"] = "off";
-    if (/^0 3 \* \* \*$/.test(cron)) frequency = "daily";
-    else if (/^0 3 \* \* 0$/.test(cron)) frequency = "weekly";
+    const parts = cron.trim().split(/\s+/);
+    if (parts.length !== 5) return off;
+    const [min, hour, , , dow] = parts;
+    const frequency: BackupScheduleInfo["frequency"] = dow === "*" ? "daily" : "weekly";
     return {
       active: Boolean(row.active),
       frequency,
       cron: cron || null,
       jobId: row.jobid ?? null,
+      hourUtc: Number.isFinite(Number(hour)) ? Number(hour) : 3,
+      minuteUtc: Number.isFinite(Number(min)) ? Number(min) : 0,
+      weekday: Number.isFinite(Number(dow)) ? Number(dow) : 0,
     };
   });
 
 const scheduleSchema = z.object({
   frequency: z.enum(["off", "daily", "weekly"]),
+  hourUtc: z.number().int().min(0).max(23).default(3),
+  minuteUtc: z.number().int().min(0).max(59).default(0),
+  weekday: z.number().int().min(0).max(6).default(0),
 });
 
 export const setBackupSchedule = createServerFn({ method: "POST" })
@@ -1471,6 +1517,9 @@ export const setBackupSchedule = createServerFn({ method: "POST" })
     const { error } = await (supabaseAdmin as any).rpc("set_system_backup_schedule", {
       _frequency: data.frequency,
       _job_name: JOB_NAME,
+      _hour: data.hourUtc,
+      _minute: data.minuteUtc,
+      _weekday: data.weekday,
     });
     if (error) throw new Error(error.message);
     return { ok: true };

@@ -690,6 +690,35 @@ function BackupFailureModal({
   );
 }
 
+const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** Converte um horário local (HH:MM + dia da semana) para UTC. */
+function localToUtc(time: string, weekday: number) {
+  const [h, m] = time.split(":").map((v) => Number(v) || 0);
+  const ref = new Date();
+  // Ajusta a data para o dia da semana escolhido, mantendo o horário local.
+  ref.setDate(ref.getDate() + ((weekday - ref.getDay() + 7) % 7));
+  ref.setHours(h, m, 0, 0);
+  return {
+    hour: ref.getUTCHours(),
+    minute: ref.getUTCMinutes(),
+    weekday: ref.getUTCDay(),
+  };
+}
+
+/** Converte o horário UTC do cron de volta para o fuso do usuário. */
+function utcToLocal(hourUtc: number, minuteUtc: number, weekdayUtc: number) {
+  const ref = new Date();
+  ref.setUTCHours(hourUtc, minuteUtc, 0, 0);
+  ref.setUTCDate(ref.getUTCDate() + ((weekdayUtc - ref.getUTCDay() + 7) % 7));
+  return {
+    time: `${pad2(ref.getHours())}:${pad2(ref.getMinutes())}`,
+    weekday: ref.getDay(),
+  };
+}
+
 export function BackupsPanel() {
   const list = useServerFn(listBackups);
   const create = useServerFn(createBackupNow);
@@ -710,6 +739,9 @@ export function BackupsPanel() {
   const [elapsed, setElapsed] = useState(0);
   const [activeBackupId, setActiveBackupId] = useState<string | null>(null);
   const [savingSchedule, setSavingSchedule] = useState(false);
+  // Horário exibido/editado em horário local do usuário.
+  const [localTime, setLocalTime] = useState("03:00");
+  const [localWeekday, setLocalWeekday] = useState(0);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryData, setSummaryData] = useState<{
     filename?: string;
@@ -741,6 +773,11 @@ export function BackupsPanel() {
       const [rowsRes, schedRes] = await Promise.all([list(), getSchedule()]);
       setRows(rowsRes);
       setSchedule(schedRes);
+      if (schedRes.frequency !== "off") {
+        const local = utcToLocal(schedRes.hourUtc, schedRes.minuteUtc, schedRes.weekday);
+        setLocalTime(local.time);
+        setLocalWeekday(local.weekday);
+      }
     } catch (err: any) {
       toast.error(err?.message ?? "Falha ao carregar backups.");
     } finally {
@@ -1064,25 +1101,42 @@ export function BackupsPanel() {
     }
   };
 
-  const handleScheduleChange = async (freq: "off" | "daily" | "weekly") => {
+  const applySchedule = async (
+    freq: "off" | "daily" | "weekly",
+    time = localTime,
+    weekday = localWeekday,
+  ) => {
     setSavingSchedule(true);
     try {
-      await putSchedule({ data: { frequency: freq } });
+      const utc = localToUtc(time, weekday);
+      await putSchedule({
+        data: {
+          frequency: freq,
+          hourUtc: utc.hour,
+          minuteUtc: utc.minute,
+          weekday: utc.weekday,
+        },
+      });
       toast.success(
         freq === "off"
           ? "Agendamento automático desativado."
           : freq === "daily"
-            ? "Backup diário agendado (03:00 UTC)."
-            : "Backup semanal agendado (domingos 03:00 UTC).",
+            ? `Backup diário agendado para ${time} (seu horário).`
+            : `Backup semanal agendado: ${WEEKDAYS[weekday]} às ${time} (seu horário).`,
       );
       const s = await getSchedule();
       setSchedule(s);
+      const local = utcToLocal(s.hourUtc, s.minuteUtc, s.weekday);
+      setLocalTime(local.time);
+      setLocalWeekday(local.weekday);
     } catch (err: any) {
       toast.error(err?.message ?? "Falha ao alterar agenda.");
     } finally {
       setSavingSchedule(false);
     }
   };
+
+  const handleScheduleChange = (freq: "off" | "daily" | "weekly") => void applySchedule(freq);
 
   return (
     <div className="space-y-4">
@@ -1174,7 +1228,7 @@ export function BackupsPanel() {
             </div>
             <div className="text-xs text-muted-foreground">
               {schedule?.frequency && schedule.frequency !== "off"
-                ? "Executa às 03:00 UTC"
+                ? `Executa ${schedule.frequency === "weekly" ? `${WEEKDAYS[localWeekday]} ` : ""}às ${localTime} (seu horário)`
                 : "Ative para rodar automaticamente"}
             </div>
           </div>
@@ -1197,7 +1251,7 @@ export function BackupsPanel() {
             <Undo2 className="mr-2 size-4" />
             Restaurar backup
           </Button>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground">Agendamento:</span>
             <Select
               value={schedule?.frequency ?? "off"}
@@ -1209,10 +1263,53 @@ export function BackupsPanel() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="off">Desligado</SelectItem>
-                <SelectItem value="daily">Diário (03:00 UTC)</SelectItem>
-                <SelectItem value="weekly">Semanal (dom, 03:00 UTC)</SelectItem>
+                <SelectItem value="daily">Diário</SelectItem>
+                <SelectItem value="weekly">Semanal</SelectItem>
               </SelectContent>
             </Select>
+            {schedule?.frequency === "weekly" ? (
+              <Select
+                value={String(localWeekday)}
+                onValueChange={(v) => {
+                  setLocalWeekday(Number(v));
+                  void applySchedule("weekly", localTime, Number(v));
+                }}
+                disabled={savingSchedule || running}
+              >
+                <SelectTrigger className="h-8 w-32 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {WEEKDAYS.map((d, i) => (
+                    <SelectItem key={d} value={String(i)}>
+                      {d}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+            {schedule?.frequency && schedule.frequency !== "off" ? (
+              <>
+                <input
+                  type="time"
+                  value={localTime}
+                  onChange={(e) => setLocalTime(e.target.value)}
+                  disabled={savingSchedule || running}
+                  className="h-8 rounded-md border border-border bg-background px-2 text-xs tabular-nums"
+                  aria-label="Horário do backup automático"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  disabled={savingSchedule || running}
+                  onClick={() => void applySchedule(schedule.frequency, localTime, localWeekday)}
+                >
+                  {savingSchedule ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+                  Salvar horário
+                </Button>
+              </>
+            ) : null}
           </div>
         </div>
       </Card>
