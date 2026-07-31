@@ -720,6 +720,8 @@ function utcToLocal(hourUtc: number, minuteUtc: number, weekdayUtc: number) {
 }
 
 export function BackupsPanel() {
+  const { state: sandboxState } = useSandbox();
+  const currentEnv: "producao" | "sandbox" = sandboxState.active ? "sandbox" : "producao";
   const list = useServerFn(listBackups);
   const create = useServerFn(createBackupNow);
   const execute = useServerFn(executeBackupNow);
@@ -732,6 +734,8 @@ export function BackupsPanel() {
   const putSchedule = useServerFn(setBackupSchedule);
 
   const [rows, setRows] = useState<BackupRow[]>([]);
+  // Histórico é sempre de um ambiente por vez; começa no ambiente atual.
+  const [listEnv, setListEnv] = useState<"producao" | "sandbox">(currentEnv);
   const [schedule, setSchedule] = useState<BackupScheduleInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
