@@ -1,40 +1,44 @@
-## Situação atual (verificada no código)
+# Migrar Banco de Dados (Configurações)
 
-O que **já funciona**: quando você gera um backup, o sistema descobre no servidor se você está em Produção ou no Modo Teste e copia apenas as linhas daquele ambiente. As tabelas com marcação de ambiente (clientes, produtos, acordos MGMV, parcelas, notas, tarefas, ponto, configurações, etc.) já saem filtradas — não há soma dos dois ambientes dentro de um mesmo arquivo.
+Novo card em Configurações que gera um **pacote de migração** pronto para subir em outra conta/projeto de nuvem — para clonar o Star Games para sócios ou para sair do Lovable Cloud quando quiser.
 
-O que **ainda não está separado**:
-1. O **histórico de backups** lista os dois ambientes misturados na mesma tabela.
-2. O **arquivo salvo** vai para a mesma pasta (`ano/mês/`) com o mesmo padrão de nome, sem indicar o ambiente.
-3. O **manifesto interno** do ZIP não registra de qual ambiente ele veio, então na hora de restaurar nada avisa se você está prestes a jogar dados de teste na produção.
-4. O backup do Modo Teste ainda espelha os arquivos originais (acervo HTML), que são compartilhados e somente leitura no teste — peso desnecessário.
+## O que o usuário vê
 
-## O que será feito
+Card "Migrar banco de dados" (somente admin / admin master), com:
 
-### 1. Histórico separado por ambiente
-- A lista de backups passa a mostrar apenas os backups do ambiente em que você está.
-- Um seletor no card permite ver "Produção" ou "Modo teste" quando quiser conferir os dois.
-- O contador e o botão "Gerar backup" continuam agindo somente sobre o ambiente atual.
+1. **Destino** — 5 opções, cada uma com ícone, descrição e o que gera:
+   - **Supabase / Postgres** — `schema.sql` (tabelas, enums, funções, RLS, GRANTs, triggers) + `data.sql` (INSERTs em lote) + `README-supabase.md` com o passo a passo.
+   - **Neon / Postgres puro** — mesmo SQL, sem as partes específicas do Supabase (auth, storage, `auth.uid()` substituído por comentário/parâmetro), para rodar em qualquer Postgres.
+   - **Firebase (Firestore)** — JSON de coleções no formato aceito pelo `firebase-import` / Admin SDK, com relacionamentos convertidos em subcoleções ou campos de referência.
+   - **AWS (RDS + DynamoDB)** — pasta `rds/` com o SQL Postgres e pasta `dynamodb/` com arquivos `BatchWriteItem` (25 itens por lote) + definição de tabelas/índices.
+   - **MongoDB Atlas** — arquivos `.json` por coleção prontos para `mongoimport`, mais um script `mongoimport.sh`.
 
-### 2. Arquivos separados no armazenamento
-- Caminho passa a ser `producao/ano/mês/...` e `sandbox/ano/mês/...`.
-- O nome do arquivo ganha o prefixo do ambiente (`stargames-producao-...zip` / `stargames-teste-...zip`), então nunca há dúvida ao baixar.
-- Backups antigos continuam funcionando (leitura pelo caminho já gravado no registro).
+2. **Conteúdo** — seletor: *Clone completo* (estrutura + dados + segurança) ou *Somente estrutura* (projeto novo em branco para o sócio).
 
-### 3. Manifesto e proteção na restauração
-- O manifesto do ZIP passa a gravar o ambiente de origem.
-- Ao restaurar, se a origem do arquivo for diferente do ambiente atual, aparece um aviso claro exigindo confirmação explícita ("este arquivo veio do Modo Teste — confirmar aplicação em Produção?").
-- A regra atual continua valendo: o destino é sempre decidido no servidor pelo seu estado de sandbox, nunca pelo navegador.
+3. **Ambiente** — sempre o ambiente ativo (produção ou modo teste), igual ao backup, exibido de forma clara no card e no nome do arquivo.
 
-### 4. Backup do Modo Teste mais leve
-- No Modo Teste, o espelhamento dos arquivos originais é ignorado (o acervo é único e só de leitura lá), reduzindo drasticamente tamanho e tempo.
-- O manifesto registra que os arquivos não foram incluídos, para não parecer perda de dados.
+4. **Pré-validação** — antes de liberar o download, roda uma checagem e mostra um relatório:
+   - contagem de linhas por tabela e tamanho estimado do pacote;
+   - referências órfãs (ex.: produto sem cliente) que quebrariam a importação com chave estrangeira;
+   - campos incompatíveis com o destino escolhido (ex.: `uuid`, `numeric`, arrays e `jsonb` em Firestore/DynamoDB, limite de 400 KB por documento, nomes reservados);
+   - avisos sobre o que **não** é migrado (usuários do auth, arquivos de storage, agendamentos cron) com instruções de como recriar.
+   Resultado: **OK**, **Avisos** (segue com ressalvas) ou **Bloqueado** (mostra como corrigir).
 
-### 5. Verificação após implementar
-- Conferir por consulta ao banco a contagem de linhas por ambiente e comparar com o `row_counts` gravado no backup gerado, garantindo que nenhum registro do outro ambiente entrou.
+5. **Download** — ZIP único com `manifest.json` (origem, ambiente, versão, data, contagens), a pasta do destino escolhido, `README.md` com passo a passo de importação e `CHECKLIST.md` pós-migração.
 
-## Detalhes técnicos
+## Como funciona por baixo
 
-- `src/lib/backup.functions.ts`: `storagePathFor` e `formatFilename` recebem o ambiente; `manifest` ganha o campo `env`; `listBackups` aceita e filtra por `env`; `mirrorBucket` é pulado quando `backupEnv === "sandbox"`; `readManifest` expõe o `env` de origem.
-- `src/components/backups-panel.tsx`: seletor de ambiente na listagem e aviso de origem divergente no fluxo de restauração.
-- Tabelas globais (perfis, papéis, permissões, responsabilidades, logs de auditoria e de acesso) não possuem coluna de ambiente e continuam presentes nos dois backups — elas são únicas do sistema, não pertencem a um ambiente.
-- Sem alteração de schema: nada de migração necessária.
+- Novo `src/lib/db-migration.functions.ts` (server functions, autenticadas com verificação de papel admin) reaproveitando a leitura paginada por tabela que o backup já usa, com o mesmo filtro por `env`.
+- Novo `src/lib/db-migration-formats.ts` com um *adapter* por destino: recebe `{ tabela, linhas, schema }` e devolve os arquivos daquele formato. Adicionar um sexto destino no futuro é criar um adapter.
+- O `schema.sql` é gerado a partir do catálogo real do banco (tabelas, colunas, defaults, enums, funções, policies, grants, triggers), não escrito à mão — assim continua correto quando o schema mudar.
+- Geração em streaming/lotes e ZIP com o mesmo mecanismo do backup, com barra de progresso e log em tempo real, para não estourar memória (aprendizado do backup do `audit_log`).
+- Tabelas de log (`audit_log`, `notion_html_access_log`, `team_task_activity`) entram opcionalmente e com janela recente, já que não são dados de negócio.
+- Novo `src/components/db-migration-card.tsx` + modal de relatório de validação, montado na tela de Configurações ao lado dos cards de Backup e GitHub.
+
+## Correção incluída
+
+Erro atual no preview: uma consulta ordena `audit_log` por `created_at`, mas a coluna correta é `changed_at`. Será corrigido no mesmo trabalho.
+
+## Fora do escopo (explicado no README gerado)
+
+Contas de usuário do auth e arquivos do storage não vão no pacote SQL — o README traz o procedimento recomendado para cada nuvem (convite de usuários / cópia de bucket).
