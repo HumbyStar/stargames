@@ -710,6 +710,9 @@ export function BackupsPanel() {
   const [elapsed, setElapsed] = useState(0);
   const [activeBackupId, setActiveBackupId] = useState<string | null>(null);
   const [savingSchedule, setSavingSchedule] = useState(false);
+  // Horário exibido/editado em horário local do usuário.
+  const [localTime, setLocalTime] = useState("03:00");
+  const [localWeekday, setLocalWeekday] = useState(0);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryData, setSummaryData] = useState<{
     filename?: string;
