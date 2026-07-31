@@ -99,6 +99,10 @@ const BACKUP_TABLES = [
   "team_punch_entries",
   "notion_html_access_log",
   "audit_log",
+  "sandbox_import_audit",
+  "system_backups",
+  "sandbox_state",
+  "active_sessions",
 ] as const;
 
 type BackupTable = (typeof BACKUP_TABLES)[number];
