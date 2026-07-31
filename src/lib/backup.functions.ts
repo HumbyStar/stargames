@@ -934,6 +934,10 @@ async function runBackup(opts: {
       storageObjectCount,
       storageSkippedReason,
       tables: BACKUP_TABLES,
+      // Tudo é exportado; estas voltam apenas como histórico consultável,
+      // porque restaurá-las sobrescreveria estado vivo do sistema.
+      historyOnlyTables: [...HISTORY_ONLY_TABLES],
+      productionOnlyTables: [...PRODUCTION_ONLY_TABLES],
       buckets: storageSkippedReason ? [] : ["notion-html-originals"],
       businessSummary,
     };
