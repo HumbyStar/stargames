@@ -1805,6 +1805,7 @@ async function loadBackupZip(
 async function readManifest(zip: any): Promise<{
   schemaVersion: number;
   generatedAt: string | null;
+  sourceEnv: "producao" | "sandbox" | null;
   rowCounts: Record<string, number>;
   storageObjectCount: number;
   businessSummary: BusinessSummary | null;
@@ -1820,6 +1821,10 @@ async function readManifest(zip: any): Promise<{
   return {
     schemaVersion: version,
     generatedAt: parsed.generatedAt ?? null,
+    sourceEnv:
+      parsed.env === "sandbox" || parsed.env === "producao"
+        ? (parsed.env as "producao" | "sandbox")
+        : null,
     rowCounts: parsed.rowCounts ?? {},
     storageObjectCount: Number(parsed.storageObjectCount ?? 0),
     businessSummary: parsed.businessSummary ?? null,
