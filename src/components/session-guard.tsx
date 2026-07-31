@@ -48,6 +48,8 @@ function generateSessionId() {
 export function SessionGuard({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const evictedRef = useRef(false);
+  const getMaintenance = useServerFn(getMaintenanceState);
+  const maintenanceKickedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
