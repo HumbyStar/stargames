@@ -20,11 +20,8 @@ export const Route = createFileRoute("/_authenticated")({
         throw redirect({ to: "/manutencao" });
       }
     } catch (err) {
-      // Redirecionamentos (redirect para /manutencao) lançam — devemos propagar.
-      const isRedirect =
-        err instanceof Error &&
-        (err.message.includes("redirect") || (err as any)?.status === 300);
-      if (isRedirect) throw err;
+      // Propaga redirects (incluindo o nosso para /manutencao).
+      if (isRedirect(err)) throw err;
       // erro transient: segue o fluxo normal, guard revalida depois.
     }
 
