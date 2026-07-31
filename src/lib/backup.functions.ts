@@ -2573,33 +2573,6 @@ export const validateBackupRestore = createServerFn({ method: "POST" })
         });
       }
     }
-    if ((backupRows["team_punch_entries"] ?? []).length > 0) {
-      const { data: productionPunches, error: punchReadError } = await (supabaseAdmin as any)
-        .from("team_punch_entries")
-        .select("user_id,day,kind")
-        .eq("env", "producao");
-      if (punchReadError) {
-        issues.push({
-          level: "error",
-          message: `team_punch_entries: não foi possível verificar colisões com a produção (${punchReadError.message}).`,
-        });
-      } else {
-        const productionKeys = new Set(
-          (productionPunches ?? []).map((row: Record<string, unknown>) =>
-            restoreRowKey("team_punch_entries", row),
-          ),
-        );
-        const collisions = (backupRows["team_punch_entries"] ?? []).filter((row) =>
-          productionKeys.has(restoreRowKey("team_punch_entries", row)),
-        ).length;
-        if (collisions > 0) {
-          issues.push({
-            level: "warn",
-            message: `team_punch_entries: ${collisions} batida(s) já existem na produção pela mesma combinação usuário + dia + tipo e serão ignoradas no sandbox para preservar o isolamento.`,
-          });
-        }
-      }
-    }
     if (selected.length === 0) {
       issues.push({ level: "error", message: "Nenhuma tabela restaurável foi encontrada no backup." });
     }
