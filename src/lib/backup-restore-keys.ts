@@ -1,7 +1,7 @@
 export const RESTORE_KEY_COLUMNS: Record<string, string[]> = {
   app_settings: ["id", "env"],
   ai_training_profile: ["user_id", "env"],
-  team_punch_entries: ["user_id", "day", "kind"],
+  team_punch_entries: ["user_id", "day", "kind", "env"],
 };
 
 export function restoreRowKey(table: string, row: Record<string, unknown>): string | null {

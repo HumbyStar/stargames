@@ -99,6 +99,10 @@ const BACKUP_TABLES = [
   "team_punch_entries",
   "notion_html_access_log",
   "audit_log",
+  "sandbox_import_audit",
+  "system_backups",
+  "sandbox_state",
+  "active_sessions",
 ] as const;
 
 type BackupTable = (typeof BACKUP_TABLES)[number];
@@ -462,23 +466,25 @@ de senha.
 /** Coluna estável usada para ordenar a paginação de cada tabela. */
 function orderKeyFor(table: string): string {
   if (table === "ai_training_profile") return "user_id";
+  if (table === "active_sessions" || table === "sandbox_state") return "user_id";
   return "id";
 }
 
-// Tabelas de log crescem indefinidamente e são muito pesadas (o audit_log
-// sozinho passa de 80 MB). Backup completo delas estourava a memória do
-// Worker e o processo morria no meio da exportação. Guardamos apenas a
-// janela recente — os dados de negócio continuam íntegros.
+// Tabelas de log crescem indefinidamente. O backup agora exporta o histórico
+// COMPLETO delas: a gravação é feita em blocos (nada é acumulado inteiro em
+// memória) e só existe um teto de segurança bem alto para o caso de uma tabela
+// crescer fora de qualquer expectativa — se ele for atingido, o backup avisa.
 //
 // `columns` é uma lista de candidatas: cada tabela de log usa um nome
 // diferente para a data (audit_log usa changed_at, as demais created_at) e o
 // nome pode mudar em migrações futuras. O backup detecta em tempo de execução
-// qual existe e, se nenhuma existir, ainda assim exporta a tabela limitada
-// por quantidade — nunca falha o backup inteiro por causa de um log.
-const LOG_TABLE_LIMITS: Record<string, { maxRows: number; days: number; columns: string[] }> = {
-  audit_log: { maxRows: 3000, days: 30, columns: ["changed_at", "created_at"] },
-  notion_html_access_log: { maxRows: 3000, days: 30, columns: ["created_at"] },
-  team_task_activity: { maxRows: 5000, days: 180, columns: ["created_at"] },
+// qual existe apenas para ordenar a paginação de forma estável.
+const LOG_SAFETY_MAX_ROWS = 1_000_000;
+
+const LOG_TABLE_LIMITS: Record<string, { maxRows: number; days: number | null; columns: string[] }> = {
+  audit_log: { maxRows: LOG_SAFETY_MAX_ROWS, days: null, columns: ["changed_at", "created_at"] },
+  notion_html_access_log: { maxRows: LOG_SAFETY_MAX_ROWS, days: null, columns: ["created_at"] },
+  team_task_activity: { maxRows: LOG_SAFETY_MAX_ROWS, days: null, columns: ["created_at"] },
 };
 
 const logColumnCache = new Map<string, string | null>();
@@ -545,7 +551,8 @@ async function fetchRowsForBackup(
   // Sem coluna de data válida, a janela por período é ignorada e a tabela sai
   // limitada só por quantidade — o backup segue em frente.
   const dateColumn = limit ? await resolveLogColumn(admin, table, limit.columns) : null;
-  const windowSkipped = Boolean(limit) && !dateColumn;
+  // Sem janela por período não há nada a "pular": o histórico sai completo.
+  const windowSkipped = Boolean(limit?.days) && !dateColumn;
   const batchSize = Math.min(opts.batchSize ?? 1000, limit?.maxRows ?? 1000);
   const rowsToKeep: any[] | undefined = opts.keepRows ? [] : undefined;
   const chunks: string[] = [];
@@ -558,13 +565,16 @@ async function fetchRowsForBackup(
     // O backup é sempre de UM ambiente (produção ou teste). Sem este filtro,
     // as tabelas com coluna `env` sairiam somadas (produção + sandbox).
     if (opts.env && ENV_SCOPED_TABLES.has(table)) query = query.eq("env", opts.env);
-    if (limit && dateColumn) {
+    if (limit && limit.days && dateColumn) {
       const since = new Date(Date.now() - limit.days * 24 * 60 * 60 * 1000).toISOString();
       query = query.gte(dateColumn, since);
     }
     // Paginação sem ordenação pode repetir/pular linhas em tabelas grandes.
+    const useDateOrder = Boolean(limit?.days && dateColumn);
     const { data, error } = await query
-      .order(dateColumn ?? orderKeyFor(table), { ascending: !dateColumn })
+      .order(useDateOrder ? (dateColumn as string) : orderKeyFor(table), {
+        ascending: !useDateOrder,
+      })
       .range(from, from + batchSize - 1);
     if (error) throw new Error(`[${table}] ${error.message}`);
     if (!data || data.length === 0) break;
@@ -924,6 +934,10 @@ async function runBackup(opts: {
       storageObjectCount,
       storageSkippedReason,
       tables: BACKUP_TABLES,
+      // Tudo é exportado; estas voltam apenas como histórico consultável,
+      // porque restaurá-las sobrescreveria estado vivo do sistema.
+      historyOnlyTables: [...HISTORY_ONLY_TABLES],
+      productionOnlyTables: [...PRODUCTION_ONLY_TABLES],
       buckets: storageSkippedReason ? [] : ["notion-html-originals"],
       businessSummary,
     };
@@ -1681,9 +1695,21 @@ export const getCurrentBusinessSummary = createServerFn({ method: "GET" })
 // Tabelas restauráveis. Mantém a mesma ordem de dependência do backup.
 // `user_roles` e `profiles` do próprio usuário logado ficam protegidos contra
 // lockout — filtrados no handler.
-const RESTORABLE_TABLES = BACKUP_TABLES.filter(
-  (t) => t !== "audit_log" && t !== "import_progress",
-);
+// Tabelas exportadas apenas como histórico — restaurá-las sobrescreveria estado
+// vivo do sistema (sessões, modo teste, catálogo de backups) e nunca é feito.
+const HISTORY_ONLY_TABLES = new Set<string>([
+  "import_progress",
+  "active_sessions",
+  "sandbox_state",
+  "system_backups",
+  "sandbox_import_audit",
+]);
+
+const RESTORABLE_TABLES = BACKUP_TABLES.filter((t) => !HISTORY_ONLY_TABLES.has(t));
+
+// Trilhas de log globais (sem coluna `env`): restauradas só na produção, para
+// que um teste jamais reescreva o histórico real de auditoria.
+const PRODUCTION_ONLY_TABLES = new Set<string>(["audit_log", "notion_html_access_log"]);
 
 // Tabelas que possuem a coluna `env` (produção x sandbox).
 const ENV_SCOPED_TABLES = new Set<string>(SANDBOX_TABLES);
@@ -2050,8 +2076,18 @@ export const restoreBackup = createServerFn({ method: "POST" })
         ? // No sandbox seguimos a ordem de dependência da clonagem para que as
           // chaves estrangeiras já estejam remapeadas quando forem usadas, e
           // nunca tocamos tabelas globais (perfis, papéis, permissões).
-          (CLONE_ORDER.map((t) => t.name) as string[]).filter(
-            (t) => RESTORABLE_TABLES.includes(t as any) && !GLOBAL_TABLES.has(t),
+          [
+            ...(CLONE_ORDER.map((t) => t.name) as string[]),
+            // Qualquer tabela com `env` que ainda não esteja na ordem de
+            // clonagem entra no fim, para que nada fique de fora do teste.
+            ...(RESTORABLE_TABLES as unknown as string[]).filter(
+              (t) => ENV_SCOPED_TABLES.has(t) && !CLONE_ORDER.some((c) => c.name === t),
+            ),
+          ].filter(
+            (t) =>
+              RESTORABLE_TABLES.includes(t as any) &&
+              !GLOBAL_TABLES.has(t) &&
+              !PRODUCTION_ONLY_TABLES.has(t),
           )
         : (RESTORABLE_TABLES as unknown as string[])
     ).filter((t) => requested.has(t));
@@ -2135,25 +2171,9 @@ export const restoreBackup = createServerFn({ method: "POST" })
       const deduped = dedupeRestoreRows(table, payload);
       payload = deduped.rows;
 
-      // `team_punch_entries` tem uma chave de negócio histórica sem `env`.
-      // Nunca disputa essa chave com a produção: no sandbox, ignora somente as
-      // batidas já existentes e mantém intacta a linha real.
-      let businessKeySkipped = deduped.removed;
-      if (targetEnv === "sandbox" && table === "team_punch_entries" && payload.length > 0) {
-        const { data: productionPunches, error: punchReadError } = await (supabaseAdmin as any)
-          .from("team_punch_entries")
-          .select("user_id,day,kind")
-          .eq("env", "producao");
-        if (punchReadError) {
-          throw new Error(`[restore] team_punch_entries: não foi possível conferir colisões: ${punchReadError.message}`);
-        }
-        const productionKeys = new Set(
-          (productionPunches ?? []).map((row: Record<string, unknown>) => restoreRowKey(table, row)),
-        );
-        const beforeCollisionFilter = payload.length;
-        payload = payload.filter((row) => !productionKeys.has(restoreRowKey(table, row)));
-        businessKeySkipped += beforeCollisionFilter - payload.length;
-      }
+      // A chave única do ponto agora inclui `env`, então produção e teste têm
+      // batidas independentes — nenhum filtro de colisão é necessário.
+      const businessKeySkipped = deduped.removed;
 
       // Trava final: nada é gravado se alguma linha não estiver carimbada com
       // o ambiente de destino (ou, no sandbox, se algum id não foi regerado).
@@ -2555,33 +2575,6 @@ export const validateBackupRestore = createServerFn({ method: "POST" })
           level: "warn",
           message: `${table}: o manifesto indica ${manifest.rowCounts[table]} registro(s), mas o arquivo veio vazio.`,
         });
-      }
-    }
-    if ((backupRows["team_punch_entries"] ?? []).length > 0) {
-      const { data: productionPunches, error: punchReadError } = await (supabaseAdmin as any)
-        .from("team_punch_entries")
-        .select("user_id,day,kind")
-        .eq("env", "producao");
-      if (punchReadError) {
-        issues.push({
-          level: "error",
-          message: `team_punch_entries: não foi possível verificar colisões com a produção (${punchReadError.message}).`,
-        });
-      } else {
-        const productionKeys = new Set(
-          (productionPunches ?? []).map((row: Record<string, unknown>) =>
-            restoreRowKey("team_punch_entries", row),
-          ),
-        );
-        const collisions = (backupRows["team_punch_entries"] ?? []).filter((row) =>
-          productionKeys.has(restoreRowKey("team_punch_entries", row)),
-        ).length;
-        if (collisions > 0) {
-          issues.push({
-            level: "warn",
-            message: `team_punch_entries: ${collisions} batida(s) já existem na produção pela mesma combinação usuário + dia + tipo e serão ignoradas no sandbox para preservar o isolamento.`,
-          });
-        }
       }
     }
     if (selected.length === 0) {

@@ -20,12 +20,15 @@ describe("backup restore keys", () => {
     );
   });
 
-  it("detecta batidas iguais mesmo que tenham ids e ambientes diferentes", () => {
+  it("trata batidas de produção e do modo teste como registros independentes", () => {
     const production = { id: "p", user_id: "u1", day: "2026-06-29", kind: "in", env: "producao" };
     const sandbox = { id: "s", user_id: "u1", day: "2026-06-29", kind: "in", env: "sandbox" };
 
-    expect(restoreRowKey("team_punch_entries", production)).toBe(
+    expect(restoreRowKey("team_punch_entries", production)).not.toBe(
       restoreRowKey("team_punch_entries", sandbox),
     );
+    expect(
+      dedupeRestoreRows("team_punch_entries", [production, sandbox]).removed,
+    ).toBe(0);
   });
 });
