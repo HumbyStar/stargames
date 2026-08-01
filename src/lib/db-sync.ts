@@ -918,6 +918,8 @@ export interface ImportDiagnostics {
   importProgressRows: number;
   /** Última versão de reset registrada localmente. */
   resetVersion: string;
+  /** Ambiente consultado (produção x modo teste). */
+  env: AppEnv;
 }
 
 // ============= Audit log =============
