@@ -425,6 +425,88 @@ export function RealtimeUpdatesCard() {
               </PopoverContent>
             </Popover>
           </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={period} onValueChange={setPeriod}>
+              <SelectTrigger className="h-8 w-[140px] text-xs">
+                <SelectValue placeholder="Período" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todo o período</SelectItem>
+                <SelectItem value="today">Hoje</SelectItem>
+                <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                <SelectItem value="30d">Últimos 30 dias</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={operation} onValueChange={setOperation}>
+              <SelectTrigger className="h-8 w-[130px] text-xs">
+                <SelectValue placeholder="Operação" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toda operação</SelectItem>
+                <SelectItem value="INSERT">Criação</SelectItem>
+                <SelectItem value="UPDATE">Edição</SelectItem>
+                <SelectItem value="DELETE">Exclusão</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={severity} onValueChange={setSeverity}>
+              <SelectTrigger className="h-8 w-[140px] text-xs">
+                <SelectValue placeholder="Gravidade" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Qualquer gravidade</SelectItem>
+                {(Object.keys(SEVERITY_LABELS) as ActivitySeverity[]).map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {SEVERITY_LABELS[s]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={tableFilter} onValueChange={setTableFilter}>
+              <SelectTrigger className="h-8 w-[160px] text-xs">
+                <SelectValue placeholder="Tipo de registro" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os registros</SelectItem>
+                {tables.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="flex items-center gap-2">
+              <Switch id="group-batches" checked={groupBatches} onCheckedChange={setGroupBatches} />
+              <Label htmlFor="group-batches" className="text-xs">
+                Agrupar em lote
+              </Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch id="group-day" checked={groupByDay} onCheckedChange={setGroupByDay} />
+              <Label htmlFor="group-day" className="text-xs">
+                Separar por dia
+              </Label>
+            </div>
+
+            <span className="text-xs text-muted-foreground">
+              {filtered.length} evento(s)
+            </span>
+            {filtersActive && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                onClick={clearFilters}
+              >
+                <RefreshCw className="size-3" />
+                Limpar filtros
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Feed */}
@@ -435,18 +517,40 @@ export function RealtimeUpdatesCard() {
                 <div key={i} className="h-10 animate-pulse rounded-md bg-foreground/5" />
               ))}
             </div>
-          ) : filtered.length === 0 ? (
+          ) : groups.length === 0 ? (
             <p className="p-6 text-center text-sm text-muted-foreground">
               Nenhuma atividade registrada ainda. Assim que alguém editar algo, aparece aqui.
             </p>
           ) : (
-            filtered.map((e) => {
+            groups.map((g, gi) => {
+              const prev = gi > 0 ? groups[gi - 1] : null;
+              const separator =
+                groupByDay && (!prev || dayLabel(prev.at) !== dayLabel(g.at)) ? (
+                  <p
+                    key={`day-${g.id}`}
+                    className="bg-foreground/[0.03] px-3 py-1 text-[11px] uppercase tracking-wide text-muted-foreground"
+                  >
+                    {dayLabel(g.at)}
+                  </p>
+                ) : null;
+
+              if (g.kind === "batch") {
+                return (
+                  <div key={g.id}>
+                    {separator}
+                    <ActivityBatchCard batch={g} onSelectEvent={setSelected} />
+                  </div>
+                );
+              }
+
+              const e = g.event;
               const Icon = CATEGORY_ICON[e.category];
               const detailed = isDetailed(e.category);
               const changes = e.changes ?? [];
               return (
+                <div key={e.id}>
+                  {separator}
                 <button
-                  key={e.id}
                   type="button"
                   onClick={() => setSelected(e)}
                   className="flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-foreground/5"
@@ -460,7 +564,15 @@ export function RealtimeUpdatesCard() {
                     <Icon className="size-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm leading-snug">{e.title}</p>
+                    <p className="text-sm leading-snug">
+                      {e.title}
+                      {e.clientLabel && (
+                        <span className="text-muted-foreground">
+                          {" "}
+                          — cliente {e.clientLabel}
+                        </span>
+                      )}
+                    </p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                       <span className="font-medium text-foreground/80">
                         {e.actorLabel}
@@ -512,6 +624,7 @@ export function RealtimeUpdatesCard() {
                   </div>
                   <ChevronRight className="mt-2 size-4 shrink-0 text-muted-foreground" />
                 </button>
+                </div>
               );
             })
           )}
@@ -524,6 +637,8 @@ export function RealtimeUpdatesCard() {
             </Button>
           </div>
         )}
+          </TabsContent>
+        </Tabs>
       </div>
 
       <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
