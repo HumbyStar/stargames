@@ -782,7 +782,7 @@ async function exportTableInChunks(
   const batchSize = 1000;
   const encoder = new TextEncoder();
   const limit = LOG_TABLE_LIMITS[table];
-  const dateColumn = limit ? await resolveLogColumn(admin, table, limit.dateColumns) : null;
+  const dateColumn = limit ? await resolveLogColumn(admin, table, limit.columns) : null;
   let buffer: string[] = [];
   let bufferRows = 0;
 
@@ -1163,13 +1163,13 @@ async function runBackup(opts: {
     if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
     await persistBackupDebug(supabaseAdmin, backupId, debugLog);
     const businessSummary = computeBusinessSummaryFromRows({
-      clients: tableRows["clients"] ?? [],
-      products: tableRows["products"] ?? [],
-      agreements: tableRows["mgmv_agreements"] ?? [],
-      installments: tableRows["mgmv_installments"] ?? [],
-      nfInvoices: tableRows["nf_invoices"] ?? [],
-      teamTasks: tableRows["team_tasks"] ?? [],
-      punchEntries: tableRows["team_punch_entries"] ?? [],
+      clients: await loadPartRows(supabaseAdmin, progress.parts["clients"]),
+      products: await loadPartRows(supabaseAdmin, progress.parts["products"]),
+      agreements: await loadPartRows(supabaseAdmin, progress.parts["mgmv_agreements"]),
+      installments: await loadPartRows(supabaseAdmin, progress.parts["mgmv_installments"]),
+      nfInvoices: await loadPartRows(supabaseAdmin, progress.parts["nf_invoices"]),
+      teamTasks: await loadPartRows(supabaseAdmin, progress.parts["team_tasks"]),
+      punchEntries: await loadPartRows(supabaseAdmin, progress.parts["team_punch_entries"]),
     });
 
     const manifest = {
@@ -1197,34 +1197,67 @@ async function runBackup(opts: {
     await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
       business_summary: businessSummary as any,
     });
-    let lastZipProgressAt = 0;
-    let lastZipCancelCheckAt = Date.now();
-    const zipBuf = await buildStoreZip(zipEntries, {
-      modifiedAt: now,
-      onEntry: async ({ index, total, path: entryPath, percent }) => {
-        const nowMs = Date.now();
-        // Cancelamento responsivo durante a compactação.
-        if (nowMs - lastZipCancelCheckAt >= 1200) {
-          lastZipCancelCheckAt = nowMs;
-          if (await isCancellationRequested(supabaseAdmin, backupId)) {
-            throw new BackupCancelledError();
-          }
-        }
-        if (nowMs - lastZipProgressAt < 1500 && index + 1 < total) return;
-        lastZipProgressAt = nowMs;
-        pushDebug("info", "zip:generate", "Compactando arquivos do backup", {
-          percent,
-          entries: total,
-          currentFile: entryPath,
-        });
-        await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
-          business_summary: businessSummary as any,
-        });
-      },
-    });
+    // Montagem do ZIP a partir dos blocos já gravados: os dados nunca são
+    // recompactados nem duplicados em memória de uma vez só.
+    const pieces: Array<Uint8Array | Blob> = [];
+    const directory: Array<{ path: string; crc: number; size: number; localOffset: number }> = [];
+    let zipOffset = 0;
+    const addZipEntry = (
+      path: string,
+      crc: number,
+      size: number,
+      bodies: Array<Uint8Array | Blob>,
+    ) => {
+      const header = zipLocalHeader({ path, crc, size }, now);
+      pieces.push(header);
+      directory.push({ path, crc, size, localOffset: zipOffset });
+      zipOffset += header.byteLength + size;
+      for (const body of bodies) pieces.push(body);
+    };
+
+    const tableNames = Object.keys(progress.parts);
+    let zipDone = 0;
+    const totalZipEntries = tableNames.length + zipEntries.length;
+    for (const table of tableNames) {
+      if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
+      const state = progress.parts[table]!;
+      const bodies: Blob[] = [];
+      for (const path of state.chunks) {
+        const { data, error } = await supabaseAdmin.storage.from(BACKUP_BUCKET).download(path);
+        if (error) throw new Error(`[${table}] ${error.message}`);
+        bodies.push(data);
+      }
+      addZipEntry(
+        `database/data/${table}.jsonl`,
+        crc32Final(state.crcState),
+        state.bytes,
+        bodies,
+      );
+      zipDone++;
+      pushDebug("info", "zip:generate", "Montando arquivos do backup", {
+        percent: Math.round((zipDone / Math.max(1, totalZipEntries)) * 100),
+        entries: totalZipEntries,
+        currentFile: `database/data/${table}.jsonl`,
+      });
+      await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
+        business_summary: businessSummary as any,
+      });
+    }
+    for (const entry of zipEntries) {
+      addZipEntry(
+        entry.path,
+        crc32Final(crc32Update(crc32Init(), entry.data)),
+        entry.data.byteLength,
+        [entry.data],
+      );
+      zipDone++;
+    }
+    pieces.push(zipCentralDirectory(directory, now, zipOffset));
+    const zipBlob = new Blob(pieces as BlobPart[], { type: "application/zip" });
+    const zipBuf = { byteLength: zipBlob.size };
     pushDebug("info", "zip:generate", "ZIP gerado", {
       percent: 100,
-      entries: zipEntries.length,
+      entries: totalZipEntries,
       sizeBytes: zipBuf.byteLength,
     });
     await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
@@ -1238,7 +1271,7 @@ async function runBackup(opts: {
     await persistBackupDebug(supabaseAdmin, backupId, debugLog);
     const { error: upErr } = await supabaseAdmin.storage
       .from(BACKUP_BUCKET)
-      .upload(storagePath, zipBuf, {
+      .upload(storagePath, zipBlob, {
         contentType: "application/zip",
         upsert: true,
       });
@@ -1280,6 +1313,7 @@ async function runBackup(opts: {
       .eq("id", backupId);
 
     await enforceBackupRetention(supabaseAdmin);
+    await cleanupBackupParts(supabaseAdmin, progress);
 
     return { id: backupId, storagePath, sizeBytes: zipBuf.byteLength };
   } catch (err: any) {
