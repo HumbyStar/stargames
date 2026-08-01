@@ -123,7 +123,7 @@ export function ImportContentModal({
     return () => {
       alive = false;
     };
-  }, [entry]);
+  }, [entry, history]);
 
   return (
     <Dialog open={entry !== null} onOpenChange={(o) => !o && onClose()}>
@@ -132,12 +132,19 @@ export function ImportContentModal({
           <DialogTitle>Conteúdo da importação</DialogTitle>
           <DialogDescription>
             {entry
-              ? `${entry.file} · ${new Date(entry.date).toLocaleString("pt-BR")}${
-                  entry.userEmail ? ` · ${entry.userEmail}` : ""
+              ? `${entry.file} · ${new Date(entry.date).toLocaleString("pt-BR")} · ${
+                  entry.userEmail ?? "Usuário não identificado"
                 }`
               : ""}
           </DialogDescription>
         </DialogHeader>
+        {entry && !loading && content && (
+          <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            {reconstructed
+              ? "Conteúdo reconstruído a partir da auditoria — esta importação foi feita antes de o sistema guardar o texto original, por isso mostramos os clientes e produtos gravados naquele momento."
+              : "Texto original exatamente como foi colado na importação."}
+          </p>
+        )}
         {loading ? (
           <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" /> Carregando conteúdo…
