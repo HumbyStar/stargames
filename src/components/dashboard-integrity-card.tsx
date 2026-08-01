@@ -13,6 +13,8 @@ import { toast } from "sonner";
 export function DashboardIntegrityCard() {
   const clients = useStore((s) => s.clients);
   const products = useStore((s) => s.products);
+  const currentEnv = useStore((s) => s.currentEnv);
+  const envSyncing = useStore((s) => s.envSyncing);
   const fetchDiagnostics = useStore((s) => s.fetchDiagnostics);
   const refreshSnapshot = useStore((s) => s.refreshSnapshot);
 
@@ -35,7 +37,7 @@ export function DashboardIntegrityCard() {
   useEffect(() => {
     void check();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentEnv]);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -43,7 +45,9 @@ export function DashboardIntegrityCard() {
       await refreshSnapshot();
       const d = await fetchDiagnostics();
       setDiag(d);
-      toast.success("Snapshot recarregado do banco oficial.");
+      toast.success(
+        `Snapshot recarregado (${d.env === "sandbox" ? "Modo Teste" : "Produção"}).`,
+      );
     } catch (err) {
       toast.error("Falha ao recarregar snapshot.", {
         description: err instanceof Error ? err.message : String(err),
@@ -53,7 +57,11 @@ export function DashboardIntegrityCard() {
     }
   }
 
-  const rows = diag
+  const envLabel = currentEnv === "sandbox" ? "Modo Teste" : "Produção";
+  const envMismatch = diag !== null && diag.env !== currentEnv;
+  const syncing = envSyncing || envMismatch;
+
+  const rows = diag && !syncing
     ? [
         { label: "Clientes", local: clients.length, db: diag.clientsCount },
         { label: "Produtos", local: products.length, db: diag.productsCount },
@@ -62,22 +70,24 @@ export function DashboardIntegrityCard() {
     : [];
 
   const divergences = rows.filter((r) => r.local !== r.db);
-  const allMatch = diag !== null && divergences.length === 0;
+  const allMatch = diag !== null && !syncing && divergences.length === 0;
 
   return (
-    <Card title="Verificação de integridade">
+    <Card title={`Verificação de integridade — ${envLabel}`}>
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm">
-            {loading ? (
+            {loading || syncing ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                <span className="text-muted-foreground">Consultando banco…</span>
+                <span className="text-muted-foreground">
+                  {syncing ? "Sincronizando ambiente…" : "Consultando banco…"}
+                </span>
               </>
             ) : allMatch ? (
               <>
                 <CheckCircle2 className="h-4 w-4 text-[color:var(--success)]" />
-                <span>Dashboard sincronizado com o banco oficial.</span>
+                <span>Dashboard sincronizado com o banco ({envLabel}).</span>
               </>
             ) : diag ? (
               <>
@@ -94,7 +104,7 @@ export function DashboardIntegrityCard() {
             size="sm"
             variant={allMatch ? "outline" : "default"}
             onClick={handleRefresh}
-            disabled={refreshing || loading}
+            disabled={refreshing || loading || envSyncing}
           >
             {refreshing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -105,14 +115,14 @@ export function DashboardIntegrityCard() {
           </Button>
         </div>
 
-        {diag && (
+        {diag && !syncing && (
           <div className="overflow-hidden rounded-lg border border-border">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">Métrica</th>
                   <th className="px-3 py-2 text-right font-medium">Dashboard</th>
-                  <th className="px-3 py-2 text-right font-medium">Banco (Configurações)</th>
+                  <th className="px-3 py-2 text-right font-medium">Banco ({envLabel})</th>
                   <th className="px-3 py-2 text-right font-medium">Status</th>
                 </tr>
               </thead>

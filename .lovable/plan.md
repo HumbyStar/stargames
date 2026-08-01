@@ -1,36 +1,35 @@
-## Objetivo
+## Problema
 
-Hoje existe **um único** ambiente sandbox compartilhado: todas as linhas com `env = 'sandbox'` (hoje 49 clientes, por exemplo) são visíveis para qualquer usuário em modo teste, e quando alguém clona a produção ou reseta o sandbox, isso apaga/substitui o sandbox de todo mundo.
+Hoje o snapshot em memória não guarda a qual ambiente ele pertence. As leituras do banco são filtradas pelo servidor (produção ou sandbox do próprio usuário), mas os dados já carregados na tela continuam sendo os do ambiente anterior. Resultado: ao entrar no Modo Teste, o painel continua mostrando 2737 clientes / 23482 produtos enquanto o banco responde 1 e 1 — e a "Verificação de integridade" acusa divergências que não existem.
 
-A mudança dá a cada usuário o **seu próprio sandbox**, invisível para os demais, sem tocar em nada da produção.
+Confirmado no código:
+- `loadSnapshot()` e `dbFetchDiagnostics()` não recebem nem registram ambiente; dependem só das regras do banco (`current_env()` = sandbox quando o usuário está com Modo Teste ligado).
+- Ao ligar/desligar o Modo Teste, é disparado apenas um evento genérico de recarga (`app:reset`), sem garantia de ordem em relação às cargas já em andamento.
+- O card de integridade compara números da memória com números do banco sem saber de qual ambiente cada lado veio.
 
-## Como vai funcionar
+## O que será feito
 
-- Cada linha de sandbox passa a ter um "dono".
-- Ao entrar no modo teste, você só enxerga os dados de sandbox que você mesmo criou ou clonou.
-- Clonar produção → sandbox, resetar sandbox e importar backup no sandbox afetam **apenas o seu** ambiente.
-- Produção continua exatamente como está: compartilhada por todos, sem dono.
+1. **Snapshot com identidade de ambiente**
+   - Todo carregamento passa a registrar o ambiente ativo (produção ou teste) junto com os dados.
+   - Cargas antigas que chegarem atrasadas, já pertencentes ao ambiente anterior, são descartadas em vez de sobrescrever a tela.
+
+2. **Dois snapshots independentes**
+   - Produção e teste passam a ter cada um o seu próprio conjunto de dados em memória. Ao alternar, a tela mostra o snapshot daquele ambiente (recarregando do banco quando ele ainda não existir ou estiver desatualizado).
+   - Alternar de volta para produção não fica dependendo de "sorte" de recarga: o snapshot de produção é restaurado/recarregado explicitamente.
+
+3. **Troca de ambiente com recarga determinística**
+   - Ao ligar/desligar o Modo Teste, a recarga só acontece depois que o servidor confirma a troca, e a carga em voo do ambiente anterior é cancelada/ignorada.
+   - Enquanto a recarga acontece, o painel mostra estado de carregamento em vez de números do ambiente errado.
+
+4. **Verificação de integridade ciente do ambiente**
+   - O card passa a exibir claramente o ambiente da checagem ("Produção" ou "Modo Teste").
+   - A coluna "Banco" e a coluna "Dashboard" passam a comparar sempre o mesmo ambiente; o botão "Atualizar snapshot" recarrega o ambiente ativo.
+   - Se por algum motivo os dois lados estiverem em ambientes diferentes, o card avisa "recarregando ambiente" em vez de acusar divergência falsa.
 
 ## Detalhes técnicos
 
-**1. Banco (migração)**
-
-- Adicionar coluna `sandbox_owner uuid` (nullable, FK `auth.users`, `ON DELETE CASCADE`) nas 14 tabelas do `CLONE_ORDER`: `clients`, `mgmv_agreements`, `mgmv_installments`, `products`, `nf_invoices`, `import_history`, `team_tasks`, `team_task_comments`, `team_task_activity`, `team_punch_entries`, `saved_filters`, `ai_automations`, `app_settings`, `ai_training_profile`. Índice parcial por `(sandbox_owner)` onde `env = 'sandbox'`.
-- Trigger `BEFORE INSERT/UPDATE`: se `env = 'sandbox'` e `sandbox_owner IS NULL`, preencher com `auth.uid()`; se `env = 'producao'`, forçar `NULL`. Impede que o cliente escolha outro dono.
-- Nova função `public.env_row_visible(_env app_env, _owner uuid) RETURNS boolean` (stable, security definer): verdadeira quando `_env = current_env()` **e** (`_env = 'producao'` OU `_owner = auth.uid()`).
-- Reescrever as policies SELECT/INSERT/UPDATE/DELETE dessas tabelas trocando `env = current_env()` por `public.env_row_visible(env, sandbox_owner)` (mantendo os checks de papel/roles já existentes).
-- Chaves primárias compostas com `env` (`app_settings (id, env)` e `ai_training_profile (user_id, env)`) precisam incluir o dono: PK passa a `(id, env, sandbox_owner)` — com `sandbox_owner` `NOT NULL DEFAULT '00000000-…0000'`-equivalente não é possível em PK nullable, então uso coluna gerada `sandbox_key uuid` = `coalesce(sandbox_owner, uuid_nil())` e PK sobre ela.
-- Backfill: as linhas de sandbox já existentes ficam sem dono e serão removidas na migração (dados de teste descartáveis), evitando um "sandbox órfão" visível para ninguém. Confirmo antes de rodar se preferir preservá-las atribuindo a um usuário específico.
-
-**2. Aplicação**
-
-- `src/lib/sandbox.functions.ts`: `countsForEnv`, `resetSandbox` e a limpeza inicial de `cloneProductionToSandbox` passam a filtrar `.eq('sandbox_owner', context.userId)` (o cliente admin ignora RLS, então o filtro precisa ser explícito).
-- `src/lib/sandbox-clone.ts`: `remapRow` grava `sandbox_owner` do usuário que clonou.
-- `src/lib/backup.functions.ts` e o fluxo de importação de backup em sandbox: escrever/ler apenas linhas do dono atual; backups de sandbox continuam com prefixo de ambiente e passam a ser por usuário.
-- `src/lib/db-migration.functions.ts` e a exportação de esquema: incluir a nova coluna.
-- Regenerar `src/integrations/supabase/types.ts`.
-
-**3. Verificação**
-
-- Consultas conferindo que dois usuários diferentes em modo teste não veem as linhas um do outro.
-- Conferir que a produção segue com a mesma contagem antes/depois (2737 clientes).
+- `src/lib/db-sync.ts`: `loadSnapshot()` e `dbFetchDiagnostics()` passam a resolver e retornar o `env` efetivo (via estado de sandbox do usuário), permitindo validação de origem.
+- `src/lib/store.ts`: novo campo `currentEnv` no store; cache de snapshot por ambiente; `refreshFromDb`/`refreshSnapshot` marcam o ambiente da requisição e descartam respostas de ambiente divergente (invalidando também a coalescência atual `refreshInFlight`).
+- `src/lib/use-sandbox.tsx`: `setActive` só dispara `reloadAppData()` após confirmação do servidor, informando o novo ambiente.
+- `src/components/dashboard-integrity-card.tsx`: rótulo do ambiente, estado "sincronizando ambiente" e comparação só entre lados do mesmo ambiente.
+- Nenhuma mudança de banco de dados é necessária: as regras por ambiente/dono já existem.

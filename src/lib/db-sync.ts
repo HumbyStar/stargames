@@ -244,6 +244,32 @@ export interface DbSnapshot {
   rules: Partial<OperationalRules>;
   security: Partial<SecuritySettings>;
   uiState: Record<string, unknown>;
+  /** Ambiente ao qual estes dados pertencem (produção ou modo teste). */
+  env?: AppEnv;
+}
+
+export type AppEnv = "producao" | "sandbox";
+
+/**
+ * Descobre o ambiente ativo do usuário logado (produção x modo teste).
+ * O banco decide a visibilidade por ambiente; aqui só precisamos saber
+ * a qual ambiente pertence cada leitura, para não misturar snapshots.
+ */
+export async function resolveCurrentEnv(): Promise<AppEnv> {
+  if (isLocalMode()) return "producao";
+  try {
+    const { data: userRes } = await supabase.auth.getUser();
+    const uid = userRes.user?.id;
+    if (!uid) return "producao";
+    const { data } = await supabase
+      .from("sandbox_state")
+      .select("active")
+      .eq("user_id", uid)
+      .maybeSingle();
+    return data?.active ? "sandbox" : "producao";
+  } catch {
+    return "producao";
+  }
 }
 
 /**
@@ -293,8 +319,9 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
   if (isLocalMode()) {
     const { loadLocalSnapshot } = await import("./local-package");
     const local = await loadLocalSnapshot();
-    if (local) return local;
+    if (local) return { ...local, env: "producao" };
   }
+  const envBefore = await resolveCurrentEnv();
   const [clientsRes, productsRes, historyRes, settingsRes, agreementsRes, installmentsRes] = await Promise.all([
     fetchAllRows<Record<string, unknown>>("clients", "*"),
     fetchAllRows<Record<string, unknown>>("products", "*"),
@@ -310,7 +337,9 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
   if (agreementsRes.error) logErr("loadAgreements", agreementsRes.error);
   if (installmentsRes.error) logErr("loadInstallments", installmentsRes.error);
 
-  return buildSnapshotFromRows({
+  const envAfter = await resolveCurrentEnv();
+
+  const snapshot = buildSnapshotFromRows({
     clients: (clientsRes.data ?? []) as Record<string, unknown>[],
     products: (productsRes.data ?? []) as Record<string, unknown>[],
     importHistory: (historyRes.data ?? []) as Record<string, unknown>[],
@@ -318,6 +347,11 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
     installments: (installmentsRes.data ?? []) as Record<string, unknown>[],
     settings: (settingsRes.data ?? null) as Record<string, unknown> | null,
   });
+
+  // Se o ambiente mudou no meio da leitura, os dados são de um ambiente
+  // que já não é o atual: relê uma única vez para não misturar snapshots.
+  if (envBefore !== envAfter) return loadSnapshot();
+  return { ...snapshot, env: envAfter };
 }
 
 /**
@@ -884,6 +918,8 @@ export interface ImportDiagnostics {
   importProgressRows: number;
   /** Última versão de reset registrada localmente. */
   resetVersion: string;
+  /** Ambiente consultado (produção x modo teste). */
+  env: AppEnv;
 }
 
 // ============= Audit log =============
@@ -950,6 +986,8 @@ export async function dbFetchDiagnostics(): Promise<ImportDiagnostics> {
   const head = (q: ReturnType<typeof supabase.from>) =>
     (q.select("*", { count: "exact", head: true }) as unknown as Promise<{ count: number | null; error: unknown }>);
 
+  const env = await resolveCurrentEnv();
+
   const [c, p, a, i, mc, mp] = await Promise.all([
     head(sb().from("clients")),
     head(sb().from("products")),
@@ -1003,6 +1041,7 @@ export async function dbFetchDiagnostics(): Promise<ImportDiagnostics> {
     mgmvProductsWithoutAgreementId: mp.count ?? 0,
     importProgressRows,
     resetVersion: getUiValue<string>("import.resetVersion", ""),
+    env,
   };
 }
 

@@ -33,6 +33,9 @@ import { suspendRealtimeRefresh } from "./db-sync";
 import { getCurrentUserInfo } from "./db-sync";
 import type { ImportDiagnostics } from "./db-sync";
 export type { ImportDiagnostics } from "./db-sync";
+import type { AppEnv, DbSnapshot } from "./db-sync";
+export type { AppEnv } from "./db-sync";
+import { resolveCurrentEnv } from "./db-sync";
 import { recalcPendingDueDates } from "./mgmv-schedule";
 
 export type FinancialStatus = "Pago" | "Reserva" | "Pendente" | "MGMV";
@@ -506,6 +509,12 @@ interface State {
   fetchDiagnostics: () => Promise<ImportDiagnostics>;
   clearImportCache: () => void;
   refreshSnapshot: () => Promise<void>;
+  /** Ambiente dos dados atualmente em memória. */
+  currentEnv: AppEnv;
+  /** True enquanto o app troca de ambiente e recarrega o snapshot. */
+  envSyncing: boolean;
+  /** Aplica a troca de ambiente: usa o snapshot em cache e revalida. */
+  switchEnv: (env: AppEnv) => Promise<void>;
   findDuplicateClientGroups: () => DuplicateClientGroup[];
   mergeDuplicateClients: () => Promise<MergeDuplicatesResult>;
 }
@@ -656,6 +665,10 @@ let hydratePromise: Promise<void> | null = null;
 // Coalescência de refreshes do snapshot (Realtime, app:reset, modais).
 let refreshInFlight: Promise<void> | null = null;
 let refreshQueued = false;
+// Snapshots separados por ambiente: produção e modo teste nunca se misturam.
+const envSnapshots = new Map<AppEnv, DbSnapshot>();
+/** Token incrementado a cada troca de ambiente: descarta respostas antigas. */
+let envToken = 0;
 
 export const RESET_VERSION_KEY = "import.resetVersion";
 export function getResetVersion(): string {
@@ -676,6 +689,8 @@ export const useStore = create<State>()((set, get) => ({
       security: defaultSecurity,
       importHistory: [],
       hydrated: false,
+      currentEnv: "producao",
+      envSyncing: false,
       hydrate: async () => {
         if (get().hydrated) return;
         if (hydratePromise) return hydratePromise;
@@ -702,7 +717,9 @@ export const useStore = create<State>()((set, get) => ({
             rules: { ...defaultRules, ...snap.rules },
             security: { ...defaultSecurity, ...snap.security },
             hydrated: true,
+            currentEnv: snap.env ?? "producao",
           });
+          envSnapshots.set(snap.env ?? "producao", snap);
         })();
         await hydratePromise;
       },
@@ -715,8 +732,13 @@ export const useStore = create<State>()((set, get) => ({
           return refreshInFlight;
         }
         refreshInFlight = (async () => {
+          const token = envToken;
           try {
             const snap = await loadSnapshot();
+            // Resposta de um ambiente que já não é o atual: descarta.
+            if (token !== envToken) return;
+            const env = snap.env ?? "producao";
+            envSnapshots.set(env, snap);
             set({
               clients: snap.clients,
               products: snap.products.map((p) =>
@@ -725,6 +747,8 @@ export const useStore = create<State>()((set, get) => ({
                   : p,
               ),
               importHistory: snap.importHistory,
+              currentEnv: env,
+              envSyncing: false,
             });
           } catch (err) {
             console.warn("refreshFromDb failed", err);
@@ -1165,7 +1189,12 @@ export const useStore = create<State>()((set, get) => ({
         void flushUiStateNow();
       },
       refreshSnapshot: async () => {
+        envToken += 1;
+        const token = envToken;
         const snap = await loadSnapshot();
+        if (token !== envToken) return;
+        const env = snap.env ?? "producao";
+        envSnapshots.set(env, snap);
         set({
           clients: snap.clients,
           products: snap.products,
@@ -1174,7 +1203,51 @@ export const useStore = create<State>()((set, get) => ({
           rules: { ...defaultRules, ...snap.rules },
           security: { ...defaultSecurity, ...snap.security },
           hydrated: true,
+          currentEnv: env,
+          envSyncing: false,
         });
+      },
+      switchEnv: async (env) => {
+        // Invalida qualquer carga em voo do ambiente anterior.
+        envToken += 1;
+        const token = envToken;
+        const cached = envSnapshots.get(env);
+        if (cached) {
+          set({
+            clients: cached.clients,
+            products: cached.products,
+            importHistory: cached.importHistory,
+            preferences: { ...defaultPreferences, ...cached.preferences },
+            rules: { ...defaultRules, ...cached.rules },
+            security: { ...defaultSecurity, ...cached.security },
+            currentEnv: env,
+            envSyncing: true,
+          });
+        } else {
+          // Sem snapshot daquele ambiente: zera a tela em vez de mostrar
+          // números do ambiente anterior enquanto recarrega.
+          set({ clients: [], products: [], importHistory: [], currentEnv: env, envSyncing: true });
+        }
+        try {
+          const snap = await loadSnapshot();
+          if (token !== envToken) return;
+          const loadedEnv = snap.env ?? "producao";
+          envSnapshots.set(loadedEnv, snap);
+          set({
+            clients: snap.clients,
+            products: snap.products,
+            importHistory: snap.importHistory,
+            preferences: { ...defaultPreferences, ...snap.preferences },
+            rules: { ...defaultRules, ...snap.rules },
+            security: { ...defaultSecurity, ...snap.security },
+            currentEnv: loadedEnv,
+            envSyncing: false,
+            hydrated: true,
+          });
+        } catch (err) {
+          console.warn("switchEnv failed", err);
+          if (token === envToken) set({ envSyncing: false });
+        }
       },
       findDuplicateClientGroups: () => {
         const { clients, products } = get();
