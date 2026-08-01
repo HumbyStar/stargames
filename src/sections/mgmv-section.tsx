@@ -1080,7 +1080,18 @@ export function MGMVSection({
                                     key={p.id}
                                     className="flex items-center justify-between rounded-md border border-border/60 bg-card px-2 py-1"
                                   >
-                                    <span className="truncate font-medium">{p.name}</span>
+                                    <span className="inline-flex min-w-0 items-center truncate font-medium">
+                                      {p.name}
+                                      {(() => {
+                                        const info = nfProductMap.get(p.id);
+                                        return info ? (
+                                          <NfEmittedBadge
+                                            count={info.count}
+                                            lastAt={info.lastAt}
+                                          />
+                                        ) : null;
+                                      })()}
+                                    </span>
                                     <span className="text-muted-foreground">{p.platform}</span>
                                     <span>{formatBRL(p.totalValue)}</span>
                                     <Tag variant="primary">Incluído no MGMV</Tag>
