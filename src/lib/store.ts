@@ -33,6 +33,9 @@ import { suspendRealtimeRefresh } from "./db-sync";
 import { getCurrentUserInfo } from "./db-sync";
 import type { ImportDiagnostics } from "./db-sync";
 export type { ImportDiagnostics } from "./db-sync";
+import type { AppEnv, DbSnapshot } from "./db-sync";
+export type { AppEnv } from "./db-sync";
+import { resolveCurrentEnv } from "./db-sync";
 import { recalcPendingDueDates } from "./mgmv-schedule";
 
 export type FinancialStatus = "Pago" | "Reserva" | "Pendente" | "MGMV";
@@ -662,6 +665,10 @@ let hydratePromise: Promise<void> | null = null;
 // Coalescência de refreshes do snapshot (Realtime, app:reset, modais).
 let refreshInFlight: Promise<void> | null = null;
 let refreshQueued = false;
+// Snapshots separados por ambiente: produção e modo teste nunca se misturam.
+const envSnapshots = new Map<AppEnv, DbSnapshot>();
+/** Token incrementado a cada troca de ambiente: descarta respostas antigas. */
+let envToken = 0;
 
 export const RESET_VERSION_KEY = "import.resetVersion";
 export function getResetVersion(): string {
