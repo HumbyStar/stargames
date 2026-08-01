@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -127,6 +127,9 @@ export function ListImportModal({
   const [editing, setEditing] = useState<ListImportRow | null>(null);
   const [aiBusyId, setAiBusyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Trava síncrona contra duplo clique: `saving` só muda no próximo render,
+  // então dois cliques rápidos no mesmo botão passariam pela checagem.
+  const savingRef = useRef(false);
   const [progressState, setProgressState] = useState<ImportProgressState | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<{
     rows: ListImportRow[];
@@ -328,6 +331,7 @@ export function ListImportModal({
    * de gravar. Se houver, abre confirmação; caso contrário grava direto.
    */
   async function persist(rowsToSave: ListImportRow[]) {
+    if (savingRef.current) return;
     if (!rowsToSave.length) {
       toast.error("Nenhum registro para salvar.");
       return;
@@ -393,10 +397,12 @@ export function ListImportModal({
   }
 
   async function runPersist(rowsToSave: ListImportRow[]) {
+    if (savingRef.current) return;
     if (!rowsToSave.length) {
       toast.error("Nenhum registro para salvar.");
       return;
     }
+    savingRef.current = true;
     setSaving(true);
     // Data marcada no cabeçalho da lista (ex.: "25/06/2026"). Quando presente,
     // os produtos importados refletem nessa data em vez de "hoje".
@@ -571,6 +577,7 @@ export function ListImportModal({
       );
       toast.error(e instanceof Error ? e.message : "Falha ao salvar.");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
