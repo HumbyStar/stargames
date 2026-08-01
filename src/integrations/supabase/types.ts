@@ -1184,6 +1184,22 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      team_usage_stats: {
+        Args: { _days?: number }
+        Returns: {
+          active_blocks: number
+          active_days: number
+          by_table: Json
+          daily: Json
+          deletes: number
+          inserts: number
+          last_action_at: string
+          total_actions: number
+          updates: number
+          user_email: string
+          user_id: string
+        }[]
+      }
     }
     Enums: {
       app_env: "producao" | "sandbox"

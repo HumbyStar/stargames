@@ -44,6 +44,10 @@ export interface ActivityEvent {
   /** Lista completa de alterações campo a campo. */
   changes?: ActivityChange[];
   entity?: ActivityEntity;
+  /** Cliente vinculado ao registro (produto, nota fiscal, parcela...). */
+  clientId?: string | null;
+  /** Nome do cliente resolvido — exibido na mesma linha do evento. */
+  clientLabel?: string;
 }
 
 export const activityCategoryLabels: Record<ActivityCategory, string> = {
@@ -350,7 +354,9 @@ function describeSettingsChange(
   prev: Record<string, unknown> | null,
   next: Record<string, unknown> | null,
 ): { title: string; description?: string; changes: ActivityChange[] } {
-  const sections = ["preferences", "rules", "security", "ui_state"];
+  // `ui_state` guarda apenas estado de tela (busca, chips, paginação,
+  // rascunhos, layout). Isso é navegação, não configuração — fica de fora.
+  const sections = ["preferences", "rules", "security"];
   const changes: SettingChange[] = [];
   for (const s of sections) {
     diffSettings(prev?.[s], next?.[s], s, [], changes);
@@ -417,6 +423,7 @@ export function mapAuditRow(
   let severity: ActivitySeverity = action === "DELETE" ? "warning" : "info";
   let changes: ActivityChange[] = rowChanges(action, row.old_data, row.new_data);
   let recordLabel: string | undefined;
+  let clientId: string | null = null;
 
   switch (row.table_name) {
     case "clients": {
@@ -431,6 +438,7 @@ export function mapAuditRow(
     case "products": {
       const nome = str(data.name) ?? "produto";
       recordLabel = nome;
+      clientId = str(data.client_id) ?? str(prev.client_id) ?? null;
       title =
         action === "INSERT"
           ? `${actorLabel} adicionou o produto ${nome}`
@@ -447,6 +455,7 @@ export function mapAuditRow(
     case "mgmv_agreements": {
       const nome = str(data.client_name) ?? "cliente";
       recordLabel = nome;
+      clientId = str(data.client_id) ?? str(prev.client_id) ?? null;
       title =
         action === "INSERT"
           ? `${actorLabel} criou o acordo MGMV de ${nome}`
@@ -502,6 +511,7 @@ export function mapAuditRow(
     }
     case "nf_invoices": {
       const total = num(data.total_cents);
+      clientId = str(data.client_id) ?? str(prev.client_id) ?? null;
       title = `${actorLabel} ${action === "INSERT" ? "gerou" : verb} uma nota fiscal`;
       description = total !== undefined ? CURRENCY.format(total / 100) : undefined;
       break;
@@ -576,6 +586,8 @@ export function mapAuditRow(
     actorId: row.user_id,
     actorLabel,
     changes,
+    clientId,
+    clientLabel: str(data.client_name) ?? undefined,
     entity: {
       table: row.table_name,
       tableLabel: TABLE_LABELS[row.table_name] ?? row.table_name,
@@ -614,6 +626,8 @@ export function useActivityFeed() {
   const [meId, setMeId] = useState<string | null>(null);
 
   const namesRef = useRef<Map<string, string>>(new Map());
+  const clientNamesRef = useRef<Map<string, string>>(new Map());
+  const clientTriedRef = useRef<Set<string>>(new Set());
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
   const bufferRef = useRef<ActivityEvent[]>([]);
@@ -805,6 +819,45 @@ export function useActivityFeed() {
     return [...map.entries()].map(([id, label]) => ({ id, label }));
   }, [events]);
 
+  // Resolve o nome do cliente vinculado (produto, nota fiscal, acordo) para
+  // que ele apareça na mesma linha do evento.
+  useEffect(() => {
+    const pending = Array.from(
+      new Set(
+        events
+          .filter((e) => e.clientId && !e.clientLabel)
+          .map((e) => e.clientId as string)
+          .filter((id) => !clientTriedRef.current.has(id)),
+      ),
+    );
+    if (pending.length === 0) return;
+    pending.forEach((id) => clientTriedRef.current.add(id));
+    let alive = true;
+    void (async () => {
+      const { data } = await supabase
+        .from("clients")
+        .select("id, name, phone")
+        .in("id", pending.slice(0, 200));
+      if (!alive) return;
+      for (const c of data ?? []) {
+        clientNamesRef.current.set(
+          c.id,
+          c.phone ? `${c.name} (${c.phone})` : c.name,
+        );
+      }
+      setEvents((prev) =>
+        prev.map((e) =>
+          e.clientId && !e.clientLabel && clientNamesRef.current.has(e.clientId)
+            ? { ...e, clientLabel: clientNamesRef.current.get(e.clientId)! }
+            : e,
+        ),
+      );
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [events]);
+
   return {
     events,
     loading,
@@ -829,4 +882,126 @@ export function relativeTime(iso: string): string {
   const d = Math.floor(h / 24);
   if (d < 30) return `há ${d}d`;
   return new Date(iso).toLocaleDateString("pt-BR");
+}
+
+// ---------------------------------------------------------------------------
+// Agrupamento em lote (importações e ações em massa)
+// ---------------------------------------------------------------------------
+
+export interface ActivityBatch {
+  kind: "batch";
+  id: string;
+  at: string;
+  actorId?: string | null;
+  actorLabel: string;
+  category: ActivityCategory;
+  table: string;
+  tableLabel: string;
+  action: ActivityEntity["action"];
+  title: string;
+  events: ActivityEvent[];
+}
+
+export type ActivityGroup =
+  | { kind: "single"; id: string; at: string; event: ActivityEvent }
+  | ActivityBatch;
+
+const PLURAL: Record<string, string> = {
+  Cliente: "clientes",
+  Produto: "produtos",
+  "Acordo MGMV": "acordos MGMV",
+  "Parcela MGMV": "parcelas MGMV",
+  "Nota fiscal": "notas fiscais",
+  Tarefa: "tarefas",
+  "Filtro salvo": "filtros salvos",
+  Backup: "backups",
+  Importação: "importações",
+};
+
+const BATCH_VERB: Record<ActivityEntity["action"], string> = {
+  INSERT: "adicionou",
+  UPDATE: "atualizou",
+  DELETE: "removeu",
+};
+
+/**
+ * Junta ações consecutivas da mesma pessoa, na mesma tabela e com a mesma
+ * operação dentro de uma janela curta — típico de importações e edições em
+ * massa — em um único card expansível.
+ */
+export function groupActivityEvents(
+  events: ActivityEvent[],
+  opts: { enabled?: boolean; windowMs?: number; minSize?: number } = {},
+): ActivityGroup[] {
+  const { enabled = true, windowMs = 120_000, minSize = 3 } = opts;
+  const single = (e: ActivityEvent): ActivityGroup => ({
+    kind: "single",
+    id: e.id,
+    at: e.at,
+    event: e,
+  });
+  if (!enabled) return events.map(single);
+
+  const out: ActivityGroup[] = [];
+  let run: ActivityEvent[] = [];
+
+  const key = (e: ActivityEvent) =>
+    e.entity ? `${e.actorId ?? "?"}|${e.entity.table}|${e.entity.action}` : null;
+
+  const flush = () => {
+    if (run.length === 0) return;
+    if (run.length < minSize || !run[0].entity) {
+      run.forEach((e) => out.push(single(e)));
+      run = [];
+      return;
+    }
+    const first = run[0];
+    const entity = first.entity!;
+    const label = PLURAL[entity.tableLabel] ?? `${entity.tableLabel.toLowerCase()}s`;
+    const clientes = new Set(
+      run.map((e) => e.clientLabel).filter((c): c is string => Boolean(c)),
+    );
+    const sufixo =
+      clientes.size === 1
+        ? ` do cliente ${[...clientes][0]}`
+        : clientes.size > 1
+          ? ` de ${clientes.size} clientes`
+          : "";
+    out.push({
+      kind: "batch",
+      id: `batch:${first.id}:${run.length}`,
+      at: first.at,
+      actorId: first.actorId,
+      actorLabel: first.actorLabel,
+      category: first.category,
+      table: entity.table,
+      tableLabel: entity.tableLabel,
+      action: entity.action,
+      title: `${first.actorLabel} ${BATCH_VERB[entity.action]} ${run.length} ${label}${sufixo}`,
+      events: [...run],
+    });
+    run = [];
+  };
+
+  for (const e of events) {
+    const k = key(e);
+    if (!k) {
+      flush();
+      out.push(single(e));
+      continue;
+    }
+    const last = run[run.length - 1];
+    if (
+      last &&
+      key(last) === k &&
+      Math.abs(+new Date(last.at) - +new Date(e.at)) <= windowMs
+    ) {
+      run.push(e);
+    } else {
+      flush();
+      run = [e];
+    }
+  }
+  flush();
+  return out;
 }

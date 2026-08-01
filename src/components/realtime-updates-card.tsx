@@ -45,10 +45,14 @@ import {
   useActivityFeed,
   activityCategoryLabels,
   relativeTime,
+  groupActivityEvents,
   type ActivityCategory,
   type ActivitySeverity,
   type ActivityEvent,
 } from "@/lib/activity-feed";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ActivityBatchCard } from "@/components/activity-batch-card";
+import { TeamUsagePanel } from "@/components/team-usage-panel";
 import { cn } from "@/lib/utils";
 
 const CATEGORY_ICON: Record<ActivityCategory, typeof Users> = {
@@ -78,6 +82,30 @@ function initials(name: string) {
     .join("");
 }
 
+const PERIOD_MS: Record<string, number | null> = {
+  all: null,
+  today: 0,
+  "7d": 7 * 86_400_000,
+  "30d": 30 * 86_400_000,
+};
+
+const SEVERITY_LABELS: Record<ActivitySeverity, string> = {
+  info: "Informativo",
+  success: "Sucesso",
+  warning: "Atenção",
+  danger: "Crítico",
+};
+
+function dayLabel(iso: string) {
+  const d = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date(Date.now() - 86_400_000);
+  const same = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+  if (same(d, today)) return "Hoje";
+  if (same(d, yesterday)) return "Ontem";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" });
+}
+
 export function RealtimeUpdatesCard() {
   const {
     events,
@@ -101,6 +129,12 @@ export function RealtimeUpdatesCard() {
     Partial<Record<ActivityCategory, boolean>>
   >({});
   const [selected, setSelected] = useState<ActivityEvent | null>(null);
+  const [period, setPeriod] = useState<string>("all");
+  const [operation, setOperation] = useState<string>("all");
+  const [severity, setSeverity] = useState<string>("all");
+  const [tableFilter, setTableFilter] = useState<string>("all");
+  const [groupBatches, setGroupBatches] = useState(true);
+  const [groupByDay, setGroupByDay] = useState(true);
 
   const isDetailed = (c: ActivityCategory) =>
     detailByCategory[c] ?? globalDetailed;
@@ -117,6 +151,17 @@ export function RealtimeUpdatesCard() {
           if (categories.length > 0 && !categories.includes(e.category)) return false;
           if (onlyMine && e.actorId !== meId) return false;
           if (actorFilter && e.actorId !== actorFilter) return false;
+          if (operation !== "all" && e.entity?.action !== operation) return false;
+          if (severity !== "all" && e.severity !== severity) return false;
+          if (tableFilter !== "all" && e.entity?.table !== tableFilter) return false;
+          const window = PERIOD_MS[period];
+          if (window !== null && window !== undefined) {
+            if (window === 0) {
+              if (new Date(e.at).toDateString() !== new Date().toDateString()) return false;
+            } else if (Date.now() - +new Date(e.at) > window) {
+              return false;
+            }
+          }
           if (query.trim()) {
             const q = query.trim().toLowerCase();
             const hay = `${e.title} ${e.description ?? ""} ${e.actorLabel} ${
@@ -127,8 +172,53 @@ export function RealtimeUpdatesCard() {
           return true;
         })
         .sort((a, b) => +new Date(b.at) - +new Date(a.at)),
-    [events, categories, onlyMine, actorFilter, query, meId],
+    [
+      events,
+      categories,
+      onlyMine,
+      actorFilter,
+      query,
+      meId,
+      operation,
+      severity,
+      tableFilter,
+      period,
+    ],
   );
+
+  const groups = useMemo(
+    () => groupActivityEvents(filtered, { enabled: groupBatches }),
+    [filtered, groupBatches],
+  );
+
+  const tables = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const e of events) {
+      if (e.entity) map.set(e.entity.table, e.entity.tableLabel);
+    }
+    return [...map.entries()].map(([value, label]) => ({ value, label }));
+  }, [events]);
+
+  const filtersActive =
+    categories.length > 0 ||
+    onlyMine ||
+    !!actorFilter ||
+    !!query.trim() ||
+    period !== "all" ||
+    operation !== "all" ||
+    severity !== "all" ||
+    tableFilter !== "all";
+
+  const clearFilters = () => {
+    setCategories([]);
+    setOnlyMine(false);
+    setActorFilter(null);
+    setQuery("");
+    setPeriod("all");
+    setOperation("all");
+    setSeverity("all");
+    setTableFilter("all");
+  };
 
   const allCategories = Object.keys(activityCategoryLabels) as ActivityCategory[];
 
@@ -204,6 +294,17 @@ export function RealtimeUpdatesCard() {
           )}
         </div>
 
+        <Tabs defaultValue="atividade" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="atividade">Atividade</TabsTrigger>
+            <TabsTrigger value="equipe">Equipe</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="equipe" className="mt-0">
+            <TeamUsagePanel meId={meId} onSelectUser={(id) => setActorFilter(id)} />
+          </TabsContent>
+
+          <TabsContent value="atividade" className="mt-0 space-y-4">
         {/* Filtros */}
         <div className="space-y-2">
           <div className="flex flex-wrap gap-1.5">
@@ -324,6 +425,88 @@ export function RealtimeUpdatesCard() {
               </PopoverContent>
             </Popover>
           </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={period} onValueChange={setPeriod}>
+              <SelectTrigger className="h-8 w-[140px] text-xs">
+                <SelectValue placeholder="Período" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todo o período</SelectItem>
+                <SelectItem value="today">Hoje</SelectItem>
+                <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                <SelectItem value="30d">Últimos 30 dias</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={operation} onValueChange={setOperation}>
+              <SelectTrigger className="h-8 w-[130px] text-xs">
+                <SelectValue placeholder="Operação" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toda operação</SelectItem>
+                <SelectItem value="INSERT">Criação</SelectItem>
+                <SelectItem value="UPDATE">Edição</SelectItem>
+                <SelectItem value="DELETE">Exclusão</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={severity} onValueChange={setSeverity}>
+              <SelectTrigger className="h-8 w-[140px] text-xs">
+                <SelectValue placeholder="Gravidade" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Qualquer gravidade</SelectItem>
+                {(Object.keys(SEVERITY_LABELS) as ActivitySeverity[]).map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {SEVERITY_LABELS[s]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={tableFilter} onValueChange={setTableFilter}>
+              <SelectTrigger className="h-8 w-[160px] text-xs">
+                <SelectValue placeholder="Tipo de registro" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os registros</SelectItem>
+                {tables.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="flex items-center gap-2">
+              <Switch id="group-batches" checked={groupBatches} onCheckedChange={setGroupBatches} />
+              <Label htmlFor="group-batches" className="text-xs">
+                Agrupar em lote
+              </Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch id="group-day" checked={groupByDay} onCheckedChange={setGroupByDay} />
+              <Label htmlFor="group-day" className="text-xs">
+                Separar por dia
+              </Label>
+            </div>
+
+            <span className="text-xs text-muted-foreground">
+              {filtered.length} evento(s)
+            </span>
+            {filtersActive && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                onClick={clearFilters}
+              >
+                <RefreshCw className="size-3" />
+                Limpar filtros
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Feed */}
@@ -334,18 +517,40 @@ export function RealtimeUpdatesCard() {
                 <div key={i} className="h-10 animate-pulse rounded-md bg-foreground/5" />
               ))}
             </div>
-          ) : filtered.length === 0 ? (
+          ) : groups.length === 0 ? (
             <p className="p-6 text-center text-sm text-muted-foreground">
               Nenhuma atividade registrada ainda. Assim que alguém editar algo, aparece aqui.
             </p>
           ) : (
-            filtered.map((e) => {
+            groups.map((g, gi) => {
+              const prev = gi > 0 ? groups[gi - 1] : null;
+              const separator =
+                groupByDay && (!prev || dayLabel(prev.at) !== dayLabel(g.at)) ? (
+                  <p
+                    key={`day-${g.id}`}
+                    className="bg-foreground/[0.03] px-3 py-1 text-[11px] uppercase tracking-wide text-muted-foreground"
+                  >
+                    {dayLabel(g.at)}
+                  </p>
+                ) : null;
+
+              if (g.kind === "batch") {
+                return (
+                  <div key={g.id}>
+                    {separator}
+                    <ActivityBatchCard batch={g} onSelectEvent={setSelected} />
+                  </div>
+                );
+              }
+
+              const e = g.event;
               const Icon = CATEGORY_ICON[e.category];
               const detailed = isDetailed(e.category);
               const changes = e.changes ?? [];
               return (
+                <div key={e.id}>
+                  {separator}
                 <button
-                  key={e.id}
                   type="button"
                   onClick={() => setSelected(e)}
                   className="flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-foreground/5"
@@ -359,7 +564,15 @@ export function RealtimeUpdatesCard() {
                     <Icon className="size-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm leading-snug">{e.title}</p>
+                    <p className="text-sm leading-snug">
+                      {e.title}
+                      {e.clientLabel && (
+                        <span className="text-muted-foreground">
+                          {" "}
+                          — cliente {e.clientLabel}
+                        </span>
+                      )}
+                    </p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                       <span className="font-medium text-foreground/80">
                         {e.actorLabel}
@@ -411,6 +624,7 @@ export function RealtimeUpdatesCard() {
                   </div>
                   <ChevronRight className="mt-2 size-4 shrink-0 text-muted-foreground" />
                 </button>
+                </div>
               );
             })
           )}
@@ -423,6 +637,8 @@ export function RealtimeUpdatesCard() {
             </Button>
           </div>
         )}
+          </TabsContent>
+        </Tabs>
       </div>
 
       <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
