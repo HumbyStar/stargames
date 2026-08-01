@@ -2706,10 +2706,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                   <SlimMetric label="Duplicados" value={summary.duplicate} tone="danger" />
                 </div>
                 <div className="sticky top-0 z-10 flex flex-col-reverse gap-2 border-y border-border bg-background/95 py-3 backdrop-blur-sm sm:flex-row sm:justify-end">
-                  <Button variant="outline" onClick={() => setRows(null)} disabled={confirming} className="w-full sm:w-auto">
+                  <Button variant="outline" onClick={() => setRows(null)} disabled={confirming || importBusy} className="w-full sm:w-auto">
                     Cancelar
                   </Button>
-                  <Button onClick={confirmImport} disabled={summary.ok === 0 || confirming} className="w-full sm:w-auto">
+                  <Button onClick={guardImport(confirmImport)} disabled={summary.ok === 0 || confirming || importBusy} className="w-full sm:w-auto">
                     {confirming ? (
                       <>
                         <Loader2 className="size-4 animate-spin" />
@@ -2742,7 +2742,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                 <NotionPreview
                   result={notion}
                   findClientByPhone={findClientByPhone}
-                  onConfirm={confirmNotionImport}
+                  onConfirm={guardImport(confirmNotionImport)}
+                  busy={importBusy}
                   onClear={() => { setNotion(null); setHtmlText(""); }}
                 />
               </div>
@@ -2753,7 +2754,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
                 <ZipPreview
                   data={zipData}
                   onClear={() => setZipData(null)}
-                  onConfirm={confirmZipImport}
+                  onConfirm={guardImport(confirmZipImport)}
                   onToggleEntry={setEntrySelected}
                   onToggleProduct={setProductSelected}
                   onToggleAll={setAllEntriesSelected}
