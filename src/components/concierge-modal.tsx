@@ -46,6 +46,7 @@ import {
 } from "@/components/concierge-task-confirm-modal";
 import type { ConciergeTaskType, ConciergePriority } from "@/lib/concierge-tasks.functions";
 import { DataIntegrityPanel } from "@/components/data-integrity-panel";
+import { OnlineUsersStrip } from "@/components/online-presence";
 
 /* ----------------------------- Quick actions ------------------------------ */
 
@@ -607,6 +608,7 @@ export function ConciergeModal() {
                     ? "Digite ou fale. Eu encontro a sessão certa, aplico os filtros e te levo direto para a ação."
                     : "Escolha uma ação rápida para abrir o filtro correto."}
                 </p>
+                <OnlineUsersStrip active={open} />
               </div>
 
               {/* Ambiguidade */}
