@@ -986,6 +986,8 @@ export async function dbFetchDiagnostics(): Promise<ImportDiagnostics> {
   const head = (q: ReturnType<typeof supabase.from>) =>
     (q.select("*", { count: "exact", head: true }) as unknown as Promise<{ count: number | null; error: unknown }>);
 
+  const env = await resolveCurrentEnv();
+
   const [c, p, a, i, mc, mp] = await Promise.all([
     head(sb().from("clients")),
     head(sb().from("products")),
@@ -1039,6 +1041,7 @@ export async function dbFetchDiagnostics(): Promise<ImportDiagnostics> {
     mgmvProductsWithoutAgreementId: mp.count ?? 0,
     importProgressRows,
     resetVersion: getUiValue<string>("import.resetVersion", ""),
+    env,
   };
 }
 
