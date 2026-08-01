@@ -586,6 +586,8 @@ export function mapAuditRow(
     actorId: row.user_id,
     actorLabel,
     changes,
+    clientId,
+    clientLabel: str(data.client_name) ?? undefined,
     entity: {
       table: row.table_name,
       tableLabel: TABLE_LABELS[row.table_name] ?? row.table_name,
