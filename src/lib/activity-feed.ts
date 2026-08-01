@@ -354,7 +354,9 @@ function describeSettingsChange(
   prev: Record<string, unknown> | null,
   next: Record<string, unknown> | null,
 ): { title: string; description?: string; changes: ActivityChange[] } {
-  const sections = ["preferences", "rules", "security", "ui_state"];
+  // `ui_state` guarda apenas estado de tela (busca, chips, paginação,
+  // rascunhos, layout). Isso é navegação, não configuração — fica de fora.
+  const sections = ["preferences", "rules", "security"];
   const changes: SettingChange[] = [];
   for (const s of sections) {
     diffSettings(prev?.[s], next?.[s], s, [], changes);
