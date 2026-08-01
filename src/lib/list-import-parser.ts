@@ -317,29 +317,48 @@ function parseSingleLine(
   lineNumber: number,
   rawLine: string,
   sourceGroup: string,
+  autoFixes: string[] = [],
+  splitFromGluedLine = false,
 ): ListImportRow {
   const fields = splitLineFields(rawLine);
   if (fields.length < 5) {
-    return buildErrorRow(
+    const err = buildErrorRow(
       lineNumber,
       rawLine,
       sourceGroup,
       `Esperado pelo menos 5 campos separados por " - ", encontrado ${fields.length}.`,
     );
+    err.autoFixes = autoFixes;
+    err.splitFromGluedLine = splitFromGluedLine;
+    return err;
   }
 
   const clientName = fields[0];
   const phoneRaw = fields[1];
   const statusToken = fields[fields.length - 1];
   const valueToken = fields[fields.length - 2];
-  const platformToken = fields[fields.length - 3];
-  const productParts = fields.slice(2, fields.length - 3);
-  const productName = productParts.join(" - ");
-
   const warnings: string[] = [];
+
+  // Formato completo: Nome - Tel - Produto - Plataforma - Valor - Status.
+  // Com exatamente 5 campos a plataforma foi omitida na digitação: o campo
+  // do meio é o produto, não a plataforma.
+  let platformToken: string;
+  let productName: string;
+  if (fields.length === 5) {
+    productName = fields[2];
+    platformToken = "—";
+    warnings.push("Plataforma/categoria ausente — informe antes de importar.");
+    autoFixes = [...autoFixes, "Plataforma ausente preenchida com \"—\"."];
+  } else {
+    platformToken = fields[fields.length - 3];
+    productName = fields.slice(2, fields.length - 3).join(" - ");
+  }
+
   const { digits: phone, valid: phoneValid } = normalizePhone(phoneRaw);
   if (!phoneValid) {
     warnings.push(`Telefone "${phoneRaw}" inválido (${phone.length} dígitos).`);
+  } else if (phone.length === 10) {
+    warnings.push(SHORT_PHONE_WARNING);
   }
 
   const totalValue = parseMoney(valueToken);
@@ -349,9 +368,6 @@ function parseSingleLine(
 
   if (!productName) {
     warnings.push("Nome do produto não identificado.");
-  }
-  if (!platformToken) {
-    warnings.push("Plataforma/categoria não identificada.");
   }
 
   const statusParsed = parseStatusToken(statusToken, totalValue);
@@ -369,11 +385,17 @@ function parseSingleLine(
   }
 
   let reviewStatus: ListReviewStatus = "ok";
-  if (statusParsed.reviewRequired || !phoneValid || totalValue === null) {
+  if (
+    statusParsed.reviewRequired ||
+    !phoneValid ||
+    totalValue === null ||
+    warnings.some((w) => w.startsWith("Plataforma/categoria ausente"))
+  ) {
     reviewStatus = "review_required";
   }
 
-  const confidence = Math.max(0, 1 - warnings.length * 0.18);
+  const hardWarnings = warnings.filter((w) => !isSoftWarning(w));
+  const confidence = Math.max(0, 1 - hardWarnings.length * 0.18);
 
   return {
     id: uid(),
@@ -392,6 +414,8 @@ function parseSingleLine(
     confidence,
     warnings,
     reviewStatus,
+    autoFixes: autoFixes.length ? autoFixes : undefined,
+    splitFromGluedLine: splitFromGluedLine || undefined,
   };
 }
 
