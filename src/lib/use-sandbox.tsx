@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { emitAppEvent } from "./app-events";
+import { useStore } from "./store";
 import {
   getSandboxState,
   setSandboxMode,
@@ -78,6 +79,9 @@ export function SandboxProvider({ children }: { children: ReactNode }) {
     async (active: boolean) => {
       const next = await setMode({ data: { active } });
       setState(next);
+      // Só depois da confirmação do servidor trocamos o snapshot: cada
+      // ambiente (produção x modo teste) tem o seu, sem misturar dados.
+      await useStore.getState().switchEnv(next.active ? "sandbox" : "producao");
       reloadAppData();
     },
     [setMode],
