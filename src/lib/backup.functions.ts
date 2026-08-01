@@ -601,7 +601,7 @@ async function fetchAllRows(
       .range(from, from + batchSize - 1);
     if (error) throw new Error(`[${table}] ${error.message}`);
     if (!data || data.length === 0) break;
-    out.push(...data);
+    out.push(...data.map((r: any) => stripSearchNoise(table, r)));
     if (data.length < batchSize) break;
     from += batchSize;
   }
