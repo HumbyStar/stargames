@@ -2,28 +2,46 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { listOnlineUsers, type OnlineUser } from "@/lib/presence.functions";
+import type { ConnectionStatus } from "@/lib/use-connection-status";
 import { cn } from "@/lib/utils";
 
-/** Bolinha de status (verde = conectado, vermelho = offline). Apenas visual. */
+/** Bolinha de status (verde = conectado, laranja = instável, vermelho = offline). Apenas visual. */
 export function PresenceDot({
   online,
+  status,
   className,
 }: {
-  online: boolean;
+  online?: boolean;
+  status?: ConnectionStatus;
   className?: string;
 }) {
+  const state: ConnectionStatus = status ?? (online === false ? "offline" : "online");
+  const label =
+    state === "online" ? "Conectado" : state === "unstable" ? "Rede instável" : "Offline";
+  const color =
+    state === "online"
+      ? "bg-emerald-500"
+      : state === "unstable"
+        ? "bg-orange-500"
+        : "bg-red-500";
+  const ping =
+    state === "online"
+      ? "bg-emerald-500/60"
+      : state === "unstable"
+        ? "bg-orange-500/60"
+        : null;
   return (
     <span
       aria-hidden
-      title={online ? "Conectado" : "Offline"}
+      title={label}
       className={cn(
         "pointer-events-none absolute -bottom-0.5 -right-0.5 z-10 grid size-3.5 place-items-center rounded-full ring-2 ring-background",
-        online ? "bg-emerald-500" : "bg-red-500",
+        color,
         className,
       )}
     >
-      {online && (
-        <span className="absolute inset-0 animate-ping rounded-full bg-emerald-500/60" />
+      {ping && (
+        <span className={cn("absolute inset-0 animate-ping rounded-full", ping)} />
       )}
     </span>
   );

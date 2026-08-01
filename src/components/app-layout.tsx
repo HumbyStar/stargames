@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { SandboxProvider, useSandbox } from "@/lib/use-sandbox";
 import { WifiOff } from "lucide-react";
+import { toast } from "sonner";
 import { initLocalMode, isLocalMode, subscribeLocalMode } from "@/lib/local-mode";
 import { startLocalPersistence } from "@/lib/local-persistence";
 import { initInstallPrompt, registerServiceWorker } from "@/lib/pwa";
@@ -738,7 +739,7 @@ const RightNavIcon = memo(RightNavIconImpl);
 
 function _FloatingNavbarImpl() {
   const [openMobile, setOpenMobile] = useState(false);
-  const { online: connectionOnline } = useConnectionStatus();
+  const { status: connectionStatus } = useConnectionStatus();
   const activeSection = useUiStore((s) => s.activeSection);
   const setActiveSection = useUiStore((s) => s.setActiveSection);
   const [isDark, setIsDark] = useState(
@@ -1101,7 +1102,7 @@ function _FloatingNavbarImpl() {
               draggable={false}
               className="relative size-11 rounded-full object-cover ring-1 ring-primary/30 shadow-md transition-all duration-[800ms] ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:shadow-lg group-hover:rotate-6 group-hover:scale-110"
             />
-            <PresenceDot online={connectionOnline} />
+            <PresenceDot status={connectionStatus} />
           </span>
           <div
             className={cn(
@@ -1521,42 +1522,47 @@ function GlobalModals() {
   );
 }
 
-/** Aviso automático quando a conexão com o sistema cai. */
+/** Aviso automático quando a conexão cai ou fica instável. */
 function OfflineNoticeModal() {
-  const { online, checking } = useConnectionStatus();
-  const [open, setOpen] = useState(false);
-  const wasOffline = useRef(false);
+  const { status, checking } = useConnectionStatus();
+  const [variant, setVariant] = useState<"offline" | "unstable" | null>(null);
+  const prev = useRef<"offline" | "unstable" | "online">("online");
   const { setActive } = useSandbox();
 
   useEffect(() => {
     if (checking) return;
-    if (!online && !wasOffline.current) {
-      wasOffline.current = true;
-      setOpen(true);
+    if (status === "offline" && prev.current !== "offline") {
+      setVariant("offline");
+    } else if (status === "unstable" && prev.current !== "unstable") {
+      setVariant("unstable");
+    } else if (status === "online" && prev.current !== "online") {
+      setVariant(null);
+      if (prev.current === "unstable") toast.success("Conexão estável novamente");
     }
-    if (online && wasOffline.current) {
-      wasOffline.current = false;
-      setOpen(false);
-    }
-  }, [online, checking]);
+    prev.current = status;
+  }, [status, checking]);
+
+  const open = variant !== null;
+  const isUnstable = variant === "unstable";
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => (o ? null : setVariant(null))}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <WifiOff className="size-5 text-red-500" />
-            Você está em modo offline
+            <WifiOff className={cn("size-5", isUnstable ? "text-orange-500" : "text-red-500")} />
+            {isUnstable ? "Instabilidade na rede wi-fi" : "Você está em modo offline"}
           </DialogTitle>
           <DialogDescription>
-            A conexão com o sistema caiu — nada será salvo na nuvem agora. Use o Modo Teste
-            caso precise importar algo apenas para validar.
+            {isUnstable
+              ? "Você está sofrendo latência de wi-fi. Algumas ações podem não ser carregadas ao banco — verifique sua conexão antes de qualquer ação."
+              : "A conexão com o sistema caiu — nada será salvo na nuvem agora. Use o Modo Teste caso precise importar algo apenas para validar."}
           </DialogDescription>
         </DialogHeader>
         <div className="flex justify-end gap-2">
           <button
             type="button"
-            onClick={() => setOpen(false)}
+            onClick={() => setVariant(null)}
             className="rounded-md border border-border px-3 py-1.5 text-sm transition hover:bg-accent"
           >
             Entendi
@@ -1565,7 +1571,7 @@ function OfflineNoticeModal() {
             type="button"
             onClick={() => {
               void setActive(true).catch(() => {});
-              setOpen(false);
+              setVariant(null);
             }}
             className="rounded-md bg-amber-500/90 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-amber-500"
           >

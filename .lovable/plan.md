@@ -1,29 +1,29 @@
 ## Objetivo
 
-Indicador de presença para **todos os usuários** do sistema: uma bolinha verde/vermelha sobre o avatar da navbar (só visual, sem clique) e, dentro do modal do Concierge, uma lista minimalista de quem está conectado agora.
+Além de verde (conectado) e vermelho (offline), a bolinha do avatar passa a ficar **laranja** quando a rede estiver instável (latência alta / falhas intermitentes), com um modal de aviso específico.
 
 ## O que será feito
 
-**1. Bolinha no avatar (sem clique)**
-- Ponto no canto inferior direito do avatar/mascote na navbar, puramente indicativo (`pointer-events-none`), sem popover — o clique continua abrindo o Concierge normalmente.
-  - Verde pulsante = conectado (navegador online + heartbeat da sessão respondendo).
-  - Vermelho = offline ou backend sem resposta.
-- `title` com o estado ("Conectado" / "Offline") para acessibilidade.
+**1. Detecção de instabilidade**
+- O ping já existente a cada 30s (`src/lib/use-connection-status.ts`) passa a medir o tempo de resposta.
+- Classificação:
+  - **Offline** — navegador sem rede ou ping falhou.
+  - **Instável** — ping demorou mais de ~1,5s, ou houve falha em uma das últimas checagens seguida de sucesso (oscilação).
+  - **Conectado** — ping rápido e estável.
+- Enquanto instável, o intervalo de checagem cai para ~10s para confirmar/limpar o estado mais rápido.
 
-**2. Lista de conectados no Concierge (minimalista)**
-- No topo do modal do Concierge, uma linha discreta: pequenos pontos verdes + nome/e-mail dos usuários com sinal nos últimos ~2 minutos, com "você" marcado, e contagem tipo "3 conectados".
-- Sem tabela, sem cards — apenas uma faixa enxuta que se atualiza a cada 30s enquanto o modal estiver aberto.
-- Se ninguém além de você estiver online, mostra "Somente você conectado".
+**2. Bolinha laranja**
+- `PresenceDot` passa a receber o status (`online` | `unstable` | `offline`) em vez de um booleano: verde pulsante, laranja pulsante, vermelho.
+- `title`: "Conectado" / "Rede instável" / "Offline".
 
-**3. Modal de modo offline**
-- Ao perder a conexão, abre um aviso:
-  > "Você está em modo offline. A conexão com o sistema caiu — nada será salvo na nuvem agora. Use o Modo Teste se precisar importar algo para validar."
-- Botões "Entendi" e "Abrir Modo Teste"; aparece uma vez por queda e fecha sozinho quando a conexão volta (com toast de "Conexão restabelecida").
+**3. Modal de aviso de latência**
+- Ao entrar em estado instável, abre um aviso:
+  > "Você está sofrendo latência de wi-fi. Algumas ações podem não ser carregadas ao banco — verifique sua conexão antes de qualquer ação."
+- Botões "Entendi" e "Abrir Modo Teste" (mesmo padrão do modal offline).
+- Aparece uma vez por episódio de instabilidade e fecha sozinho quando a conexão normaliza (com toast "Conexão estável novamente"). Se a conexão cair de vez, o modal offline atual assume o lugar.
 
 ## Detalhes técnicos
 
-- Novo hook `src/lib/use-connection-status.ts`: combina `isOnline()` de `src/lib/local-mode.ts` (eventos `online`/`offline`) com o resultado do heartbeat já existente em `src/lib/session-guard.functions.ts`.
-- Nova server fn `listOnlineUsers` (com `requireSupabaseAuth`) lendo `public.active_sessions` filtrando `last_seen > now() - 2 min`, cruzando com `profiles.display_name`; retorna apenas id, nome/e-mail e último sinal.
-- Como as políticas de `active_sessions` hoje são por usuário, a leitura coletiva passa por uma função `security definer` restrita a quem tem papel interno (`has_any_internal_role`), sem expor dados sensíveis.
-- O heartbeat atual (30s, em `src/components/session-guard.tsx`) já alimenta a tabela para todos os usuários, então a presença funciona para o time inteiro sem código extra por usuário.
-- Bolinha adicionada no bloco do avatar em `src/components/app-layout.tsx` (~linha 1089); faixa de conectados em `src/components/concierge-modal.tsx`; modal de offline renderizado uma vez no layout.
+- `src/lib/use-connection-status.ts`: retorna `{ status, online, checking, latencyMs }`, mantendo `online` para compatibilidade com os usos atuais.
+- `src/components/online-presence.tsx`: `PresenceDot` aceita `status` (mantendo suporte ao prop `online` para não quebrar chamadas existentes) e mapeia cores por token de estado.
+- `src/components/app-layout.tsx`: passa o status para a bolinha (linha ~1104) e o `OfflineNoticeModal` (linha ~1525) ganha a variante de instabilidade, com título/ícone e texto próprios.
