@@ -760,14 +760,131 @@ async function mirrorBucket(
   return count;
 }
 
+/**
+ * Exporta uma tabela em blocos gravados no armazenamento intermediário,
+ * respeitando o orçamento de tempo da execução atual. Retorna com
+ * `state.done = false` quando o tempo acaba — a próxima execução continua
+ * exatamente da linha seguinte.
+ */
+async function exportTableInChunks(
+  admin: any,
+  opts: {
+    backupId: string;
+    table: string;
+    env: "producao" | "sandbox";
+    state: BackupPartState;
+    deadline: number;
+    onProgress?: (rows: number) => Promise<void>;
+  },
+): Promise<void> {
+  const { crc32Update } = await import("@/lib/zip-store-writer");
+  const { table, state, deadline } = opts;
+  const batchSize = 1000;
+  const encoder = new TextEncoder();
+  const limit = LOG_TABLE_LIMITS[table];
+  const dateColumn = limit ? await resolveLogColumn(admin, table, limit.dateColumns) : null;
+  let buffer: string[] = [];
+  let bufferRows = 0;
+
+  const flush = async () => {
+    if (bufferRows === 0) return;
+    const text = (state.rows === bufferRows ? "" : "\n") + buffer.join("\n");
+    const bytes = encoder.encode(text);
+    const path = partPath(opts.backupId, table, state.chunks.length);
+    const { error } = await admin.storage
+      .from(BACKUP_BUCKET)
+      .upload(path, bytes, { contentType: "application/x-ndjson", upsert: true });
+    if (error) throw new Error(`[${table}] ${error.message}`);
+    state.chunks.push(path);
+    state.bytes += bytes.byteLength;
+    state.crcState = crc32Update(state.crcState, bytes);
+    buffer = [];
+    bufferRows = 0;
+  };
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    let query = admin.from(table).select("*");
+    // O backup é sempre de UM ambiente: sem este filtro produção e teste
+    // sairiam somados no mesmo arquivo.
+    if (ENV_SCOPED_TABLES.has(table)) query = query.eq("env", opts.env);
+    const { data, error } = await query
+      .order(dateColumn ?? orderKeyFor(table), { ascending: true })
+      .range(state.offset, state.offset + batchSize - 1);
+    if (error) throw new Error(`[${table}] ${error.message}`);
+    if (!data || data.length === 0) {
+      await flush();
+      state.done = true;
+      return;
+    }
+    for (const row of data) buffer.push(JSON.stringify(row));
+    bufferRows += data.length;
+    state.rows += data.length;
+    state.offset += data.length;
+    if (opts.onProgress) await opts.onProgress(state.rows);
+    if (bufferRows >= PART_CHUNK_ROWS) await flush();
+    if (data.length < batchSize) {
+      await flush();
+      state.done = true;
+      return;
+    }
+    if (state.rows >= MAX_ROWS_PER_TABLE) {
+      await flush();
+      state.capped = true;
+      state.done = true;
+      return;
+    }
+    if (Date.now() >= deadline) {
+      await flush();
+      return; // pausa: continua na próxima execução
+    }
+  }
+}
+
+/** Recarrega as linhas já exportadas de uma tabela (usado pelo resumo). */
+async function loadPartRows(admin: any, state: BackupPartState | undefined): Promise<any[]> {
+  if (!state) return [];
+  const rows: any[] = [];
+  for (const path of state.chunks) {
+    const { data, error } = await admin.storage.from(BACKUP_BUCKET).download(path);
+    if (error) throw new Error(error.message);
+    const text = await data.text();
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        rows.push(JSON.parse(trimmed));
+      } catch {
+        /* linha corrompida é ignorada no resumo */
+      }
+    }
+  }
+  return rows;
+}
+
+async function cleanupBackupParts(admin: any, progress: BackupProgress) {
+  const paths = Object.values(progress.parts).flatMap((state) => state.chunks);
+  if (paths.length === 0) return;
+  for (let i = 0; i < paths.length; i += 100) {
+    await admin.storage.from(BACKUP_BUCKET).remove(paths.slice(i, i + 100));
+  }
+}
+
 async function runBackup(opts: {
   type: "manual" | "scheduled";
   createdBy: string | null;
   env?: "producao" | "sandbox";
   existing?: { id: string; storagePath: string };
-}): Promise<{ id: string; storagePath: string; sizeBytes: number }> {
+}): Promise<{ id: string; storagePath: string; sizeBytes: number; incomplete?: boolean }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { buildStoreZip, toZipBytes } = await import("@/lib/zip-store-writer");
+  const {
+    toZipBytes,
+    crc32Init,
+    crc32Update,
+    crc32Final,
+    zipLocalHeader,
+    zipCentralDirectory,
+  } = await import("@/lib/zip-store-writer");
 
   await cleanupStaleBackups(supabaseAdmin);
 
@@ -804,11 +921,12 @@ async function runBackup(opts: {
   };
 
   let backupId: string;
+  let progress: BackupProgress = emptyProgress();
   if (opts.existing) {
     backupId = opts.existing.id;
     const { data: existingRow } = await supabaseAdmin
       .from("system_backups")
-      .select("debug_log")
+      .select("debug_log, error_details")
       .eq("id", backupId)
       .maybeSingle();
     debugLog.push(
@@ -816,9 +934,11 @@ async function runBackup(opts: {
         ? (existingRow.debug_log as unknown as BackupDebugEntry[])
         : []),
     );
+    progress = normalizeProgress((existingRow?.error_details as any)?.resume);
     pushDebug("info", "initializing", "Retomada do backup iniciada", {
       type: opts.type,
       mode: "resume",
+      rowsAlreadyExported: progress.totalRows,
     });
     const { error: startErr } = await supabaseAdmin
       .from("system_backups")
