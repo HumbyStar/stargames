@@ -319,20 +319,41 @@ export function calculateReservaDueDate(registerDate: string): string {
   return due.toISOString();
 }
 
+/** Prazo padrão dos produtos que não são Reserva: cadastro + 30 dias. */
+export function calculateDefaultDueDate(registerDate: string): string {
+  const registerTime = parseDateOnlyTime(registerDate) ?? Date.now();
+  return new Date(registerTime + 30 * 86400000).toISOString();
+}
+
+/** Data limite conforme o status financeiro (Reserva = +1 mês; demais = +30 dias). */
+export function calculateDueDateForStatus(
+  status: FinancialStatus,
+  registerDate: string,
+): string {
+  return status === "Reserva"
+    ? calculateReservaDueDate(registerDate)
+    : calculateDefaultDueDate(registerDate);
+}
+
 export function normalizeProductDueDateForCreate(
   product: Omit<Product, "id">,
 ): Omit<Product, "id"> {
-  if (product.financialStatus !== "Reserva") return product;
-  // Regra: Reserva NUNCA pode nascer com dueDate <= registerDate. Se o
-  // chamador informou um dueDate estritamente maior que o cadastro
-  // (ex.: "Data Limite" do cabeçalho da lista colada), preservamos esse
-  // valor. Caso contrário, força cadastro + 1 mês.
+  // Regra: nenhum produto nasce com dueDate <= registerDate. Se o chamador
+  // informou um dueDate estritamente maior que o cadastro (ex.: "Data Limite"
+  // do cabeçalho da lista colada ou do HTML), preservamos esse valor. Caso
+  // contrário, aplica cadastro + 1 mês (Reserva) ou cadastro + 30 dias.
   const registerTime = parseDateOnlyTime(product.registerDate);
   const providedTime = product.dueDate ? parseDateOnlyTime(product.dueDate) : null;
   if (registerTime !== null && providedTime !== null && providedTime > registerTime) {
     return product;
   }
-  return { ...product, dueDate: calculateReservaDueDate(product.registerDate) };
+  return {
+    ...product,
+    dueDate: calculateDueDateForStatus(
+      product.financialStatus,
+      product.registerDate,
+    ),
+  };
 }
 
 export interface Client {
