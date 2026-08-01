@@ -1312,6 +1312,7 @@ export function subscribeRealtimeSnapshot(onRefresh: () => void): () => void {
     .on("postgres_changes", { event: "*", schema: "public", table: "products" }, schedule)
     .on("postgres_changes", { event: "*", schema: "public", table: "mgmv_agreements" }, schedule)
     .on("postgres_changes", { event: "*", schema: "public", table: "mgmv_installments" }, schedule)
+    .on("postgres_changes", { event: "*", schema: "public", table: "import_history" }, schedule)
     .subscribe();
   return () => {
     if (timer) window.clearTimeout(timer);
