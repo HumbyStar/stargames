@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   calculateFinancialStatus,
   calculateReservaDueDate,
+  calculateDefaultDueDate,
   migrateStoreV3,
   normalizeProductDueDateForCreate,
   productCollectionStatus,
@@ -49,6 +50,45 @@ describe("reserva due date", () => {
       }),
     );
     expect(normalized.dueDate.slice(0, 10)).toBe("2026-08-23");
+  });
+});
+
+describe("data limite padrão (não-Reserva)", () => {
+  it("calcula cadastro + 30 dias", () => {
+    expect(calculateDefaultDueDate("2026-07-17").slice(0, 10)).toBe("2026-08-16");
+  });
+
+  it("corrige Pendente criado com limite igual ao cadastro", () => {
+    const normalized = normalizeProductDueDateForCreate(
+      baseProduct({
+        financialStatus: "Pendente",
+        registerDate: "2026-07-17T12:00:00.000Z",
+        dueDate: "2026-07-17T12:00:00.000Z",
+      }),
+    );
+    expect(normalized.dueDate.slice(0, 10)).toBe("2026-08-16");
+  });
+
+  it("aplica +30 dias também para Pago sem data limite", () => {
+    const normalized = normalizeProductDueDateForCreate(
+      baseProduct({
+        financialStatus: "Pago",
+        registerDate: "2026-07-01T12:00:00.000Z",
+        dueDate: "2026-06-01T12:00:00.000Z",
+      }),
+    );
+    expect(normalized.dueDate.slice(0, 10)).toBe("2026-07-31");
+  });
+
+  it("preserva data limite do arquivo quando maior que o cadastro", () => {
+    const normalized = normalizeProductDueDateForCreate(
+      baseProduct({
+        financialStatus: "Pendente",
+        registerDate: "2026-07-01T12:00:00.000Z",
+        dueDate: "2026-07-10T12:00:00.000Z",
+      }),
+    );
+    expect(normalized.dueDate.slice(0, 10)).toBe("2026-07-10");
   });
 });
 

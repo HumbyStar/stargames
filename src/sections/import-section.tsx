@@ -27,6 +27,7 @@ import {
 import {
   calculateFinancialStatus,
   calculateReservaDueDate,
+  calculateDueDateForStatus,
   formatBRL,
   useStore,
   getResetVersion,
@@ -224,10 +225,7 @@ const normalizeDateBR = (s: string): string | null => {
 
 const calculateDueDate = (status: FinancialStatus, registerDate: string | null) => {
   if (!registerDate) return null;
-  if (status === "Reserva") {
-    return calculateReservaDueDate(registerDate).split("T")[0];
-  }
-  return registerDate;
+  return calculateDueDateForStatus(status, registerDate).split("T")[0];
 };
 
 // ---- Helpers MGMV ----
@@ -1883,9 +1881,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           ? effectiveStatus === "Reserva"
             ? calculateReservaDueDate(regISO)
             : new Date(`${p.dueDate}T12:00:00`).toISOString()
-          : effectiveStatus === "Reserva"
-            ? calculateReservaDueDate(regISO)
-            : regISO;
+          : calculateDueDateForStatus(effectiveStatus, regISO);
         addProduct({
           clientId: client!.id,
           name: p.product,
@@ -2275,7 +2271,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       const dueISO =
         finalStatus === "Reserva"
           ? calculateReservaDueDate(regISO)
-          : r.dueDate ?? new Date(new Date(regISO).getTime() + 7 * 86400000).toISOString();
+          : r.dueDate ?? calculateDueDateForStatus(finalStatus, regISO);
       addProduct({
         clientId: client.id,
         name: r.product,
@@ -2369,9 +2365,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           ? p.financialStatus === "Reserva"
             ? calculateReservaDueDate(regISO)
             : new Date(`${p.dueDate}T12:00:00`).toISOString()
-          : p.financialStatus === "Reserva"
-            ? calculateReservaDueDate(regISO)
-            : regISO;
+          : calculateDueDateForStatus(p.financialStatus, regISO);
         addProduct({
           clientId: client!.id,
           name: p.product,
