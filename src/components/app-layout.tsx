@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { SandboxProvider, useSandbox } from "@/lib/use-sandbox";
 import { WifiOff } from "lucide-react";
+import { toast } from "sonner";
 import { initLocalMode, isLocalMode, subscribeLocalMode } from "@/lib/local-mode";
 import { startLocalPersistence } from "@/lib/local-persistence";
 import { initInstallPrompt, registerServiceWorker } from "@/lib/pwa";
