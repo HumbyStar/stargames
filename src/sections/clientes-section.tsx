@@ -1718,15 +1718,7 @@ function ClientDrawer({
               <Button
                 size="sm"
                 variant="default"
-                onClick={() => {
-                  const sel = selectedProducts();
-                  if (sel.length === 0) {
-                    toast.info("Selecione ao menos 1 produto");
-                    return;
-                  }
-                  setNfProducts(sel);
-                  setNfModalOpen(true);
-                }}
+                onClick={handleGerarNf}
                 title="Classifica NCM via IA e gera texto pronto para o contador"
               >
                 <Sparkles className="mr-1 h-3.5 w-3.5" />
