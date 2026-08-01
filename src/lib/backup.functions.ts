@@ -1085,7 +1085,7 @@ async function runBackup(opts: {
           backupId,
           table,
           env: backupEnv,
-          sandboxOwner: context.userId,
+          sandboxOwner: opts.createdBy,
           state,
           deadline,
           onProgress: async (rows) => {
