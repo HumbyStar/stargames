@@ -44,6 +44,10 @@ export interface ActivityEvent {
   /** Lista completa de alterações campo a campo. */
   changes?: ActivityChange[];
   entity?: ActivityEntity;
+  /** Cliente vinculado ao registro (produto, nota fiscal, parcela...). */
+  clientId?: string | null;
+  /** Nome do cliente resolvido — exibido na mesma linha do evento. */
+  clientLabel?: string;
 }
 
 export const activityCategoryLabels: Record<ActivityCategory, string> = {
