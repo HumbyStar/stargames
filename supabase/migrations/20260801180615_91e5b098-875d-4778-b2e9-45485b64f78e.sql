@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.import_history_set_author() FROM PUBLIC, anon, authenticated;
