@@ -41,12 +41,12 @@ Allef - 81 8995-3053 - Dying Light + EXPANSAO E DLC - PS4 Completo - 60 reais - 
     expect(row.remainingValue).toBe(30);
   });
 
-  it("flags RESERVA without value for review", () => {
+  it("aplica sinal padrão de R$10 quando RESERVA vem sem valor", () => {
     const out = parseListText(`Grupo 4:
 Joao - 11 91194-7693 - Mario - Switch - 100 reais - RESERVA`);
-    expect(out.rows[0].reviewStatus).toBe("review_required");
-    expect(out.rows[0].paidValue).toBeNull();
-    expect(out.rows[0].warnings.some((w) => w.includes("Valor pago"))).toBe(true);
+    expect(out.rows[0].reviewStatus).toBe("ok");
+    expect(out.rows[0].paidValue).toBe(10);
+    expect(out.rows[0].remainingValue).toBe(90);
   });
 
   it("flags invalid phones", () => {
