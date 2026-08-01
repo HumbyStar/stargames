@@ -30,8 +30,15 @@ OBJETIVO
 
 REGRAS DE LEITURA
 - IGNORE linhas vazias, linhas só com data/cabeçalho, e linhas que começam com "Grupo", "GRUPO" ou "Grupo N:".
+- IGNORE cabeçalhos soltos em caixa alta sem " - " (ex.: "PASSADOS", "ATUAIS") — não são clientes nem erro.
 - Cada cliente tem a ordem: NOME -> TELEFONE -> PRODUTO -> PLATAFORMA -> VALOR -> STATUS.
 - Leia da esquerda para a direita começando pelo nome. Tudo o que aparecer DEPOIS do status é o início de um novo cliente — mesmo que esteja na mesma linha.
+- REGRA ABSOLUTA DE CORTE: o status ("Pago", "Reserva", "Reserva (65)", "Pendente", "MGMV") ENCERRA o registro. Se depois dele houver qualquer texto contendo um telefone, divida em DOIS clientes e devolva os dois no array. Nunca deixe o segundo cliente virar parte do nome do produto.
+- Corrija ruído de digitação sem mudar o conteúdo: espaços no início/fim da linha, espaços duplicados, traço colado ("texto- texto", "texto -  texto"), status em minúsculo ("reserva" -> "Reserva").
+- "Reserva(65)", "Reserva 65" e "Reserva - 65" significam o mesmo: financialStatus="Reserva" com paidValue=65.
+- Se faltar a plataforma (a linha tem só 5 campos), o campo do meio é o PRODUTO e a plataforma fica "—", registrando em fixes "plataforma ausente".
+- Telefone com 10 dígitos: mantenha como veio e registre em fixes "telefone com 10 dígitos — confirmar 9º dígito". NUNCA invente dígitos.
+- Nomes com caixa diferente ("felipe" e "Felipe") no mesmo telefone são o MESMO cliente.
 - Telefone: somente dígitos, 10 ou 11 (junte DDD + número).
 - Status financeiro normalizado: "Pago", "Reserva", "Pendente" ou "MGMV". "Reserva 50" significa status Reserva com paidValue=50.
 - Se faltar plataforma, use "—". Se faltar valor numérico, deixe totalValue=null e descreva em fixes.
