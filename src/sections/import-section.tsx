@@ -2299,6 +2299,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       errors: rows.length - ready.length,
       status: rows.length - ready.length > 0 ? "Com avisos" : "Concluído",
       fileHash,
+      rawContent: importSource === "Texto" ? text : undefined,
       });
       const savedHistory = useStore.getState().importHistory[0];
       if (savedHistory) {

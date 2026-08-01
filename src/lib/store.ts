@@ -30,6 +30,7 @@ import {
   dbDeleteClientsByIdsAsync,
 } from "./db-sync";
 import { suspendRealtimeRefresh } from "./db-sync";
+import { getCurrentUserInfo } from "./db-sync";
 import type { ImportDiagnostics } from "./db-sync";
 export type { ImportDiagnostics } from "./db-sync";
 import { recalcPendingDueDates } from "./mgmv-schedule";
@@ -410,6 +411,12 @@ export interface ImportHistoryEntry {
   skippedDuplicates?: number;
   /** Tempo total da operação em ms. */
   durationMs?: number;
+  /** E-mail de quem executou a importação. */
+  userEmail?: string;
+  /** id do usuário que executou a importação. */
+  userId?: string;
+  /** Conteúdo original importado (texto colado), quando disponível. */
+  rawContent?: string;
 }
 
 export type DangerAction =
@@ -1002,6 +1009,9 @@ export const useStore = create<State>()((set, get) => ({
             agreementsReplaced: entry.agreementsReplaced,
             skippedDuplicates: entry.skippedDuplicates,
             durationMs: entry.durationMs,
+            rawContent: entry.rawContent,
+            userId: entry.userId ?? getCurrentUserInfo().id,
+            userEmail: entry.userEmail ?? getCurrentUserInfo().email,
           };
           dbInsertHistory(newEntry);
           // Mantém um buffer maior na memória — o banco preserva tudo;
