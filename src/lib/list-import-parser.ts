@@ -542,16 +542,26 @@ export function parseListText(raw: string): ListImportPreview {
     headerDueDate = undefined;
   }
   lines.forEach((rawLine, idx) => {
-    const line = rawLine.trim();
+    const cleaned = normalizeLineNoise(rawLine);
+    const line = cleaned.line;
     if (!line) return;
     if (GROUP_HEADER_RE.test(line)) {
       currentGroup = line.replace(/:\s*$/, "").trim();
       groupsSeen.add(currentGroup);
       return;
     }
-    if (currentGroup !== "(sem grupo)" || /\s-\s/.test(line)) {
-      rows.push(parseSingleLine(idx + 1, line, currentGroup));
-    }
+    if (currentGroup === "(sem grupo)" && !/\s-\s/.test(line)) return;
+    const segments = splitGluedRecords(line);
+    const wasSplit = segments.length > 1;
+    segments.forEach((segment, segIdx) => {
+      const fixes = [...cleaned.fixes];
+      if (wasSplit) {
+        fixes.push(
+          `Linha dividida automaticamente (${segments.length} clientes na mesma linha) — parte ${segIdx + 1}.`,
+        );
+      }
+      rows.push(parseSingleLine(idx + 1, segment, currentGroup, fixes, wasSplit));
+    });
   });
 
   markDuplicateCandidates(rows);
@@ -581,6 +591,11 @@ export function computeTotals(
   const validPhones = active.filter((r) => r.phoneValid).length;
   const invalidPhones = active.filter((r) => !r.phoneValid).length;
   const duplicateCandidates = active.filter((r) => r.duplicateCandidate).length;
+  const splitRows = active.filter((r) => r.splitFromGluedLine).length;
+  const missingPlatformRows = active.filter((r) =>
+    r.warnings.some((w) => w.startsWith("Plataforma/categoria ausente")),
+  ).length;
+  const shortPhones = active.filter((r) => r.phoneValid && r.phone.length === 10).length;
   return {
     lines: rows.length,
     validRows,
@@ -596,6 +611,9 @@ export function computeTotals(
     duplicateCandidates,
     uniqueClients: clients.length,
     products: active.filter((r) => r.reviewStatus !== "error").length,
+    splitRows,
+    missingPlatformRows,
+    shortPhones,
   };
 }
 
@@ -604,6 +622,10 @@ export function recalcRow(row: ListImportRow): ListImportRow {
   const { valid } = normalizePhone(next.phone);
   next.phoneValid = valid;
   if (!valid) next.warnings.push("Telefone inválido.");
+  else if (next.phone.replace(/\D+/g, "").length === 10) next.warnings.push(SHORT_PHONE_WARNING);
+  if (!next.platformOrCategory || next.platformOrCategory === "—") {
+    next.warnings.push("Plataforma/categoria ausente — informe antes de importar.");
+  }
 
   if (next.totalValue === null) next.warnings.push("Valor total não informado.");
   if (next.totalValue !== null && next.paidValue !== null) {
@@ -626,9 +648,9 @@ export function recalcRow(row: ListImportRow): ListImportRow {
     }
   }
 
-  const review =
-    next.warnings.length > 0 || next.totalValue === null ? "review_required" : "ok";
+  const hard = next.warnings.filter((w) => !isSoftWarning(w));
+  const review = hard.length > 0 || next.totalValue === null ? "review_required" : "ok";
   next.reviewStatus = review;
-  next.confidence = Math.max(0, 1 - next.warnings.length * 0.18);
+  next.confidence = Math.max(0, 1 - hard.length * 0.18);
   return next;
 }
