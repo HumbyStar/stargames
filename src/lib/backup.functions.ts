@@ -830,6 +830,7 @@ async function exportTableInChunks(
     backupId: string;
     table: string;
     env: "producao" | "sandbox";
+    sandboxOwner?: string | null;
     state: BackupPartState;
     deadline: number;
     onProgress?: (rows: number) => Promise<void>;
@@ -865,7 +866,13 @@ async function exportTableInChunks(
     let query = admin.from(table).select("*");
     // O backup é sempre de UM ambiente: sem este filtro produção e teste
     // sairiam somados no mesmo arquivo.
-    if (ENV_SCOPED_TABLES.has(table)) query = query.eq("env", opts.env);
+    if (ENV_SCOPED_TABLES.has(table)) {
+      query = query.eq("env", opts.env);
+      // Sandbox é individual: o backup leva apenas o ambiente do próprio usuário.
+      if (opts.env === "sandbox" && opts.sandboxOwner) {
+        query = query.eq("sandbox_owner", opts.sandboxOwner);
+      }
+    }
     const { data, error } = await query
       .order(dateColumn ?? orderKeyFor(table), { ascending: true })
       .range(state.offset, state.offset + batchSize - 1);
@@ -1078,6 +1085,7 @@ async function runBackup(opts: {
           backupId,
           table,
           env: backupEnv,
+          sandboxOwner: context.userId,
           state,
           deadline,
           onProgress: async (rows) => {
@@ -1636,7 +1644,10 @@ export const estimateBackup = createServerFn({ method: "GET" })
         let counter = (supabaseAdmin as any)
           .from(t)
           .select("*", { count: "exact", head: true });
-        if (ENV_SCOPED_TABLES.has(t)) counter = counter.eq("env", backupEnv);
+        if (ENV_SCOPED_TABLES.has(t)) {
+          counter = counter.eq("env", backupEnv);
+          if (backupEnv === "sandbox") counter = counter.eq("sandbox_owner", context.userId);
+        }
         const { count, error } = await counter;
         if (error) throw error;
         const rows = count ?? 0;
@@ -2044,13 +2055,13 @@ export const getCurrentBusinessSummary = createServerFn({ method: "GET" })
     const env = await resolveTargetEnv(supabaseAdmin, context.userId);
     const [clients, products, agreements, installments, nfInvoices, teamTasks, punchEntries] =
       await Promise.all([
-        fetchAllRows(supabaseAdmin, "clients", 1000, env),
-        fetchAllRows(supabaseAdmin, "products", 1000, env),
-        fetchAllRows(supabaseAdmin, "mgmv_agreements", 1000, env),
-        fetchAllRows(supabaseAdmin, "mgmv_installments", 1000, env),
-        fetchAllRows(supabaseAdmin, "nf_invoices", 1000, env),
-        fetchAllRows(supabaseAdmin, "team_tasks", 1000, env),
-        fetchAllRows(supabaseAdmin, "team_punch_entries", 1000, env),
+        fetchAllRows(supabaseAdmin, "clients", 1000, env, context.userId),
+        fetchAllRows(supabaseAdmin, "products", 1000, env, context.userId),
+        fetchAllRows(supabaseAdmin, "mgmv_agreements", 1000, env, context.userId),
+        fetchAllRows(supabaseAdmin, "mgmv_installments", 1000, env, context.userId),
+        fetchAllRows(supabaseAdmin, "nf_invoices", 1000, env, context.userId),
+        fetchAllRows(supabaseAdmin, "team_tasks", 1000, env, context.userId),
+        fetchAllRows(supabaseAdmin, "team_punch_entries", 1000, env, context.userId),
       ]);
     return computeBusinessSummaryFromRows({
       clients,
@@ -2105,8 +2116,8 @@ const CLONE_BY_TABLE: Record<string, CloneTable> = Object.fromEntries(
 // Alvo de conflito do upsert por tabela. As tabelas com chave composta
 // (id/env) precisam do alvo correto, senão o banco recusa a gravação.
 const CONFLICT_TARGET: Record<string, string> = {
-  app_settings: "id,env",
-  ai_training_profile: "user_id,env",
+  app_settings: "id,env,sandbox_key",
+  ai_training_profile: "user_id,env,sandbox_key",
   active_sessions: "user_id",
   sandbox_state: "user_id",
 };
@@ -2379,13 +2390,13 @@ export const previewBackupRestore = createServerFn({ method: "POST" })
     // Estado atual do banco vivo — escopado ao ambiente de destino.
     const [clients, products, agreements, installments, nfInvoices, teamTasks, punchEntries] =
       await Promise.all([
-        fetchAllRows(supabaseAdmin, "clients", 1000, targetEnv),
-        fetchAllRows(supabaseAdmin, "products", 1000, targetEnv),
-        fetchAllRows(supabaseAdmin, "mgmv_agreements", 1000, targetEnv),
-        fetchAllRows(supabaseAdmin, "mgmv_installments", 1000, targetEnv),
-        fetchAllRows(supabaseAdmin, "nf_invoices", 1000, targetEnv),
-        fetchAllRows(supabaseAdmin, "team_tasks", 1000, targetEnv),
-        fetchAllRows(supabaseAdmin, "team_punch_entries", 1000, targetEnv),
+        fetchAllRows(supabaseAdmin, "clients", 1000, targetEnv, context.userId),
+        fetchAllRows(supabaseAdmin, "products", 1000, targetEnv, context.userId),
+        fetchAllRows(supabaseAdmin, "mgmv_agreements", 1000, targetEnv, context.userId),
+        fetchAllRows(supabaseAdmin, "mgmv_installments", 1000, targetEnv, context.userId),
+        fetchAllRows(supabaseAdmin, "nf_invoices", 1000, targetEnv, context.userId),
+        fetchAllRows(supabaseAdmin, "team_tasks", 1000, targetEnv, context.userId),
+        fetchAllRows(supabaseAdmin, "team_punch_entries", 1000, targetEnv, context.userId),
       ]);
     const current = computeBusinessSummaryFromRows({
       clients,
@@ -2486,7 +2497,10 @@ export const restoreBackup = createServerFn({ method: "POST" })
         // Conta antes de apagar para relatar quantos registros saíram.
         try {
           let counter = (supabaseAdmin as any).from(table).select("*", { count: "exact", head: true });
-          if (ENV_SCOPED_TABLES.has(table)) counter = counter.eq("env", targetEnv);
+          if (ENV_SCOPED_TABLES.has(table)) {
+            counter = counter.eq("env", targetEnv);
+            if (targetEnv === "sandbox") counter = counter.eq("sandbox_owner", context.userId);
+          }
           const { count } = await counter;
           deletedByTable[table] = count ?? 0;
         } catch {
@@ -2496,6 +2510,8 @@ export const restoreBackup = createServerFn({ method: "POST" })
         // Exclusão SEMPRE escopada ao ambiente de destino.
         if (ENV_SCOPED_TABLES.has(table)) {
           query = query.eq("env" as any, targetEnv);
+          // Nunca apaga o sandbox de outro usuário.
+          if (targetEnv === "sandbox") query = query.eq("sandbox_owner" as any, context.userId);
         } else if (targetEnv === "sandbox") {
           continue; // tabela global: nunca apagada em teste
         }
@@ -2534,10 +2550,20 @@ export const restoreBackup = createServerFn({ method: "POST" })
         // Regenera todos os ids e reescreve as FKs — nenhum id do backup entra
         // como está, então é impossível sobrescrever uma linha de produção.
         idMaps[table] = idMaps[table] ?? {};
-        payload = filtered.map((row) => remapRow(cloneTable, row, idMaps));
+        payload = filtered.map((row) =>
+          stripGeneratedColumns(remapRow(cloneTable, row, idMaps, context.userId)),
+        );
       } else {
         payload = filtered.map((row) =>
-          ENV_SCOPED_TABLES.has(table) ? { ...row, env: targetEnv } : { ...row },
+          stripGeneratedColumns(
+            ENV_SCOPED_TABLES.has(table)
+              ? {
+                  ...row,
+                  env: targetEnv,
+                  sandbox_owner: targetEnv === "sandbox" ? context.userId : null,
+                }
+              : { ...row },
+          ),
         );
       }
 
@@ -2872,12 +2898,12 @@ export const validateBackupRestore = createServerFn({ method: "POST" })
     const currentRows: Record<string, any[]> = {};
     await Promise.all(
       SUMMARY_TABLES.map(async (table) => {
-        currentRows[table] = await fetchAllRows(supabaseAdmin, table as any, 1000, "sandbox");
+        currentRows[table] = await fetchAllRows(supabaseAdmin, table as any, 1000, "sandbox", context.userId);
       }),
     );
     for (const table of selected) {
       if (!currentRows[table]) {
-        currentRows[table] = await fetchAllRows(supabaseAdmin, table as any, 1000, "sandbox");
+        currentRows[table] = await fetchAllRows(supabaseAdmin, table as any, 1000, "sandbox", context.userId);
       }
     }
 
