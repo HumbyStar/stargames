@@ -46,6 +46,10 @@ import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { CustomerDataModal } from "@/components/customer-data-modal";
 import { isFichaComplete } from "@/lib/ficha-parse";
 import { NfFormatModal } from "@/components/nf-format-modal";
+import {
+  NfDuplicateWarningModal,
+  type DuplicateNfProduct,
+} from "@/components/nf-duplicate-warning-modal";
 import { NfHistoryModal } from "@/components/nf-history-modal";
 import { NfEmittedBadge } from "@/components/nf-emitted-badge";
 import { listNfInvoices, type NfInvoiceRow } from "@/lib/nf-history.functions";
@@ -1154,6 +1158,8 @@ function ClientDrawer({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [nfModalOpen, setNfModalOpen] = useState(false);
   const [nfProducts, setNfProducts] = useState<Product[]>([]);
+  const [nfWarnOpen, setNfWarnOpen] = useState(false);
+  const [nfPendingSelection, setNfPendingSelection] = useState<Product[]>([]);
   const [nfHistoryOpen, setNfHistoryOpen] = useState(false);
   const listInvoicesFn = useServerFn(listNfInvoices);
   const [nfInvoices, setNfInvoices] = useState<NfInvoiceRow[]>([]);
@@ -1246,6 +1252,33 @@ function ClientDrawer({
   const clearSelection = () => setSelectedIds(new Set());
   const selectedProducts = () =>
     individualProducts.filter((p) => selectedIds.has(p.id));
+  // Produtos da seleção que já tiveram NF emitida (bloqueio de duplicidade).
+  const selectedDuplicates = useMemo<DuplicateNfProduct[]>(() => {
+    return individualProducts
+      .filter((p) => selectedIds.has(p.id) && nfProductMap.has(p.id))
+      .map((p) => {
+        const info = nfProductMap.get(p.id)!;
+        return { id: p.id, name: p.name, count: info.count, lastAt: info.lastAt };
+      });
+  }, [individualProducts, selectedIds, nfProductMap]);
+  const openNfModalWith = (list: Product[]) => {
+    setNfProducts(list);
+    setNfModalOpen(true);
+  };
+  const handleGerarNf = () => {
+    const sel = selectedProducts();
+    if (sel.length === 0) {
+      toast.info("Selecione ao menos 1 produto");
+      return;
+    }
+    const dupIds = new Set(selectedDuplicates.map((d) => d.id));
+    if (dupIds.size === 0) {
+      openNfModalWith(sel);
+      return;
+    }
+    setNfPendingSelection(sel);
+    setNfWarnOpen(true);
+  };
   const bulkMarkPaid = () => {
     const targets = selectedProducts().filter((p) => p.financialStatus !== "Pago");
     if (targets.length === 0) {
@@ -1580,8 +1613,18 @@ function ClientDrawer({
                   </thead>
                   <tbody>
                     {mgmvProducts.map((p) => (
-                      <tr key={p.id} className="border-b border-border/60 last:border-0">
-                        <td className="py-2 px-3 font-medium">{p.name}</td>
+                       <tr key={p.id} className="border-b border-border/60 last:border-0">
+                        <td className="py-2 px-3 font-medium">
+                          <span className="inline-flex items-center">
+                            {p.name}
+                            {(() => {
+                              const info = nfProductMap.get(p.id);
+                              return info ? (
+                                <NfEmittedBadge count={info.count} lastAt={info.lastAt} />
+                              ) : null;
+                            })()}
+                          </span>
+                        </td>
                         <td className="py-2 px-3 text-muted-foreground">{p.platform}</td>
                         <td className="py-2 px-3 tabular-nums">{formatBRL(p.totalValue)}</td>
                         <td className="py-2 px-3 tabular-nums text-muted-foreground">
@@ -1617,6 +1660,11 @@ function ClientDrawer({
             <span className="text-sm font-medium">
               {selectedCount} selecionado(s)
             </span>
+            {selectedDuplicates.length > 0 && (
+              <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                {selectedDuplicates.length} já {selectedDuplicates.length > 1 ? "têm" : "tem"} NF
+              </span>
+            )}
             <div className="ml-auto flex flex-wrap gap-1.5">
               <Button
                 size="sm"
@@ -1685,15 +1733,7 @@ function ClientDrawer({
               <Button
                 size="sm"
                 variant="default"
-                onClick={() => {
-                  const sel = selectedProducts();
-                  if (sel.length === 0) {
-                    toast.info("Selecione ao menos 1 produto");
-                    return;
-                  }
-                  setNfProducts(sel);
-                  setNfModalOpen(true);
-                }}
+                onClick={handleGerarNf}
                 title="Classifica NCM via IA e gera texto pronto para o contador"
               >
                 <Sparkles className="mr-1 h-3.5 w-3.5" />
@@ -1987,7 +2027,17 @@ function ClientDrawer({
                 className="flex items-center justify-between gap-3 py-2"
               >
                 <div className="min-w-0">
-                  <div className="truncate font-medium">{p.name}</div>
+                  <div className="truncate font-medium">
+                    <span className="inline-flex items-center">
+                      {p.name}
+                      {(() => {
+                        const info = nfProductMap.get(p.id);
+                        return info ? (
+                          <NfEmittedBadge count={info.count} lastAt={info.lastAt} />
+                        ) : null;
+                      })()}
+                    </span>
+                  </div>
                   <div className="truncate text-xs text-muted-foreground">
                     {p.platform || "—"} · {formatBRL(p.totalValue)} ·{" "}
                     {formatDateBR(p.registerDate)}
@@ -2095,6 +2145,22 @@ function ClientDrawer({
         </DialogContent>
       </Dialog>
 
+      <NfDuplicateWarningModal
+        open={nfWarnOpen}
+        duplicates={selectedDuplicates}
+        freshCount={
+          nfPendingSelection.filter((p) => !nfProductMap.has(p.id)).length
+        }
+        onClose={() => setNfWarnOpen(false)}
+        onContinueWithoutDuplicates={() => {
+          setNfWarnOpen(false);
+          openNfModalWith(nfPendingSelection.filter((p) => !nfProductMap.has(p.id)));
+        }}
+        onForceAll={() => {
+          setNfWarnOpen(false);
+          openNfModalWith(nfPendingSelection);
+        }}
+      />
       <NfFormatModal
         open={nfModalOpen}
         onClose={() => setNfModalOpen(false)}

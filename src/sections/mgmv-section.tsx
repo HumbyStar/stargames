@@ -26,6 +26,9 @@ import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
 import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
 import { useUiStore } from "@/lib/ui-store";
 import { NotionHtmlActions } from "@/components/notion-html-actions";
+import { NfEmittedBadge } from "@/components/nf-emitted-badge";
+import { listNfInvoices } from "@/lib/nf-history.functions";
+import { useServerFn } from "@tanstack/react-start";
 
 type MgmvChip =
   | "todos"
@@ -236,6 +239,42 @@ export function MGMVSection({
   const [chip, setChip] = usePersistedState<MgmvChip>("mgmv.chip", "todos");
   const [search, setSearch] = usePersistedState<string>("mgmv.search", "");
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Notas fiscais já emitidas para o cliente aberto (badge "NF" nos produtos).
+  const listInvoicesFn = useServerFn(listNfInvoices);
+  const [nfProductMap, setNfProductMap] = useState<
+    Map<string, { count: number; lastAt: string }>
+  >(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    if (!expanded) {
+      setNfProductMap(new Map());
+      return;
+    }
+    void (async () => {
+      try {
+        const rows = await listInvoicesFn({ data: { clientId: expanded } });
+        if (cancelled) return;
+        const map = new Map<string, { count: number; lastAt: string }>();
+        for (const inv of rows) {
+          for (const pid of inv.productIds) {
+            const cur = map.get(pid);
+            if (!cur) map.set(pid, { count: 1, lastAt: inv.createdAt });
+            else {
+              cur.count += 1;
+              if (new Date(inv.createdAt) > new Date(cur.lastAt))
+                cur.lastAt = inv.createdAt;
+            }
+          }
+        }
+        setNfProductMap(map);
+      } catch {
+        /* silencioso: badge é informativo */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [expanded, listInvoicesFn]);
   const [aiTarget, setAiTarget] = useState<string | null>(null);
   const [editingAgreement, setEditingAgreement] = useState<string | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
@@ -1041,7 +1080,18 @@ export function MGMVSection({
                                     key={p.id}
                                     className="flex items-center justify-between rounded-md border border-border/60 bg-card px-2 py-1"
                                   >
-                                    <span className="truncate font-medium">{p.name}</span>
+                                    <span className="inline-flex min-w-0 items-center truncate font-medium">
+                                      {p.name}
+                                      {(() => {
+                                        const info = nfProductMap.get(p.id);
+                                        return info ? (
+                                          <NfEmittedBadge
+                                            count={info.count}
+                                            lastAt={info.lastAt}
+                                          />
+                                        ) : null;
+                                      })()}
+                                    </span>
                                     <span className="text-muted-foreground">{p.platform}</span>
                                     <span>{formatBRL(p.totalValue)}</span>
                                     <Tag variant="primary">Incluído no MGMV</Tag>
