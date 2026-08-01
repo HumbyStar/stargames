@@ -1246,6 +1246,22 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   const [text, setText] = useState(SAMPLE_LIST);
   const [rows, setRows] = useState<ParsedRow[] | null>(null);
   const [confirming, setConfirming] = useState(false);
+  // Trava síncrona contra duplo clique nos botões de confirmação de import.
+  // O estado React só muda no render seguinte, então dois cliques rápidos
+  // podem entrar duas vezes no mesmo fluxo e duplicar clientes/produtos.
+  const importBusyRef = useRef(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const guardImport = (fn: () => Promise<void> | void) => async () => {
+    if (importBusyRef.current) return;
+    importBusyRef.current = true;
+    setImportBusy(true);
+    try {
+      await fn();
+    } finally {
+      importBusyRef.current = false;
+      setImportBusy(false);
+    }
+  };
   const [notion, setNotion] = useState<NotionParseResult | null>(null);
   const [htmlText, setHtmlText] = useState("");
   const [zipData, setZipData] = useState<ZipPreviewData | null>(null);
