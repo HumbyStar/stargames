@@ -56,6 +56,16 @@ export interface ListImportRow {
 
   /** Quando true, possível duplicidade detectada. */
   duplicateCandidate?: boolean;
+
+  /**
+   * Correções automáticas aplicadas na leitura (linha dividida, ruído de
+   * digitação, plataforma ausente...). Só informativo — o usuário confirma
+   * ou edita antes de importar.
+   */
+  autoFixes?: string[];
+
+  /** Linha veio de uma linha original que continha mais de um cliente. */
+  splitFromGluedLine?: boolean;
 }
 
 export interface ListImportClientGroup {
@@ -102,14 +112,89 @@ export interface ListImportPreview {
     duplicateCandidates: number;
     uniqueClients: number;
     products: number;
+    /** Linhas geradas por corte automático de registros colados. */
+    splitRows: number;
+    /** Linhas sem plataforma/categoria informada. */
+    missingPlatformRows: number;
+    /** Telefones com 10 dígitos (provável 9º dígito faltando). */
+    shortPhones: number;
   };
 }
 
 const GROUP_HEADER_RE = /^grupo\s+.+:\s*$/i;
-const RESERVA_WITH_VALUE_RE = /^reserva\s*\(\s*(\d+(?:[.,]\d+)?)\s*\)\s*$/i;
+const RESERVA_WITH_VALUE_RE = /^reserva\s*(?:[-:]\s*)?\(?\s*(\d+(?:[.,]\d+)?)\s*\)?\s*$/i;
 const RESERVA_RE = /^reserva\s*$/i;
 const PAGO_RE = /^pago\s*$/i;
 const PENDENTE_RE = /^pendente\s*$/i;
+const MGMV_RE = /^mgmv\s*$/i;
+
+/** Aviso informativo — não força revisão manual da linha. */
+export const SHORT_PHONE_WARNING =
+  "Telefone com 10 dígitos — confirme o 9º dígito.";
+
+function isSoftWarning(w: string): boolean {
+  return w === SHORT_PHONE_WARNING;
+}
+
+/**
+ * Limpa ruído de digitação sem alterar o conteúdo dos campos:
+ * espaços no início/fim, espaços múltiplos e traço com espaço duplicado.
+ */
+export function normalizeLineNoise(line: string): { line: string; fixes: string[] } {
+  const fixes: string[] = [];
+  let out = line.replace(/\u00a0/g, " ");
+  if (out !== out.trim()) fixes.push("Espaços no início/fim da linha removidos.");
+  out = out.trim();
+  if (/\s{2,}/.test(out)) {
+    fixes.push("Espaços duplicados normalizados.");
+    out = out.replace(/\s{2,}/g, " ");
+  }
+  const collapsed = out.replace(/\s*-\s*(?=\S)/g, (m) => (m.includes(" ") ? " - " : m));
+  if (collapsed !== out) {
+    fixes.push("Separador \" - \" normalizado.");
+    out = collapsed;
+  }
+  return { line: out, fixes };
+}
+
+// Token de status no meio da linha: depois dele SEMPRE começa outro registro.
+const STATUS_ANYWHERE_RE =
+  /\b(pago|reserva\s*\(\s*\d+(?:[.,]\d+)?\s*\)|reserva\s*\d+(?:[.,]\d+)?|reserva|pendente|mgmv)\b/gi;
+// Telefone brasileiro: DD + 8/9 dígitos com ou sem hífen/espaço.
+const PHONE_ANYWHERE_RE = /\(?\d{2}\)?\s*9?\d{4}[-\s]?\d{4}/;
+
+/**
+ * Corta linhas com mais de um cliente grudado.
+ *
+ * Regra de negócio: depois do status financeiro a linha acabou. Se ainda
+ * houver texto e esse texto contiver um telefone, é um novo registro.
+ */
+export function splitGluedRecords(line: string): string[] {
+  const parts: string[] = [];
+  let rest = line;
+  // Limite defensivo: no máximo 20 registros por linha.
+  for (let guard = 0; guard < 20; guard++) {
+    STATUS_ANYWHERE_RE.lastIndex = 0;
+    let cutAt = -1;
+    let m: RegExpExecArray | null;
+    while ((m = STATUS_ANYWHERE_RE.exec(rest)) !== null) {
+      const end = m.index + m[0].length;
+      const tail = rest.slice(end);
+      if (tail.trim() && PHONE_ANYWHERE_RE.test(tail)) {
+        cutAt = end;
+        break;
+      }
+    }
+    if (cutAt < 0) break;
+    const head = rest.slice(0, cutAt).trim();
+    const tail = rest.slice(cutAt).trim();
+    if (!head || !tail) break;
+    parts.push(head);
+    rest = tail;
+  }
+  parts.push(rest.trim());
+  return parts.filter((p) => p.length > 0);
+}
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -182,6 +267,9 @@ function parseStatusToken(token: string, totalValue: number | null): ParsedStatu
   }
   if (PENDENTE_RE.test(t)) {
     return { status: "Pendente", paidValue: 0, reviewRequired: false };
+  }
+  if (MGMV_RE.test(t)) {
+    return { status: "Pendente", paidValue: 0, reviewRequired: true, warning: "Status MGMV: confirme o acordo manualmente." };
   }
   return {
     status: "Revisão necessária",
