@@ -1012,7 +1012,7 @@ async function runBackup(opts: {
       });
       await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
         row_counts: rowCounts,
-        progress: progress as any,
+        error_details: { resume: progress } as any,
       });
       let lastBatchLogAt = 0;
       try {
@@ -1038,7 +1038,7 @@ async function runBackup(opts: {
             );
             await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
               row_counts: rowCounts,
-              progress: progress as any,
+              error_details: { resume: progress } as any,
             });
           },
         });
@@ -1075,7 +1075,7 @@ async function runBackup(opts: {
       }
       await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
         row_counts: rowCounts,
-        progress: progress as any,
+        error_details: { resume: progress } as any,
       });
       if (!state.done) {
         paused = true;
@@ -1103,7 +1103,7 @@ async function runBackup(opts: {
       );
       await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
         row_counts: rowCounts,
-        progress: progress as any,
+        error_details: { resume: progress } as any,
         status: "running",
       });
       await scheduleContinuation(backupId);
