@@ -883,3 +883,125 @@ export function relativeTime(iso: string): string {
   if (d < 30) return `há ${d}d`;
   return new Date(iso).toLocaleDateString("pt-BR");
 }
+
+// ---------------------------------------------------------------------------
+// Agrupamento em lote (importações e ações em massa)
+// ---------------------------------------------------------------------------
+
+export interface ActivityBatch {
+  kind: "batch";
+  id: string;
+  at: string;
+  actorId?: string | null;
+  actorLabel: string;
+  category: ActivityCategory;
+  table: string;
+  tableLabel: string;
+  action: ActivityEntity["action"];
+  title: string;
+  events: ActivityEvent[];
+}
+
+export type ActivityGroup =
+  | { kind: "single"; id: string; at: string; event: ActivityEvent }
+  | ActivityBatch;
+
+const PLURAL: Record<string, string> = {
+  Cliente: "clientes",
+  Produto: "produtos",
+  "Acordo MGMV": "acordos MGMV",
+  "Parcela MGMV": "parcelas MGMV",
+  "Nota fiscal": "notas fiscais",
+  Tarefa: "tarefas",
+  "Filtro salvo": "filtros salvos",
+  Backup: "backups",
+  Importação: "importações",
+};
+
+const BATCH_VERB: Record<ActivityEntity["action"], string> = {
+  INSERT: "adicionou",
+  UPDATE: "atualizou",
+  DELETE: "removeu",
+};
+
+/**
+ * Junta ações consecutivas da mesma pessoa, na mesma tabela e com a mesma
+ * operação dentro de uma janela curta — típico de importações e edições em
+ * massa — em um único card expansível.
+ */
+export function groupActivityEvents(
+  events: ActivityEvent[],
+  opts: { enabled?: boolean; windowMs?: number; minSize?: number } = {},
+): ActivityGroup[] {
+  const { enabled = true, windowMs = 120_000, minSize = 3 } = opts;
+  const single = (e: ActivityEvent): ActivityGroup => ({
+    kind: "single",
+    id: e.id,
+    at: e.at,
+    event: e,
+  });
+  if (!enabled) return events.map(single);
+
+  const out: ActivityGroup[] = [];
+  let run: ActivityEvent[] = [];
+
+  const key = (e: ActivityEvent) =>
+    e.entity ? `${e.actorId ?? "?"}|${e.entity.table}|${e.entity.action}` : null;
+
+  const flush = () => {
+    if (run.length === 0) return;
+    if (run.length < minSize || !run[0].entity) {
+      run.forEach((e) => out.push(single(e)));
+      run = [];
+      return;
+    }
+    const first = run[0];
+    const entity = first.entity!;
+    const label = PLURAL[entity.tableLabel] ?? `${entity.tableLabel.toLowerCase()}s`;
+    const clientes = new Set(
+      run.map((e) => e.clientLabel).filter((c): c is string => Boolean(c)),
+    );
+    const sufixo =
+      clientes.size === 1
+        ? ` do cliente ${[...clientes][0]}`
+        : clientes.size > 1
+          ? ` de ${clientes.size} clientes`
+          : "";
+    out.push({
+      kind: "batch",
+      id: `batch:${first.id}:${run.length}`,
+      at: first.at,
+      actorId: first.actorId,
+      actorLabel: first.actorLabel,
+      category: first.category,
+      table: entity.table,
+      tableLabel: entity.tableLabel,
+      action: entity.action,
+      title: `${first.actorLabel} ${BATCH_VERB[entity.action]} ${run.length} ${label}${sufixo}`,
+      events: [...run],
+    });
+    run = [];
+  };
+
+  for (const e of events) {
+    const k = key(e);
+    if (!k) {
+      flush();
+      out.push(single(e));
+      continue;
+    }
+    const last = run[run.length - 1];
+    if (
+      last &&
+      key(last) === k &&
+      Math.abs(+new Date(last.at) - +new Date(e.at)) <= windowMs
+    ) {
+      run.push(e);
+    } else {
+      flush();
+      run = [e];
+    }
+  }
+  flush();
+  return out;
+}
