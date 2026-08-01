@@ -156,6 +156,7 @@ export type Database = {
         Row: {
           action: string
           changed_at: string
+          env: Database["public"]["Enums"]["app_env"]
           id: string
           new_data: Json | null
           old_data: Json | null
@@ -167,6 +168,7 @@ export type Database = {
         Insert: {
           action: string
           changed_at?: string
+          env?: Database["public"]["Enums"]["app_env"]
           id?: string
           new_data?: Json | null
           old_data?: Json | null
@@ -178,6 +180,7 @@ export type Database = {
         Update: {
           action?: string
           changed_at?: string
+          env?: Database["public"]["Enums"]["app_env"]
           id?: string
           new_data?: Json | null
           old_data?: Json | null
@@ -821,6 +824,7 @@ export type Database = {
       }
       system_backups: {
         Row: {
+          ai_verification: Json | null
           business_summary: Json
           cancel_requested: boolean
           created_at: string
@@ -832,6 +836,7 @@ export type Database = {
           error_details: Json | null
           finished_at: string | null
           id: string
+          progress: Json
           row_counts: Json
           size_bytes: number | null
           status: string
@@ -841,6 +846,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ai_verification?: Json | null
           business_summary?: Json
           cancel_requested?: boolean
           created_at?: string
@@ -852,6 +858,7 @@ export type Database = {
           error_details?: Json | null
           finished_at?: string | null
           id?: string
+          progress?: Json
           row_counts?: Json
           size_bytes?: number | null
           status?: string
@@ -861,6 +868,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ai_verification?: Json | null
           business_summary?: Json
           cancel_requested?: boolean
           created_at?: string
@@ -872,6 +880,7 @@ export type Database = {
           error_details?: Json | null
           finished_at?: string | null
           id?: string
+          progress?: Json
           row_counts?: Json
           size_bytes?: number | null
           status?: string

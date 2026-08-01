@@ -815,8 +815,9 @@ export function BackupsPanel() {
   useEffect(() => {
     if (!running || !activeBackupId) return;
     const started = Date.now();
-    const MAX_MS = 20 * 60 * 1000;
+    const MAX_MS = 90 * 60 * 1000;
     let stopped = false;
+    let resuming = false;
     const poll = async () => {
       if (stopped) return;
       try {
@@ -858,6 +859,20 @@ export function BackupsPanel() {
           setActiveBackupId(null);
           return;
         }
+        // Backup em etapas: quando a execução pausa para não estourar o
+        // tempo do servidor, a tela retoma automaticamente de onde parou.
+        const paused = [...(row?.debugLog ?? [])].reverse().find((e) => e.phase === "paused");
+        const lastEntry = row?.debugLog?.[row.debugLog.length - 1];
+        if (!resuming && row && paused && lastEntry?.phase === "paused") {
+          resuming = true;
+          try {
+            await resume({ data: { id: row.id } });
+          } catch {
+            /* a próxima rodada tenta de novo */
+          } finally {
+            resuming = false;
+          }
+        }
       } catch {
         // ignore transient errors while polling
       }
@@ -867,7 +882,7 @@ export function BackupsPanel() {
       stopped = true;
       clearInterval(iv);
     };
-  }, [running, activeBackupId, list]);
+  }, [running, activeBackupId, list, resume]);
 
   const totalSize = useMemo(
     () => rows.reduce((s, r) => s + (r.status === "completed" ? (r.sizeBytes ?? 0) : 0), 0),

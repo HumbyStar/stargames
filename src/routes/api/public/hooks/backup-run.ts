@@ -25,8 +25,14 @@ export const Route = createFileRoute("/api/public/hooks/backup-run")({
         }
 
         try {
-          const { runScheduledBackup } = await import("@/lib/backup.functions");
-          const result = await runScheduledBackup();
+          const body = await request.json().catch(() => ({}) as any);
+          const backupId = typeof body?.backupId === "string" ? body.backupId : null;
+          const mod = await import("@/lib/backup.functions");
+          // Continuação de um backup pausado (execução em etapas) ou
+          // início de um backup agendado.
+          const result = backupId
+            ? await mod.continueBackupById(backupId)
+            : await mod.runScheduledBackup();
           return Response.json({ ok: true, ...result });
         } catch (err: any) {
           console.error("[backup-run] failed:", err);
