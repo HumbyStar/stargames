@@ -95,11 +95,30 @@ export function ImportContentModal({
         const d = (r.new_data ?? {}) as Record<string, unknown>;
         if (d.id) names.set(String(d.id), String(d.name ?? "—"));
       }
+      // Clientes que já existiam antes desta importação: busca o nome atual
+      // direto na tabela de clientes.
+      const missing = new Set<string>();
+      for (const r of rows) {
+        if (r.table_name !== "products") continue;
+        const d = (r.new_data ?? {}) as Record<string, unknown>;
+        const cid = d.client_id ? String(d.client_id) : "";
+        if (cid && !names.has(cid)) missing.add(cid);
+      }
+      if (missing.size > 0) {
+        const { data: clientRows } = await supabase
+          .from("clients")
+          .select("id, name")
+          .in("id", Array.from(missing));
+        if (!alive) return;
+        for (const c of clientRows ?? []) {
+          names.set(String(c.id), String(c.name ?? "—"));
+        }
+      }
       const lines: string[] = [];
       for (const r of rows) {
         if (r.table_name !== "products") continue;
         const d = (r.new_data ?? {}) as Record<string, unknown>;
-        const cliente = names.get(String(d.client_id)) ?? "(cliente existente)";
+        const cliente = names.get(String(d.client_id)) ?? "(cliente removido)";
         lines.push(
           [
             cliente,
