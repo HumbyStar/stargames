@@ -273,7 +273,7 @@ export function ListImportModal({
       if (!prev) return prev;
       const rows = prev.rows.map((r) => (r.id === id ? recalcRow({ ...r, ...patch }) : r));
       const clients = buildClientGroups(rows);
-      return { rows, groups: prev.groups, clients, totals: computeTotals(rows, clients) };
+      return { ...prev, rows, clients, totals: computeTotals(rows, clients) };
     });
   }
 
@@ -282,7 +282,7 @@ export function ListImportModal({
       if (!prev) return prev;
       const rows = prev.rows.map((r) => (r.id === id ? { ...r, ignored: true } : r));
       const clients = buildClientGroups(rows.filter((r) => !r.ignored));
-      return { rows, groups: prev.groups, clients, totals: computeTotals(rows, clients) };
+      return { ...prev, rows, clients, totals: computeTotals(rows, clients) };
     });
   }
 
