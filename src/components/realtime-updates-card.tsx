@@ -45,10 +45,14 @@ import {
   useActivityFeed,
   activityCategoryLabels,
   relativeTime,
+  groupActivityEvents,
   type ActivityCategory,
   type ActivitySeverity,
   type ActivityEvent,
 } from "@/lib/activity-feed";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ActivityBatchCard } from "@/components/activity-batch-card";
+import { TeamUsagePanel } from "@/components/team-usage-panel";
 import { cn } from "@/lib/utils";
 
 const CATEGORY_ICON: Record<ActivityCategory, typeof Users> = {
@@ -78,6 +82,30 @@ function initials(name: string) {
     .join("");
 }
 
+const PERIOD_MS: Record<string, number | null> = {
+  all: null,
+  today: 0,
+  "7d": 7 * 86_400_000,
+  "30d": 30 * 86_400_000,
+};
+
+const SEVERITY_LABELS: Record<ActivitySeverity, string> = {
+  info: "Informativo",
+  success: "Sucesso",
+  warning: "Atenção",
+  danger: "Crítico",
+};
+
+function dayLabel(iso: string) {
+  const d = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date(Date.now() - 86_400_000);
+  const same = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+  if (same(d, today)) return "Hoje";
+  if (same(d, yesterday)) return "Ontem";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" });
+}
+
 export function RealtimeUpdatesCard() {
   const {
     events,
@@ -101,6 +129,12 @@ export function RealtimeUpdatesCard() {
     Partial<Record<ActivityCategory, boolean>>
   >({});
   const [selected, setSelected] = useState<ActivityEvent | null>(null);
+  const [period, setPeriod] = useState<string>("all");
+  const [operation, setOperation] = useState<string>("all");
+  const [severity, setSeverity] = useState<string>("all");
+  const [tableFilter, setTableFilter] = useState<string>("all");
+  const [groupBatches, setGroupBatches] = useState(true);
+  const [groupByDay, setGroupByDay] = useState(true);
 
   const isDetailed = (c: ActivityCategory) =>
     detailByCategory[c] ?? globalDetailed;
@@ -117,6 +151,17 @@ export function RealtimeUpdatesCard() {
           if (categories.length > 0 && !categories.includes(e.category)) return false;
           if (onlyMine && e.actorId !== meId) return false;
           if (actorFilter && e.actorId !== actorFilter) return false;
+          if (operation !== "all" && e.entity?.action !== operation) return false;
+          if (severity !== "all" && e.severity !== severity) return false;
+          if (tableFilter !== "all" && e.entity?.table !== tableFilter) return false;
+          const window = PERIOD_MS[period];
+          if (window !== null && window !== undefined) {
+            if (window === 0) {
+              if (new Date(e.at).toDateString() !== new Date().toDateString()) return false;
+            } else if (Date.now() - +new Date(e.at) > window) {
+              return false;
+            }
+          }
           if (query.trim()) {
             const q = query.trim().toLowerCase();
             const hay = `${e.title} ${e.description ?? ""} ${e.actorLabel} ${
@@ -127,8 +172,53 @@ export function RealtimeUpdatesCard() {
           return true;
         })
         .sort((a, b) => +new Date(b.at) - +new Date(a.at)),
-    [events, categories, onlyMine, actorFilter, query, meId],
+    [
+      events,
+      categories,
+      onlyMine,
+      actorFilter,
+      query,
+      meId,
+      operation,
+      severity,
+      tableFilter,
+      period,
+    ],
   );
+
+  const groups = useMemo(
+    () => groupActivityEvents(filtered, { enabled: groupBatches }),
+    [filtered, groupBatches],
+  );
+
+  const tables = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const e of events) {
+      if (e.entity) map.set(e.entity.table, e.entity.tableLabel);
+    }
+    return [...map.entries()].map(([value, label]) => ({ value, label }));
+  }, [events]);
+
+  const filtersActive =
+    categories.length > 0 ||
+    onlyMine ||
+    !!actorFilter ||
+    !!query.trim() ||
+    period !== "all" ||
+    operation !== "all" ||
+    severity !== "all" ||
+    tableFilter !== "all";
+
+  const clearFilters = () => {
+    setCategories([]);
+    setOnlyMine(false);
+    setActorFilter(null);
+    setQuery("");
+    setPeriod("all");
+    setOperation("all");
+    setSeverity("all");
+    setTableFilter("all");
+  };
 
   const allCategories = Object.keys(activityCategoryLabels) as ActivityCategory[];
 
