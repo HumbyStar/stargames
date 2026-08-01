@@ -675,10 +675,15 @@ async function cleanupStaleBackups(admin: any) {
   const cutoff = new Date(Date.now() - STALE_BACKUP_MS).toISOString();
   const { data: staleRows } = await admin
     .from("system_backups")
-    .select("id, debug_log")
+    .select("id, debug_log, error_details, created_at")
     .in("status", ["pending", "running"])
     .lt("updated_at", cutoff);
   for (const row of staleRows ?? []) {
+    // Backups em etapas guardam o progresso: enquanto forem recentes,
+    // continuam retomáveis em vez de virarem falha.
+    const resumable = Boolean((row as any).error_details?.resume?.paused);
+    const ageMs = row.created_at ? Date.now() - Date.parse(row.created_at as string) : 0;
+    if (resumable && ageMs < 6 * 60 * 60 * 1000) continue;
     const entry: BackupDebugEntry = {
       at: new Date().toISOString(),
       level: "error",
