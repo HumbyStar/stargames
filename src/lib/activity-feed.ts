@@ -423,6 +423,7 @@ export function mapAuditRow(
   let severity: ActivitySeverity = action === "DELETE" ? "warning" : "info";
   let changes: ActivityChange[] = rowChanges(action, row.old_data, row.new_data);
   let recordLabel: string | undefined;
+  let clientId: string | null = null;
 
   switch (row.table_name) {
     case "clients": {
@@ -437,6 +438,7 @@ export function mapAuditRow(
     case "products": {
       const nome = str(data.name) ?? "produto";
       recordLabel = nome;
+      clientId = str(data.client_id) ?? str(prev.client_id) ?? null;
       title =
         action === "INSERT"
           ? `${actorLabel} adicionou o produto ${nome}`
@@ -453,6 +455,7 @@ export function mapAuditRow(
     case "mgmv_agreements": {
       const nome = str(data.client_name) ?? "cliente";
       recordLabel = nome;
+      clientId = str(data.client_id) ?? str(prev.client_id) ?? null;
       title =
         action === "INSERT"
           ? `${actorLabel} criou o acordo MGMV de ${nome}`
@@ -508,6 +511,7 @@ export function mapAuditRow(
     }
     case "nf_invoices": {
       const total = num(data.total_cents);
+      clientId = str(data.client_id) ?? str(prev.client_id) ?? null;
       title = `${actorLabel} ${action === "INSERT" ? "gerou" : verb} uma nota fiscal`;
       description = total !== undefined ? CURRENCY.format(total / 100) : undefined;
       break;
