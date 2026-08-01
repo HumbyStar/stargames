@@ -630,13 +630,18 @@ async function fetchAllRows(
   table: BackupTable,
   batchSize = 1000,
   env?: "producao" | "sandbox",
+  sandboxOwner?: string | null,
 ): Promise<any[]> {
   const out: any[] = [];
   let from = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
     let query = admin.from(table).select("*");
-    if (env && ENV_SCOPED_TABLES.has(table)) query = query.eq("env", env);
+    if (env && ENV_SCOPED_TABLES.has(table)) {
+      query = query.eq("env", env);
+      // Cada usuário tem o próprio sandbox: nunca lê o de outro.
+      if (env === "sandbox" && sandboxOwner) query = query.eq("sandbox_owner", sandboxOwner);
+    }
     const { data, error } = await query
       .order(orderKeyFor(table), { ascending: true })
       .range(from, from + batchSize - 1);
@@ -656,6 +661,7 @@ async function fetchRowsForBackup(
     batchSize?: number;
     keepRows?: boolean;
     env?: "producao" | "sandbox";
+    sandboxOwner?: string | null;
     onBatch?: (rowCount: number) => Promise<void>;
   } = {},
 ): Promise<{
@@ -682,7 +688,12 @@ async function fetchRowsForBackup(
     let query = admin.from(table).select("*");
     // O backup é sempre de UM ambiente (produção ou teste). Sem este filtro,
     // as tabelas com coluna `env` sairiam somadas (produção + sandbox).
-    if (opts.env && ENV_SCOPED_TABLES.has(table)) query = query.eq("env", opts.env);
+    if (opts.env && ENV_SCOPED_TABLES.has(table)) {
+      query = query.eq("env", opts.env);
+      if (opts.env === "sandbox" && opts.sandboxOwner) {
+        query = query.eq("sandbox_owner", opts.sandboxOwner);
+      }
+    }
     if (limit && limit.days && dateColumn) {
       const since = new Date(Date.now() - limit.days * 24 * 60 * 60 * 1000).toISOString();
       query = query.gte(dateColumn, since);
