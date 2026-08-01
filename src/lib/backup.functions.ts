@@ -1369,22 +1369,26 @@ async function removeBackupFile(admin: any, storagePath: string | null): Promise
 async function enforceBackupRetention(admin: any) {
   const { data } = await admin
     .from("system_backups")
-    .select("id, storage_path, status, size_bytes, created_at")
+    .select("id, storage_path, status, size_bytes, created_at, env")
     .eq("status", "completed")
     .order("created_at", { ascending: false });
   if (!data?.length) return;
 
-  let retainedCount = 0;
+  // Retenção é contada por ambiente: 3 backups de produção E 3 de teste.
+  const retainedByEnv: Record<string, number> = {};
   let retainedBytes = 0;
   const toDelete: any[] = [];
-  for (const [index, row] of data.entries()) {
+  const latestByEnv = new Set<string>();
+  for (const row of data) {
     const size = Math.max(0, Number(row.size_bytes ?? 0));
-    const mustKeepLatest = index === 0;
+    const env = (row.env as string) ?? "producao";
+    const mustKeepLatest = !latestByEnv.has(env);
+    latestByEnv.add(env);
     const fits =
-      retainedCount < BACKUP_RETENTION_COUNT &&
+      (retainedByEnv[env] ?? 0) < BACKUP_RETENTION_COUNT &&
       retainedBytes + size <= BACKUP_RETENTION_BYTES;
     if (mustKeepLatest || fits) {
-      retainedCount += 1;
+      retainedByEnv[env] = (retainedByEnv[env] ?? 0) + 1;
       retainedBytes += size;
     } else {
       toDelete.push(row);
@@ -1420,6 +1424,32 @@ async function enforceBackupRetention(admin: any) {
 export async function runScheduledBackup(): Promise<{ id: string; sizeBytes: number }> {
   const r = await runBackup({ type: "scheduled", createdBy: null });
   return { id: r.id, sizeBytes: r.sizeBytes };
+}
+
+/**
+ * Continua um backup pausado (chamado pelo próprio backup ao esgotar o
+ * orçamento de tempo, ou pela tela quando o usuário está acompanhando).
+ */
+export async function continueBackupById(
+  backupId: string,
+): Promise<{ id: string; sizeBytes: number; incomplete: boolean }> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: row } = await supabaseAdmin
+    .from("system_backups")
+    .select("id, storage_path, status, env, type")
+    .eq("id", backupId)
+    .maybeSingle();
+  if (!row) throw new Error("Backup não encontrado");
+  if (row.status !== "running" && row.status !== "pending") {
+    return { id: backupId, sizeBytes: 0, incomplete: false };
+  }
+  const r = await runBackup({
+    type: (row.type as "manual" | "scheduled") ?? "scheduled",
+    createdBy: null,
+    env: (row.env as "producao" | "sandbox") ?? "producao",
+    existing: { id: row.id as string, storagePath: (row.storage_path as string) ?? "" },
+  });
+  return { id: r.id, sizeBytes: r.sizeBytes, incomplete: Boolean(r.incomplete) };
 }
 
 // ---------------------------------------------------------------------------
