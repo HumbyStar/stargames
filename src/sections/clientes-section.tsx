@@ -1613,8 +1613,18 @@ function ClientDrawer({
                   </thead>
                   <tbody>
                     {mgmvProducts.map((p) => (
-                      <tr key={p.id} className="border-b border-border/60 last:border-0">
-                        <td className="py-2 px-3 font-medium">{p.name}</td>
+                       <tr key={p.id} className="border-b border-border/60 last:border-0">
+                        <td className="py-2 px-3 font-medium">
+                          <span className="inline-flex items-center">
+                            {p.name}
+                            {(() => {
+                              const info = nfProductMap.get(p.id);
+                              return info ? (
+                                <NfEmittedBadge count={info.count} lastAt={info.lastAt} />
+                              ) : null;
+                            })()}
+                          </span>
+                        </td>
                         <td className="py-2 px-3 text-muted-foreground">{p.platform}</td>
                         <td className="py-2 px-3 tabular-nums">{formatBRL(p.totalValue)}</td>
                         <td className="py-2 px-3 tabular-nums text-muted-foreground">
@@ -1650,6 +1660,11 @@ function ClientDrawer({
             <span className="text-sm font-medium">
               {selectedCount} selecionado(s)
             </span>
+            {selectedDuplicates.length > 0 && (
+              <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                {selectedDuplicates.length} já {selectedDuplicates.length > 1 ? "têm" : "tem"} NF
+              </span>
+            )}
             <div className="ml-auto flex flex-wrap gap-1.5">
               <Button
                 size="sm"
@@ -2012,7 +2027,17 @@ function ClientDrawer({
                 className="flex items-center justify-between gap-3 py-2"
               >
                 <div className="min-w-0">
-                  <div className="truncate font-medium">{p.name}</div>
+                  <div className="truncate font-medium">
+                    <span className="inline-flex items-center">
+                      {p.name}
+                      {(() => {
+                        const info = nfProductMap.get(p.id);
+                        return info ? (
+                          <NfEmittedBadge count={info.count} lastAt={info.lastAt} />
+                        ) : null;
+                      })()}
+                    </span>
+                  </div>
                   <div className="truncate text-xs text-muted-foreground">
                     {p.platform || "—"} · {formatBRL(p.totalValue)} ·{" "}
                     {formatDateBR(p.registerDate)}
@@ -2120,6 +2145,26 @@ function ClientDrawer({
         </DialogContent>
       </Dialog>
 
+      <NfFormatModal
+        open={nfModalOpen}
+        onClose={() => setNfModalOpen(false)}
+      />
+      <NfDuplicateWarningModal
+        open={nfWarnOpen}
+        duplicates={selectedDuplicates}
+        freshCount={
+          nfPendingSelection.filter((p) => !nfProductMap.has(p.id)).length
+        }
+        onClose={() => setNfWarnOpen(false)}
+        onContinueWithoutDuplicates={() => {
+          setNfWarnOpen(false);
+          openNfModalWith(nfPendingSelection.filter((p) => !nfProductMap.has(p.id)));
+        }}
+        onForceAll={() => {
+          setNfWarnOpen(false);
+          openNfModalWith(nfPendingSelection);
+        }}
+      />
       <NfFormatModal
         open={nfModalOpen}
         onClose={() => setNfModalOpen(false)}
