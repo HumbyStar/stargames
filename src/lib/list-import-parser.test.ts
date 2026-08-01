@@ -108,3 +108,47 @@ Breno - 11 91194-7693 - Fire Emblem - Switch - 60 reais - RESERVA (30)`);
     expect(out.headerDueDate).toBeUndefined();
   });
 });
+describe("correções de formatação (lista colada)", () => {
+  it("divide dois clientes grudados na mesma linha", () => {
+    const out = parseListText(
+      ` soldier - 13 99805-6851 - Pure Vessel (Hollow Knight) - Figure - 80 reais  - Pago  Zanon - 44 9984-8236 - Dragon Quest XI: Echoes of an Elusive Age - PS4 - 90 reais -  Reserva`,
+    );
+    expect(out.rows).toHaveLength(2);
+    expect(out.rows[0].clientName).toBe("soldier");
+    expect(out.rows[0].productName).toBe("Pure Vessel (Hollow Knight)");
+    expect(out.rows[1].clientName).toBe("Zanon");
+    expect(out.rows[1].phone).toBe("4499848236");
+    expect(out.rows[1].financialStatus).toBe("Reserva");
+    expect(out.totals.splitRows).toBe(2);
+  });
+
+  it("marca plataforma ausente sem perder o produto", () => {
+    const out = parseListText("Paulo - 11 98504-6889 - Controle de PS2 - 50 reais - Reserva");
+    const r = out.rows[0];
+    expect(r.productName).toBe("Controle de PS2");
+    expect(r.platformOrCategory).toBe("—");
+    expect(r.reviewStatus).toBe("review_required");
+    expect(out.totals.missingPlatformRows).toBe(1);
+  });
+
+  it("aceita Reserva(65) e status em minúsculo", () => {
+    const out = parseListText(
+      `Gaby Anad - 91 9178-1390 - Sabrina Spellman - Funko Pop 777 - 130 reais  - Reserva(65)
+CODE - 62 99224-5792 - The Knight (Hollow Knight) - Figure - 50 reais - reserva`,
+    );
+    expect(out.rows[0].financialStatus).toBe("Reserva");
+    expect(out.rows[0].paidValue).toBe(65);
+    expect(out.rows[1].financialStatus).toBe("Reserva");
+  });
+
+  it("ignora cabeçalho solto e sinaliza telefone de 10 dígitos", () => {
+    const out = parseListText(
+      `PASSADOS
+
+Pedro Paulo - 32 9199-7720 - Pac Man - Atari 2600 ORIGINAL - 70 reais - Pago`,
+    );
+    expect(out.rows).toHaveLength(1);
+    expect(out.totals.shortPhones).toBe(1);
+    expect(out.rows[0].reviewStatus).toBe("ok");
+  });
+});
