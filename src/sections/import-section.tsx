@@ -3422,8 +3422,10 @@ function NotionPreview({
       </div>
 
       <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={onClear}>Cancelar</Button>
-        <Button onClick={onConfirm} disabled={!canConfirm}>Confirmar Importação</Button>
+        <Button variant="outline" onClick={onClear} disabled={busy}>Cancelar</Button>
+        <Button onClick={onConfirm} disabled={!canConfirm || busy}>
+          {busy ? "Importando..." : "Confirmar Importação"}
+        </Button>
       </div>
 
       <div className="space-y-4">
