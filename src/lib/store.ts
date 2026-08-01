@@ -689,6 +689,8 @@ export const useStore = create<State>()((set, get) => ({
       security: defaultSecurity,
       importHistory: [],
       hydrated: false,
+      currentEnv: "producao",
+      envSyncing: false,
       hydrate: async () => {
         if (get().hydrated) return;
         if (hydratePromise) return hydratePromise;
@@ -715,7 +717,9 @@ export const useStore = create<State>()((set, get) => ({
             rules: { ...defaultRules, ...snap.rules },
             security: { ...defaultSecurity, ...snap.security },
             hydrated: true,
+            currentEnv: snap.env ?? "producao",
           });
+          envSnapshots.set(snap.env ?? "producao", snap);
         })();
         await hydratePromise;
       },
@@ -728,8 +732,13 @@ export const useStore = create<State>()((set, get) => ({
           return refreshInFlight;
         }
         refreshInFlight = (async () => {
+          const token = envToken;
           try {
             const snap = await loadSnapshot();
+            // Resposta de um ambiente que já não é o atual: descarta.
+            if (token !== envToken) return;
+            const env = snap.env ?? "producao";
+            envSnapshots.set(env, snap);
             set({
               clients: snap.clients,
               products: snap.products.map((p) =>
@@ -738,6 +747,8 @@ export const useStore = create<State>()((set, get) => ({
                   : p,
               ),
               importHistory: snap.importHistory,
+              currentEnv: env,
+              envSyncing: false,
             });
           } catch (err) {
             console.warn("refreshFromDb failed", err);
