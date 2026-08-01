@@ -410,6 +410,12 @@ export interface ImportHistoryEntry {
   skippedDuplicates?: number;
   /** Tempo total da operação em ms. */
   durationMs?: number;
+  /** E-mail de quem executou a importação. */
+  userEmail?: string;
+  /** id do usuário que executou a importação. */
+  userId?: string;
+  /** Conteúdo original importado (texto colado), quando disponível. */
+  rawContent?: string;
 }
 
 export type DangerAction =
