@@ -23,6 +23,26 @@ function crc32(buf: Uint8Array): number {
   return (c ^ 0xffffffff) >>> 0;
 }
 
+/**
+ * CRC-32 incremental: permite calcular o checksum de um arquivo que é
+ * exportado em vários blocos (execuções diferentes do backup) sem manter o
+ * conteúdo inteiro em memória. Comece com `crc32Init()` e finalize com
+ * `crc32Final()`.
+ */
+export function crc32Init(): number {
+  return 0xffffffff;
+}
+
+export function crc32Update(state: number, buf: Uint8Array): number {
+  let c = state >>> 0;
+  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+  return c >>> 0;
+}
+
+export function crc32Final(state: number): number {
+  return ((state ^ 0xffffffff) >>> 0);
+}
+
 function dosDateTime(date: Date): { time: number; date: number } {
   const time =
     (Math.floor(date.getSeconds() / 2) & 0x1f) |
