@@ -46,6 +46,10 @@ import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { CustomerDataModal } from "@/components/customer-data-modal";
 import { isFichaComplete } from "@/lib/ficha-parse";
 import { NfFormatModal } from "@/components/nf-format-modal";
+import {
+  NfDuplicateWarningModal,
+  type DuplicateNfProduct,
+} from "@/components/nf-duplicate-warning-modal";
 import { NfHistoryModal } from "@/components/nf-history-modal";
 import { NfEmittedBadge } from "@/components/nf-emitted-badge";
 import { listNfInvoices, type NfInvoiceRow } from "@/lib/nf-history.functions";
@@ -1154,6 +1158,8 @@ function ClientDrawer({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [nfModalOpen, setNfModalOpen] = useState(false);
   const [nfProducts, setNfProducts] = useState<Product[]>([]);
+  const [nfWarnOpen, setNfWarnOpen] = useState(false);
+  const [nfPendingSelection, setNfPendingSelection] = useState<Product[]>([]);
   const [nfHistoryOpen, setNfHistoryOpen] = useState(false);
   const listInvoicesFn = useServerFn(listNfInvoices);
   const [nfInvoices, setNfInvoices] = useState<NfInvoiceRow[]>([]);
