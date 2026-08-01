@@ -245,7 +245,7 @@ export interface DbSnapshot {
   security: Partial<SecuritySettings>;
   uiState: Record<string, unknown>;
   /** Ambiente ao qual estes dados pertencem (produção ou modo teste). */
-  env: AppEnv;
+  env?: AppEnv;
 }
 
 export type AppEnv = "producao" | "sandbox";
