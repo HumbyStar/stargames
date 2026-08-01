@@ -864,7 +864,7 @@ async function exportTableInChunks(
       state.done = true;
       return;
     }
-    for (const row of data) buffer.push(JSON.stringify(row));
+    for (const row of data) buffer.push(JSON.stringify(stripSearchNoise(table, row)));
     bufferRows += data.length;
     state.rows += data.length;
     state.offset += data.length;
