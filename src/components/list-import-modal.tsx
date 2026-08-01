@@ -273,7 +273,7 @@ export function ListImportModal({
       if (!prev) return prev;
       const rows = prev.rows.map((r) => (r.id === id ? recalcRow({ ...r, ...patch }) : r));
       const clients = buildClientGroups(rows);
-      return { rows, groups: prev.groups, clients, totals: computeTotals(rows, clients) };
+      return { ...prev, rows, clients, totals: computeTotals(rows, clients) };
     });
   }
 
@@ -282,7 +282,7 @@ export function ListImportModal({
       if (!prev) return prev;
       const rows = prev.rows.map((r) => (r.id === id ? { ...r, ignored: true } : r));
       const clients = buildClientGroups(rows.filter((r) => !r.ignored));
-      return { rows, groups: prev.groups, clients, totals: computeTotals(rows, clients) };
+      return { ...prev, rows, clients, totals: computeTotals(rows, clients) };
     });
   }
 
@@ -803,6 +803,42 @@ export function ListImportModal({
             </ImportCardsGrid>
 
             {/* Barra de confirmação sincronizada com o que está visível */}
+            {(preview.totals.splitRows > 0 ||
+              preview.totals.missingPlatformRows > 0 ||
+              preview.totals.shortPhones > 0 ||
+              preview.totals.duplicateCandidates > 0) && (
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs">
+                <p className="mb-1 font-medium text-amber-700">
+                  Correções aplicadas na leitura — confira e edite antes de importar
+                </p>
+                <ul className="list-disc space-y-0.5 pl-4 text-amber-700/90">
+                  {preview.totals.splitRows > 0 && (
+                    <li>
+                      {preview.totals.splitRows} registro(s) vieram grudados na mesma linha e foram
+                      divididos automaticamente (o texto depois do status vira um novo cliente).
+                    </li>
+                  )}
+                  {preview.totals.missingPlatformRows > 0 && (
+                    <li>
+                      {preview.totals.missingPlatformRows} linha(s) sem plataforma/categoria — preencha
+                      antes de confirmar.
+                    </li>
+                  )}
+                  {preview.totals.shortPhones > 0 && (
+                    <li>
+                      {preview.totals.shortPhones} telefone(s) com 10 dígitos — confirme se falta o 9º
+                      dígito.
+                    </li>
+                  )}
+                  {preview.totals.duplicateCandidates > 0 && (
+                    <li>
+                      {preview.totals.duplicateCandidates} possível(is) duplicidade(s) de cliente/produto.
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
+
             <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 rounded-md border bg-background/95 px-3 py-2 backdrop-blur">
               <div className="text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">{filteredRows.length}</span> registro(s) visíveis serão importados ao confirmar.
@@ -893,6 +929,11 @@ export function ListImportModal({
                         {r.duplicateCandidate && (
                           <Badge variant="outline" className="ml-1">dup?</Badge>
                         )}
+                        {r.splitFromGluedLine && (
+                          <Badge variant="outline" className="ml-1" title="Linha estava grudada e foi dividida">
+                            dividida
+                          </Badge>
+                        )}
                       </td>
                       <td className="p-2 align-top tabular-nums">
                         {(r.confidence * 100).toFixed(0)}%
@@ -907,6 +948,13 @@ export function ListImportModal({
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
+                        {r.autoFixes?.length ? (
+                          <ul className="mt-1 list-disc pl-4 text-[11px] text-amber-700">
+                            {r.autoFixes.slice(0, 3).map((f, i) => (
+                              <li key={i}>{f}</li>
+                            ))}
+                          </ul>
+                        ) : null}
                       </td>
                       <td className="p-2 align-top">
                         <div className="flex justify-end gap-1">

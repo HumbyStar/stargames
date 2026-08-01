@@ -56,6 +56,16 @@ export interface ListImportRow {
 
   /** Quando true, possível duplicidade detectada. */
   duplicateCandidate?: boolean;
+
+  /**
+   * Correções automáticas aplicadas na leitura (linha dividida, ruído de
+   * digitação, plataforma ausente...). Só informativo — o usuário confirma
+   * ou edita antes de importar.
+   */
+  autoFixes?: string[];
+
+  /** Linha veio de uma linha original que continha mais de um cliente. */
+  splitFromGluedLine?: boolean;
 }
 
 export interface ListImportClientGroup {
@@ -102,14 +112,89 @@ export interface ListImportPreview {
     duplicateCandidates: number;
     uniqueClients: number;
     products: number;
+    /** Linhas geradas por corte automático de registros colados. */
+    splitRows: number;
+    /** Linhas sem plataforma/categoria informada. */
+    missingPlatformRows: number;
+    /** Telefones com 10 dígitos (provável 9º dígito faltando). */
+    shortPhones: number;
   };
 }
 
 const GROUP_HEADER_RE = /^grupo\s+.+:\s*$/i;
-const RESERVA_WITH_VALUE_RE = /^reserva\s*\(\s*(\d+(?:[.,]\d+)?)\s*\)\s*$/i;
+const RESERVA_WITH_VALUE_RE = /^reserva\s*(?:[-:]\s*)?\(?\s*(\d+(?:[.,]\d+)?)\s*\)?\s*$/i;
 const RESERVA_RE = /^reserva\s*$/i;
 const PAGO_RE = /^pago\s*$/i;
 const PENDENTE_RE = /^pendente\s*$/i;
+const MGMV_RE = /^mgmv\s*$/i;
+
+/** Aviso informativo — não força revisão manual da linha. */
+export const SHORT_PHONE_WARNING =
+  "Telefone com 10 dígitos — confirme o 9º dígito.";
+
+function isSoftWarning(w: string): boolean {
+  return w === SHORT_PHONE_WARNING;
+}
+
+/**
+ * Limpa ruído de digitação sem alterar o conteúdo dos campos:
+ * espaços no início/fim, espaços múltiplos e traço com espaço duplicado.
+ */
+export function normalizeLineNoise(line: string): { line: string; fixes: string[] } {
+  const fixes: string[] = [];
+  let out = line.replace(/\u00a0/g, " ");
+  if (out !== out.trim()) fixes.push("Espaços no início/fim da linha removidos.");
+  out = out.trim();
+  if (/\s{2,}/.test(out)) {
+    fixes.push("Espaços duplicados normalizados.");
+    out = out.replace(/\s{2,}/g, " ");
+  }
+  const collapsed = out.replace(/\s*-\s*(?=\S)/g, (m) => (m.includes(" ") ? " - " : m));
+  if (collapsed !== out) {
+    fixes.push("Separador \" - \" normalizado.");
+    out = collapsed;
+  }
+  return { line: out, fixes };
+}
+
+// Token de status no meio da linha: depois dele SEMPRE começa outro registro.
+const STATUS_ANYWHERE_RE =
+  /\b(pago|reserva\s*\(\s*\d+(?:[.,]\d+)?\s*\)|reserva\s*\d+(?:[.,]\d+)?|reserva|pendente|mgmv)\b/gi;
+// Telefone brasileiro: DD + 8/9 dígitos com ou sem hífen/espaço.
+const PHONE_ANYWHERE_RE = /\(?\d{2}\)?\s*9?\d{4}[-\s]?\d{4}/;
+
+/**
+ * Corta linhas com mais de um cliente grudado.
+ *
+ * Regra de negócio: depois do status financeiro a linha acabou. Se ainda
+ * houver texto e esse texto contiver um telefone, é um novo registro.
+ */
+export function splitGluedRecords(line: string): string[] {
+  const parts: string[] = [];
+  let rest = line;
+  // Limite defensivo: no máximo 20 registros por linha.
+  for (let guard = 0; guard < 20; guard++) {
+    STATUS_ANYWHERE_RE.lastIndex = 0;
+    let cutAt = -1;
+    let m: RegExpExecArray | null;
+    while ((m = STATUS_ANYWHERE_RE.exec(rest)) !== null) {
+      const end = m.index + m[0].length;
+      const tail = rest.slice(end);
+      if (tail.trim() && PHONE_ANYWHERE_RE.test(tail)) {
+        cutAt = end;
+        break;
+      }
+    }
+    if (cutAt < 0) break;
+    const head = rest.slice(0, cutAt).trim();
+    const tail = rest.slice(cutAt).trim();
+    if (!head || !tail) break;
+    parts.push(head);
+    rest = tail;
+  }
+  parts.push(rest.trim());
+  return parts.filter((p) => p.length > 0);
+}
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -183,6 +268,9 @@ function parseStatusToken(token: string, totalValue: number | null): ParsedStatu
   if (PENDENTE_RE.test(t)) {
     return { status: "Pendente", paidValue: 0, reviewRequired: false };
   }
+  if (MGMV_RE.test(t)) {
+    return { status: "Pendente", paidValue: 0, reviewRequired: true, warning: "Status MGMV: confirme o acordo manualmente." };
+  }
   return {
     status: "Revisão necessária",
     paidValue: null,
@@ -229,29 +317,48 @@ function parseSingleLine(
   lineNumber: number,
   rawLine: string,
   sourceGroup: string,
+  autoFixes: string[] = [],
+  splitFromGluedLine = false,
 ): ListImportRow {
   const fields = splitLineFields(rawLine);
   if (fields.length < 5) {
-    return buildErrorRow(
+    const err = buildErrorRow(
       lineNumber,
       rawLine,
       sourceGroup,
       `Esperado pelo menos 5 campos separados por " - ", encontrado ${fields.length}.`,
     );
+    err.autoFixes = autoFixes;
+    err.splitFromGluedLine = splitFromGluedLine;
+    return err;
   }
 
   const clientName = fields[0];
   const phoneRaw = fields[1];
   const statusToken = fields[fields.length - 1];
   const valueToken = fields[fields.length - 2];
-  const platformToken = fields[fields.length - 3];
-  const productParts = fields.slice(2, fields.length - 3);
-  const productName = productParts.join(" - ");
-
   const warnings: string[] = [];
+
+  // Formato completo: Nome - Tel - Produto - Plataforma - Valor - Status.
+  // Com exatamente 5 campos a plataforma foi omitida na digitação: o campo
+  // do meio é o produto, não a plataforma.
+  let platformToken: string;
+  let productName: string;
+  if (fields.length === 5) {
+    productName = fields[2];
+    platformToken = "—";
+    warnings.push("Plataforma/categoria ausente — informe antes de importar.");
+    autoFixes = [...autoFixes, "Plataforma ausente preenchida com \"—\"."];
+  } else {
+    platformToken = fields[fields.length - 3];
+    productName = fields.slice(2, fields.length - 3).join(" - ");
+  }
+
   const { digits: phone, valid: phoneValid } = normalizePhone(phoneRaw);
   if (!phoneValid) {
     warnings.push(`Telefone "${phoneRaw}" inválido (${phone.length} dígitos).`);
+  } else if (phone.length === 10) {
+    warnings.push(SHORT_PHONE_WARNING);
   }
 
   const totalValue = parseMoney(valueToken);
@@ -261,9 +368,6 @@ function parseSingleLine(
 
   if (!productName) {
     warnings.push("Nome do produto não identificado.");
-  }
-  if (!platformToken) {
-    warnings.push("Plataforma/categoria não identificada.");
   }
 
   const statusParsed = parseStatusToken(statusToken, totalValue);
@@ -281,11 +385,17 @@ function parseSingleLine(
   }
 
   let reviewStatus: ListReviewStatus = "ok";
-  if (statusParsed.reviewRequired || !phoneValid || totalValue === null) {
+  if (
+    statusParsed.reviewRequired ||
+    !phoneValid ||
+    totalValue === null ||
+    warnings.some((w) => w.startsWith("Plataforma/categoria ausente"))
+  ) {
     reviewStatus = "review_required";
   }
 
-  const confidence = Math.max(0, 1 - warnings.length * 0.18);
+  const hardWarnings = warnings.filter((w) => !isSoftWarning(w));
+  const confidence = Math.max(0, 1 - hardWarnings.length * 0.18);
 
   return {
     id: uid(),
@@ -304,6 +414,8 @@ function parseSingleLine(
     confidence,
     warnings,
     reviewStatus,
+    autoFixes: autoFixes.length ? autoFixes : undefined,
+    splitFromGluedLine: splitFromGluedLine || undefined,
   };
 }
 
@@ -430,16 +542,26 @@ export function parseListText(raw: string): ListImportPreview {
     headerDueDate = undefined;
   }
   lines.forEach((rawLine, idx) => {
-    const line = rawLine.trim();
+    const cleaned = normalizeLineNoise(rawLine);
+    const line = cleaned.line;
     if (!line) return;
     if (GROUP_HEADER_RE.test(line)) {
       currentGroup = line.replace(/:\s*$/, "").trim();
       groupsSeen.add(currentGroup);
       return;
     }
-    if (currentGroup !== "(sem grupo)" || /\s-\s/.test(line)) {
-      rows.push(parseSingleLine(idx + 1, line, currentGroup));
-    }
+    if (currentGroup === "(sem grupo)" && !/\s-\s/.test(line)) return;
+    const segments = splitGluedRecords(line);
+    const wasSplit = segments.length > 1;
+    segments.forEach((segment, segIdx) => {
+      const fixes = [...cleaned.fixes];
+      if (wasSplit) {
+        fixes.push(
+          `Linha dividida automaticamente (${segments.length} clientes na mesma linha) — parte ${segIdx + 1}.`,
+        );
+      }
+      rows.push(parseSingleLine(idx + 1, segment, currentGroup, fixes, wasSplit));
+    });
   });
 
   markDuplicateCandidates(rows);
@@ -469,6 +591,11 @@ export function computeTotals(
   const validPhones = active.filter((r) => r.phoneValid).length;
   const invalidPhones = active.filter((r) => !r.phoneValid).length;
   const duplicateCandidates = active.filter((r) => r.duplicateCandidate).length;
+  const splitRows = active.filter((r) => r.splitFromGluedLine).length;
+  const missingPlatformRows = active.filter((r) =>
+    r.warnings.some((w) => w.startsWith("Plataforma/categoria ausente")),
+  ).length;
+  const shortPhones = active.filter((r) => r.phoneValid && r.phone.length === 10).length;
   return {
     lines: rows.length,
     validRows,
@@ -484,6 +611,9 @@ export function computeTotals(
     duplicateCandidates,
     uniqueClients: clients.length,
     products: active.filter((r) => r.reviewStatus !== "error").length,
+    splitRows,
+    missingPlatformRows,
+    shortPhones,
   };
 }
 
@@ -492,6 +622,10 @@ export function recalcRow(row: ListImportRow): ListImportRow {
   const { valid } = normalizePhone(next.phone);
   next.phoneValid = valid;
   if (!valid) next.warnings.push("Telefone inválido.");
+  else if (next.phone.replace(/\D+/g, "").length === 10) next.warnings.push(SHORT_PHONE_WARNING);
+  if (!next.platformOrCategory || next.platformOrCategory === "—") {
+    next.warnings.push("Plataforma/categoria ausente — informe antes de importar.");
+  }
 
   if (next.totalValue === null) next.warnings.push("Valor total não informado.");
   if (next.totalValue !== null && next.paidValue !== null) {
@@ -514,9 +648,9 @@ export function recalcRow(row: ListImportRow): ListImportRow {
     }
   }
 
-  const review =
-    next.warnings.length > 0 || next.totalValue === null ? "review_required" : "ok";
+  const hard = next.warnings.filter((w) => !isSoftWarning(w));
+  const review = hard.length > 0 || next.totalValue === null ? "review_required" : "ok";
   next.reviewStatus = review;
-  next.confidence = Math.max(0, 1 - next.warnings.length * 0.18);
+  next.confidence = Math.max(0, 1 - hard.length * 0.18);
   return next;
 }
