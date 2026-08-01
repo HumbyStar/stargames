@@ -9,12 +9,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import type { ImportHistoryEntry } from "@/lib/store";
+import { useStore, type ImportHistoryEntry } from "@/lib/store";
 
-/** Janela de auditoria usada para reconstruir o conteúdo de importações antigas. */
-function windowFor(entry: ImportHistoryEntry) {
-  const end = new Date(entry.date).getTime() + 60_000;
-  const start = end - (entry.durationMs ?? 0) - 5 * 60_000;
+/**
+ * Janela de auditoria usada para reconstruir o conteúdo de importações antigas.
+ * O limite inferior nunca passa da importação anterior, para não misturar
+ * registros de duas importações feitas com poucos minutos de diferença.
+ */
+function windowFor(entry: ImportHistoryEntry, previousDate?: string) {
+  const end = new Date(entry.date).getTime() + 5_000;
+  let start = end - (entry.durationMs ?? 0) - 5 * 60_000;
+  if (previousDate) {
+    const prev = new Date(previousDate).getTime() + 1_000;
+    if (prev > start) start = prev;
+  }
   return { start: new Date(start).toISOString(), end: new Date(end).toISOString() };
 }
 
@@ -40,11 +48,14 @@ export function ImportContentModal({
   const [loading, setLoading] = useState(false);
   const [content, setContent] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [reconstructed, setReconstructed] = useState(false);
+  const history = useStore((s) => s.importHistory);
 
   useEffect(() => {
     if (!entry) return;
     if (entry.rawContent) {
       setContent(entry.rawContent);
+      setReconstructed(false);
       setError(null);
       return;
     }
@@ -52,7 +63,11 @@ export function ImportContentModal({
     setLoading(true);
     setError(null);
     setContent("");
-    const { start, end } = windowFor(entry);
+    setReconstructed(true);
+    const previous = history
+      .filter((h) => new Date(h.date).getTime() < new Date(entry.date).getTime())
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    const { start, end } = windowFor(entry, previous?.date);
     void (async () => {
       const { data, error: err } = await supabase
         .from("audit_log")
