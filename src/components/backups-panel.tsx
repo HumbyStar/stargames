@@ -815,7 +815,7 @@ export function BackupsPanel() {
   useEffect(() => {
     if (!running || !activeBackupId) return;
     const started = Date.now();
-    const MAX_MS = 20 * 60 * 1000;
+    const MAX_MS = 90 * 60 * 1000;
     let stopped = false;
     let resuming = false;
     const poll = async () => {
