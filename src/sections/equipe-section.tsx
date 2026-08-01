@@ -42,6 +42,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TeamPunch } from "@/components/team-punch";
 import { TeamDashboard } from "@/components/team-dashboard";
+import { TeamUsagePanel } from "@/components/team-usage-panel";
 import {
   Dialog,
   DialogContent,
@@ -168,6 +169,7 @@ export function EquipeSection() {
             {(hasPermission("team.assign.all") || hasPermission("team.assign.team")) && (
               <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             )}
+            <TabsTrigger value="desempenho">Desempenho</TabsTrigger>
           </TabsList>
           <Button onClick={() => setOpenCreate(true)} size="sm">
             <Plus className="size-4" /> Nova tarefa
@@ -212,6 +214,9 @@ export function EquipeSection() {
         </TabsContent>
         <TabsContent value="dashboard" className="mt-4">
           <TeamDashboard />
+        </TabsContent>
+        <TabsContent value="desempenho" className="mt-4">
+          <TeamUsagePanel days={30} meId={access?.userId ?? null} />
         </TabsContent>
       </Tabs>
 
