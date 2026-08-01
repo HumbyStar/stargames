@@ -626,6 +626,8 @@ export function useActivityFeed() {
   const [meId, setMeId] = useState<string | null>(null);
 
   const namesRef = useRef<Map<string, string>>(new Map());
+  const clientNamesRef = useRef<Map<string, string>>(new Map());
+  const clientTriedRef = useRef<Set<string>>(new Set());
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
   const bufferRef = useRef<ActivityEvent[]>([]);
@@ -815,6 +817,45 @@ export function useActivityFeed() {
       if (e.actorId) map.set(e.actorId, e.actorLabel);
     }
     return [...map.entries()].map(([id, label]) => ({ id, label }));
+  }, [events]);
+
+  // Resolve o nome do cliente vinculado (produto, nota fiscal, acordo) para
+  // que ele apareça na mesma linha do evento.
+  useEffect(() => {
+    const pending = Array.from(
+      new Set(
+        events
+          .filter((e) => e.clientId && !e.clientLabel)
+          .map((e) => e.clientId as string)
+          .filter((id) => !clientTriedRef.current.has(id)),
+      ),
+    );
+    if (pending.length === 0) return;
+    pending.forEach((id) => clientTriedRef.current.add(id));
+    let alive = true;
+    void (async () => {
+      const { data } = await supabase
+        .from("clients")
+        .select("id, name, phone")
+        .in("id", pending.slice(0, 200));
+      if (!alive) return;
+      for (const c of data ?? []) {
+        clientNamesRef.current.set(
+          c.id,
+          c.phone ? `${c.name} (${c.phone})` : c.name,
+        );
+      }
+      setEvents((prev) =>
+        prev.map((e) =>
+          e.clientId && !e.clientLabel && clientNamesRef.current.has(e.clientId)
+            ? { ...e, clientLabel: clientNamesRef.current.get(e.clientId)! }
+            : e,
+        ),
+      );
+    })();
+    return () => {
+      alive = false;
+    };
   }, [events]);
 
   return {
