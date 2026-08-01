@@ -82,6 +82,8 @@ import { RestoreBackupModal } from "@/components/restore-backup-modal";
 import { DbMigrationCard } from "@/components/db-migration-card";
 import { RealtimeUpdatesCard } from "@/components/realtime-updates-card";
 import { MaintenanceCard } from "@/components/maintenance-card";
+import { ImportContentModal } from "@/components/import-content-modal";
+import type { ImportHistoryEntry } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Wrench } from "lucide-react";
@@ -366,6 +368,7 @@ export function ConfiguracoesSection() {
   const rules = useStore((s) => s.rules);
   const security = useStore((s) => s.security);
   const importHistory = useStore((s) => s.importHistory);
+  const [contentEntry, setContentEntry] = useState<ImportHistoryEntry | null>(null);
   const clients = useStore((s) => s.clients);
   const products = useStore((s) => s.products);
   const setPreferences = useStore((s) => s.setPreferences);
