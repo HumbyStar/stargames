@@ -1699,7 +1699,7 @@ export const resumeBackup = createServerFn({ method: "POST" })
 
     const { data: row, error } = await supabaseAdmin
       .from("system_backups")
-      .select("id, storage_path, status, updated_at, created_by, env")
+      .select("id, storage_path, status, updated_at, created_by, env, error_details")
       .eq("id", data.id)
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -1708,8 +1708,10 @@ export const resumeBackup = createServerFn({ method: "POST" })
       return { id: row.id as string, status: row.status as string, queued: false };
     }
     if (!row.storage_path) throw new Error("Backup sem storage_path.");
+    // Backup pausado por orçamento de tempo pode (e deve) continuar na hora.
+    const pausedForBudget = Boolean((row.error_details as any)?.resume?.paused);
     const lastTouch = row.updated_at ? Date.parse(row.updated_at as string) : 0;
-    if (lastTouch > 0 && Date.now() - lastTouch < RESUME_STALE_MS) {
+    if (!pausedForBudget && lastTouch > 0 && Date.now() - lastTouch < RESUME_STALE_MS) {
       return {
         id: row.id as string,
         status: row.status as string,
@@ -1725,7 +1727,11 @@ export const resumeBackup = createServerFn({ method: "POST" })
       env: (row.env as "producao" | "sandbox" | null) ?? "producao",
       existing: { id: row.id as string, storagePath: row.storage_path as string },
     });
-    return { id: result.id, status: "completed", queued: false };
+    return {
+      id: result.id,
+      status: result.incomplete ? "running" : "completed",
+      queued: Boolean(result.incomplete),
+    };
   });
 
 // removido: implementação original de createBackupNow substituída acima
