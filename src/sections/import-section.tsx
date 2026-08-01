@@ -1251,7 +1251,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   // podem entrar duas vezes no mesmo fluxo e duplicar clientes/produtos.
   const importBusyRef = useRef(false);
   const [importBusy, setImportBusy] = useState(false);
-  const guardImport = (fn: () => Promise<void> | void) => async () => {
+  const guardImport = (fn: () => unknown) => async () => {
     if (importBusyRef.current) return;
     importBusyRef.current = true;
     setImportBusy(true);
