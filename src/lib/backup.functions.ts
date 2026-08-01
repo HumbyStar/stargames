@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { CLONE_ORDER, SANDBOX_TABLES, remapRow, type CloneTable } from "@/lib/sandbox-clone";
+import { CLONE_ORDER, SANDBOX_TABLES, remapRow, stripGeneratedColumns, type CloneTable } from "@/lib/sandbox-clone";
 import {
   RESTORE_KEY_COLUMNS,
   dedupeRestoreRows,
