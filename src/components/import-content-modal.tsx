@@ -9,12 +9,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import type { ImportHistoryEntry } from "@/lib/store";
+import { useStore, type ImportHistoryEntry } from "@/lib/store";
 
-/** Janela de auditoria usada para reconstruir o conteúdo de importações antigas. */
-function windowFor(entry: ImportHistoryEntry) {
-  const end = new Date(entry.date).getTime() + 60_000;
-  const start = end - (entry.durationMs ?? 0) - 5 * 60_000;
+/**
+ * Janela de auditoria usada para reconstruir o conteúdo de importações antigas.
+ * O limite inferior nunca passa da importação anterior, para não misturar
+ * registros de duas importações feitas com poucos minutos de diferença.
+ */
+function windowFor(entry: ImportHistoryEntry, previousDate?: string) {
+  const end = new Date(entry.date).getTime() + 5_000;
+  let start = end - (entry.durationMs ?? 0) - 5 * 60_000;
+  if (previousDate) {
+    const prev = new Date(previousDate).getTime() + 1_000;
+    if (prev > start) start = prev;
+  }
   return { start: new Date(start).toISOString(), end: new Date(end).toISOString() };
 }
 
@@ -40,11 +48,14 @@ export function ImportContentModal({
   const [loading, setLoading] = useState(false);
   const [content, setContent] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [reconstructed, setReconstructed] = useState(false);
+  const history = useStore((s) => s.importHistory);
 
   useEffect(() => {
     if (!entry) return;
     if (entry.rawContent) {
       setContent(entry.rawContent);
+      setReconstructed(false);
       setError(null);
       return;
     }
@@ -52,7 +63,11 @@ export function ImportContentModal({
     setLoading(true);
     setError(null);
     setContent("");
-    const { start, end } = windowFor(entry);
+    setReconstructed(true);
+    const previous = history
+      .filter((h) => new Date(h.date).getTime() < new Date(entry.date).getTime())
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    const { start, end } = windowFor(entry, previous?.date);
     void (async () => {
       const { data, error: err } = await supabase
         .from("audit_log")
@@ -108,7 +123,7 @@ export function ImportContentModal({
     return () => {
       alive = false;
     };
-  }, [entry]);
+  }, [entry, history]);
 
   return (
     <Dialog open={entry !== null} onOpenChange={(o) => !o && onClose()}>
@@ -117,12 +132,19 @@ export function ImportContentModal({
           <DialogTitle>Conteúdo da importação</DialogTitle>
           <DialogDescription>
             {entry
-              ? `${entry.file} · ${new Date(entry.date).toLocaleString("pt-BR")}${
-                  entry.userEmail ? ` · ${entry.userEmail}` : ""
+              ? `${entry.file} · ${new Date(entry.date).toLocaleString("pt-BR")} · ${
+                  entry.userEmail ?? "Usuário não identificado"
                 }`
               : ""}
           </DialogDescription>
         </DialogHeader>
+        {entry && !loading && content && (
+          <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            {reconstructed
+              ? "Conteúdo reconstruído a partir da auditoria — esta importação foi feita antes de o sistema guardar o texto original, por isso mostramos os clientes e produtos gravados naquele momento."
+              : "Texto original exatamente como foi colado na importação."}
+          </p>
+        )}
         {loading ? (
           <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" /> Carregando conteúdo…
