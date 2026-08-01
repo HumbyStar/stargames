@@ -27,6 +27,11 @@ const SYSTEM = `Você corrige linhas de uma lista de vendas/reservas no formato:
 
 Regras:
 - Telefone deve ser somente dígitos (10 ou 11), juntando DDD.
+- O status ("Pago", "Reserva", "Reserva (65)", "Pendente", "MGMV") ENCERRA o registro: se houver texto depois dele, esse texto é OUTRO cliente e NÃO faz parte do produto — corrija a linha devolvendo apenas o PRIMEIRO cliente e registre em warnings "linha contém mais de um cliente".
+- Corrija ruído: espaços no início/fim, espaços duplicados, traço colado, status em minúsculo ("reserva" -> "Reserva").
+- "Reserva(65)", "Reserva 65" e "Reserva - 65" => financialStatus "Reserva" com paidValue 65.
+- Se a linha tiver só 5 campos, a plataforma foi omitida: o campo do meio é o PRODUTO e platformOrCategory deve ser "—", com warning "plataforma ausente".
+- Telefone com 10 dígitos: mantenha como veio e adicione warning "telefone com 10 dígitos — confirmar 9º dígito". Nunca invente dígitos.
 - Status PAGO => paidValue = totalValue, remainingValue = 0.
 - Status RESERVA (N) => paidValue = N, remainingValue = totalValue - N.
 - Se faltar dado, retorne null no campo correspondente.
