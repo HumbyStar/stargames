@@ -1101,7 +1101,7 @@ function _FloatingNavbarImpl() {
               draggable={false}
               className="relative size-11 rounded-full object-cover ring-1 ring-primary/30 shadow-md transition-all duration-[800ms] ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:shadow-lg group-hover:rotate-6 group-hover:scale-110"
             />
-            <PresenceDot online={connectionOnline} />
+            <PresenceDot status={connectionStatus} />
           </span>
           <div
             className={cn(
