@@ -1008,6 +1008,9 @@ export const useStore = create<State>()((set, get) => ({
             agreementsReplaced: entry.agreementsReplaced,
             skippedDuplicates: entry.skippedDuplicates,
             durationMs: entry.durationMs,
+            rawContent: entry.rawContent,
+            userId: entry.userId ?? getCurrentUserInfo().id,
+            userEmail: entry.userEmail ?? getCurrentUserInfo().email,
           };
           dbInsertHistory(newEntry);
           // Mantém um buffer maior na memória — o banco preserva tudo;
