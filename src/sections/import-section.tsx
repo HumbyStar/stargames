@@ -27,6 +27,7 @@ import {
 import {
   calculateFinancialStatus,
   calculateReservaDueDate,
+  calculateDueDateForStatus,
   formatBRL,
   useStore,
   getResetVersion,
