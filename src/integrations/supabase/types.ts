@@ -1181,6 +1181,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      list_online_users: {
+        Args: { _window_seconds?: number }
+        Returns: {
+          display_name: string
+          last_seen: string
+          user_email: string
+          user_id: string
+        }[]
+      }
       set_system_backup_schedule: {
         Args: {
           _frequency: string
