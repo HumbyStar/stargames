@@ -2273,7 +2273,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       const dueISO =
         finalStatus === "Reserva"
           ? calculateReservaDueDate(regISO)
-          : r.dueDate ?? new Date(new Date(regISO).getTime() + 7 * 86400000).toISOString();
+          : r.dueDate ?? calculateDueDateForStatus(finalStatus, regISO);
       addProduct({
         clientId: client.id,
         name: r.product,
