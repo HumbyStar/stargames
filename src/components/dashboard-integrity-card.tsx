@@ -45,7 +45,9 @@ export function DashboardIntegrityCard() {
       await refreshSnapshot();
       const d = await fetchDiagnostics();
       setDiag(d);
-      toast.success("Snapshot recarregado do banco oficial.");
+      toast.success(
+        `Snapshot recarregado (${d.env === "sandbox" ? "Modo Teste" : "Produção"}).`,
+      );
     } catch (err) {
       toast.error("Falha ao recarregar snapshot.", {
         description: err instanceof Error ? err.message : String(err),
