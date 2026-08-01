@@ -224,10 +224,7 @@ const normalizeDateBR = (s: string): string | null => {
 
 const calculateDueDate = (status: FinancialStatus, registerDate: string | null) => {
   if (!registerDate) return null;
-  if (status === "Reserva") {
-    return calculateReservaDueDate(registerDate).split("T")[0];
-  }
-  return registerDate;
+  return calculateDueDateForStatus(status, registerDate).split("T")[0];
 };
 
 // ---- Helpers MGMV ----
