@@ -31,11 +31,88 @@ const STALE_BACKUP_MS = 5 * 60 * 1000;
 const RESUME_STALE_MS = 90 * 1000;
 const STORAGE_MIRROR_MAX_BYTES = 500 * 1024 * 1024;
 const STORAGE_MIRROR_MAX_FILES = 10_000;
-const BACKUP_RETENTION_COUNT = 10;
+const BACKUP_RETENTION_COUNT = 3;
 const BACKUP_RETENTION_BYTES = 1024 * 1024 * 1024;
 const FAILED_BACKUP_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 // Heurística: cada linha ocupa ~800 bytes em JSONL (chaves + valores).
 const ESTIMATED_BYTES_PER_ROW = 800;
+
+// ---------------------------------------------------------------------------
+// Execução em etapas (à prova de timeout)
+// ---------------------------------------------------------------------------
+// Cada execução do Worker exporta o quanto couber dentro do orçamento de
+// tempo, grava o progresso e agenda a continuação. Nenhuma execução isolada
+// precisa terminar o backup inteiro — por isso não há mais timeout.
+const RUN_TIME_BUDGET_MS = 45_000;
+/** Linhas por bloco gravado no armazenamento intermediário. */
+const PART_CHUNK_ROWS = 20_000;
+/** Teto por tabela e teto global (avisam em vez de falhar). */
+export const MAX_ROWS_PER_TABLE = 300_000;
+export const MAX_TOTAL_ROWS = 1_000_000;
+const PARTS_PREFIX = "_parts";
+
+interface BackupPartState {
+  chunks: string[];
+  rows: number;
+  bytes: number;
+  crcState: number;
+  offset: number;
+  done: boolean;
+  capped?: boolean;
+  skipped?: boolean;
+}
+
+interface BackupProgress {
+  version: 2;
+  parts: Record<string, BackupPartState>;
+  totalRows: number;
+  paused?: boolean;
+  pausedAt?: string;
+  runs?: number;
+}
+
+function emptyProgress(): BackupProgress {
+  return { version: 2, parts: {}, totalRows: 0, runs: 0 };
+}
+
+function normalizeProgress(value: unknown): BackupProgress {
+  const p = value as BackupProgress | null;
+  if (!p || typeof p !== "object" || p.version !== 2 || !p.parts) return emptyProgress();
+  return p;
+}
+
+function partPath(backupId: string, table: string, index: number): string {
+  return `${PARTS_PREFIX}/${backupId}/${table}.${String(index).padStart(4, "0")}.jsonl`;
+}
+
+/** URL estável usada para o backup continuar sozinho na próxima execução. */
+function continuationUrl(): string {
+  const base =
+    process.env["BACKUP_HOOK_URL"] ??
+    "https://project--9675ace6-1d0a-4259-a33a-8378153df5fa.lovable.app/api/public/hooks/backup-run";
+  return base;
+}
+
+/** Dispara a continuação do backup sem bloquear a execução atual. */
+async function scheduleContinuation(backupId: string): Promise<boolean> {
+  const apikey =
+    process.env["SUPABASE_PUBLISHABLE_KEY"] ?? process.env["SUPABASE_ANON_KEY"] ?? "";
+  if (!apikey) return false;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    await fetch(continuationUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey },
+      body: JSON.stringify({ type: "continue", backupId }),
+      signal: controller.signal,
+    }).catch(() => undefined);
+    clearTimeout(timer);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 class BackupCancelledError extends Error {
   constructor() {
