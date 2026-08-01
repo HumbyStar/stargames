@@ -19,6 +19,26 @@ import type {
 
 import type { Json } from "@/integrations/supabase/types";
 
+// ============= Usuário atual (cache leve) =============
+
+let currentUser: { id?: string; email?: string } = {};
+
+/** Identidade do usuário logado, usada para carimbar o histórico de importações. */
+export function getCurrentUserInfo(): { id?: string; email?: string } {
+  return currentUser;
+}
+
+if (typeof window !== "undefined") {
+  void supabase.auth.getUser().then(({ data }) => {
+    if (data.user) currentUser = { id: data.user.id, email: data.user.email ?? undefined };
+  });
+  supabase.auth.onAuthStateChange((_e, session) => {
+    currentUser = session?.user
+      ? { id: session.user.id, email: session.user.email ?? undefined }
+      : {};
+  });
+}
+
 export interface DbClientRow {
   id: string;
   name: string;
@@ -63,6 +83,9 @@ export interface DbImportHistoryRow {
   agreements_replaced: number | null;
   skipped_duplicates: number | null;
   duration_ms: number | null;
+  user_id?: string | null;
+  user_email?: string | null;
+  raw_content?: string | null;
 }
 
 export function rowToClient(r: DbClientRow): Client {
@@ -148,6 +171,9 @@ export function rowToHistory(r: DbImportHistoryRow): ImportHistoryEntry {
     agreementsReplaced: r.agreements_replaced ?? undefined,
     skippedDuplicates: r.skipped_duplicates ?? undefined,
     durationMs: r.duration_ms ?? undefined,
+    userId: r.user_id ?? undefined,
+    userEmail: r.user_email ?? undefined,
+    rawContent: r.raw_content ?? undefined,
   };
 }
 
@@ -166,6 +192,9 @@ export function historyToRow(h: ImportHistoryEntry): DbImportHistoryRow {
     agreements_replaced: h.agreementsReplaced ?? null,
     skipped_duplicates: h.skippedDuplicates ?? null,
     duration_ms: h.durationMs ?? null,
+    user_id: h.userId ?? getCurrentUserInfo().id ?? null,
+    user_email: h.userEmail ?? getCurrentUserInfo().email ?? null,
+    raw_content: h.rawContent ?? null,
   };
 }
 
