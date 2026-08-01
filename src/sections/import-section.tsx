@@ -2365,9 +2365,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           ? p.financialStatus === "Reserva"
             ? calculateReservaDueDate(regISO)
             : new Date(`${p.dueDate}T12:00:00`).toISOString()
-          : p.financialStatus === "Reserva"
-            ? calculateReservaDueDate(regISO)
-            : regISO;
+          : calculateDueDateForStatus(p.financialStatus, regISO);
         addProduct({
           clientId: client!.id,
           name: p.product,
