@@ -738,7 +738,7 @@ const RightNavIcon = memo(RightNavIconImpl);
 
 function _FloatingNavbarImpl() {
   const [openMobile, setOpenMobile] = useState(false);
-  const { online: connectionOnline } = useConnectionStatus();
+  const { status: connectionStatus } = useConnectionStatus();
   const activeSection = useUiStore((s) => s.activeSection);
   const setActiveSection = useUiStore((s) => s.setActiveSection);
   const [isDark, setIsDark] = useState(
