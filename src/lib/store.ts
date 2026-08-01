@@ -1189,7 +1189,12 @@ export const useStore = create<State>()((set, get) => ({
         void flushUiStateNow();
       },
       refreshSnapshot: async () => {
+        envToken += 1;
+        const token = envToken;
         const snap = await loadSnapshot();
+        if (token !== envToken) return;
+        const env = snap.env ?? "producao";
+        envSnapshots.set(env, snap);
         set({
           clients: snap.clients,
           products: snap.products,
@@ -1198,7 +1203,51 @@ export const useStore = create<State>()((set, get) => ({
           rules: { ...defaultRules, ...snap.rules },
           security: { ...defaultSecurity, ...snap.security },
           hydrated: true,
+          currentEnv: env,
+          envSyncing: false,
         });
+      },
+      switchEnv: async (env) => {
+        // Invalida qualquer carga em voo do ambiente anterior.
+        envToken += 1;
+        const token = envToken;
+        const cached = envSnapshots.get(env);
+        if (cached) {
+          set({
+            clients: cached.clients,
+            products: cached.products,
+            importHistory: cached.importHistory,
+            preferences: { ...defaultPreferences, ...cached.preferences },
+            rules: { ...defaultRules, ...cached.rules },
+            security: { ...defaultSecurity, ...cached.security },
+            currentEnv: env,
+            envSyncing: true,
+          });
+        } else {
+          // Sem snapshot daquele ambiente: zera a tela em vez de mostrar
+          // números do ambiente anterior enquanto recarrega.
+          set({ clients: [], products: [], importHistory: [], currentEnv: env, envSyncing: true });
+        }
+        try {
+          const snap = await loadSnapshot();
+          if (token !== envToken) return;
+          const loadedEnv = snap.env ?? "producao";
+          envSnapshots.set(loadedEnv, snap);
+          set({
+            clients: snap.clients,
+            products: snap.products,
+            importHistory: snap.importHistory,
+            preferences: { ...defaultPreferences, ...snap.preferences },
+            rules: { ...defaultRules, ...snap.rules },
+            security: { ...defaultSecurity, ...snap.security },
+            currentEnv: loadedEnv,
+            envSyncing: false,
+            hydrated: true,
+          });
+        } catch (err) {
+          console.warn("switchEnv failed", err);
+          if (token === envToken) set({ envSyncing: false });
+        }
       },
       findDuplicateClientGroups: () => {
         const { clients, products } = get();
