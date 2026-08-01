@@ -3384,11 +3384,13 @@ function NotionPreview({
   findClientByPhone,
   onConfirm,
   onClear,
+  busy,
 }: {
   result: NotionParseResult;
   findClientByPhone: (phone: string) => { id: string; name: string } | undefined;
   onConfirm: () => void;
   onClear: () => void;
+  busy?: boolean;
 }) {
   const totalProducts = result.clients.reduce((s, c) => s + c.products.length, 0);
   const totalValid = result.clients.reduce(
