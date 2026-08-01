@@ -6,6 +6,7 @@ import {
   CLONE_ORDER,
   type CloneTable,
   remapRow,
+  stripGeneratedColumns,
 } from "./sandbox-clone";
 
 export interface SandboxState {
@@ -46,17 +47,36 @@ async function readState(admin: any, userId: string) {
   };
 }
 
-async function countsForEnv(admin: any, env: "producao" | "sandbox") {
+/** No sandbox cada usuário só enxerga/afeta as próprias linhas. */
+function scopeSandbox(query: any, env: "producao" | "sandbox", ownerId: string) {
+  const scoped = query.eq("env", env);
+  return env === "sandbox" ? scoped.eq("sandbox_owner", ownerId) : scoped;
+}
+
+async function countsForEnv(admin: any, env: "producao" | "sandbox", ownerId: string) {
   const entries = await Promise.all(
     SANDBOX_TABLES.map(async (table) => {
-      const { count } = await admin
-        .from(table)
-        .select("*", { count: "exact", head: true })
-        .eq("env", env);
+      const { count } = await scopeSandbox(
+        admin.from(table).select("*", { count: "exact", head: true }),
+        env,
+        ownerId,
+      );
       return [table, count ?? 0] as const;
     }),
   );
   return Object.fromEntries(entries) as Record<string, number>;
+}
+
+/** Apaga somente o sandbox do usuário atual (ordem inversa de dependência). */
+async function wipeOwnSandbox(admin: any, ownerId: string) {
+  for (const table of [...CLONE_ORDER].reverse()) {
+    const { error } = await admin
+      .from(table.name)
+      .delete()
+      .eq("env", "sandbox")
+      .eq("sandbox_owner", ownerId);
+    if (error) throw new Error(`${table.name}: ${error.message}`);
+  }
 }
 
 export const getSandboxState = createServerFn({ method: "GET" })
@@ -69,7 +89,7 @@ export const getSandboxState = createServerFn({ method: "GET" })
     const { supabaseAdmin: adminClient } = await import("@/integrations/supabase/client.server");
     const supabaseAdmin = adminClient as any;
     const state = await readState(supabaseAdmin, context.userId);
-    const counts = await countsForEnv(supabaseAdmin, "sandbox");
+    const counts = await countsForEnv(supabaseAdmin, "sandbox", context.userId);
     return { ...state, counts, isAdmin: true };
   });
 
@@ -88,7 +108,7 @@ export const setSandboxMode = createServerFn({ method: "POST" })
       );
     if (error) throw new Error(error.message);
     const state = await readState(supabaseAdmin, context.userId);
-    const counts = await countsForEnv(supabaseAdmin, "sandbox");
+    const counts = await countsForEnv(supabaseAdmin, "sandbox", context.userId);
     return { ...state, counts, isAdmin: true };
   });
 
@@ -98,12 +118,8 @@ export const resetSandbox = createServerFn({ method: "POST" })
     await assertAdmin(context);
     const { supabaseAdmin: adminClient } = await import("@/integrations/supabase/client.server");
     const supabaseAdmin = adminClient as any;
-    const before = await countsForEnv(supabaseAdmin, "sandbox");
-    // Ordem inversa das dependências
-    for (const table of [...CLONE_ORDER].reverse()) {
-      const { error } = await supabaseAdmin.from(table.name).delete().eq("env", "sandbox");
-      if (error) throw new Error(`${table.name}: ${error.message}`);
-    }
+    const before = await countsForEnv(supabaseAdmin, "sandbox", context.userId);
+    await wipeOwnSandbox(supabaseAdmin, context.userId);
     await supabaseAdmin
       .from("sandbox_state")
       .upsert(
@@ -128,11 +144,8 @@ export const cloneProductionToSandbox = createServerFn({ method: "POST" })
     const { supabaseAdmin: adminClient } = await import("@/integrations/supabase/client.server");
     const supabaseAdmin = adminClient as any;
 
-    // Limpa o sandbox anterior (ordem inversa de dependência)
-    for (const table of [...CLONE_ORDER].reverse()) {
-      const { error } = await supabaseAdmin.from(table.name).delete().eq("env", "sandbox");
-      if (error) throw new Error(`limpeza ${table.name}: ${error.message}`);
-    }
+    // Limpa apenas o sandbox DESTE usuário (os demais permanecem intactos)
+    await wipeOwnSandbox(supabaseAdmin, context.userId);
 
     const idMaps: Record<string, Record<string, string>> = {};
     const copied: Record<string, number> = {};
@@ -155,7 +168,9 @@ export const cloneProductionToSandbox = createServerFn({ method: "POST" })
         const rows = (data ?? []) as Record<string, unknown>[];
         if (rows.length === 0) break;
 
-        const mapped = rows.map((row) => remapRow(table, row, idMaps));
+        const mapped = rows.map((row) =>
+          stripGeneratedColumns(remapRow(table, row, idMaps, context.userId)),
+        );
         const { error: insertError } = await supabaseAdmin.from(table.name).insert(mapped);
         if (insertError) {
           errors.push(`${table.name}: ${insertError.message}`);

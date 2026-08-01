@@ -329,7 +329,7 @@ export const saveGithubConfig = createServerFn({ method: "POST" })
         preferences: data,
         updated_at: new Date().toISOString(),
       } as never,
-      { onConflict: "id,env" },
+      { onConflict: "id,env,sandbox_key" },
     );
     if (error) throw new Error(error.message);
     return { ok: true as const };

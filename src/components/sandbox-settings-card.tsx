@@ -144,6 +144,8 @@ export function SandboxSettingsCard() {
                 <p className="max-w-prose text-xs text-muted-foreground">
                   Uma cópia do sistema com os mesmos dados. Tudo que você fizer aqui —
                   importar, editar, apagar, gerar backup — não altera a produção.
+                  O ambiente de teste é individual: cada usuário tem o seu, e ninguém
+                  vê nem apaga o sandbox de outro.
                 </p>
               </div>
             </div>

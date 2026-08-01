@@ -44,6 +44,16 @@ export const CLONE_ORDER: CloneTable[] = [
 
 export const SANDBOX_TABLES = CLONE_ORDER.map((t) => t.name);
 
+/**
+ * Colunas geradas pelo banco: não podem ser enviadas em INSERT/UPSERT.
+ * `sandbox_key` existe apenas para compor as chaves primárias por dono.
+ */
+export function stripGeneratedColumns<T extends Record<string, unknown>>(row: T): T {
+  if (!("sandbox_key" in row)) return row;
+  const { sandbox_key: _generated, ...rest } = row as Record<string, unknown>;
+  return rest as T;
+}
+
 function newId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -55,8 +65,14 @@ export function remapRow(
   table: CloneTable,
   row: Record<string, unknown>,
   idMaps: Record<string, Record<string, string>>,
+  sandboxOwner?: string | null,
 ): Record<string, unknown> {
-  const next: Record<string, unknown> = { ...row, env: "sandbox" };
+  const next: Record<string, unknown> = stripGeneratedColumns({
+    ...row,
+    env: "sandbox",
+    // Cada usuário tem o seu próprio sandbox: a linha nasce carimbada com o dono.
+    sandbox_owner: sandboxOwner ?? null,
+  });
 
   if (table.idColumn) {
     const original = row[table.idColumn];

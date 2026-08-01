@@ -46,6 +46,7 @@ export type Database = {
           name: string
           python_code: string
           reasoning: string
+          sandbox_owner: string | null
           scope: string
           status: string
           trigger: string
@@ -62,6 +63,7 @@ export type Database = {
           name: string
           python_code?: string
           reasoning?: string
+          sandbox_owner?: string | null
           scope?: string
           status?: string
           trigger?: string
@@ -78,6 +80,7 @@ export type Database = {
           name?: string
           python_code?: string
           reasoning?: string
+          sandbox_owner?: string | null
           scope?: string
           status?: string
           trigger?: string
@@ -95,6 +98,8 @@ export type Database = {
           last_analysis_at: string | null
           onboarding_answers: Json
           onboarding_completed: boolean
+          sandbox_key: string
+          sandbox_owner: string | null
           updated_at: string
           user_id: string
         }
@@ -106,6 +111,8 @@ export type Database = {
           last_analysis_at?: string | null
           onboarding_answers?: Json
           onboarding_completed?: boolean
+          sandbox_key?: string
+          sandbox_owner?: string | null
           updated_at?: string
           user_id: string
         }
@@ -117,6 +124,8 @@ export type Database = {
           last_analysis_at?: string | null
           onboarding_answers?: Json
           onboarding_completed?: boolean
+          sandbox_key?: string
+          sandbox_owner?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -128,6 +137,8 @@ export type Database = {
           id: string
           preferences: Json
           rules: Json
+          sandbox_key: string
+          sandbox_owner: string | null
           security: Json
           ui_state: Json
           updated_at: string
@@ -137,6 +148,8 @@ export type Database = {
           id?: string
           preferences?: Json
           rules?: Json
+          sandbox_key?: string
+          sandbox_owner?: string | null
           security?: Json
           ui_state?: Json
           updated_at?: string
@@ -146,6 +159,8 @@ export type Database = {
           id?: string
           preferences?: Json
           rules?: Json
+          sandbox_key?: string
+          sandbox_owner?: string | null
           security?: Json
           ui_state?: Json
           updated_at?: string
@@ -208,6 +223,7 @@ export type Database = {
           original_html_source_folder: string | null
           original_html_storage_path: string | null
           phone: string
+          sandbox_owner: string | null
           updated_at: string
         }
         Insert: {
@@ -226,6 +242,7 @@ export type Database = {
           original_html_source_folder?: string | null
           original_html_storage_path?: string | null
           phone?: string
+          sandbox_owner?: string | null
           updated_at?: string
         }
         Update: {
@@ -244,6 +261,7 @@ export type Database = {
           original_html_source_folder?: string | null
           original_html_storage_path?: string | null
           phone?: string
+          sandbox_owner?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -263,6 +281,7 @@ export type Database = {
           id: string
           products_added: number
           raw_content: string | null
+          sandbox_owner: string | null
           skipped_duplicates: number | null
           source: string
           status: string
@@ -283,6 +302,7 @@ export type Database = {
           id?: string
           products_added?: number
           raw_content?: string | null
+          sandbox_owner?: string | null
           skipped_duplicates?: number | null
           source: string
           status: string
@@ -303,6 +323,7 @@ export type Database = {
           id?: string
           products_added?: number
           raw_content?: string | null
+          sandbox_owner?: string | null
           skipped_duplicates?: number | null
           source?: string
           status?: string
@@ -387,6 +408,7 @@ export type Database = {
           pending_installments: number | null
           remaining_value: number | null
           review_status: string
+          sandbox_owner: string | null
           source_file: string | null
           source_folder: string | null
           status: string
@@ -417,6 +439,7 @@ export type Database = {
           pending_installments?: number | null
           remaining_value?: number | null
           review_status?: string
+          sandbox_owner?: string | null
           source_file?: string | null
           source_folder?: string | null
           status?: string
@@ -447,6 +470,7 @@ export type Database = {
           pending_installments?: number | null
           remaining_value?: number | null
           review_status?: string
+          sandbox_owner?: string | null
           source_file?: string | null
           source_folder?: string | null
           status?: string
@@ -475,6 +499,7 @@ export type Database = {
           manual_partial: boolean
           paid_amount: number | null
           paid_at: string | null
+          sandbox_owner: string | null
           status: string
           updated_at: string
         }
@@ -489,6 +514,7 @@ export type Database = {
           manual_partial?: boolean
           paid_amount?: number | null
           paid_at?: string | null
+          sandbox_owner?: string | null
           status?: string
           updated_at?: string
         }
@@ -503,6 +529,7 @@ export type Database = {
           manual_partial?: boolean
           paid_amount?: number | null
           paid_at?: string | null
+          sandbox_owner?: string | null
           status?: string
           updated_at?: string
         }
@@ -525,6 +552,7 @@ export type Database = {
           generated_by: string | null
           id: string
           product_ids: string[]
+          sandbox_owner: string | null
           total_cents: number
         }
         Insert: {
@@ -535,6 +563,7 @@ export type Database = {
           generated_by?: string | null
           id?: string
           product_ids?: string[]
+          sandbox_owner?: string | null
           total_cents?: number
         }
         Update: {
@@ -545,6 +574,7 @@ export type Database = {
           generated_by?: string | null
           id?: string
           product_ids?: string[]
+          sandbox_owner?: string | null
           total_cents?: number
         }
         Relationships: [
@@ -614,6 +644,7 @@ export type Database = {
           paid_value: number
           platform: string
           register_date: string
+          sandbox_owner: string | null
           situation: string
           total_value: number
           updated_at: string
@@ -633,6 +664,7 @@ export type Database = {
           paid_value?: number
           platform?: string
           register_date?: string
+          sandbox_owner?: string | null
           situation?: string
           total_value?: number
           updated_at?: string
@@ -652,6 +684,7 @@ export type Database = {
           paid_value?: number
           platform?: string
           register_date?: string
+          sandbox_owner?: string | null
           situation?: string
           total_value?: number
           updated_at?: string
@@ -806,6 +839,7 @@ export type Database = {
           id: string
           name: string
           payload: Json
+          sandbox_owner: string | null
           scope: string
           updated_at: string
         }
@@ -816,6 +850,7 @@ export type Database = {
           id?: string
           name: string
           payload?: Json
+          sandbox_owner?: string | null
           scope: string
           updated_at?: string
         }
@@ -826,6 +861,7 @@ export type Database = {
           id?: string
           name?: string
           payload?: Json
+          sandbox_owner?: string | null
           scope?: string
           updated_at?: string
         }
@@ -912,6 +948,7 @@ export type Database = {
           id: string
           kind: Database["public"]["Enums"]["punch_kind"]
           punched_at: string
+          sandbox_owner: string | null
           user_id: string
         }
         Insert: {
@@ -925,6 +962,7 @@ export type Database = {
           id?: string
           kind: Database["public"]["Enums"]["punch_kind"]
           punched_at?: string
+          sandbox_owner?: string | null
           user_id: string
         }
         Update: {
@@ -938,6 +976,7 @@ export type Database = {
           id?: string
           kind?: Database["public"]["Enums"]["punch_kind"]
           punched_at?: string
+          sandbox_owner?: string | null
           user_id?: string
         }
         Relationships: []
@@ -950,6 +989,7 @@ export type Database = {
           env: Database["public"]["Enums"]["app_env"]
           id: string
           payload: Json | null
+          sandbox_owner: string | null
           task_id: string
         }
         Insert: {
@@ -959,6 +999,7 @@ export type Database = {
           env?: Database["public"]["Enums"]["app_env"]
           id?: string
           payload?: Json | null
+          sandbox_owner?: string | null
           task_id: string
         }
         Update: {
@@ -968,6 +1009,7 @@ export type Database = {
           env?: Database["public"]["Enums"]["app_env"]
           id?: string
           payload?: Json | null
+          sandbox_owner?: string | null
           task_id?: string
         }
         Relationships: [
@@ -988,6 +1030,7 @@ export type Database = {
           env: Database["public"]["Enums"]["app_env"]
           id: string
           kind: string
+          sandbox_owner: string | null
           task_id: string
         }
         Insert: {
@@ -997,6 +1040,7 @@ export type Database = {
           env?: Database["public"]["Enums"]["app_env"]
           id?: string
           kind?: string
+          sandbox_owner?: string | null
           task_id: string
         }
         Update: {
@@ -1006,6 +1050,7 @@ export type Database = {
           env?: Database["public"]["Enums"]["app_env"]
           id?: string
           kind?: string
+          sandbox_owner?: string | null
           task_id?: string
         }
         Relationships: [
@@ -1036,6 +1081,7 @@ export type Database = {
           position: number
           priority: string
           product_id: string | null
+          sandbox_owner: string | null
           source: string
           started_at: string | null
           status: string
@@ -1061,6 +1107,7 @@ export type Database = {
           position?: number
           priority?: string
           product_id?: string | null
+          sandbox_owner?: string | null
           source?: string
           started_at?: string | null
           status?: string
@@ -1086,6 +1133,7 @@ export type Database = {
           position?: number
           priority?: string
           product_id?: string | null
+          sandbox_owner?: string | null
           source?: string
           started_at?: string | null
           status?: string
@@ -1156,6 +1204,10 @@ export type Database = {
       current_env: {
         Args: never
         Returns: Database["public"]["Enums"]["app_env"]
+      }
+      env_row_visible: {
+        Args: { _env: Database["public"]["Enums"]["app_env"]; _owner: string }
+        Returns: boolean
       }
       export_db_schema_snapshot: { Args: never; Returns: Json }
       get_system_backup_schedule: {
