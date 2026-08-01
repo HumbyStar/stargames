@@ -847,8 +847,10 @@ async function runBackup(opts: {
     backupId = rowIns.id as string;
   }
 
+  const deadline = startedAt + RUN_TIME_BUDGET_MS;
+
   try {
-    pushDebug("info", "zip:create", "Preparando arquivo ZIP");
+    pushDebug("info", "zip:create", "Preparando pacote do backup");
     await persistBackupDebug(supabaseAdmin, backupId, debugLog);
     const zipEntries: Array<{ path: string; data: Uint8Array }> = [];
     const zip = {
@@ -857,89 +859,137 @@ async function runBackup(opts: {
       },
     };
     const rowCounts: Record<string, number> = {};
-    const tableRows: Record<string, any[]> = {};
-    // Somente tabelas necessárias ao resumo permanecem em memória; as
-    // demais são serializadas e descartadas para evitar estourar o
-    // limite de memória do Worker.
-    const KEEP_FOR_SUMMARY = new Set<string>([
-      "clients",
-      "products",
-      "mgmv_agreements",
-      "mgmv_installments",
-      "nf_invoices",
-      "team_tasks",
-      "team_punch_entries",
-    ]);
+    for (const [table, state] of Object.entries(progress.parts)) {
+      rowCounts[table] = state.rows;
+    }
 
+    // Exportação em etapas: cada tabela é gravada em blocos no armazenamento
+    // intermediário. Quando o orçamento de tempo acaba, o backup pausa,
+    // guarda a posição exata e continua na execução seguinte.
+    let paused = false;
     for (const table of BACKUP_TABLES) {
+      let state = progress.parts[table];
+      if (!state) {
+        state = {
+          chunks: [],
+          rows: 0,
+          bytes: 0,
+          crcState: crc32Init(),
+          offset: 0,
+          done: false,
+        };
+        progress.parts[table] = state;
+      }
+      if (state.done) {
+        rowCounts[table] = state.rows;
+        continue;
+      }
       phase = `database:${table}`;
       if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
       pushDebug("info", `database:${table}`, `Exportando tabela ${table}…`, {
         started: true,
+        alreadyExported: state.rows,
       });
-      await persistBackupDebug(supabaseAdmin, backupId, debugLog, { row_counts: rowCounts });
-      const keepRows = KEEP_FOR_SUMMARY.has(table);
+      await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
+        row_counts: rowCounts,
+        progress: progress as any,
+      });
       let lastBatchLogAt = 0;
-      const fetchOptions = {
-        keepRows,
-        env: backupEnv,
-        onBatch: async (rows: number) => {
-          if (await isCancellationRequested(supabaseAdmin, backupId)) throw new BackupCancelledError();
-          const nowMs = Date.now();
-          if (nowMs - lastBatchLogAt < 2500) return;
-          lastBatchLogAt = nowMs;
-          pushDebug("info", `database:${table}`, `Exportando ${table}: ${rows.toLocaleString("pt-BR")} linhas lidas`, {
-            rows,
-            progress: true,
-          });
-          await persistBackupDebug(supabaseAdmin, backupId, debugLog, { row_counts: rowCounts });
-        },
-      };
-      let exported: Awaited<ReturnType<typeof fetchRowsForBackup>>;
       try {
-        exported = await fetchRowsForBackup(supabaseAdmin, table, fetchOptions);
+        await exportTableInChunks(supabaseAdmin, {
+          backupId,
+          table,
+          env: backupEnv,
+          state,
+          deadline,
+          onProgress: async (rows) => {
+            if (await isCancellationRequested(supabaseAdmin, backupId)) {
+              throw new BackupCancelledError();
+            }
+            const nowMs = Date.now();
+            if (nowMs - lastBatchLogAt < 2500) return;
+            lastBatchLogAt = nowMs;
+            rowCounts[table] = rows;
+            pushDebug(
+              "info",
+              `database:${table}`,
+              `Exportando ${table}: ${rows.toLocaleString("pt-BR")} linhas lidas`,
+              { rows, progress: true },
+            );
+            await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
+              row_counts: rowCounts,
+              progress: progress as any,
+            });
+          },
+        });
       } catch (err) {
         if (err instanceof BackupCancelledError) throw err;
         // Tabelas de log/diagnóstico nunca podem derrubar o backup inteiro:
         // o que importa são os dados de negócio.
         if (!LOG_TABLE_LIMITS[table]) throw err;
         const message = err instanceof Error ? err.message : String(err);
+        state.done = true;
+        state.skipped = true;
         pushDebug(
           "warn",
           `database:${table}`,
           `Não foi possível exportar o histórico ${table}; o backup segue sem essa tabela (${message})`,
           { skipped: true },
         );
-        exported = { rowCount: 0, jsonl: "" };
       }
-      rowCounts[table] = exported.rowCount;
-      zip.file(`database/data/${table}.jsonl`, exported.jsonl);
-      if (keepRows) {
-        tableRows[table] = exported.rows ?? [];
+      rowCounts[table] = state.rows;
+      progress.totalRows = Object.values(progress.parts).reduce((acc, s) => acc + s.rows, 0);
+      if (state.done) {
+        pushDebug("info", `database:${table}`, `Tabela ${table} exportada`, {
+          rows: state.rows,
+          completed: true,
+        });
+        if (state.capped) {
+          pushDebug(
+            "warn",
+            `database:${table}`,
+            `Tabela ${table} atingiu o teto de ${MAX_ROWS_PER_TABLE.toLocaleString("pt-BR")} linhas por tabela; o restante ficou de fora deste backup`,
+            { truncated: true, rows: state.rows },
+          );
+        }
       }
-      if (exported.windowSkipped) {
-        pushDebug(
-          "warn",
-          `database:${table}`,
-          `Histórico ${table} exportado sem recorte por período (coluna de data não encontrada)`,
-          { windowSkipped: true },
-        );
-      }
-      pushDebug("info", `database:${table}`, `Tabela ${table} exportada`, {
-        rows: exported.rowCount,
-        completed: true,
-        keptForSummary: keepRows,
+      await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
+        row_counts: rowCounts,
+        progress: progress as any,
       });
-      if (exported.truncated) {
+      if (!state.done) {
+        paused = true;
+        break;
+      }
+      if (progress.totalRows >= MAX_TOTAL_ROWS) {
         pushDebug(
           "warn",
-          `database:${table}`,
-          `Tabela de log ${table} limitada às ${exported.rowCount.toLocaleString("pt-BR")} entradas mais recentes para o backup não estourar memória`,
-          { truncated: true, rows: exported.rowCount },
+          "database",
+          `Teto global de ${MAX_TOTAL_ROWS.toLocaleString("pt-BR")} linhas atingido; as tabelas restantes ficaram de fora deste backup`,
+          { truncated: true, rows: progress.totalRows },
         );
+        break;
       }
-      await persistBackupDebug(supabaseAdmin, backupId, debugLog, { row_counts: rowCounts });
     }
+
+    if (paused) {
+      progress.paused = true;
+      progress.pausedAt = new Date().toISOString();
+      pushDebug(
+        "info",
+        "paused",
+        `Etapa parcial concluída (${progress.totalRows.toLocaleString("pt-BR")} linhas exportadas). O backup continua automaticamente de onde parou.`,
+        { rows: progress.totalRows, resume: true },
+      );
+      await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
+        row_counts: rowCounts,
+        progress: progress as any,
+        status: "running",
+      });
+      await scheduleContinuation(backupId);
+      return { id: backupId, storagePath, sizeBytes: 0, incomplete: true };
+    }
+    progress.paused = false;
 
     // Storage: notion-html-originals
     let storageObjectCount = 0;
