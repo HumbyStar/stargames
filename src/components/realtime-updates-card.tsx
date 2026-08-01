@@ -294,6 +294,17 @@ export function RealtimeUpdatesCard() {
           )}
         </div>
 
+        <Tabs defaultValue="atividade" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="atividade">Atividade</TabsTrigger>
+            <TabsTrigger value="equipe">Equipe</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="equipe" className="mt-0">
+            <TeamUsagePanel meId={meId} onSelectUser={(id) => setActorFilter(id)} />
+          </TabsContent>
+
+          <TabsContent value="atividade" className="mt-0 space-y-4">
         {/* Filtros */}
         <div className="space-y-2">
           <div className="flex flex-wrap gap-1.5">
