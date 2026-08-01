@@ -53,6 +53,8 @@ import { useNotifications } from "@/lib/notifications";
 import { HelpCenter } from "@/components/help-center";
 import { TutorialRunner } from "@/components/tutorial-runner";
 import { ConciergeModal } from "@/components/concierge-modal";
+import { PresenceDot } from "@/components/online-presence";
+import { useConnectionStatus } from "@/lib/use-connection-status";
 import { FloatingConcierge } from "@/components/floating-concierge";
 import { FinanceDashboard } from "@/components/finance-dashboard";
 import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
