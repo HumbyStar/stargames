@@ -584,6 +584,47 @@ async function resolveLogColumn(
   return null;
 }
 
+/** Chaves de estado de tela que guardam texto digitado em busca. */
+const SEARCH_STATE_KEYS = new Set(["search", "searchTerm", "query", "globalSearch"]);
+
+function stripSearchKeys(value: unknown, depth = 0): unknown {
+  if (Array.isArray(value) || typeof value !== "object" || value === null || depth > 4) {
+    return value;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    const leaf = k.split(".").pop() ?? k;
+    if (SEARCH_STATE_KEYS.has(leaf)) continue;
+    out[k] = stripSearchKeys(v, depth + 1);
+  }
+  return out;
+}
+
+/**
+ * Termos digitados em busca (navbar e filtros) nunca saem no backup — nem em
+ * produção, nem no Modo Teste. Vale para o estado de tela das configurações e
+ * para o histórico de auditoria.
+ */
+function stripSearchNoise(table: string, row: any): any {
+  if (!row || typeof row !== "object") return row;
+  if (table === "app_settings" && row.ui_state) {
+    return { ...row, ui_state: stripSearchKeys(row.ui_state) };
+  }
+  if (table === "audit_log" && row.table_name === "app_settings") {
+    const clean = { ...row };
+    if (clean.old_data && typeof clean.old_data === "object") {
+      const { ui_state: _o, ...rest } = clean.old_data as Record<string, unknown>;
+      clean.old_data = rest;
+    }
+    if (clean.new_data && typeof clean.new_data === "object") {
+      const { ui_state: _n, ...rest } = clean.new_data as Record<string, unknown>;
+      clean.new_data = rest;
+    }
+    return clean;
+  }
+  return row;
+}
+
 async function fetchAllRows(
   admin: any,
   table: BackupTable,
@@ -601,7 +642,7 @@ async function fetchAllRows(
       .range(from, from + batchSize - 1);
     if (error) throw new Error(`[${table}] ${error.message}`);
     if (!data || data.length === 0) break;
-    out.push(...data);
+    out.push(...data.map((r: any) => stripSearchNoise(table, r)));
     if (data.length < batchSize) break;
     from += batchSize;
   }
@@ -656,9 +697,10 @@ async function fetchRowsForBackup(
     if (error) throw new Error(`[${table}] ${error.message}`);
     if (!data || data.length === 0) break;
 
-    const batchJsonl = data.map((r: any) => JSON.stringify(r)).join("\n");
+    const sanitized = data.map((r: any) => stripSearchNoise(table, r));
+    const batchJsonl = sanitized.map((r: any) => JSON.stringify(r)).join("\n");
     if (batchJsonl) chunks.push(rowCount === 0 ? batchJsonl : `\n${batchJsonl}`);
-    if (rowsToKeep) rowsToKeep.push(...data);
+    if (rowsToKeep) rowsToKeep.push(...sanitized);
     rowCount += data.length;
     if (opts.onBatch) await opts.onBatch(rowCount);
     if (data.length < batchSize) break;
@@ -822,7 +864,7 @@ async function exportTableInChunks(
       state.done = true;
       return;
     }
-    for (const row of data) buffer.push(JSON.stringify(row));
+    for (const row of data) buffer.push(JSON.stringify(stripSearchNoise(table, row)));
     bufferRows += data.length;
     state.rows += data.length;
     state.offset += data.length;
