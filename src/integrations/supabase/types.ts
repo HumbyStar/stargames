@@ -262,9 +262,12 @@ export type Database = {
           file_hash: string | null
           id: string
           products_added: number
+          raw_content: string | null
           skipped_duplicates: number | null
           source: string
           status: string
+          user_email: string | null
+          user_id: string | null
         }
         Insert: {
           agreements_created?: number | null
@@ -279,9 +282,12 @@ export type Database = {
           file_hash?: string | null
           id?: string
           products_added?: number
+          raw_content?: string | null
           skipped_duplicates?: number | null
           source: string
           status: string
+          user_email?: string | null
+          user_id?: string | null
         }
         Update: {
           agreements_created?: number | null
@@ -296,9 +302,12 @@ export type Database = {
           file_hash?: string | null
           id?: string
           products_added?: number
+          raw_content?: string | null
           skipped_duplicates?: number | null
           source?: string
           status?: string
+          user_email?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
