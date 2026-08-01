@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useRouter } from "@tanstack/react-router";
 import { emitAppEvent } from "./app-events";
 import { useStore } from "./store";
 import {
@@ -47,6 +48,7 @@ export function reloadAppData() {
 export function SandboxProvider({ children }: { children: ReactNode }) {
   const fetchState = useServerFn(getSandboxState);
   const setMode = useServerFn(setSandboxMode);
+  const router = useRouter();
   const [state, setState] = useState<SandboxState>(EMPTY);
   const [loading, setLoading] = useState(true);
 
@@ -79,12 +81,20 @@ export function SandboxProvider({ children }: { children: ReactNode }) {
     async (active: boolean) => {
       const next = await setMode({ data: { active } });
       setState(next);
+      // Ao desligar o Modo Teste, a URL precisa voltar para a produção —
+      // senão a barra de endereço continua em /sandbox mostrando produção.
+      if (!next.active) {
+        const path = router.state.location.pathname;
+        if (path === "/sandbox" || path.startsWith("/sandbox/")) {
+          await router.navigate({ to: "/", replace: true });
+        }
+      }
       // Só depois da confirmação do servidor trocamos o snapshot: cada
       // ambiente (produção x modo teste) tem o seu, sem misturar dados.
       await useStore.getState().switchEnv(next.active ? "sandbox" : "producao");
       reloadAppData();
     },
-    [setMode],
+    [setMode, router],
   );
 
   const value = useMemo(
