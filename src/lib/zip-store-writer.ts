@@ -105,6 +105,7 @@ export function zipLocalHeader(part: ZipPartMeta, modifiedAt: Date): Uint8Array 
 export function zipCentralDirectory(
   parts: Array<ZipPartMeta & { localOffset: number }>,
   modifiedAt: Date,
+  centralStart: number,
 ): Uint8Array {
   const encoder = new TextEncoder();
   const { time, date } = dosDateTime(modifiedAt);
@@ -143,7 +144,7 @@ export function zipCentralDirectory(
   view.setUint16(offset + 8, named.length, true);
   view.setUint16(offset + 10, named.length, true);
   view.setUint32(offset + 12, centralSize, true);
-  view.setUint32(offset + 16, parts.length ? parts[0].localOffset + 0 : 0, true);
+  view.setUint32(offset + 16, centralStart, true);
   view.setUint16(offset + 20, 0, true);
   return out;
 }
