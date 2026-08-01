@@ -67,6 +67,87 @@ export interface BuildStoreZipOptions {
   onEntry?: (info: { index: number; total: number; path: string; percent: number }) => void | Promise<void>;
 }
 
+// ---------------------------------------------------------------------------
+// Montagem incremental (usada pelo backup em etapas)
+// ---------------------------------------------------------------------------
+
+export interface ZipPartMeta {
+  /** Caminho dentro do ZIP. */
+  path: string;
+  /** CRC-32 já finalizado do conteúdo completo da entrada. */
+  crc: number;
+  /** Tamanho total em bytes do conteúdo da entrada. */
+  size: number;
+}
+
+/** Cabeçalho local de uma entrada STORE (vai imediatamente antes dos dados). */
+export function zipLocalHeader(part: ZipPartMeta, modifiedAt: Date): Uint8Array {
+  const nameBytes = new TextEncoder().encode(part.path);
+  const { time, date } = dosDateTime(modifiedAt);
+  const out = new Uint8Array(30 + nameBytes.length);
+  const view = new DataView(out.buffer);
+  view.setUint32(0, 0x04034b50, true);
+  view.setUint16(4, 20, true);
+  view.setUint16(6, 0, true);
+  view.setUint16(8, 0, true); // STORE
+  view.setUint16(10, time, true);
+  view.setUint16(12, date, true);
+  view.setUint32(14, part.crc, true);
+  view.setUint32(18, part.size, true);
+  view.setUint32(22, part.size, true);
+  view.setUint16(26, nameBytes.length, true);
+  view.setUint16(28, 0, true);
+  out.set(nameBytes, 30);
+  return out;
+}
+
+/** Diretório central + EOCD para a lista completa de entradas já escritas. */
+export function zipCentralDirectory(
+  parts: Array<ZipPartMeta & { localOffset: number }>,
+  modifiedAt: Date,
+): Uint8Array {
+  const encoder = new TextEncoder();
+  const { time, date } = dosDateTime(modifiedAt);
+  const named = parts.map((p) => ({ ...p, nameBytes: encoder.encode(p.path) }));
+  let size = 22;
+  for (const p of named) size += 46 + p.nameBytes.length;
+  const out = new Uint8Array(size);
+  const view = new DataView(out.buffer);
+  let offset = 0;
+  for (const p of named) {
+    view.setUint32(offset, 0x02014b50, true);
+    view.setUint16(offset + 4, 20, true);
+    view.setUint16(offset + 6, 20, true);
+    view.setUint16(offset + 8, 0, true);
+    view.setUint16(offset + 10, 0, true);
+    view.setUint16(offset + 12, time, true);
+    view.setUint16(offset + 14, date, true);
+    view.setUint32(offset + 16, p.crc, true);
+    view.setUint32(offset + 20, p.size, true);
+    view.setUint32(offset + 24, p.size, true);
+    view.setUint16(offset + 28, p.nameBytes.length, true);
+    view.setUint16(offset + 30, 0, true);
+    view.setUint16(offset + 32, 0, true);
+    view.setUint16(offset + 34, 0, true);
+    view.setUint16(offset + 36, 0, true);
+    view.setUint32(offset + 38, 0, true);
+    view.setUint32(offset + 42, p.localOffset, true);
+    offset += 46;
+    out.set(p.nameBytes, offset);
+    offset += p.nameBytes.length;
+  }
+  const centralSize = offset;
+  view.setUint32(offset, 0x06054b50, true);
+  view.setUint16(offset + 4, 0, true);
+  view.setUint16(offset + 6, 0, true);
+  view.setUint16(offset + 8, named.length, true);
+  view.setUint16(offset + 10, named.length, true);
+  view.setUint32(offset + 12, centralSize, true);
+  view.setUint32(offset + 16, parts.length ? parts[0].localOffset + 0 : 0, true);
+  view.setUint16(offset + 20, 0, true);
+  return out;
+}
+
 /**
  * Monta o ZIP em um único buffer pré-dimensionado. Cada arquivo é gravado em
  * uma iteração própria, permitindo progresso e cancelamento imediatos.
