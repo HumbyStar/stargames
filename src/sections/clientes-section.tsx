@@ -2145,10 +2145,6 @@ function ClientDrawer({
         </DialogContent>
       </Dialog>
 
-      <NfFormatModal
-        open={nfModalOpen}
-        onClose={() => setNfModalOpen(false)}
-      />
       <NfDuplicateWarningModal
         open={nfWarnOpen}
         duplicates={selectedDuplicates}
