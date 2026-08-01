@@ -506,6 +506,12 @@ interface State {
   fetchDiagnostics: () => Promise<ImportDiagnostics>;
   clearImportCache: () => void;
   refreshSnapshot: () => Promise<void>;
+  /** Ambiente dos dados atualmente em memória. */
+  currentEnv: AppEnv;
+  /** True enquanto o app troca de ambiente e recarrega o snapshot. */
+  envSyncing: boolean;
+  /** Aplica a troca de ambiente: usa o snapshot em cache e revalida. */
+  switchEnv: (env: AppEnv) => Promise<void>;
   findDuplicateClientGroups: () => DuplicateClientGroup[];
   mergeDuplicateClients: () => Promise<MergeDuplicatesResult>;
 }
