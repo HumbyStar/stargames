@@ -605,7 +605,7 @@ function stripSearchKeys(value: unknown, depth = 0): unknown {
  * produção, nem no Modo Teste. Vale para o estado de tela das configurações e
  * para o histórico de auditoria.
  */
-function stripSearchNoise(table: BackupTable, row: any): any {
+function stripSearchNoise(table: string, row: any): any {
   if (!row || typeof row !== "object") return row;
   if (table === "app_settings" && row.ui_state) {
     return { ...row, ui_state: stripSearchKeys(row.ui_state) };
