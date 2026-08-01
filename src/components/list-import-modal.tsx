@@ -537,6 +537,9 @@ export function ListImportModal({
         productsAdded: productsCreated,
         errors: preview?.totals.errorRows ?? 0,
         status: (preview?.totals.errorRows ?? 0) > 0 ? "Com avisos" : "Concluído",
+        // Guarda o conteúdo exato colado/importado para o botão "Ver texto"
+        // reproduzir a importação original sem depender da auditoria.
+        rawContent: (mode === "html" ? rawHtml : rawText).trim() || undefined,
       });
       setProgressState((prev) =>
         prev
