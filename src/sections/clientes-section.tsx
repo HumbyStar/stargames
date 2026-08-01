@@ -1252,6 +1252,33 @@ function ClientDrawer({
   const clearSelection = () => setSelectedIds(new Set());
   const selectedProducts = () =>
     individualProducts.filter((p) => selectedIds.has(p.id));
+  // Produtos da seleção que já tiveram NF emitida (bloqueio de duplicidade).
+  const selectedDuplicates = useMemo<DuplicateNfProduct[]>(() => {
+    return individualProducts
+      .filter((p) => selectedIds.has(p.id) && nfProductMap.has(p.id))
+      .map((p) => {
+        const info = nfProductMap.get(p.id)!;
+        return { id: p.id, name: p.name, count: info.count, lastAt: info.lastAt };
+      });
+  }, [individualProducts, selectedIds, nfProductMap]);
+  const openNfModalWith = (list: Product[]) => {
+    setNfProducts(list);
+    setNfModalOpen(true);
+  };
+  const handleGerarNf = () => {
+    const sel = selectedProducts();
+    if (sel.length === 0) {
+      toast.info("Selecione ao menos 1 produto");
+      return;
+    }
+    const dupIds = new Set(selectedDuplicates.map((d) => d.id));
+    if (dupIds.size === 0) {
+      openNfModalWith(sel);
+      return;
+    }
+    setNfPendingSelection(sel);
+    setNfWarnOpen(true);
+  };
   const bulkMarkPaid = () => {
     const targets = selectedProducts().filter((p) => p.financialStatus !== "Pago");
     if (targets.length === 0) {
