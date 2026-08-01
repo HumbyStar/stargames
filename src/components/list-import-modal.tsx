@@ -1044,11 +1044,16 @@ export function ListImportModal({
             </table>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setDuplicateWarning(null)}>
+            <Button
+              variant="outline"
+              disabled={saving}
+              onClick={() => setDuplicateWarning(null)}
+            >
               Cancelar e revisar
             </Button>
             <Button
               variant="outline"
+              disabled={saving}
               onClick={() => {
                 if (!duplicateWarning) return;
                 const suspectRowIds = new Set(
@@ -1069,6 +1074,7 @@ export function ListImportModal({
             </Button>
             <Button
               className="bg-amber-600 hover:bg-amber-700 text-white"
+              disabled={saving}
               onClick={() => {
                 if (!duplicateWarning) return;
                 const rows = duplicateWarning.rows;
