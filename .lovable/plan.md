@@ -1,43 +1,46 @@
-## Diagnóstico (verificado no banco e no código)
+## O que verifiquei agora no banco
 
-Conferi o banco e o fluxo de backup/restauração. O que encontrei:
+Contagens reais por ambiente:
 
-1. **A tela mostra só 12 tabelas**: o ZIP realmente traz as 21, mas o card "Estrutura do ZIP validada" corta a lista em 12 chips (`slice(0, 12)`) e esconde as tabelas com 0 registro.
-2. **Ponto da equipe some no Modo Teste**: produção tem 36 batidas, o teste ficou com **0**. Causa: o índice único `uniq_punch_user_day_kind (user_id, day, kind)` não considera o ambiente, então a restauração descarta toda batida que já existe na produção.
-3. **Logs são cortados no backup**: `audit_log` sai limitado a 3.000 linhas / 30 dias (o banco tem ~69 mil), `notion_html_access_log` e `team_task_activity` idem. E `audit_log` **nunca** é restaurado.
-4. **Tabelas fora do backup**: `sandbox_import_audit`, `system_backups`, `sandbox_state`, `active_sessions` não entram em nenhum backup — e nada avisa quando uma tabela nova é criada no banco e fica de fora.
-5. **Finanças "zeradas" no teste não é perda de dados**: conferi as contagens por ambiente e o teste está idêntico à produção (2.728 clientes, 23.428 produtos, 77 acordos, 508 parcelas, todos os vínculos preenchidos). O que está realmente vazio nos dois ambientes é `nf_invoices`, `saved_filters`, `team_task_comments`. Ou seja: o card de finanças precisa ser reconferido depois das correções acima — se ainda vier zerado, é leitura de tela, não backup.
-6. **Separação por ambiente já está correta**: o backup filtra `env` e a restauração escreve só no ambiente de destino. Isso será preservado integralmente.
+| Tabela | Produção | Teste |
+|---|---|---|
+| clients | 2.729 | 2.728 |
+| products | 23.456 | 23.428 |
+| mgmv_agreements | 77 | 77 |
+| mgmv_installments | 508 | 508 |
+| team_punch_entries | 36 | 0 |
+| audit_log | 69.821 (tabela sem coluna de ambiente) | — |
+
+**Sobre os "números duplicados":** o backup filtra `env` corretamente — não soma produção + teste. Os números parecem repetidos porque o Modo Teste é um **clone da produção**, então as contagens são quase idênticas de propósito. A única exceção real é `audit_log` (69.821 linhas): essa tabela **não tem coluna de ambiente**, então ela sai inteira nos dois backups. É o único ponto que hoje mistura histórico dos dois ambientes.
+
+**Sobre o timeout:** hoje o backup inteiro (~97 mil linhas + espelho de storage + compactação) roda numa única execução de servidor, que tem tempo limitado. Ele é marcado como travado após 5 minutos. Por isso ele para sempre "na compactação".
 
 ## O que será feito
 
-### 1. Cobertura total das tabelas
-- Lista de tabelas do backup passa a ser conferida contra a lista real do banco (via `export_db_schema_snapshot`): qualquer tabela nova entra automaticamente e aparece no log do backup.
-- Incluir `sandbox_import_audit`, `system_backups` e `sandbox_state` no pacote. `active_sessions` entra como dado histórico, mas fica marcada como **não restaurável** (sessões ativas não podem ser sobrescritas).
-- O manifesto passa a registrar a lista completa e o motivo de qualquer tabela pulada.
+### 1. Backup em etapas, sem timeout (meta: 200 mil linhas)
+- O backup passa a rodar com **orçamento de tempo por execução** (~60s): exporta o quanto der, salva o progresso (tabela e posição atual) no registro do backup e **se reagenda sozinho** para continuar de onde parou.
+- Cada bloco exportado é gravado como parte do pacote, sem acumular o ZIP inteiro em memória; a compactação final só ocorre quando todas as tabelas terminaram.
+- Retomada automática: nada de "Tentar novamente" manual. Se uma execução cair, a próxima continua da mesma posição.
+- **Capacidade**: com esse modelo o limite deixa de ser tempo e passa a ser memória do pacote final. O teto será configurado em **300 mil linhas por tabela e 1 milhão no total**, com folga confortável para os 200 mil que você pediu (hoje o sistema todo tem ~170 mil linhas). Se algum teto for atingido, o backup avisa explicitamente em vez de falhar em silêncio.
 
-### 2. Fim do corte dos históricos
-- Remover o limite de 3.000 linhas / 30 dias dos logs. Exportação passa a ser paginada e gravada em blocos no ZIP (sem acumular tudo em memória), com um teto de segurança bem alto e aviso claro só se ele for atingido.
-- `audit_log` e `notion_html_access_log` entram na restauração (no ambiente de destino, sem tocar no outro).
+### 2. Retenção passa de 10 para 3
+- Mantém sempre os **3 backups concluídos mais recentes** por ambiente; os mais antigos são apagados do armazenamento e do histórico automaticamente ao final de cada backup novo.
+- Backups falhos continuam sendo limpos após 7 dias.
 
-### 3. Ponto da equipe no Modo Teste
-- Migração: substituir o índice único `(user_id, day, kind)` por `(user_id, day, kind, env)`.
-- Remover o filtro de colisão contra produção na restauração — deixa de ser necessário, e as 36 batidas passam a aparecer no teste.
+### 3. Separação total produção × teste
+- `audit_log` passa a ser separada por ambiente no pacote: o backup de produção leva só o histórico de produção. Como a tabela não tem coluna de ambiente, a separação será feita por migração (nova coluna `env` preenchida como produção no histórico existente).
+- O resumo do backup passa a exibir o ambiente de origem em cada número, para que nunca reste dúvida sobre de onde veio o dado.
+- Conferência final: gerar um backup de cada ambiente e comparar tabela a tabela com as contagens do banco.
 
-### 4. Restauração cobrindo tudo
-- A restauração no teste deixa de seguir apenas a lista de clonagem: passa a percorrer todas as tabelas do ZIP que tenham coluna `env`, na ordem de dependência, mantendo o remapeamento de IDs.
-- Tabelas globais compartilhadas (perfis, papéis, permissões, responsabilidades) continuam intocadas — elas já são visíveis nos dois ambientes, então a equipe aparece sem risco de alterar acesso real.
-
-### 5. Tela de análise mais honesta
-- Mostrar **todas** as tabelas do ZIP (sem corte em 12), com contagem explícita, e "0" em vez de esconder.
-- Separar visualmente "com dados" e "vazias no backup".
-- Após restaurar, a conferência já existente (esperado x gravado) passa a listar todas as tabelas processadas, inclusive as vazias.
-
-### 6. Conferência final
-- Rodar um backup de produção e um do teste, comparar contagens tabela a tabela com o banco, e confirmar que nenhum backup mistura os dois ambientes.
+### 4. Camada de verificação com I.A. (sim, é possível)
+Será adicionada como etapa opcional ao final de cada backup:
+- A I.A. recebe o **relatório do backup** (contagens esperadas x gravadas, tabelas puladas, tempo por etapa, erros) — nunca os dados dos clientes.
+- Ela aponta: tabela faltando, contagem divergente, etapa anormalmente lenta, teto atingido.
+- **Correção automática permitida** apenas para ações seguras e reversíveis: reexecutar a exportação de uma tabela que falhou e disparar a retomada quando detectar backup parado. Qualquer coisa além disso vira apenas recomendação na tela, exigindo sua aprovação.
+- Resultado aparece como selo no card do backup: "Verificado por I.A. — íntegro" ou "Atenção: X divergências".
 
 ## Detalhes técnicos
-- `src/lib/backup.functions.ts`: `BACKUP_TABLES` dinâmico, remoção de `LOG_TABLE_LIMITS`, exportação em blocos, `RESTORABLE_TABLES` ampliado, `tablesToProcess` do sandbox baseado nas tabelas com `env`.
-- Migração: `uniq_punch_user_day_kind` → inclui `env`.
-- `src/lib/backup-restore-keys.ts`: chave de `team_punch_entries` passa a incluir `env`.
-- `src/components/restore-backup-modal.tsx`: remoção do `slice(0, 12)` e novo agrupamento das tabelas.
+- `src/lib/backup.functions.ts`: orçamento de tempo por execução, cursor de progresso persistido em `system_backups`, auto-reagendamento via `/api/public/hooks/backup-run`, `BACKUP_RETENTION_COUNT` 10 → 3, tetos por tabela/total, filtro de `env` em `audit_log`.
+- Migração: coluna `env` em `audit_log` (default produção) + índice de apoio; `audit_change()` passa a gravar o ambiente atual.
+- Nova função de verificação por I.A. (Lovable AI, sem chave extra) recebendo só o relatório do backup.
+- `src/components/backups-panel.tsx`: barra de progresso por tabela, selo de verificação da I.A. e aviso de retenção 3.
