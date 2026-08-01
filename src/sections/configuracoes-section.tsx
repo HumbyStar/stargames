@@ -1022,7 +1022,10 @@ export function ConfiguracoesSection() {
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium">{h.file}</p>
                           <p className="text-xs text-muted-foreground">
-                            {formatDateBR(h.date)} · {h.source}
+                            {new Date(h.date).toLocaleString("pt-BR")} · {h.source}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {h.userEmail ?? "Usuário não identificado"}
                           </p>
                         </div>
                         <Tag variant={statusVariant[h.status]}>{h.status}</Tag>
@@ -1048,6 +1051,14 @@ export function ConfiguracoesSection() {
                           </div>
                         </div>
                       </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 w-full"
+                        onClick={() => setContentEntry(h)}
+                      >
+                        Ver texto
+                      </Button>
                     </li>
                   ))}
                 </ul>
@@ -1056,20 +1067,25 @@ export function ConfiguracoesSection() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Data</TableHead>
+                        <TableHead>Data e hora</TableHead>
+                        <TableHead>Usuário</TableHead>
                         <TableHead>Origem</TableHead>
                         <TableHead>Arquivo</TableHead>
                         <TableHead className="text-right">Clientes</TableHead>
                         <TableHead className="text-right">Produtos</TableHead>
                         <TableHead className="text-right">Erros</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {importHistory.map((h) => (
                         <TableRow key={h.id}>
                           <TableCell className="whitespace-nowrap">
-                            {formatDateBR(h.date)}
+                            {new Date(h.date).toLocaleString("pt-BR")}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                            {h.userEmail ?? "—"}
                           </TableCell>
                           <TableCell>{h.source}</TableCell>
                           <TableCell className="font-medium">{h.file}</TableCell>
@@ -1083,6 +1099,11 @@ export function ConfiguracoesSection() {
                           <TableCell>
                             <Tag variant={statusVariant[h.status]}>{h.status}</Tag>
                           </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="outline" size="sm" onClick={() => setContentEntry(h)}>
+                              Ver texto
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -1091,6 +1112,7 @@ export function ConfiguracoesSection() {
               </>
             )}
           </Card>
+          <ImportContentModal entry={contentEntry} onClose={() => setContentEntry(null)} />
         </>
       )}
 
