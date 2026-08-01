@@ -1516,7 +1516,64 @@ function GlobalModals() {
 
       <TutorialRunner />
       <ConciergeModal />
+      <OfflineNoticeModal />
     </>
+  );
+}
+
+/** Aviso automático quando a conexão com o sistema cai. */
+function OfflineNoticeModal() {
+  const { online, checking } = useConnectionStatus();
+  const [open, setOpen] = useState(false);
+  const wasOffline = useRef(false);
+  const { setActive } = useSandbox();
+
+  useEffect(() => {
+    if (checking) return;
+    if (!online && !wasOffline.current) {
+      wasOffline.current = true;
+      setOpen(true);
+    }
+    if (online && wasOffline.current) {
+      wasOffline.current = false;
+      setOpen(false);
+    }
+  }, [online, checking]);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <WifiOff className="size-5 text-red-500" />
+            Você está em modo offline
+          </DialogTitle>
+          <DialogDescription>
+            A conexão com o sistema caiu — nada será salvo na nuvem agora. Use o Modo Teste
+            caso precise importar algo apenas para validar.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="rounded-md border border-border px-3 py-1.5 text-sm transition hover:bg-accent"
+          >
+            Entendi
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void setActive(true).catch(() => {});
+              setOpen(false);
+            }}
+            className="rounded-md bg-amber-500/90 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-amber-500"
+          >
+            Abrir Modo Teste
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
