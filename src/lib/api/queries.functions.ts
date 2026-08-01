@@ -557,14 +557,20 @@ export const getDashboardAggregates = createServerFn({ method: "POST" })
         .limit(3),
     ]);
 
+    // Uma contagem que falha (timeout, rede instável) não pode derrubar o
+    // dashboard inteiro: registramos e seguimos com 0 naquela métrica.
     const c = (r: { count: number | null; error: unknown }) => {
-      if (r.error) throw new Error(String((r.error as { message?: string })?.message ?? r.error));
+      if (r.error) {
+        console.error("[getDashboardAggregates] count failed:", JSON.stringify(r.error));
+        return 0;
+      }
       return r.count ?? 0;
     };
 
-    if (alertsRes.error)
-      throw new Error(String((alertsRes.error as { message?: string })?.message ?? alertsRes.error));
-    const topAlerts = (alertsRes.data ?? []).map((r) => {
+    if (alertsRes.error) {
+      console.error("[getDashboardAggregates] alerts failed:", JSON.stringify(alertsRes.error));
+    }
+    const topAlerts = (alertsRes.error ? [] : alertsRes.data ?? []).map((r) => {
       const rel = (r as unknown as { clients?: { name?: string } }).clients;
       return {
         productId: r.id,
