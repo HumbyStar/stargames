@@ -104,8 +104,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const deleteClient = useStore((s) => s.deleteClient);
   const addProduct = useStore((s) => s.addProduct);
   const updateProduct = useStore((s) => s.updateProduct);
-  const deleteProducts = useStore((s) => s.deleteProducts);
-  const [deletingProducts, setDeletingProducts] = useState(false);
   const registerPayment = useStore((s) => s.registerPayment);
   const setProductSituation = useStore((s) => s.setProductSituation);
   const payMGMVInstallment = useStore((s) => s.payMGMVInstallment);
@@ -1195,6 +1193,8 @@ function ClientDrawer({
     return map;
   }, [nfInvoices]);
   const updateProduct = useStore((s) => s.updateProduct);
+  const deleteProducts = useStore((s) => s.deleteProducts);
+  const [deletingProducts, setDeletingProducts] = useState(false);
   // Edição por lápis dos produtos do cliente. Apenas Confirmar persiste;
   // Fechar descarta. Blur / click-outside são ignorados pelo hook.
   const productEdit = useRowEdit<{
