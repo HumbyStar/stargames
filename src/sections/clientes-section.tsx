@@ -1758,6 +1758,15 @@ function ClientDrawer({
               </Button>
               <Button
                 size="sm"
+                variant="destructive"
+                disabled={deletingProducts}
+                onClick={() => void bulkDelete()}
+                title="Excluir definitivamente os produtos selecionados (ex.: item duplicado importado por engano)"
+              >
+                {deletingProducts ? "Excluindo..." : "Excluir"}
+              </Button>
+              <Button
+                size="sm"
                 variant="default"
                 onClick={handleGerarNf}
                 title="Classifica NCM via IA e gera texto pronto para o contador"
