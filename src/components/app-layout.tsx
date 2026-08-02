@@ -1,4 +1,4 @@
-import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Outlet } from "@tanstack/react-router";
 import {
   Search,
   FlaskConical,
@@ -1422,8 +1422,6 @@ function LocalModePill() {
 
 function SandboxPillInner() {
   const { state, setActive } = useSandbox();
-  const navigate = useNavigate();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [leaving, setLeaving] = useState(false);
   if (!state.active) return null;
   return (
@@ -1443,9 +1441,6 @@ function SandboxPillInner() {
           setLeaving(true);
           try {
             await setActive(false);
-            // Estando na página /sandbox, sair também precisa voltar a URL
-            // para a produção — senão a barra continua em /sandbox.
-            if (pathname.startsWith("/sandbox")) await navigate({ to: "/" });
           } finally {
             setLeaving(false);
           }

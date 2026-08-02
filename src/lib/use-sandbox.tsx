@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -51,6 +52,7 @@ export function SandboxProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [state, setState] = useState<SandboxState>(EMPTY);
   const [loading, setLoading] = useState(true);
+  const modeChangeRef = useRef<Promise<void> | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -79,20 +81,32 @@ export function SandboxProvider({ children }: { children: ReactNode }) {
 
   const setActive = useCallback(
     async (active: boolean) => {
-      const next = await setMode({ data: { active } });
-      setState(next);
-      // Ao desligar o Modo Teste, a URL precisa voltar para a produção —
-      // senão a barra de endereço continua em /sandbox mostrando produção.
-      if (!next.active) {
-        const path = router.state.location.pathname;
-        if (path === "/sandbox" || path.startsWith("/sandbox/")) {
+      if (modeChangeRef.current) return modeChangeRef.current;
+
+      const change = (async () => {
+        const currentPath = router.state.location.pathname;
+
+        // A rota /sandbox representa a mesma tela da produção em /. Ao sair,
+        // alteramos a URL antes da chamada ao servidor para que endereço e UI
+        // nunca permaneçam temporariamente em ambientes diferentes.
+        if (!active && (currentPath === "/sandbox" || currentPath.startsWith("/sandbox/"))) {
           await router.navigate({ to: "/", replace: true });
         }
+
+        const next = await setMode({ data: { active } });
+        setState(next);
+        // Só depois da confirmação do servidor trocamos o snapshot: cada
+        // ambiente (produção x modo teste) tem o seu, sem misturar dados.
+        await useStore.getState().switchEnv(next.active ? "sandbox" : "producao");
+        reloadAppData();
+      })();
+
+      modeChangeRef.current = change;
+      try {
+        await change;
+      } finally {
+        modeChangeRef.current = null;
       }
-      // Só depois da confirmação do servidor trocamos o snapshot: cada
-      // ambiente (produção x modo teste) tem o seu, sem misturar dados.
-      await useStore.getState().switchEnv(next.active ? "sandbox" : "producao");
-      reloadAppData();
     },
     [setMode, router],
   );
