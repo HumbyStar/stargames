@@ -1193,6 +1193,8 @@ function ClientDrawer({
     return map;
   }, [nfInvoices]);
   const updateProduct = useStore((s) => s.updateProduct);
+  const deleteProducts = useStore((s) => s.deleteProducts);
+  const [deletingProducts, setDeletingProducts] = useState(false);
   // Edição por lápis dos produtos do cliente. Apenas Confirmar persiste;
   // Fechar descarta. Blur / click-outside são ignorados pelo hook.
   const productEdit = useRowEdit<{
@@ -1328,6 +1330,30 @@ function ClientDrawer({
       toast.success(`${targets.length} produto(s) copiado(s)`);
     } catch {
       toast.error("Não foi possível copiar para a área de transferência");
+    }
+  };
+  // Exclusão definitiva — usada quando um item foi importado em duplicidade
+  // por engano e não deve permanecer no histórico do cliente.
+  const bulkDelete = async () => {
+    const targets = selectedProducts();
+    if (targets.length === 0) return;
+    if (
+      !window.confirm(
+        `Excluir definitivamente ${targets.length} produto(s) selecionado(s)?\n\n` +
+          targets.map((p) => `• ${p.name} — ${formatBRL(p.totalValue)}`).join("\n") +
+          "\n\nEsta ação não pode ser desfeita.",
+      )
+    )
+      return;
+    setDeletingProducts(true);
+    try {
+      await deleteProducts(targets.map((p) => p.id));
+      toast.success(`${targets.length} produto(s) excluído(s)`);
+      clearSelection();
+    } catch {
+      toast.error("Não foi possível excluir os produtos");
+    } finally {
+      setDeletingProducts(false);
     }
   };
   const financialSummary = calculateClientFinancialSummary(client, products);
@@ -1729,6 +1755,15 @@ function ClientDrawer({
               </Button>
               <Button size="sm" variant="ghost" onClick={clearSelection}>
                 Limpar
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={deletingProducts}
+                onClick={() => void bulkDelete()}
+                title="Excluir definitivamente os produtos selecionados (ex.: item duplicado importado por engano)"
+              >
+                {deletingProducts ? "Excluindo..." : "Excluir"}
               </Button>
               <Button
                 size="sm"

@@ -28,6 +28,7 @@ import {
   dbReassignProductsClientAsync,
   dbReassignAgreementClientAsync,
   dbDeleteClientsByIdsAsync,
+  dbDeleteProductsByIdsAsync,
 } from "./db-sync";
 import { suspendRealtimeRefresh } from "./db-sync";
 import { getCurrentUserInfo } from "./db-sync";
@@ -468,6 +469,8 @@ interface State {
   findClientByPhone: (phone: string) => Client | undefined;
   addProduct: (p: Omit<Product, "id">) => void;
   updateProduct: (id: string, patch: Partial<Omit<Product, "id">>) => void;
+  /** Exclui definitivamente produtos (local + banco). */
+  deleteProducts: (ids: string[]) => Promise<void>;
   registerPayment: (productId: string, amount: number) => void;
   markResolved: (productId: string) => void;
   setProductSituation: (productId: string, situation: Situation) => void;
@@ -820,6 +823,17 @@ export const useStore = create<State>()((set, get) => ({
           if (updated) queueProductUpsert(updated);
           return { products };
         }),
+      deleteProducts: async (ids) => {
+        if (ids.length === 0) return;
+        const idSet = new Set(ids);
+        set((s) => ({ products: s.products.filter((p) => !idSet.has(p.id)) }));
+        try {
+          await dbDeleteProductsByIdsAsync(ids);
+        } catch (err) {
+          console.error("deleteProducts failed", err);
+          throw err;
+        }
+      },
       registerPayment: (productId, amount) =>
         set((s) => {
           const products = s.products.map((p) => {
