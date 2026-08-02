@@ -823,6 +823,17 @@ export const useStore = create<State>()((set, get) => ({
           if (updated) queueProductUpsert(updated);
           return { products };
         }),
+      deleteProducts: async (ids) => {
+        if (ids.length === 0) return;
+        const idSet = new Set(ids);
+        set((s) => ({ products: s.products.filter((p) => !idSet.has(p.id)) }));
+        try {
+          await dbDeleteProductsByIdsAsync(ids);
+        } catch (err) {
+          console.error("deleteProducts failed", err);
+          throw err;
+        }
+      },
       registerPayment: (productId, amount) =>
         set((s) => {
           const products = s.products.map((p) => {
