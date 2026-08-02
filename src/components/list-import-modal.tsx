@@ -1121,6 +1121,33 @@ export function ListImportModal({
               Pular os duplicados
             </Button>
             <Button
+              variant="outline"
+              disabled={saving}
+              title="Mantém apenas uma ocorrência de cada produto repetido no lote"
+              onClick={() => {
+                if (!duplicateWarning) return;
+                // Unificar: remove apenas as repetições dentro do lote
+                // (mantendo a primeira ocorrência) e preserva o restante.
+                const repeatedIds = new Set(
+                  duplicateWarning.suspects
+                    .filter((s) => s.kind === "duplicate-in-batch")
+                    .map((s) => s.row.id),
+                );
+                const rows = duplicateWarning.rows.filter((r) => !repeatedIds.has(r.id));
+                setDuplicateWarning(null);
+                if (rows.length === 0) {
+                  toast.error("Nada restou para importar após unificar os itens.");
+                  return;
+                }
+                toast.success(
+                  `${repeatedIds.size} item(ns) repetido(s) unificado(s) — 1 registro por produto.`,
+                );
+                void runPersist(rows);
+              }}
+            >
+              Unificar itens
+            </Button>
+            <Button
               className="bg-amber-600 hover:bg-amber-700 text-white"
               disabled={saving}
               onClick={() => {
