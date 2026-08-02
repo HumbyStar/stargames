@@ -28,6 +28,7 @@ import {
   dbReassignProductsClientAsync,
   dbReassignAgreementClientAsync,
   dbDeleteClientsByIdsAsync,
+  dbDeleteProductsByIdsAsync,
 } from "./db-sync";
 import { suspendRealtimeRefresh } from "./db-sync";
 import { getCurrentUserInfo } from "./db-sync";
