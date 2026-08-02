@@ -739,6 +739,17 @@ export async function dbDeleteClientsByIdsAsync(ids: string[]): Promise<void> {
   }
 }
 
+/** Apaga produtos pelos ids informados. */
+export async function dbDeleteProductsByIdsAsync(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const CHUNK = 100;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK);
+    const { error } = await sb().from("products").delete().in("id", slice);
+    if (error) logErr("deleteProductsByIds", error);
+  }
+}
+
 // ============= MGMV relational sync =============
 
 /**
