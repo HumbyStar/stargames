@@ -469,6 +469,8 @@ interface State {
   findClientByPhone: (phone: string) => Client | undefined;
   addProduct: (p: Omit<Product, "id">) => void;
   updateProduct: (id: string, patch: Partial<Omit<Product, "id">>) => void;
+  /** Exclui definitivamente produtos (local + banco). */
+  deleteProducts: (ids: string[]) => Promise<void>;
   registerPayment: (productId: string, amount: number) => void;
   markResolved: (productId: string) => void;
   setProductSituation: (productId: string, situation: Situation) => void;
