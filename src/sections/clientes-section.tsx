@@ -104,6 +104,8 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const deleteClient = useStore((s) => s.deleteClient);
   const addProduct = useStore((s) => s.addProduct);
   const updateProduct = useStore((s) => s.updateProduct);
+  const deleteProducts = useStore((s) => s.deleteProducts);
+  const [deletingProducts, setDeletingProducts] = useState(false);
   const registerPayment = useStore((s) => s.registerPayment);
   const setProductSituation = useStore((s) => s.setProductSituation);
   const payMGMVInstallment = useStore((s) => s.payMGMVInstallment);
@@ -1328,6 +1330,30 @@ function ClientDrawer({
       toast.success(`${targets.length} produto(s) copiado(s)`);
     } catch {
       toast.error("Não foi possível copiar para a área de transferência");
+    }
+  };
+  // Exclusão definitiva — usada quando um item foi importado em duplicidade
+  // por engano e não deve permanecer no histórico do cliente.
+  const bulkDelete = async () => {
+    const targets = selectedProducts();
+    if (targets.length === 0) return;
+    if (
+      !window.confirm(
+        `Excluir definitivamente ${targets.length} produto(s) selecionado(s)?\n\n` +
+          targets.map((p) => `• ${p.name} — ${formatBRL(p.totalValue)}`).join("\n") +
+          "\n\nEsta ação não pode ser desfeita.",
+      )
+    )
+      return;
+    setDeletingProducts(true);
+    try {
+      await deleteProducts(targets.map((p) => p.id));
+      toast.success(`${targets.length} produto(s) excluído(s)`);
+      clearSelection();
+    } catch {
+      toast.error("Não foi possível excluir os produtos");
+    } finally {
+      setDeletingProducts(false);
     }
   };
   const financialSummary = calculateClientFinancialSummary(client, products);
