@@ -38,6 +38,7 @@ import type { AppEnv, DbSnapshot } from "./db-sync";
 export type { AppEnv } from "./db-sync";
 import { resolveCurrentEnv } from "./db-sync";
 import { recalcPendingDueDates } from "./mgmv-schedule";
+import { canonicalPhone } from "./list-import-parser";
 
 export type FinancialStatus = "Pago" | "Reserva" | "Pendente" | "MGMV";
 
