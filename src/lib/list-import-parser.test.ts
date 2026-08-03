@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseListText, parseMoney, normalizePhone } from "./list-import-parser";
+import { parseListText, parseMoney, normalizePhone, canonicalPhone } from "./list-import-parser";
 
 describe("list-import-parser", () => {
   it("parses groups, paid and reserva lines", () => {
