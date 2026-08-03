@@ -61,9 +61,11 @@ export function MetricCard({
 export function Tag({
   children,
   variant = "neutral",
+  className,
 }: {
   children: ReactNode;
   variant?: "neutral" | "success" | "danger" | "warning" | "primary";
+  className?: string;
 }) {
   const styles = {
     neutral: "bg-muted text-muted-foreground",
@@ -77,6 +79,7 @@ export function Tag({
       className={cn(
         "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
         styles,
+        className,
       )}
     >
       {children}
