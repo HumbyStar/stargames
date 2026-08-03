@@ -2072,25 +2072,7 @@ function ClientDrawer({
                     </td>
                     <td className="py-2 pr-3 tabular-nums font-medium">{formatBRL(remaining)}</td>
                     <td className="py-2 pr-3">
-                      <Tag
-                        variant={
-                          !isOpenSituation(p)
-                            ? "neutral"
-                            : p.financialStatus === "Pago"
-                            ? "success"
-                            : p.financialStatus === "Reserva"
-                              ? "warning"
-                              : p.financialStatus === "Pendente"
-                                ? "danger"
-                                : status.variant === "danger"
-                                  ? "danger"
-                                  : status.variant === "warning"
-                                    ? "warning"
-                                    : "neutral"
-                        }
-                      >
-                        {status.label}
-                      </Tag>
+                      <Tag variant={productStatusVariant(p)}>{status.label}</Tag>
                     </td>
                     <td className="py-2 pr-3">
                       {editing ? (
