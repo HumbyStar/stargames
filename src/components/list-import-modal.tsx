@@ -140,11 +140,25 @@ export function ListImportModal({
       note: string;
     }>;
   } | null>(null);
+  // Conciliação de identidade: mesmo telefone já cadastrado com outro nome.
+  const [nameConflicts, setNameConflicts] = useState<{
+    rows: ListImportRow[];
+    items: Array<{
+      phone: string;
+      clientId: string;
+      currentName: string;
+      incomingName: string;
+      decision: "keep" | "update";
+    }>;
+  } | null>(null);
+  // Decisões confirmadas por telefone (usadas em runPersist).
+  const nameDecisionsRef = useRef<Map<string, "keep" | "update">>(new Map());
 
   const reviewFn = useServerFn(reviewListImportLine);
   const addClient = useStore((s) => s.addClient);
   const addProduct = useStore((s) => s.addProduct);
   const findClientByPhone = useStore((s) => s.findClientByPhone);
+  const updateClient = useStore((s) => s.updateClient);
   const addImportHistory = useStore((s) => s.addImportHistory);
   const products = useStore((s) => s.products);
 
@@ -160,6 +174,8 @@ export function ListImportModal({
     setAiBusyId(null);
     setProgressState(null);
     setDuplicateWarning(null);
+    setNameConflicts(null);
+    nameDecisionsRef.current = new Map();
     onOpenChange(false);
   }
 
@@ -325,12 +341,58 @@ export function ListImportModal({
       .trim();
   }
 
+  /** Nome normalizado para comparação: sem acento, pontuação ou símbolos. */
+  function normalizeName(s: string) {
+    return String(s || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  /**
+   * Etapa 1: mesmo telefone já cadastrado com nome diferente. Pergunta se é
+   * o mesmo cliente e se o nome deve ser atualizado ou mantido.
+   */
+  async function persist(rowsToSave: ListImportRow[]) {
+    if (savingRef.current) return;
+    if (!rowsToSave.length) {
+      toast.error("Nenhum registro para salvar.");
+      return;
+    }
+    const seen = new Set<string>();
+    const items: NonNullable<typeof nameConflicts>["items"] = [];
+    for (const r of rowsToSave) {
+      if (!r.phone || !r.clientName) continue;
+      if (seen.has(r.phone)) continue;
+      seen.add(r.phone);
+      if (nameDecisionsRef.current.has(r.phone)) continue;
+      const existing = findClientByPhone(r.phone);
+      if (!existing) continue;
+      if (normalizeName(existing.name) === normalizeName(r.clientName)) continue;
+      items.push({
+        phone: r.phone,
+        clientId: existing.id,
+        currentName: existing.name,
+        incomingName: r.clientName,
+        decision: "keep",
+      });
+    }
+    if (items.length > 0) {
+      setNameConflicts({ rows: rowsToSave, items });
+      return;
+    }
+    await checkDuplicates(rowsToSave);
+  }
+
   /**
    * Wrapper: detecta duplicidade recente (mesmo cliente + mesmo produto já
    * salvo nos últimos N minutos) e duplicidade dentro do próprio lote antes
    * de gravar. Se houver, abre confirmação; caso contrário grava direto.
    */
-  async function persist(rowsToSave: ListImportRow[]) {
+  async function checkDuplicates(rowsToSave: ListImportRow[]) {
     if (savingRef.current) return;
     if (!rowsToSave.length) {
       toast.error("Nenhum registro para salvar.");
@@ -475,6 +537,13 @@ export function ListImportModal({
           const existing = findClientByPhone(r.phone);
           if (existing) {
             clientId = existing.id;
+            if (
+              nameDecisionsRef.current.get(r.phone) === "update" &&
+              r.clientName &&
+              r.clientName !== existing.name
+            ) {
+              updateClient(existing.id, { name: r.clientName });
+            }
           } else {
             const created = addClient({
               name: r.clientName,
@@ -1047,6 +1116,137 @@ export function ListImportModal({
       />
 
       {/* Aviso da IA: mesmo produto para o mesmo cliente em poucos minutos */}
+      <Dialog
+        open={!!nameConflicts}
+        onOpenChange={(o) => { if (!o) setNameConflicts(null); }}
+      >
+        <DialogContent className="border-sky-500/50 bg-gradient-to-b from-sky-500/10 via-background to-background sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sky-700 dark:text-sky-300">
+              <Sparkles className="h-5 w-5" /> Clientes com o mesmo número
+            </DialogTitle>
+            <DialogDescription>
+              {nameConflicts?.items.length ?? 0} telefone(s) da lista já existem no
+              sistema com <span className="font-medium text-foreground">nome diferente</span>.
+              Provavelmente é o mesmo cliente com o nome atualizado no WhatsApp.
+              Escolha manter o nome atual ou atualizar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                setNameConflicts((prev) =>
+                  prev
+                    ? { ...prev, items: prev.items.map((i) => ({ ...i, decision: "keep" as const })) }
+                    : prev,
+                )
+              }
+            >
+              Manter todos
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                setNameConflicts((prev) =>
+                  prev
+                    ? { ...prev, items: prev.items.map((i) => ({ ...i, decision: "update" as const })) }
+                    : prev,
+                )
+              }
+            >
+              Atualizar todos
+            </Button>
+          </div>
+          <div className="max-h-72 overflow-y-auto rounded-md border bg-background/70">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-muted/60 text-left">
+                <tr>
+                  <th className="p-2">Telefone</th>
+                  <th className="p-2">Nome no sistema</th>
+                  <th className="p-2">Nome na lista</th>
+                  <th className="p-2">Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {nameConflicts?.items.map((it) => (
+                  <tr key={it.phone} className="border-t">
+                    <td className="p-2 align-middle font-mono">{it.phone}</td>
+                    <td className="p-2 align-middle">{it.currentName}</td>
+                    <td className="p-2 align-middle font-medium">{it.incomingName}</td>
+                    <td className="p-2 align-middle">
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant={it.decision === "keep" ? "default" : "outline"}
+                          onClick={() =>
+                            setNameConflicts((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    items: prev.items.map((x) =>
+                                      x.phone === it.phone ? { ...x, decision: "keep" as const } : x,
+                                    ),
+                                  }
+                                : prev,
+                            )
+                          }
+                        >
+                          Manter
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={it.decision === "update" ? "default" : "outline"}
+                          onClick={() =>
+                            setNameConflicts((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    items: prev.items.map((x) =>
+                                      x.phone === it.phone ? { ...x, decision: "update" as const } : x,
+                                    ),
+                                  }
+                                : prev,
+                            )
+                          }
+                        >
+                          Atualizar
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" disabled={saving} onClick={() => setNameConflicts(null)}>
+              Cancelar e revisar
+            </Button>
+            <Button
+              disabled={saving}
+              onClick={() => {
+                if (!nameConflicts) return;
+                const rows = nameConflicts.rows;
+                const updates = nameConflicts.items.filter((i) => i.decision === "update").length;
+                for (const it of nameConflicts.items) {
+                  nameDecisionsRef.current.set(it.phone, it.decision);
+                }
+                setNameConflicts(null);
+                if (updates > 0) {
+                  toast.success(`${updates} nome(s) de cliente serão atualizados na importação.`);
+                }
+                void checkDuplicates(rows);
+              }}
+            >
+              Confirmar e continuar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog
         open={!!duplicateWarning}
         onOpenChange={(o) => { if (!o) setDuplicateWarning(null); }}
