@@ -40,6 +40,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { productStatusTone } from "@/lib/status-tone";
+import { StatusLegend } from "@/components/status-legend";
 import { NotionHtmlActions } from "@/components/notion-html-actions";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
 import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
@@ -442,6 +443,8 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           </>
         }
       />
+
+      <StatusLegend className="mt-4" />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <MetricCard

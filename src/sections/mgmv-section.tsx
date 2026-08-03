@@ -31,6 +31,7 @@ import { listNfInvoices } from "@/lib/nf-history.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { cn } from "@/lib/utils";
 import { productStatusTone } from "@/lib/status-tone";
+import { StatusLegend } from "@/components/status-legend";
 
 type MgmvChip =
   | "todos"
@@ -520,6 +521,8 @@ export function MGMVSection({
           </div>
         }
       />
+
+      <StatusLegend className="mt-4" />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
         <MetricCard
