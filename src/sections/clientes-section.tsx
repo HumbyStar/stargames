@@ -1120,6 +1120,13 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
 }
 
 const STATUS_FILTER_KEY = "stargames:product-status-filter";
+const SITUATION_FILTER_KEY = "stargames:product-situation-filter";
+const FILTERABLE_SITUATIONS: Situation[] = [
+  "Em Aberto",
+  "Enviado",
+  "Removido",
+  "Retirado",
+];
 
 function readStoredStatusFilter(): FinancialStatus[] {
   if (typeof window === "undefined") return [];
@@ -1141,6 +1148,31 @@ function writeStoredStatusFilter(values: FinancialStatus[]) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(STATUS_FILTER_KEY, JSON.stringify(values));
+  } catch {
+    /* storage indisponível: filtro segue apenas em memória */
+  }
+}
+
+function readStoredSituationFilter(): Situation[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(SITUATION_FILTER_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (v): v is Situation =>
+        typeof v === "string" && (FILTERABLE_SITUATIONS as string[]).includes(v),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredSituationFilter(values: Situation[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SITUATION_FILTER_KEY, JSON.stringify(values));
   } catch {
     /* storage indisponível: filtro segue apenas em memória */
   }
