@@ -1161,6 +1161,8 @@ function ClientDrawer({
   // Enviado / Retirar / Removido). Só o clique nos botões da barra aplica;
   // marcar o checkbox nunca altera status sozinho.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Filtro por status no Histórico de Produtos. `null` = mostrar todos.
+  const [statusFilter, setStatusFilter] = useState<FinancialStatus | null>(null);
   const [nfModalOpen, setNfModalOpen] = useState(false);
   const [nfProducts, setNfProducts] = useState<Product[]>([]);
   const [nfWarnOpen, setNfWarnOpen] = useState(false);
@@ -1223,7 +1225,11 @@ function ClientDrawer({
   const individualAll = sortedProducts.filter((p) => p.financialStatus !== "MGMV");
   // Retirado = arquivado: sai da lista ativa e migra para o histórico do
   // cliente. Mantido nas somas totais para não perder o histórico financeiro.
-  const individualProducts = individualAll.filter((p) => !isProductArchived(p));
+  const individualProducts = individualAll.filter(
+    (p) =>
+      !isProductArchived(p) &&
+      (statusFilter === null || p.financialStatus === statusFilter),
+  );
   const archivedProducts = individualAll.filter((p) => isProductArchived(p));
   // Sincroniza seleção: remove ids que sumiram da lista ativa (ex.: produto
   // virou Removido/Retirado e foi arquivado).
