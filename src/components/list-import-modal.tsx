@@ -1302,6 +1302,7 @@ export function ListImportModal({
                 const updates = nameConflicts.items.filter((i) => i.decision === "update").length;
                 for (const it of nameConflicts.items) {
                   nameDecisionsRef.current.set(it.phone, it.decision);
+                  linkDecisionsRef.current.set(it.phone, it.link);
                 }
                 setNameConflicts(null);
                 if (updates > 0) {
