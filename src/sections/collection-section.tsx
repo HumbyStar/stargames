@@ -42,6 +42,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
 import { productStatusTone, productStatusTextTone } from "@/lib/status-tone";
+import { cn } from "@/lib/utils";
 
 type Filter = "todos" | "reserva_vencida" | "pendente_vencido" | "mgmv" | "mgmv_vencido" | "em_aberto";
 
@@ -898,7 +899,10 @@ export function CollectionSection({
                 const editing = collectionEdit.isEditing(p.id);
                 const draft = collectionEdit.draftValues;
                 return (
-                  <tr key={`p-${p.id}-${idx}`} className="border-b border-border/60 last:border-0">
+                  <tr
+                    key={`p-${p.id}-${idx}`}
+                    className={cn("border-b border-border/60 last:border-0", productStatusTone(p))}
+                  >
                     <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 font-medium"}>{highlight(client?.name ?? "", search)}</td>
                     <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>{highlight(client?.phone ?? "", search)}</td>
                     <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}>{highlight(p.name, search)}</td>
@@ -932,7 +936,7 @@ export function CollectionSection({
                       )}
                     </td>
                     <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 tabular-nums font-medium"}>{formatBRL(remaining)}</td>
-                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}><Tag variant={status.variant === "danger" ? "danger" : status.variant === "warning" ? "warning" : "neutral"}>{status.label}</Tag></td>
+                    <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}><Tag variant={status.variant === "danger" ? "danger" : status.variant === "warning" ? "warning" : "neutral"} className={productStatusTextTone(p)}>{status.label}</Tag></td>
                     <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300"}><Tag>{displaySituation(p.situation)}</Tag></td>
                     <td className={(compact ? "py-1.5" : "py-3") + " pr-3 transition-[padding] duration-300 text-muted-foreground"}>
                       {editing ? (
