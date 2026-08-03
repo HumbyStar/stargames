@@ -1994,7 +1994,7 @@ function ClientDrawer({
                     key={p.id}
                     className={cn(
                       "border-b border-border/60 last:border-0",
-                      productStatusTone(p.financialStatus, p.situation),
+                      productStatusTone(p),
                     )}
                   >
                     <td className="py-2 pr-2 align-middle">

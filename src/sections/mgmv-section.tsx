@@ -1085,7 +1085,7 @@ export function MGMVSection({
                                     key={p.id}
                                     className={cn(
                                       "flex items-center justify-between rounded-md border border-border/60 bg-card px-2 py-1",
-                                      productStatusTone(p.financialStatus, p.situation),
+                                      productStatusTone(p),
                                     )}
                                   >
                                     <span className="inline-flex min-w-0 items-center truncate font-medium">
