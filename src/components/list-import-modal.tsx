@@ -548,7 +548,8 @@ export function ListImportModal({
         let clientId = cache.get(r.phone);
         let wasNewClient = false;
         if (!clientId) {
-          const existing = findClientByPhone(r.phone);
+          const keepSeparate = linkDecisionsRef.current.get(r.phone) === "separate";
+          const existing = keepSeparate ? undefined : findClientByPhone(r.phone);
           if (existing) {
             clientId = existing.id;
             if (
@@ -561,7 +562,9 @@ export function ListImportModal({
           } else {
             const created = addClient({
               name: r.clientName,
-              phone: r.phone,
+              // Salva sempre a forma canônica (com o 9 do celular) para não
+              // gerar novas duplicatas a partir de exports sem o 9.
+              phone: keepSeparate ? r.phone : canonicalPhone(r.phone),
               notes: r.sourceGroup ? `Origem: ${r.sourceGroup} (lista colada)` : undefined,
               clientType: "common",
             });
