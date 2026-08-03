@@ -1119,6 +1119,33 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   );
 }
 
+const STATUS_FILTER_KEY = "stargames:product-status-filter";
+
+function readStoredStatusFilter(): FinancialStatus[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(STATUS_FILTER_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const allowed = ["Pago", "Reserva", "Pendente"];
+    return parsed.filter(
+      (v): v is FinancialStatus => typeof v === "string" && allowed.includes(v),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredStatusFilter(values: FinancialStatus[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STATUS_FILTER_KEY, JSON.stringify(values));
+  } catch {
+    /* storage indisponível: filtro segue apenas em memória */
+  }
+}
+
 function ClientDrawer({
   client,
   products,
