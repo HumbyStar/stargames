@@ -1686,12 +1686,49 @@ function ClientDrawer({
       )}
 
       <Card title={`Histórico de Produtos${mgmvProducts.length > 0 ? " — Individuais" : ""}`}>
-        {mgmvProducts.length > 0 && (
-          <p className="mb-3 text-xs text-muted-foreground">
-            Itens do MGMV aparecem no card &ldquo;Itens incluídos no MGMV&rdquo; acima e são
-            cobrados pelas parcelas do acordo (sem cobrança individual).
-          </p>
-        )}
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-xs font-medium text-muted-foreground">
+            Filtrar por status:
+          </span>
+          {(["Pago", "Reserva", "Pendente"] as FinancialStatus[]).map((st) => {
+            const active = statusFilter === st;
+            const tone =
+              st === "Pago"
+                ? "border-[color:var(--success)]/40 bg-[color:var(--success)]/10 text-[color:var(--success)]"
+                : st === "Reserva"
+                  ? "border-[color:var(--warning)]/40 bg-[color:var(--warning)]/10 text-[color:var(--warning)]"
+                  : "border-destructive/40 bg-destructive/10 text-destructive";
+            return (
+              <button
+                key={st}
+                type="button"
+                onClick={() => setStatusFilter(active ? null : st)}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs font-medium transition",
+                  active
+                    ? tone
+                    : "border-border bg-transparent text-muted-foreground hover:bg-muted/50",
+                )}
+              >
+                {st}
+              </button>
+            );
+          })}
+          {statusFilter !== null && (
+            <button
+              type="button"
+              onClick={() => setStatusFilter(null)}
+              className="rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+            >
+              Limpar filtro
+            </button>
+          )}
+          {statusFilter !== null && (
+            <span className="text-xs text-muted-foreground">
+              ({individualProducts.length} exibido(s))
+            </span>
+          )}
+        </div>
         {selectedCount > 0 && (
           <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2">
             <span className="text-sm font-medium">
