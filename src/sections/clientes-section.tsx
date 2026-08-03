@@ -39,7 +39,7 @@ import {
 } from "@/lib/store";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { productStatusTone } from "@/lib/status-tone";
+import { productStatusTone, productStatusVariant } from "@/lib/status-tone";
 import { StatusLegend } from "@/components/status-legend";
 import { NotionHtmlActions } from "@/components/notion-html-actions";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
@@ -1994,7 +1994,7 @@ function ClientDrawer({
                     key={p.id}
                     className={cn(
                       "border-b border-border/60 last:border-0",
-                      productStatusTone(p.financialStatus, p.situation),
+                      productStatusTone(p),
                     )}
                   >
                     <td className="py-2 pr-2 align-middle">
@@ -2072,25 +2072,7 @@ function ClientDrawer({
                     </td>
                     <td className="py-2 pr-3 tabular-nums font-medium">{formatBRL(remaining)}</td>
                     <td className="py-2 pr-3">
-                      <Tag
-                        variant={
-                          !isOpenSituation(p)
-                            ? "neutral"
-                            : p.financialStatus === "Pago"
-                            ? "success"
-                            : p.financialStatus === "Reserva"
-                              ? "warning"
-                              : p.financialStatus === "Pendente"
-                                ? "danger"
-                                : status.variant === "danger"
-                                  ? "danger"
-                                  : status.variant === "warning"
-                                    ? "warning"
-                                    : "neutral"
-                        }
-                      >
-                        {status.label}
-                      </Tag>
+                      <Tag variant={productStatusVariant(p)}>{status.label}</Tag>
                     </td>
                     <td className="py-2 pr-3">
                       {editing ? (
