@@ -1161,8 +1161,22 @@ function ClientDrawer({
   // Enviado / Retirar / Removido). Só o clique nos botões da barra aplica;
   // marcar o checkbox nunca altera status sozinho.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  // Filtro por status no Histórico de Produtos. `null` = mostrar todos.
-  const [statusFilter, setStatusFilter] = useState<FinancialStatus | null>(null);
+  // Filtro por status no Histórico de Produtos. Conjunto vazio = mostrar
+  // todos. Persistido em localStorage para sobreviver à troca de tela.
+  const [statusFilter, setStatusFilter] = useState<Set<FinancialStatus>>(
+    () => new Set(readStoredStatusFilter()),
+  );
+  useEffect(() => {
+    writeStoredStatusFilter([...statusFilter]);
+  }, [statusFilter]);
+  const toggleStatusFilter = (st: FinancialStatus) => {
+    setStatusFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(st)) next.delete(st);
+      else next.add(st);
+      return next;
+    });
+  };
   const [nfModalOpen, setNfModalOpen] = useState(false);
   const [nfProducts, setNfProducts] = useState<Product[]>([]);
   const [nfWarnOpen, setNfWarnOpen] = useState(false);
