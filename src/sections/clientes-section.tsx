@@ -1120,6 +1120,13 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
 }
 
 const STATUS_FILTER_KEY = "stargames:product-status-filter";
+const SITUATION_FILTER_KEY = "stargames:product-situation-filter";
+const FILTERABLE_SITUATIONS: Situation[] = [
+  "Em Aberto",
+  "Enviado",
+  "Removido",
+  "Retirado",
+];
 
 function readStoredStatusFilter(): FinancialStatus[] {
   if (typeof window === "undefined") return [];
@@ -1141,6 +1148,31 @@ function writeStoredStatusFilter(values: FinancialStatus[]) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(STATUS_FILTER_KEY, JSON.stringify(values));
+  } catch {
+    /* storage indisponível: filtro segue apenas em memória */
+  }
+}
+
+function readStoredSituationFilter(): Situation[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(SITUATION_FILTER_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (v): v is Situation =>
+        typeof v === "string" && (FILTERABLE_SITUATIONS as string[]).includes(v),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredSituationFilter(values: Situation[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SITUATION_FILTER_KEY, JSON.stringify(values));
   } catch {
     /* storage indisponível: filtro segue apenas em memória */
   }
@@ -1196,6 +1228,20 @@ function ClientDrawer({
   useEffect(() => {
     writeStoredStatusFilter([...statusFilter]);
   }, [statusFilter]);
+  const [situationFilter, setSituationFilter] = useState<Set<Situation>>(
+    () => new Set(readStoredSituationFilter()),
+  );
+  useEffect(() => {
+    writeStoredSituationFilter([...situationFilter]);
+  }, [situationFilter]);
+  const toggleSituationFilter = (s: Situation) => {
+    setSituationFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s);
+      else next.add(s);
+      return next;
+    });
+  };
   const toggleStatusFilter = (st: FinancialStatus) => {
     setStatusFilter((prev) => {
       const next = new Set(prev);
@@ -1268,13 +1314,19 @@ function ClientDrawer({
   // cliente. Mantido nas somas totais para não perder o histórico financeiro.
   const individualProducts = individualAll.filter(
     (p) =>
-      !isProductArchived(p) &&
-      (statusFilter.size === 0 || statusFilter.has(p.financialStatus)),
+      (!isProductArchived(p) || situationFilter.has("Retirado")) &&
+      (statusFilter.size === 0 || statusFilter.has(p.financialStatus)) &&
+      (situationFilter.size === 0 || situationFilter.has(p.situation)),
   );
   // Contagem por status (ignora o filtro atual) para exibir ao lado dos botões.
   const statusCounts = individualAll.reduce<Record<string, number>>((acc, p) => {
     if (isProductArchived(p)) return acc;
     acc[p.financialStatus] = (acc[p.financialStatus] ?? 0) + 1;
+    return acc;
+  }, {});
+  // Contagem por situação (considera também os arquivados/Retirado).
+  const situationCounts = individualAll.reduce<Record<string, number>>((acc, p) => {
+    acc[p.situation] = (acc[p.situation] ?? 0) + 1;
     return acc;
   }, {});
   const archivedProducts = individualAll.filter((p) => isProductArchived(p));
@@ -1764,16 +1816,43 @@ function ClientDrawer({
               </button>
             );
           })}
-          {statusFilter.size > 0 && (
+          <span className="ml-2 mr-1 text-xs font-medium text-muted-foreground">
+            Situação:
+          </span>
+          {FILTERABLE_SITUATIONS.map((s) => {
+            const active = situationFilter.has(s);
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => toggleSituationFilter(s)}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs font-medium transition",
+                  active
+                    ? "border-primary/50 bg-primary/10 text-primary"
+                    : "border-border bg-transparent text-muted-foreground hover:bg-muted/50",
+                )}
+              >
+                {displaySituation(s)}
+                <span className="ml-1.5 tabular-nums opacity-70">
+                  {situationCounts[s] ?? 0}
+                </span>
+              </button>
+            );
+          })}
+          {(statusFilter.size > 0 || situationFilter.size > 0) && (
             <button
               type="button"
-              onClick={() => setStatusFilter(new Set())}
+              onClick={() => {
+                setStatusFilter(new Set());
+                setSituationFilter(new Set());
+              }}
               className="rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
             >
               Limpar filtro
             </button>
           )}
-          {statusFilter.size > 0 && (
+          {(statusFilter.size > 0 || situationFilter.size > 0) && (
             <span className="text-xs text-muted-foreground">
               ({individualProducts.length} exibido(s))
             </span>
@@ -1915,7 +1994,7 @@ function ClientDrawer({
                     key={p.id}
                     className={cn(
                       "border-b border-border/60 last:border-0",
-                      productStatusTone(p.financialStatus),
+                      productStatusTone(p.financialStatus, p.situation),
                     )}
                   >
                     <td className="py-2 pr-2 align-middle">
@@ -1995,7 +2074,9 @@ function ClientDrawer({
                     <td className="py-2 pr-3">
                       <Tag
                         variant={
-                          p.financialStatus === "Pago"
+                          !isOpenSituation(p)
+                            ? "neutral"
+                            : p.financialStatus === "Pago"
                             ? "success"
                             : p.financialStatus === "Reserva"
                               ? "warning"

@@ -58,6 +58,10 @@ export function StatusLegend({ className }: { className?: string }) {
           </TooltipContent>
         </Tooltip>
       ))}
+      <span className="basis-full text-[11px] text-muted-foreground/80">
+        As cores destacam apenas itens em aberto — enviados, removidos e retirados
+        ficam sem cor.
+      </span>
     </div>
     </TooltipProvider>
   );
