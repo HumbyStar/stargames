@@ -1145,9 +1145,10 @@ export function ListImportModal({
             </DialogTitle>
             <DialogDescription>
               {nameConflicts?.items.length ?? 0} telefone(s) da lista já existem no
-              sistema com <span className="font-medium text-foreground">nome diferente</span>.
-              Provavelmente é o mesmo cliente com o nome atualizado no WhatsApp.
-              Escolha manter o nome atual ou atualizar.
+              sistema com <span className="font-medium text-foreground">nome diferente</span> ou
+              com o <span className="font-medium text-foreground">9 do celular ausente</span>.
+              Provavelmente é o mesmo cliente. Escolha se vincula ao cadastro existente e se o
+              nome deve ser mantido ou atualizado.
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-2">
@@ -1185,19 +1186,68 @@ export function ListImportModal({
                   <th className="p-2">Telefone</th>
                   <th className="p-2">Nome no sistema</th>
                   <th className="p-2">Nome na lista</th>
-                  <th className="p-2">Ação</th>
+                  <th className="p-2">Cliente</th>
+                  <th className="p-2">Nome</th>
                 </tr>
               </thead>
               <tbody>
                 {nameConflicts?.items.map((it) => (
                   <tr key={it.phone} className="border-t">
-                    <td className="p-2 align-middle font-mono">{it.phone}</td>
+                    <td className="p-2 align-middle font-mono">
+                      {it.phone}
+                      {it.matchKind === "missing9" && (
+                        <div className="mt-1 font-sans text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                          falta o 9 — cadastro: {it.existingPhone}
+                        </div>
+                      )}
+                    </td>
                     <td className="p-2 align-middle">{it.currentName}</td>
                     <td className="p-2 align-middle font-medium">{it.incomingName}</td>
                     <td className="p-2 align-middle">
                       <div className="flex gap-1">
                         <Button
                           size="sm"
+                          variant={it.link === "link" ? "default" : "outline"}
+                          onClick={() =>
+                            setNameConflicts((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    items: prev.items.map((x) =>
+                                      x.phone === it.phone ? { ...x, link: "link" as const } : x,
+                                    ),
+                                  }
+                                : prev,
+                            )
+                          }
+                        >
+                          Usar existente
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={it.link === "separate" ? "default" : "outline"}
+                          onClick={() =>
+                            setNameConflicts((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    items: prev.items.map((x) =>
+                                      x.phone === it.phone ? { ...x, link: "separate" as const } : x,
+                                    ),
+                                  }
+                                : prev,
+                            )
+                          }
+                        >
+                          Separar
+                        </Button>
+                      </div>
+                    </td>
+                    <td className="p-2 align-middle">
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          disabled={it.link === "separate"}
                           variant={it.decision === "keep" ? "default" : "outline"}
                           onClick={() =>
                             setNameConflicts((prev) =>
@@ -1216,6 +1266,7 @@ export function ListImportModal({
                         </Button>
                         <Button
                           size="sm"
+                          disabled={it.link === "separate"}
                           variant={it.decision === "update" ? "default" : "outline"}
                           onClick={() =>
                             setNameConflicts((prev) =>
