@@ -39,7 +39,7 @@ import {
 } from "@/lib/store";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { productStatusTone } from "@/lib/status-tone";
+import { productStatusTone, productStatusVariant } from "@/lib/status-tone";
 import { StatusLegend } from "@/components/status-legend";
 import { NotionHtmlActions } from "@/components/notion-html-actions";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
