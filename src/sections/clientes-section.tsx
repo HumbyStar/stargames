@@ -1242,8 +1242,14 @@ function ClientDrawer({
   const individualProducts = individualAll.filter(
     (p) =>
       !isProductArchived(p) &&
-      (statusFilter === null || p.financialStatus === statusFilter),
+      (statusFilter.size === 0 || statusFilter.has(p.financialStatus)),
   );
+  // Contagem por status (ignora o filtro atual) para exibir ao lado dos botões.
+  const statusCounts = individualAll.reduce<Record<string, number>>((acc, p) => {
+    if (isProductArchived(p)) return acc;
+    acc[p.financialStatus] = (acc[p.financialStatus] ?? 0) + 1;
+    return acc;
+  }, {});
   const archivedProducts = individualAll.filter((p) => isProductArchived(p));
   // Sincroniza seleção: remove ids que sumiram da lista ativa (ex.: produto
   // virou Removido/Retirado e foi arquivado).
