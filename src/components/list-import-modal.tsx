@@ -379,13 +379,19 @@ export function ListImportModal({
       if (nameDecisionsRef.current.has(r.phone)) continue;
       const existing = findClientByPhone(r.phone);
       if (!existing) continue;
-      if (normalizeName(existing.name) === normalizeName(r.clientName)) continue;
+      const existingDigits = (existing.phone || "").replace(/\D/g, "");
+      const samePhone = existingDigits === r.phone;
+      const sameName = normalizeName(existing.name) === normalizeName(r.clientName);
+      if (samePhone && sameName) continue;
       items.push({
         phone: r.phone,
         clientId: existing.id,
         currentName: existing.name,
         incomingName: r.clientName,
         decision: "keep",
+        existingPhone: existing.phone,
+        matchKind: samePhone ? "exact" : "missing9",
+        link: "link",
       });
     }
     if (items.length > 0) {
