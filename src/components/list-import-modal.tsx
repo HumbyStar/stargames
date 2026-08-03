@@ -537,6 +537,13 @@ export function ListImportModal({
           const existing = findClientByPhone(r.phone);
           if (existing) {
             clientId = existing.id;
+            if (
+              nameDecisionsRef.current.get(r.phone) === "update" &&
+              r.clientName &&
+              r.clientName !== existing.name
+            ) {
+              updateClient(existing.id, { name: r.clientName });
+            }
           } else {
             const created = addClient({
               name: r.clientName,
