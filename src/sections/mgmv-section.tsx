@@ -29,6 +29,8 @@ import { NotionHtmlActions } from "@/components/notion-html-actions";
 import { NfEmittedBadge } from "@/components/nf-emitted-badge";
 import { listNfInvoices } from "@/lib/nf-history.functions";
 import { useServerFn } from "@tanstack/react-start";
+import { cn } from "@/lib/utils";
+import { productStatusTone } from "@/lib/status-tone";
 
 type MgmvChip =
   | "todos"
@@ -1078,7 +1080,10 @@ export function MGMVSection({
                                 {productsOfClient.map((p) => (
                                   <div
                                     key={p.id}
-                                    className="flex items-center justify-between rounded-md border border-border/60 bg-card px-2 py-1"
+                                    className={cn(
+                                      "flex items-center justify-between rounded-md border border-border/60 bg-card px-2 py-1",
+                                      productStatusTone(p.financialStatus),
+                                    )}
                                   >
                                     <span className="inline-flex min-w-0 items-center truncate font-medium">
                                       {p.name}
