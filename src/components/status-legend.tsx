@@ -22,11 +22,18 @@ const items = [
       "Item reservado com pagamento parcial ou aguardando confirmação. Data limite de 1 mês após o cadastro.",
   },
   {
-    label: "Pendente",
+    label: "Reserva vencida / Pendente",
     tone: "bg-destructive/10 border-destructive/30",
     dot: "bg-destructive",
     description:
-      "Sem pagamento registrado. Entra na régua de cobrança e vence 30 dias após o cadastro.",
+      "Pendente sem pagamento registrado ou reserva que passou da data limite. Entra na régua de cobrança.",
+  },
+  {
+    label: "Enviado / Removido",
+    tone: "bg-muted/60 border-border",
+    dot: "bg-muted-foreground",
+    description:
+      "Itens já resolvidos (enviado, removido, retirado). Ficam em cinza mesmo se estiverem pagos ou vencidos.",
   },
 ];
 
@@ -59,8 +66,8 @@ export function StatusLegend({ className }: { className?: string }) {
         </Tooltip>
       ))}
       <span className="basis-full text-[11px] text-muted-foreground/80">
-        As cores destacam apenas itens em aberto — enviados, removidos e retirados
-        ficam sem cor.
+        As cores destacam itens em aberto — enviados, removidos e retirados ficam
+        em cinza, mesmo quando pagos.
       </span>
     </div>
     </TooltipProvider>
