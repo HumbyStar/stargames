@@ -140,11 +140,25 @@ export function ListImportModal({
       note: string;
     }>;
   } | null>(null);
+  // Conciliação de identidade: mesmo telefone já cadastrado com outro nome.
+  const [nameConflicts, setNameConflicts] = useState<{
+    rows: ListImportRow[];
+    items: Array<{
+      phone: string;
+      clientId: string;
+      currentName: string;
+      incomingName: string;
+      decision: "keep" | "update";
+    }>;
+  } | null>(null);
+  // Decisões confirmadas por telefone (usadas em runPersist).
+  const nameDecisionsRef = useRef<Map<string, "keep" | "update">>(new Map());
 
   const reviewFn = useServerFn(reviewListImportLine);
   const addClient = useStore((s) => s.addClient);
   const addProduct = useStore((s) => s.addProduct);
   const findClientByPhone = useStore((s) => s.findClientByPhone);
+  const updateClient = useStore((s) => s.updateClient);
   const addImportHistory = useStore((s) => s.addImportHistory);
   const products = useStore((s) => s.products);
 
@@ -160,6 +174,8 @@ export function ListImportModal({
     setAiBusyId(null);
     setProgressState(null);
     setDuplicateWarning(null);
+    setNameConflicts(null);
+    nameDecisionsRef.current = new Map();
     onOpenChange(false);
   }
 
