@@ -1816,16 +1816,43 @@ function ClientDrawer({
               </button>
             );
           })}
-          {statusFilter.size > 0 && (
+          <span className="ml-2 mr-1 text-xs font-medium text-muted-foreground">
+            Situação:
+          </span>
+          {FILTERABLE_SITUATIONS.map((s) => {
+            const active = situationFilter.has(s);
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => toggleSituationFilter(s)}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs font-medium transition",
+                  active
+                    ? "border-primary/50 bg-primary/10 text-primary"
+                    : "border-border bg-transparent text-muted-foreground hover:bg-muted/50",
+                )}
+              >
+                {displaySituation(s)}
+                <span className="ml-1.5 tabular-nums opacity-70">
+                  {situationCounts[s] ?? 0}
+                </span>
+              </button>
+            );
+          })}
+          {(statusFilter.size > 0 || situationFilter.size > 0) && (
             <button
               type="button"
-              onClick={() => setStatusFilter(new Set())}
+              onClick={() => {
+                setStatusFilter(new Set());
+                setSituationFilter(new Set());
+              }}
               className="rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
             >
               Limpar filtro
             </button>
           )}
-          {statusFilter.size > 0 && (
+          {(statusFilter.size > 0 || situationFilter.size > 0) && (
             <span className="text-xs text-muted-foreground">
               ({individualProducts.length} exibido(s))
             </span>
