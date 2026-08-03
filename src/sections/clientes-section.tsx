@@ -444,6 +444,8 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
         }
       />
 
+      <StatusLegend className="mt-4" />
+
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <MetricCard
           label="Total de Clientes"
