@@ -39,7 +39,11 @@ import {
 } from "@/lib/store";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { productStatusTone, productStatusVariant } from "@/lib/status-tone";
+import {
+  productStatusTone,
+  productStatusTextTone,
+  productStatusVariant,
+} from "@/lib/status-tone";
 import { StatusLegend } from "@/components/status-legend";
 import { NotionHtmlActions } from "@/components/notion-html-actions";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
@@ -2072,7 +2076,12 @@ function ClientDrawer({
                     </td>
                     <td className="py-2 pr-3 tabular-nums font-medium">{formatBRL(remaining)}</td>
                     <td className="py-2 pr-3">
-                      <Tag variant={productStatusVariant(p)}>{status.label}</Tag>
+                      <Tag
+                        variant={productStatusVariant(p)}
+                        className={productStatusTextTone(p)}
+                      >
+                        {status.label}
+                      </Tag>
                     </td>
                     <td className="py-2 pr-3">
                       {editing ? (
