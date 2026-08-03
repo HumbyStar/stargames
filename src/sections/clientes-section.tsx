@@ -1228,6 +1228,20 @@ function ClientDrawer({
   useEffect(() => {
     writeStoredStatusFilter([...statusFilter]);
   }, [statusFilter]);
+  const [situationFilter, setSituationFilter] = useState<Set<Situation>>(
+    () => new Set(readStoredSituationFilter()),
+  );
+  useEffect(() => {
+    writeStoredSituationFilter([...situationFilter]);
+  }, [situationFilter]);
+  const toggleSituationFilter = (s: Situation) => {
+    setSituationFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s);
+      else next.add(s);
+      return next;
+    });
+  };
   const toggleStatusFilter = (st: FinancialStatus) => {
     setStatusFilter((prev) => {
       const next = new Set(prev);
@@ -1300,13 +1314,19 @@ function ClientDrawer({
   // cliente. Mantido nas somas totais para não perder o histórico financeiro.
   const individualProducts = individualAll.filter(
     (p) =>
-      !isProductArchived(p) &&
-      (statusFilter.size === 0 || statusFilter.has(p.financialStatus)),
+      (!isProductArchived(p) || situationFilter.has("Retirado")) &&
+      (statusFilter.size === 0 || statusFilter.has(p.financialStatus)) &&
+      (situationFilter.size === 0 || situationFilter.has(p.situation)),
   );
   // Contagem por status (ignora o filtro atual) para exibir ao lado dos botões.
   const statusCounts = individualAll.reduce<Record<string, number>>((acc, p) => {
     if (isProductArchived(p)) return acc;
     acc[p.financialStatus] = (acc[p.financialStatus] ?? 0) + 1;
+    return acc;
+  }, {});
+  // Contagem por situação (considera também os arquivados/Retirado).
+  const situationCounts = individualAll.reduce<Record<string, number>>((acc, p) => {
+    acc[p.situation] = (acc[p.situation] ?? 0) + 1;
     return acc;
   }, {});
   const archivedProducts = individualAll.filter((p) => isProductArchived(p));
