@@ -173,6 +173,8 @@ export function ListImportModal({
 
   function close() {
     setRawText("");
+    nameDecisionsRef.current.clear();
+    linkDecisionsRef.current.clear();
     setRawHtml("");
     setHtmlFileName(null);
     setMode("text");
