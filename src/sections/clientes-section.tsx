@@ -1915,7 +1915,7 @@ function ClientDrawer({
                     key={p.id}
                     className={cn(
                       "border-b border-border/60 last:border-0",
-                      productStatusTone(p.financialStatus),
+                      productStatusTone(p.financialStatus, p.situation),
                     )}
                   >
                     <td className="py-2 pr-2 align-middle">
@@ -1995,7 +1995,9 @@ function ClientDrawer({
                     <td className="py-2 pr-3">
                       <Tag
                         variant={
-                          p.financialStatus === "Pago"
+                          !isOpenSituation(p)
+                            ? "neutral"
+                            : p.financialStatus === "Pago"
                             ? "success"
                             : p.financialStatus === "Reserva"
                               ? "warning"
