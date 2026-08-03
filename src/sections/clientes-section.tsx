@@ -1119,6 +1119,33 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   );
 }
 
+const STATUS_FILTER_KEY = "stargames:product-status-filter";
+
+function readStoredStatusFilter(): FinancialStatus[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(STATUS_FILTER_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const allowed = ["Pago", "Reserva", "Pendente"];
+    return parsed.filter(
+      (v): v is FinancialStatus => typeof v === "string" && allowed.includes(v),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredStatusFilter(values: FinancialStatus[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STATUS_FILTER_KEY, JSON.stringify(values));
+  } catch {
+    /* storage indisponível: filtro segue apenas em memória */
+  }
+}
+
 function ClientDrawer({
   client,
   products,
@@ -1161,8 +1188,22 @@ function ClientDrawer({
   // Enviado / Retirar / Removido). Só o clique nos botões da barra aplica;
   // marcar o checkbox nunca altera status sozinho.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  // Filtro por status no Histórico de Produtos. `null` = mostrar todos.
-  const [statusFilter, setStatusFilter] = useState<FinancialStatus | null>(null);
+  // Filtro por status no Histórico de Produtos. Conjunto vazio = mostrar
+  // todos. Persistido em localStorage para sobreviver à troca de tela.
+  const [statusFilter, setStatusFilter] = useState<Set<FinancialStatus>>(
+    () => new Set(readStoredStatusFilter()),
+  );
+  useEffect(() => {
+    writeStoredStatusFilter([...statusFilter]);
+  }, [statusFilter]);
+  const toggleStatusFilter = (st: FinancialStatus) => {
+    setStatusFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(st)) next.delete(st);
+      else next.add(st);
+      return next;
+    });
+  };
   const [nfModalOpen, setNfModalOpen] = useState(false);
   const [nfProducts, setNfProducts] = useState<Product[]>([]);
   const [nfWarnOpen, setNfWarnOpen] = useState(false);
@@ -1228,8 +1269,14 @@ function ClientDrawer({
   const individualProducts = individualAll.filter(
     (p) =>
       !isProductArchived(p) &&
-      (statusFilter === null || p.financialStatus === statusFilter),
+      (statusFilter.size === 0 || statusFilter.has(p.financialStatus)),
   );
+  // Contagem por status (ignora o filtro atual) para exibir ao lado dos botões.
+  const statusCounts = individualAll.reduce<Record<string, number>>((acc, p) => {
+    if (isProductArchived(p)) return acc;
+    acc[p.financialStatus] = (acc[p.financialStatus] ?? 0) + 1;
+    return acc;
+  }, {});
   const archivedProducts = individualAll.filter((p) => isProductArchived(p));
   // Sincroniza seleção: remove ids que sumiram da lista ativa (ex.: produto
   // virou Removido/Retirado e foi arquivado).
@@ -1691,7 +1738,7 @@ function ClientDrawer({
             Filtrar por status:
           </span>
           {(["Pago", "Reserva", "Pendente"] as FinancialStatus[]).map((st) => {
-            const active = statusFilter === st;
+            const active = statusFilter.has(st);
             const tone =
               st === "Pago"
                 ? "border-[color:var(--success)]/40 bg-[color:var(--success)]/10 text-[color:var(--success)]"
@@ -1702,7 +1749,7 @@ function ClientDrawer({
               <button
                 key={st}
                 type="button"
-                onClick={() => setStatusFilter(active ? null : st)}
+                onClick={() => toggleStatusFilter(st)}
                 className={cn(
                   "rounded-full border px-3 py-1 text-xs font-medium transition",
                   active
@@ -1711,19 +1758,22 @@ function ClientDrawer({
                 )}
               >
                 {st}
+                <span className="ml-1.5 tabular-nums opacity-70">
+                  {statusCounts[st] ?? 0}
+                </span>
               </button>
             );
           })}
-          {statusFilter !== null && (
+          {statusFilter.size > 0 && (
             <button
               type="button"
-              onClick={() => setStatusFilter(null)}
+              onClick={() => setStatusFilter(new Set())}
               className="rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
             >
               Limpar filtro
             </button>
           )}
-          {statusFilter !== null && (
+          {statusFilter.size > 0 && (
             <span className="text-xs text-muted-foreground">
               ({individualProducts.length} exibido(s))
             </span>
