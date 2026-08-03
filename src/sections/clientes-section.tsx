@@ -1711,7 +1711,7 @@ function ClientDrawer({
             Filtrar por status:
           </span>
           {(["Pago", "Reserva", "Pendente"] as FinancialStatus[]).map((st) => {
-            const active = statusFilter === st;
+            const active = statusFilter.has(st);
             const tone =
               st === "Pago"
                 ? "border-[color:var(--success)]/40 bg-[color:var(--success)]/10 text-[color:var(--success)]"
@@ -1722,7 +1722,7 @@ function ClientDrawer({
               <button
                 key={st}
                 type="button"
-                onClick={() => setStatusFilter(active ? null : st)}
+                onClick={() => toggleStatusFilter(st)}
                 className={cn(
                   "rounded-full border px-3 py-1 text-xs font-medium transition",
                   active
@@ -1731,19 +1731,22 @@ function ClientDrawer({
                 )}
               >
                 {st}
+                <span className="ml-1.5 tabular-nums opacity-70">
+                  {statusCounts[st] ?? 0}
+                </span>
               </button>
             );
           })}
-          {statusFilter !== null && (
+          {statusFilter.size > 0 && (
             <button
               type="button"
-              onClick={() => setStatusFilter(null)}
+              onClick={() => setStatusFilter(new Set())}
               className="rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
             >
               Limpar filtro
             </button>
           )}
-          {statusFilter !== null && (
+          {statusFilter.size > 0 && (
             <span className="text-xs text-muted-foreground">
               ({individualProducts.length} exibido(s))
             </span>
