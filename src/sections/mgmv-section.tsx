@@ -31,6 +31,7 @@ import { listNfInvoices } from "@/lib/nf-history.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { cn } from "@/lib/utils";
 import { productStatusTone } from "@/lib/status-tone";
+import { StatusLegend } from "@/components/status-legend";
 
 type MgmvChip =
   | "todos"
