@@ -341,12 +341,58 @@ export function ListImportModal({
       .trim();
   }
 
+  /** Nome normalizado para comparação: sem acento, pontuação ou símbolos. */
+  function normalizeName(s: string) {
+    return String(s || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  /**
+   * Etapa 1: mesmo telefone já cadastrado com nome diferente. Pergunta se é
+   * o mesmo cliente e se o nome deve ser atualizado ou mantido.
+   */
+  async function persist(rowsToSave: ListImportRow[]) {
+    if (savingRef.current) return;
+    if (!rowsToSave.length) {
+      toast.error("Nenhum registro para salvar.");
+      return;
+    }
+    const seen = new Set<string>();
+    const items: NonNullable<typeof nameConflicts>["items"] = [];
+    for (const r of rowsToSave) {
+      if (!r.phone || !r.clientName) continue;
+      if (seen.has(r.phone)) continue;
+      seen.add(r.phone);
+      if (nameDecisionsRef.current.has(r.phone)) continue;
+      const existing = findClientByPhone(r.phone);
+      if (!existing) continue;
+      if (normalizeName(existing.name) === normalizeName(r.clientName)) continue;
+      items.push({
+        phone: r.phone,
+        clientId: existing.id,
+        currentName: existing.name,
+        incomingName: r.clientName,
+        decision: "keep",
+      });
+    }
+    if (items.length > 0) {
+      setNameConflicts({ rows: rowsToSave, items });
+      return;
+    }
+    await checkDuplicates(rowsToSave);
+  }
+
   /**
    * Wrapper: detecta duplicidade recente (mesmo cliente + mesmo produto já
    * salvo nos últimos N minutos) e duplicidade dentro do próprio lote antes
    * de gravar. Se houver, abre confirmação; caso contrário grava direto.
    */
-  async function persist(rowsToSave: ListImportRow[]) {
+  async function checkDuplicates(rowsToSave: ListImportRow[]) {
     if (savingRef.current) return;
     if (!rowsToSave.length) {
       toast.error("Nenhum registro para salvar.");
