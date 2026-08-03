@@ -38,6 +38,7 @@ import type { AppEnv, DbSnapshot } from "./db-sync";
 export type { AppEnv } from "./db-sync";
 import { resolveCurrentEnv } from "./db-sync";
 import { recalcPendingDueDates } from "./mgmv-schedule";
+import { canonicalPhone } from "./list-import-parser";
 
 export type FinancialStatus = "Pago" | "Reserva" | "Pendente" | "MGMV";
 
@@ -808,8 +809,16 @@ export const useStore = create<State>()((set, get) => ({
           throw err;
         }
       },
-      findClientByPhone: (phone) =>
-        get().clients.find((c) => c.phone.replace(/\D/g, "") === phone.replace(/\D/g, "")),
+      findClientByPhone: (phone) => {
+        const raw = (phone || "").replace(/\D/g, "");
+        const clients = get().clients;
+        const exact = clients.find((c) => c.phone.replace(/\D/g, "") === raw);
+        if (exact) return exact;
+        // Tolerante ao 9 inicial ausente (export do Notion às vezes remove).
+        const key = canonicalPhone(raw);
+        if (!key) return undefined;
+        return clients.find((c) => canonicalPhone(c.phone) === key);
+      },
       addProduct: (p) =>
         set((s) => {
           const prod = { ...normalizeProductDueDateForCreate(p), id: uid() };

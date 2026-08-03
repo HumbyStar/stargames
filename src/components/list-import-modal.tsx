@@ -54,6 +54,7 @@ import {
   type ListImportPreview,
   type ListImportRow,
 } from "@/lib/list-import-parser";
+import { canonicalPhone } from "@/lib/list-import-parser";
 import { reviewListImportLine } from "@/lib/list-import-ai.functions";
 import { parseClientHtml } from "@/lib/html-client-import-parser";
 import { flushAllPendingUpserts } from "@/lib/db-sync";
@@ -149,10 +150,18 @@ export function ListImportModal({
       currentName: string;
       incomingName: string;
       decision: "keep" | "update";
+      /** Telefone já cadastrado no sistema (pode diferir do da lista). */
+      existingPhone: string;
+      /** "exact" = mesmos dígitos; "missing9" = casou pelo 9 ausente. */
+      matchKind: "exact" | "missing9";
+      /** Vincular ao cliente existente ou criar um cliente novo. */
+      link: "link" | "separate";
     }>;
   } | null>(null);
   // Decisões confirmadas por telefone (usadas em runPersist).
   const nameDecisionsRef = useRef<Map<string, "keep" | "update">>(new Map());
+  // Decisões de vínculo por telefone da lista (link = usar cliente existente).
+  const linkDecisionsRef = useRef<Map<string, "link" | "separate">>(new Map());
 
   const reviewFn = useServerFn(reviewListImportLine);
   const addClient = useStore((s) => s.addClient);
@@ -164,6 +173,8 @@ export function ListImportModal({
 
   function close() {
     setRawText("");
+    nameDecisionsRef.current.clear();
+    linkDecisionsRef.current.clear();
     setRawHtml("");
     setHtmlFileName(null);
     setMode("text");
@@ -371,13 +382,19 @@ export function ListImportModal({
       if (nameDecisionsRef.current.has(r.phone)) continue;
       const existing = findClientByPhone(r.phone);
       if (!existing) continue;
-      if (normalizeName(existing.name) === normalizeName(r.clientName)) continue;
+      const existingDigits = (existing.phone || "").replace(/\D/g, "");
+      const samePhone = existingDigits === r.phone;
+      const sameName = normalizeName(existing.name) === normalizeName(r.clientName);
+      if (samePhone && sameName) continue;
       items.push({
         phone: r.phone,
         clientId: existing.id,
         currentName: existing.name,
         incomingName: r.clientName,
         decision: "keep",
+        existingPhone: existing.phone,
+        matchKind: samePhone ? "exact" : "missing9",
+        link: "link",
       });
     }
     if (items.length > 0) {
@@ -534,7 +551,8 @@ export function ListImportModal({
         let clientId = cache.get(r.phone);
         let wasNewClient = false;
         if (!clientId) {
-          const existing = findClientByPhone(r.phone);
+          const keepSeparate = linkDecisionsRef.current.get(r.phone) === "separate";
+          const existing = keepSeparate ? undefined : findClientByPhone(r.phone);
           if (existing) {
             clientId = existing.id;
             if (
@@ -547,7 +565,9 @@ export function ListImportModal({
           } else {
             const created = addClient({
               name: r.clientName,
-              phone: r.phone,
+              // Salva sempre a forma canônica (com o 9 do celular) para não
+              // gerar novas duplicatas a partir de exports sem o 9.
+              phone: keepSeparate ? r.phone : canonicalPhone(r.phone),
               notes: r.sourceGroup ? `Origem: ${r.sourceGroup} (lista colada)` : undefined,
               clientType: "common",
             });
@@ -1127,9 +1147,10 @@ export function ListImportModal({
             </DialogTitle>
             <DialogDescription>
               {nameConflicts?.items.length ?? 0} telefone(s) da lista já existem no
-              sistema com <span className="font-medium text-foreground">nome diferente</span>.
-              Provavelmente é o mesmo cliente com o nome atualizado no WhatsApp.
-              Escolha manter o nome atual ou atualizar.
+              sistema com <span className="font-medium text-foreground">nome diferente</span> ou
+              com o <span className="font-medium text-foreground">9 do celular ausente</span>.
+              Provavelmente é o mesmo cliente. Escolha se vincula ao cadastro existente e se o
+              nome deve ser mantido ou atualizado.
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-2">
@@ -1167,19 +1188,68 @@ export function ListImportModal({
                   <th className="p-2">Telefone</th>
                   <th className="p-2">Nome no sistema</th>
                   <th className="p-2">Nome na lista</th>
-                  <th className="p-2">Ação</th>
+                  <th className="p-2">Cliente</th>
+                  <th className="p-2">Nome</th>
                 </tr>
               </thead>
               <tbody>
                 {nameConflicts?.items.map((it) => (
                   <tr key={it.phone} className="border-t">
-                    <td className="p-2 align-middle font-mono">{it.phone}</td>
+                    <td className="p-2 align-middle font-mono">
+                      {it.phone}
+                      {it.matchKind === "missing9" && (
+                        <div className="mt-1 font-sans text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                          falta o 9 — cadastro: {it.existingPhone}
+                        </div>
+                      )}
+                    </td>
                     <td className="p-2 align-middle">{it.currentName}</td>
                     <td className="p-2 align-middle font-medium">{it.incomingName}</td>
                     <td className="p-2 align-middle">
                       <div className="flex gap-1">
                         <Button
                           size="sm"
+                          variant={it.link === "link" ? "default" : "outline"}
+                          onClick={() =>
+                            setNameConflicts((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    items: prev.items.map((x) =>
+                                      x.phone === it.phone ? { ...x, link: "link" as const } : x,
+                                    ),
+                                  }
+                                : prev,
+                            )
+                          }
+                        >
+                          Usar existente
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={it.link === "separate" ? "default" : "outline"}
+                          onClick={() =>
+                            setNameConflicts((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    items: prev.items.map((x) =>
+                                      x.phone === it.phone ? { ...x, link: "separate" as const } : x,
+                                    ),
+                                  }
+                                : prev,
+                            )
+                          }
+                        >
+                          Separar
+                        </Button>
+                      </div>
+                    </td>
+                    <td className="p-2 align-middle">
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          disabled={it.link === "separate"}
                           variant={it.decision === "keep" ? "default" : "outline"}
                           onClick={() =>
                             setNameConflicts((prev) =>
@@ -1198,6 +1268,7 @@ export function ListImportModal({
                         </Button>
                         <Button
                           size="sm"
+                          disabled={it.link === "separate"}
                           variant={it.decision === "update" ? "default" : "outline"}
                           onClick={() =>
                             setNameConflicts((prev) =>
@@ -1233,6 +1304,7 @@ export function ListImportModal({
                 const updates = nameConflicts.items.filter((i) => i.decision === "update").length;
                 for (const it of nameConflicts.items) {
                   nameDecisionsRef.current.set(it.phone, it.decision);
+                  linkDecisionsRef.current.set(it.phone, it.link);
                 }
                 setNameConflicts(null);
                 if (updates > 0) {

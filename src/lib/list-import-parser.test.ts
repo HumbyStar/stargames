@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseListText, parseMoney, normalizePhone } from "./list-import-parser";
+import { parseListText, parseMoney, normalizePhone, canonicalPhone } from "./list-import-parser";
 
 describe("list-import-parser", () => {
   it("parses groups, paid and reserva lines", () => {
@@ -150,5 +150,29 @@ Pedro Paulo - 32 9199-7720 - Pac Man - Atari 2600 ORIGINAL - 70 reais - Pago`,
     expect(out.rows).toHaveLength(1);
     expect(out.totals.shortPhones).toBe(1);
     expect(out.rows[0].reviewStatus).toBe("ok");
+  });
+});
+
+describe("canonicalPhone", () => {
+  it("insere o 9 ausente em celular de 10 dígitos", () => {
+    expect(canonicalPhone("1588267132")).toBe("15988267132");
+    expect(canonicalPhone("15 98826-7132")).toBe("15988267132");
+  });
+
+  it("mantém telefone fixo de 10 dígitos", () => {
+    expect(canonicalPhone("1533221100")).toBe("1533221100");
+  });
+
+  it("remove o DDI 55", () => {
+    expect(canonicalPhone("+55 15 98826-7132")).toBe("15988267132");
+    expect(canonicalPhone("551588267132")).toBe("15988267132");
+  });
+
+  it("normalizePhone expõe canonical e wasFixed", () => {
+    const a = normalizePhone("1588267132");
+    expect(a.canonical).toBe("15988267132");
+    expect(a.wasFixed).toBe(true);
+    const b = normalizePhone("15988267132");
+    expect(b.wasFixed).toBe(false);
   });
 });

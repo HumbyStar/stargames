@@ -200,10 +200,42 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-export function normalizePhone(raw: string): { digits: string; valid: boolean } {
+/**
+ * Chave canônica de telefone brasileiro.
+ *
+ * O export do Notion às vezes remove o 9 inicial do celular, então
+ * "15 98826-7132" e "1588267132" precisam gerar a MESMA chave para que a
+ * importação reconheça o cliente já cadastrado.
+ *
+ * Regras:
+ * - remove DDI 55 quando o número tem 12/13 dígitos;
+ * - 10 dígitos com número começando em 6/7/8/9 (celular antigo) → insere o 9;
+ * - 10 dígitos começando em 2/3/4/5 → telefone fixo, mantém como está;
+ * - qualquer outro tamanho → devolve os dígitos crus.
+ */
+export function canonicalPhone(raw: string): string {
+  let d = (raw || "").replace(/\D+/g, "");
+  if ((d.length === 12 || d.length === 13) && d.startsWith("55")) d = d.slice(2);
+  if (d.length === 10 && /^[6-9]/.test(d.slice(2))) return `${d.slice(0, 2)}9${d.slice(2)}`;
+  return d;
+}
+
+/** true quando o número claramente perdeu o 9 inicial do celular. */
+export function isMissingNinthDigit(raw: string): boolean {
+  const d = (raw || "").replace(/\D+/g, "");
+  return d.length === 10 && /^[6-9]/.test(d.slice(2));
+}
+
+export function normalizePhone(raw: string): {
+  digits: string;
+  valid: boolean;
+  canonical: string;
+  wasFixed: boolean;
+} {
   const digits = (raw || "").replace(/\D+/g, "");
   const valid = digits.length === 10 || digits.length === 11;
-  return { digits, valid };
+  const canonical = canonicalPhone(digits);
+  return { digits, valid, canonical, wasFixed: canonical !== digits };
 }
 
 export function parseMoney(raw: string): number | null {
