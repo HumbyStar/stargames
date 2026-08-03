@@ -38,6 +38,8 @@ import {
   type PartialPaymentResult,
 } from "@/lib/store";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { productStatusTone } from "@/lib/status-tone";
 import { NotionHtmlActions } from "@/components/notion-html-actions";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
 import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
@@ -1813,7 +1815,13 @@ function ClientDrawer({
                 const editing = productEdit.isEditing(p.id);
                 const draft = productEdit.draftValues;
                 return (
-                  <tr key={p.id} className="border-b border-border/60 last:border-0">
+                  <tr
+                    key={p.id}
+                    className={cn(
+                      "border-b border-border/60 last:border-0",
+                      productStatusTone(p.financialStatus),
+                    )}
+                  >
                     <td className="py-2 pr-2 align-middle">
                       <input
                         type="checkbox"
@@ -1891,11 +1899,17 @@ function ClientDrawer({
                     <td className="py-2 pr-3">
                       <Tag
                         variant={
-                          status.variant === "danger"
-                            ? "danger"
-                            : status.variant === "warning"
+                          p.financialStatus === "Pago"
+                            ? "success"
+                            : p.financialStatus === "Reserva"
                               ? "warning"
-                              : "neutral"
+                              : p.financialStatus === "Pendente"
+                                ? "danger"
+                                : status.variant === "danger"
+                                  ? "danger"
+                                  : status.variant === "warning"
+                                    ? "warning"
+                                    : "neutral"
                         }
                       >
                         {status.label}
