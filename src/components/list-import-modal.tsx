@@ -149,10 +149,18 @@ export function ListImportModal({
       currentName: string;
       incomingName: string;
       decision: "keep" | "update";
+      /** Telefone já cadastrado no sistema (pode diferir do da lista). */
+      existingPhone: string;
+      /** "exact" = mesmos dígitos; "missing9" = casou pelo 9 ausente. */
+      matchKind: "exact" | "missing9";
+      /** Vincular ao cliente existente ou criar um cliente novo. */
+      link: "link" | "separate";
     }>;
   } | null>(null);
   // Decisões confirmadas por telefone (usadas em runPersist).
   const nameDecisionsRef = useRef<Map<string, "keep" | "update">>(new Map());
+  // Decisões de vínculo por telefone da lista (link = usar cliente existente).
+  const linkDecisionsRef = useRef<Map<string, "link" | "separate">>(new Map());
 
   const reviewFn = useServerFn(reviewListImportLine);
   const addClient = useStore((s) => s.addClient);
