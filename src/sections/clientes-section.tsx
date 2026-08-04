@@ -1550,7 +1550,7 @@ function ClientDrawer({
         >
           Notas Fiscais
         </Button>
-        {!client.mgmv && products.length > 0 && (
+        {!activeAgreement && products.length > 0 && (
           <Button size="sm" variant="secondary" onClick={() => setMgmvCreateOpen(true)}>
             Criar acordo MGMV
           </Button>
@@ -1583,8 +1583,8 @@ function ClientDrawer({
         <MetricCard label="Produtos" value={products.length} />
         <MetricCard
           label="MGMV"
-          value={client.mgmv ? "Ativo" : "Inativo"}
-          status={client.mgmv ? "primary" : "default"}
+          value={activeAgreement ? "Ativo" : "Inativo"}
+          status={activeAgreement ? "primary" : "default"}
         />
       </div>
 
