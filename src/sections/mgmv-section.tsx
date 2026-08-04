@@ -26,7 +26,6 @@ import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
 import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
 import { useUiStore } from "@/lib/ui-store";
 import { NotionHtmlActions } from "@/components/notion-html-actions";
-import { NfEmittedBadge } from "@/components/nf-emitted-badge";
 import { listNfInvoices } from "@/lib/nf-history.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { cn } from "@/lib/utils";
