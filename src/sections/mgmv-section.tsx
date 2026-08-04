@@ -42,6 +42,7 @@ type MgmvChip =
   | "todos"
   | "ativos"
   | "em_atraso"
+  | "quitados"
   | "revisao"
   | "revisado_ia"
   | "revisado_manual"
@@ -367,6 +368,7 @@ export function MGMVSection({
   const stats = useMemo(() => {
     const ativos = rows.filter((r) => r.status === "Ativo").length;
     const atraso = rows.filter((r) => r.status === "Em atraso").length;
+    const quitados = rows.filter((r) => r.status === "Quitado").length;
     const revisao = rows.filter((r) => r.reviewStatus === "review_required").length;
     const revisadoIA = rows.filter((r) => r.reviewStatus === "ai_reviewed").length;
     const revisadoManual = rows.filter(
@@ -392,6 +394,7 @@ export function MGMVSection({
       clientes: rows.length,
       ativos,
       atraso,
+      quitados,
       revisao,
       revisadoIA,
       revisadoManual,
@@ -443,6 +446,8 @@ export function MGMVSection({
           return r.status === "Ativo";
         case "em_atraso":
           return r.status === "Em atraso";
+        case "quitados":
+          return r.status === "Quitado";
         case "revisao":
           return r.reviewStatus === "review_required";
         case "revisado_ia":
@@ -486,6 +491,7 @@ export function MGMVSection({
     { id: "todos", label: "Todos" },
     { id: "ativos", label: "Ativos", count: stats.ativos },
     { id: "em_atraso", label: "Em atraso", count: stats.atraso },
+    { id: "quitados", label: "Quitados", count: stats.quitados },
     { id: "revisao", label: "Revisão necessária", count: stats.revisao },
     { id: "revisado_ia", label: "Revisado com IA", count: stats.revisadoIA },
     { id: "revisado_manual", label: "Revisado manualmente", count: stats.revisadoManual },
