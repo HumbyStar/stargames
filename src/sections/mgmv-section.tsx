@@ -26,21 +26,20 @@ import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
 import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
 import { useUiStore } from "@/lib/ui-store";
 import { NotionHtmlActions } from "@/components/notion-html-actions";
-import { NfEmittedBadge } from "@/components/nf-emitted-badge";
 import { listNfInvoices } from "@/lib/nf-history.functions";
 import { useServerFn } from "@tanstack/react-start";
-import { cn } from "@/lib/utils";
-import { productStatusTone } from "@/lib/status-tone";
 import { StatusLegend } from "@/components/status-legend";
 import {
   MgmvCompleteModal,
   MgmvFullyPaidBanner,
 } from "@/components/mgmv-complete-modal";
+import { MgmvProductsPanel } from "@/components/mgmv-products-panel";
 
 type MgmvChip =
   | "todos"
   | "ativos"
   | "em_atraso"
+  | "quitados"
   | "revisao"
   | "revisado_ia"
   | "revisado_manual"
@@ -249,6 +248,7 @@ export function MGMVSection({
   const [expanded, setExpanded] = useState<string | null>(null);
   // Notas fiscais já emitidas para o cliente aberto (badge "NF" nos produtos).
   const listInvoicesFn = useServerFn(listNfInvoices);
+  const [nfRefreshKey, setNfRefreshKey] = useState(0);
   const [nfProductMap, setNfProductMap] = useState<
     Map<string, { count: number; lastAt: string }>
   >(new Map());
@@ -282,7 +282,7 @@ export function MGMVSection({
     return () => {
       cancelled = true;
     };
-  }, [expanded, listInvoicesFn]);
+  }, [expanded, listInvoicesFn, nfRefreshKey]);
   const [aiTarget, setAiTarget] = useState<string | null>(null);
   const [editingAgreement, setEditingAgreement] = useState<string | null>(null);
   const [completeTarget, setCompleteTarget] = useState<string | null>(null);
@@ -365,6 +365,7 @@ export function MGMVSection({
   const stats = useMemo(() => {
     const ativos = rows.filter((r) => r.status === "Ativo").length;
     const atraso = rows.filter((r) => r.status === "Em atraso").length;
+    const quitados = rows.filter((r) => r.status === "Quitado").length;
     const revisao = rows.filter((r) => r.reviewStatus === "review_required").length;
     const revisadoIA = rows.filter((r) => r.reviewStatus === "ai_reviewed").length;
     const revisadoManual = rows.filter(
@@ -390,6 +391,7 @@ export function MGMVSection({
       clientes: rows.length,
       ativos,
       atraso,
+      quitados,
       revisao,
       revisadoIA,
       revisadoManual,
@@ -441,6 +443,8 @@ export function MGMVSection({
           return r.status === "Ativo";
         case "em_atraso":
           return r.status === "Em atraso";
+        case "quitados":
+          return r.status === "Quitado";
         case "revisao":
           return r.reviewStatus === "review_required";
         case "revisado_ia":
@@ -484,6 +488,7 @@ export function MGMVSection({
     { id: "todos", label: "Todos" },
     { id: "ativos", label: "Ativos", count: stats.ativos },
     { id: "em_atraso", label: "Em atraso", count: stats.atraso },
+    { id: "quitados", label: "Quitados", count: stats.quitados },
     { id: "revisao", label: "Revisão necessária", count: stats.revisao },
     { id: "revisado_ia", label: "Revisado com IA", count: stats.revisadoIA },
     { id: "revisado_manual", label: "Revisado manualmente", count: stats.revisadoManual },
@@ -802,7 +807,11 @@ export function MGMVSection({
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex flex-wrap gap-1">
-                          <Tag variant={tagVariant}>{r.status}</Tag>
+                          <Tag variant={tagVariant}>
+                            {r.status === "Quitado"
+                              ? "Quitado — aguardando conclusão"
+                              : r.status}
+                          </Tag>
                           {fullyPaid && (
                             <Tag variant="success">Aguardando conclusão</Tag>
                           )}
@@ -1091,38 +1100,12 @@ export function MGMVSection({
                               <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
                                 Produtos incluídos ({productsOfClient.length})
                               </div>
-                              <div className="space-y-1 text-xs">
-                                {productsOfClient.length === 0 && (
-                                  <p className="text-muted-foreground">
-                                    Nenhum produto vinculado.
-                                  </p>
-                                )}
-                                {productsOfClient.map((p) => (
-                                  <div
-                                    key={p.id}
-                                    className={cn(
-                                      "flex items-center justify-between rounded-md border border-border/60 px-2 py-1",
-                                      productStatusTone(p) || "bg-card",
-                                    )}
-                                  >
-                                    <span className="inline-flex min-w-0 items-center truncate font-medium">
-                                      {p.name}
-                                      {(() => {
-                                        const info = nfProductMap.get(p.id);
-                                        return info ? (
-                                          <NfEmittedBadge
-                                            count={info.count}
-                                            lastAt={info.lastAt}
-                                          />
-                                        ) : null;
-                                      })()}
-                                    </span>
-                                    <span className="text-muted-foreground">{p.platform}</span>
-                                    <span>{formatBRL(p.totalValue)}</span>
-                                    <Tag variant="primary">Incluído no MGMV</Tag>
-                                  </div>
-                                ))}
-                              </div>
+                              <MgmvProductsPanel
+                                client={r.client}
+                                products={productsOfClient}
+                                nfProductMap={nfProductMap}
+                                onNfSaved={() => setNfRefreshKey((k) => k + 1)}
+                              />
                               {r.client.notes && (
                                 <div className="mt-4">
                                   <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">

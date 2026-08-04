@@ -61,6 +61,7 @@ import { FinanceDashboard } from "@/components/finance-dashboard";
 import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 import { useNavbarConfig, getIconMeta, type NavbarIconId } from "@/lib/navbar-config";
 import { scrollToSection } from "@/lib/scroll-to-section";
+import { MgmvCompletionWatcher } from "@/components/mgmv-completion-watcher";
 
 // Normaliza texto para busca: remove acentos, minúsculas e trim.
 // Compartilhado entre input e campos comparados para tratar
@@ -1518,6 +1519,7 @@ function GlobalModals() {
       <TutorialRunner />
       <ConciergeModal />
       <OfflineNoticeModal />
+      <MgmvCompletionWatcher />
     </>
   );
 }
