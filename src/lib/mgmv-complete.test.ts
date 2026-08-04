@@ -19,6 +19,7 @@ vi.mock("./db-sync", () => ({
   },
   dbCompleteMGMVAgreementAsync: async () => completionResult,
   loadMGMVProductsForClient: async () => [],
+  loadProductsForClient: async () => [],
   loadSnapshot: async () => ({ clients: [], products: [], history: [], settings: null, env: "producao" }),
   resolveCurrentEnv: async () => "producao",
   getUiValue: () => undefined,
