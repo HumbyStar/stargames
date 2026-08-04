@@ -16,7 +16,7 @@ import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
 // paginação client-side removida — mostrar todos os acordos MGMV de uma vez
 import { extractMGMVAgreementFromNotes } from "@/sections/import-section";
 import { reprocessMGMVFromNotes } from "@/lib/mgmv-reprocess";
-import { rebalanceAgreement } from "@/lib/mgmv-schedule";
+import { rebalanceAgreement, isAgreementFullyPaid } from "@/lib/mgmv-schedule";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { Eye, EyeOff } from "lucide-react";
@@ -32,6 +32,10 @@ import { useServerFn } from "@tanstack/react-start";
 import { cn } from "@/lib/utils";
 import { productStatusTone } from "@/lib/status-tone";
 import { StatusLegend } from "@/components/status-legend";
+import {
+  MgmvCompleteModal,
+  MgmvFullyPaidBanner,
+} from "@/components/mgmv-complete-modal";
 
 type MgmvChip =
   | "todos"
@@ -343,11 +347,12 @@ export function MGMVSection({
         c.clientType === "mgmv" || (!!c.mgmv && c.mgmv.installments.length > 0);
       if (!isMgmv || !c.mgmv) continue;
       if (onlySet && !onlySet.has(c.id)) continue;
+      // Acordos já concluídos (quitação confirmada) saem da listagem — o
+      // histórico continua acessível pela ficha do cliente. Acordos com todas
+      // as parcelas pagas mas sem confirmação permanecem para o usuário
+      // confirmar ou revisar.
+      if (c.mgmv.completedAt) continue;
       const row = buildRow(c, c.mgmv);
-      // A seção MGMV lista apenas acordos vivos: ativos, com pendências ou em
-      // atraso. Acordos já quitados saem da listagem (o histórico continua
-      // acessível pelo modal do cliente).
-      if (row.status === "Quitado") continue;
       list.push(row);
     }
     return list.sort((a, b) =>
