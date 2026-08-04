@@ -242,6 +242,8 @@ export function MGMVSection({
   const registerMGMVPartialPayment = useStore((s) => s.registerMGMVPartialPayment);
   const setMGMVAgreement = useStore((s) => s.setMGMVAgreement);
   const completeMGMVAgreement = useStore((s) => s.completeMGMVAgreement);
+  const ensureMGMVProductsLoaded = useStore((s) => s.ensureMGMVProductsLoaded);
+  const [completionProductsLoading, setCompletionProductsLoading] = useState(false);
   const applyAiReviewToAgreement = useStore((s) => s.applyAiReviewToAgreement);
   const [chip, setChip] = usePersistedState<MgmvChip>("mgmv.chip", "todos");
   const [search, setSearch] = usePersistedState<string>("mgmv.search", "");
@@ -1190,6 +1192,7 @@ export function MGMVSection({
             clientName={row.client.name}
             agreement={row.agreement}
             products={mgmvProducts}
+            productsLoading={completionProductsLoading}
             onClose={() => setCompleteTarget(null)}
             onReview={() => {
               setCompleteTarget(null);
