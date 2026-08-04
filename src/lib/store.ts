@@ -1011,9 +1011,6 @@ export const useStore = create<State>()((set, get) => ({
         const state = get();
         const client = state.clients.find((c) => c.id === clientId);
         if (!client?.mgmv) return { ok: false, movedProducts: 0 };
-        const loadedMGMVProducts = state.products.filter(
-          (p) => p.clientId === clientId && p.financialStatus === "MGMV",
-        );
         try {
           const result = await dbCompleteMGMVAgreementAsync(clientId);
           if (!result.ok) return { ok: false, movedProducts: 0 };
@@ -1047,59 +1044,6 @@ export const useStore = create<State>()((set, get) => ({
           console.error("completeMGMVAgreement failed", err);
           return { ok: false, movedProducts: 0 };
         }
-        /* c8 ignore next 49 -- fluxo antigo mantido fora da execução */
-        /*
-        let movedProducts = 0;
-        const convertedProducts: Product[] = [];
-        let updatedClient: Client | undefined;
-        set((s) => {
-          const clients = s.clients.map((c) => {
-            if (c.id !== clientId || !c.mgmv) return c;
-            return {
-              ...c,
-              clientType: "common" as const,
-              mgmv: { ...c.mgmv, completedAt: new Date().toISOString() },
-            };
-          });
-          const products = s.products.map((p) => {
-            if (p.clientId !== clientId) return p;
-            if (p.financialStatus !== "MGMV") return p;
-            const keepsSituation =
-              p.situation !== "Em Aberto" && p.situation !== "Resolvido";
-            const next: Product = {
-              ...p,
-              financialStatus: "Pago",
-              paidValue: p.totalValue,
-              situation: keepsSituation ? p.situation : ("Em Aberto" as Situation),
-            };
-            movedProducts++;
-            convertedProducts.push(next);
-            return next;
-          });
-          const updated = clients.find((c) => c.id === clientId);
-          if (updated) {
-            updatedClient = updated;
-            queueClientUpsert(updated);
-          }
-          return { clients, products };
-        });
-        // Persistência ordenada: os produtos precisam estar gravados como
-        // "Pago" ANTES do sync do acordo, senão o sync ainda os enxerga como
-        // MGMV e reaplica included_in_mgmv/mgmv_agreement_id.
-        void (async () => {
-          try {
-            if (convertedProducts.length > 0) {
-              await dbUpsertProductsAsync(convertedProducts);
-            }
-            if (updatedClient) {
-              await dbSyncAgreementForClientAsync(updatedClient);
-            }
-          } catch (err) {
-            console.error("completeMGMVAgreement sync failed", err);
-          }
-        })();
-        return { ok: true, movedProducts };
-        */
       },
       ensureMGMVProductsLoaded: async (clientId) => {
         const current = get().products.filter(

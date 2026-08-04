@@ -4,6 +4,11 @@ const calls: { products: string[][]; agreements: string[] } = {
   products: [],
   agreements: [],
 };
+let completionResult = {
+  ok: true,
+  movedProducts: 2,
+  completedAt: "2026-08-04T22:28:16.969Z",
+};
 
 vi.mock("./db-sync", () => ({
   dbUpsertProductsAsync: async (ps: { id: string }[]) => {
@@ -12,6 +17,8 @@ vi.mock("./db-sync", () => ({
   dbSyncAgreementForClientAsync: async (c: { id: string }) => {
     calls.agreements.push(c.id);
   },
+  dbCompleteMGMVAgreementAsync: async () => completionResult,
+  loadMGMVProductsForClient: async () => [],
   loadSnapshot: async () => ({ clients: [], products: [], history: [], settings: null, env: "producao" }),
   resolveCurrentEnv: async () => "producao",
   getUiValue: () => undefined,
@@ -80,6 +87,11 @@ describe("completeMGMVAgreement", () => {
   beforeEach(() => {
     calls.products = [];
     calls.agreements = [];
+    completionResult = {
+      ok: true,
+      movedProducts: 2,
+      completedAt: "2026-08-04T22:28:16.969Z",
+    };
   });
 
   it("converte produtos MGMV em individuais Pago/Em Aberto e persiste na ordem certa", async () => {
@@ -128,7 +140,7 @@ describe("completeMGMVAgreement", () => {
       ] as never,
     });
 
-    const res = useStore.getState().completeMGMVAgreement("c1");
+    const res = await useStore.getState().completeMGMVAgreement("c1");
     expect(res).toEqual({ ok: true, movedProducts: 2 });
 
     const products = useStore.getState().products;
@@ -143,12 +155,11 @@ describe("completeMGMVAgreement", () => {
     expect(client.clientType).toBe("common");
     expect(client.mgmv?.completedAt).toBeTruthy();
 
-    await new Promise((r) => setTimeout(r, 0));
-    expect(calls.products[0]).toEqual(["p1", "p2"]);
-    expect(calls.agreements).toEqual(["c1"]);
+    expect(calls.products).toEqual([]);
+    expect(calls.agreements).toEqual([]);
   });
 
-  it("bloqueia a conclusão quando os produtos MGMV ainda não foram carregados", () => {
+  it("consolida de forma idempotente quando os produtos já foram convertidos", async () => {
     const now = new Date().toISOString();
     useStore.setState({
       clients: [{
@@ -167,12 +178,17 @@ describe("completeMGMVAgreement", () => {
       products: [],
     });
 
-    expect(useStore.getState().completeMGMVAgreement("c-sem-itens")).toEqual({
-      ok: false,
+    completionResult = {
+      ok: true,
+      movedProducts: 0,
+      completedAt: "2026-08-04T22:28:16.969Z",
+    };
+    await expect(useStore.getState().completeMGMVAgreement("c-sem-itens")).resolves.toEqual({
+      ok: true,
       movedProducts: 0,
     });
     const client = useStore.getState().clients[0];
-    expect(client.clientType).toBe("mgmv");
-    expect(client.mgmv?.completedAt).toBeUndefined();
+    expect(client.clientType).toBe("common");
+    expect(client.mgmv?.completedAt).toBeTruthy();
   });
 });

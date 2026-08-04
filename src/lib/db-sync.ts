@@ -516,8 +516,7 @@ export function buildSnapshotFromRows(raw: RawSnapshotRows): DbSnapshot {
       aiConfidence:
         row.ai_confidence == null ? undefined : Number(row.ai_confidence) || 0,
       aiReviewRawResult: row.ai_review_raw_result ?? undefined,
-      completedAt:
-        row.completed_at ?? (row.status === "Quitado" ? row.created_at : undefined),
+      completedAt: row.completed_at ?? undefined,
     });
   }
 

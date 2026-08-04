@@ -1229,7 +1229,7 @@ export function MGMVSection({
               setExpanded(row.client.id);
               setEditingAgreement(row.client.id);
             }}
-            onConfirm={() => {
+            onConfirm={async () => {
               const res = await completeMGMVAgreement(row.client.id);
               if (res.ok) {
                 setCompleteTarget(null);
