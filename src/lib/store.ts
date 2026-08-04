@@ -685,6 +685,14 @@ const envSnapshots = new Map<AppEnv, DbSnapshot>();
 /** Token incrementado a cada troca de ambiente: descarta respostas antigas. */
 let envToken = 0;
 
+/**
+ * Leitura parcial (alguma tabela falhou, ex.: tempo limite): não apaga o que
+ * já está na tela — mantém as listas anteriores quando a nova veio vazia.
+ */
+function keepOnPartial<T>(next: T[], prev: T[], partial?: boolean): T[] {
+  return partial && next.length === 0 && prev.length > 0 ? prev : next;
+}
+
 export const RESET_VERSION_KEY = "import.resetVersion";
 export function getResetVersion(): string {
   return getUiValue<string>(RESET_VERSION_KEY, "");
@@ -718,8 +726,8 @@ export const useStore = create<State>()((set, get) => ({
             void flushUiStateNow();
           }
           set({
-            clients: snap.clients,
-            products: snap.products.map((p) =>
+            clients: keepOnPartial(snap.clients, get().clients, snap.partial),
+            products: keepOnPartial(snap.products, get().products, snap.partial).map((p) =>
               // Fix retroativo: produtos que já foram consolidados em MGMV
               // não devem permanecer com situation "Em Aberto" (causava dupla
               // cobrança e inflação em "Valores a Receber").
@@ -734,7 +742,7 @@ export const useStore = create<State>()((set, get) => ({
             hydrated: true,
             currentEnv: snap.env ?? "producao",
           });
-          envSnapshots.set(snap.env ?? "producao", snap);
+          if (!snap.partial) envSnapshots.set(snap.env ?? "producao", snap);
         })();
         await hydratePromise;
       },
@@ -753,10 +761,10 @@ export const useStore = create<State>()((set, get) => ({
             // Resposta de um ambiente que já não é o atual: descarta.
             if (token !== envToken) return;
             const env = snap.env ?? "producao";
-            envSnapshots.set(env, snap);
+            if (!snap.partial) envSnapshots.set(env, snap);
             set({
-              clients: snap.clients,
-              products: snap.products.map((p) =>
+              clients: keepOnPartial(snap.clients, get().clients, snap.partial),
+              products: keepOnPartial(snap.products, get().products, snap.partial).map((p) =>
                 p.financialStatus === "MGMV" && p.situation === "Em Aberto"
                   ? { ...p, situation: "Resolvido" as Situation }
                   : p,
@@ -1283,11 +1291,11 @@ export const useStore = create<State>()((set, get) => ({
         const snap = await loadSnapshot();
         if (token !== envToken) return;
         const env = snap.env ?? "producao";
-        envSnapshots.set(env, snap);
+        if (!snap.partial) envSnapshots.set(env, snap);
         set({
-          clients: snap.clients,
-          products: snap.products,
-          importHistory: snap.importHistory,
+          clients: keepOnPartial(snap.clients, get().clients, snap.partial),
+          products: keepOnPartial(snap.products, get().products, snap.partial),
+          importHistory: keepOnPartial(snap.importHistory, get().importHistory, snap.partial),
           preferences: { ...defaultPreferences, ...snap.preferences },
           rules: { ...defaultRules, ...snap.rules },
           security: { ...defaultSecurity, ...snap.security },
@@ -1321,11 +1329,11 @@ export const useStore = create<State>()((set, get) => ({
           const snap = await loadSnapshot();
           if (token !== envToken) return;
           const loadedEnv = snap.env ?? "producao";
-          envSnapshots.set(loadedEnv, snap);
+          if (!snap.partial) envSnapshots.set(loadedEnv, snap);
           set({
-            clients: snap.clients,
-            products: snap.products,
-            importHistory: snap.importHistory,
+            clients: keepOnPartial(snap.clients, get().clients, snap.partial),
+            products: keepOnPartial(snap.products, get().products, snap.partial),
+            importHistory: keepOnPartial(snap.importHistory, get().importHistory, snap.partial),
             preferences: { ...defaultPreferences, ...snap.preferences },
             rules: { ...defaultRules, ...snap.rules },
             security: { ...defaultSecurity, ...snap.security },

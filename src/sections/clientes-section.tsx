@@ -1782,7 +1782,7 @@ function ClientDrawer({
             </table>
           </div>
 
-          {mgmvProducts.length > 0 && (
+          {client.mgmv && !client.mgmv.completedAt && (
             <div className="mt-6">
               <h4 className="mb-2 text-sm font-semibold">
                 Itens incluídos no MGMV
@@ -1803,6 +1803,16 @@ function ClientDrawer({
                     </tr>
                   </thead>
                   <tbody>
+                    {mgmvProducts.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="py-4 px-3 text-center text-xs text-muted-foreground"
+                        >
+                          Nenhum item carregado para este acordo no momento.
+                        </td>
+                      </tr>
+                    )}
                     {mgmvProducts.map((p) => (
                        <tr key={p.id} className="border-b border-border/60 last:border-0">
                         <td className="py-2 px-3 font-medium">

@@ -218,20 +218,36 @@ export async function fetchAllRows<T = Record<string, unknown>>(
   table: "clients" | "products" | "mgmv_agreements" | "mgmv_installments",
   columns = "*",
   pageSize = 1000,
+  opts?: { env?: AppEnv; owner?: string | null },
 ): Promise<FetchAllPage<T>> {
   const out: T[] = [];
   let from = 0;
+  let size = pageSize;
+  let retries = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const res = await sb()
-      .from(table)
-      .select(columns)
-      .range(from, from + pageSize - 1);
-    if (res.error) return { data: null, error: res.error };
+    // Filtrar por ambiente no banco (em vez de deixar tudo para a RLS) evita
+    // varredura da tabela inteira — era o que estourava o tempo limite.
+    let q: any = sb().from(table).select(columns);
+    if (opts?.env) {
+      q = q.eq("env", opts.env);
+      if (opts.env === "sandbox" && opts.owner) q = q.eq("sandbox_owner", opts.owner);
+    }
+    const res = await q.range(from, from + size - 1);
+    if (res.error) {
+      const code = (res.error as { code?: string } | null)?.code;
+      // Tempo limite: tenta novamente com páginas menores antes de desistir.
+      if (code === "57014" && retries < 3 && size > 125) {
+        retries += 1;
+        size = Math.max(125, Math.floor(size / 2));
+        continue;
+      }
+      return { data: null, error: res.error };
+    }
     const rows = (res.data ?? []) as T[];
     out.push(...rows);
-    if (rows.length < pageSize) break;
-    from += pageSize;
+    if (rows.length < size) break;
+    from += size;
   }
   return { data: out, error: null };
 }
@@ -246,6 +262,8 @@ export interface DbSnapshot {
   uiState: Record<string, unknown>;
   /** Ambiente ao qual estes dados pertencem (produção ou modo teste). */
   env?: AppEnv;
+  /** Alguma tabela falhou na leitura: o snapshot está incompleto. */
+  partial?: boolean;
 }
 
 export type AppEnv = "producao" | "sandbox";
@@ -322,13 +340,28 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
     if (local) return { ...local, env: "producao" };
   }
   const envBefore = await resolveCurrentEnv();
+  let owner: string | null = null;
+  if (envBefore === "sandbox") {
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      owner = userRes.user?.id ?? null;
+    } catch {
+      owner = null;
+    }
+  }
+  const scope = { env: envBefore, owner };
   const [clientsRes, productsRes, historyRes, settingsRes, agreementsRes, installmentsRes] = await Promise.all([
-    fetchAllRows<Record<string, unknown>>("clients", "*"),
-    fetchAllRows<Record<string, unknown>>("products", "*"),
-    sb().from("import_history").select("*").order("date", { ascending: false }).limit(200),
+    fetchAllRows<Record<string, unknown>>("clients", "*", 1000, scope),
+    fetchAllRows<Record<string, unknown>>("products", "*", 1000, scope),
+    sb()
+      .from("import_history")
+      .select("*")
+      .eq("env", envBefore)
+      .order("date", { ascending: false })
+      .limit(200),
     sb().from("app_settings").select("*").eq("id", "default").maybeSingle(),
-    fetchAllRows<Record<string, unknown>>("mgmv_agreements", "*"),
-    fetchAllRows<Record<string, unknown>>("mgmv_installments", "*"),
+    fetchAllRows<Record<string, unknown>>("mgmv_agreements", "*", 1000, scope),
+    fetchAllRows<Record<string, unknown>>("mgmv_installments", "*", 1000, scope),
   ]);
   if (clientsRes.error) logErr("loadClients", clientsRes.error);
   if (productsRes.error) logErr("loadProducts", productsRes.error);
@@ -338,6 +371,12 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
   if (installmentsRes.error) logErr("loadInstallments", installmentsRes.error);
 
   const envAfter = await resolveCurrentEnv();
+  const partial = !!(
+    clientsRes.error ||
+    productsRes.error ||
+    agreementsRes.error ||
+    installmentsRes.error
+  );
 
   const snapshot = buildSnapshotFromRows({
     clients: (clientsRes.data ?? []) as Record<string, unknown>[],
@@ -351,7 +390,7 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
   // Se o ambiente mudou no meio da leitura, os dados são de um ambiente
   // que já não é o atual: relê uma única vez para não misturar snapshots.
   if (envBefore !== envAfter) return loadSnapshot();
-  return { ...snapshot, env: envAfter };
+  return { ...snapshot, env: envAfter, partial };
 }
 
 /**
