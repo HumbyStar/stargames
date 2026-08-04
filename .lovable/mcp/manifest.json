@@ -1,0 +1,181 @@
+{
+  "version": 1,
+  "sdk_version": "0.26.1",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://cthjxxcmcshybfmemydb.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "star-games-hub",
+      "version": "0.1.0",
+      "title": "Star Games Hub"
+    },
+    "tools": [
+      {
+        "name": "search_clients",
+        "title": "Buscar clientes",
+        "description": "Busca clientes de produção por nome ou telefone e devolve id, nome, telefone e tipo (comum/MGMV).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Trecho do nome ou do telefone do cliente."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "Quantidade máxima de resultados (padrão 20)."
+            }
+          },
+          "required": [
+            "query"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_client",
+        "title": "Detalhes do cliente",
+        "description": "Retorna a ficha de um cliente de produção: dados cadastrais, produtos (status financeiro, situação, valores) e acordos MGMV.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "client_id": {
+              "type": "string",
+              "description": "ID do cliente (use search_clients para descobrir)."
+            }
+          },
+          "required": [
+            "client_id"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_products",
+        "title": "Listar produtos",
+        "description": "Lista produtos de produção com filtros opcionais por status financeiro (Pago, Reserva, Pendente, MGMV), situação (Em Aberto, Enviado, Retirado, Removido) e vencidos.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "financial_status": {
+              "type": "string",
+              "description": "Status financeiro exato, ex.: Pago."
+            },
+            "situation": {
+              "type": "string",
+              "description": "Situação exata, ex.: Em Aberto."
+            },
+            "overdue_only": {
+              "type": "boolean",
+              "description": "Apenas itens com vencimento no passado."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "Máximo de linhas (padrão 50)."
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_mgmv_agreements",
+        "title": "Listar acordos MGMV",
+        "description": "Lista acordos MGMV de produção com filtro opcional por status (ex.: active, completed) e por acordos com parcelas em atraso.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "description": "Status do acordo, ex.: active."
+            },
+            "overdue_only": {
+              "type": "boolean",
+              "description": "Apenas acordos com próxima parcela vencida."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "Máximo de linhas (padrão 50)."
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "create_task",
+        "title": "Criar tarefa da equipe",
+        "description": "Cria uma tarefa operacional para a equipe (cobrança, MGMV, envio, importação, etc.) no ambiente de produção.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Título curto da tarefa."
+            },
+            "description": {
+              "type": "string",
+              "description": "Detalhes da tarefa."
+            },
+            "task_type": {
+              "type": "string",
+              "description": "Tipo: cobranca, mgmv, envio, importacao, revisao_ia, cadastro, financeiro, atendimento."
+            },
+            "priority": {
+              "type": "string",
+              "description": "baixa, media, alta ou urgente."
+            },
+            "client_id": {
+              "type": "string",
+              "description": "Cliente relacionado, se houver."
+            }
+          },
+          "required": [
+            "title"
+          ]
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
