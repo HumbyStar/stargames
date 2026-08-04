@@ -1329,7 +1329,10 @@ function ClientDrawer({
     dueDate: string;
     notes: string;
   }>();
-  const mgmv = getMGMVDisplay(client);
+  // Acordo concluído (quitado e confirmado) deixa de contar como MGMV ativo:
+  // o cliente volta a ser tratado como comum até criar um novo acordo.
+  const activeAgreement = client.mgmv && !client.mgmv.completedAt ? client.mgmv : null;
+  const mgmv = activeAgreement ? getMGMVDisplay(client) : null;
   // Ordena produtos do mais recente para o mais antigo (por data de
   // cadastro), tanto individuais quanto os incluídos no acordo MGMV.
   const byRegisterDateDesc = (a: Product, b: Product) =>
