@@ -17,6 +17,7 @@ import {
   queueProductUpsert,
   loadSnapshot,
   loadMGMVProductsForClient,
+  loadProductsForClient,
   migrateLocalStorageOnce,
   primeUiState,
   getUiValue,
@@ -1039,6 +1040,27 @@ export const useStore = create<State>()((set, get) => ({
               };
             }),
           }));
+          // Releitura direcionada: itens que entraram no acordo ainda como
+          // Reserva/Pendente (ex.: reserva vencida antes do MGMV) só ficam
+          // corretos na UI com o estado real gravado pela transação.
+          try {
+            const fresh = await loadProductsForClient(clientId);
+            if (fresh.length > 0) {
+              set((s) => {
+                const freshIds = new Set(fresh.map((p) => p.id));
+                return {
+                  products: [
+                    ...s.products.filter(
+                      (p) => p.clientId !== clientId && !freshIds.has(p.id),
+                    ),
+                    ...fresh,
+                  ],
+                };
+              });
+            }
+          } catch (err) {
+            console.warn("completeMGMVAgreement: releitura de produtos falhou", err);
+          }
           return { ok: true, movedProducts: result.movedProducts };
         } catch (err) {
           console.error("completeMGMVAgreement failed", err);

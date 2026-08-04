@@ -425,6 +425,27 @@ export interface CompleteMGMVResult {
   completedAt?: string;
 }
 
+/**
+ * Releitura direcionada de TODOS os produtos de um cliente. Usada após a
+ * quitação do MGMV para refletir na UI exatamente o que o banco gravou
+ * (inclusive itens que entraram no acordo ainda como Reserva/Pendente).
+ */
+export async function loadProductsForClient(clientId: string): Promise<Product[]> {
+  const env = await resolveCurrentEnv();
+  let query = sb().from("products").select("*").eq("client_id", clientId).eq("env", env);
+
+  if (env === "sandbox") {
+    const { data: userRes } = await supabase.auth.getUser();
+    const owner = userRes.user?.id;
+    if (!owner) throw new Error("Usuário do modo teste não identificado.");
+    query = query.eq("sandbox_owner", owner);
+  }
+
+  const { data, error } = await query.order("created_at", { ascending: false });
+  if (error) throw error;
+  return ((data ?? []) as DbProductRow[]).map(rowToProduct);
+}
+
 /** Conclui o acordo e converte seus produtos em uma única transação no banco. */
 export async function dbCompleteMGMVAgreementAsync(
   clientId: string,
