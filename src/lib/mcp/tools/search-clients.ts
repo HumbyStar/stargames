@@ -9,7 +9,7 @@ export default defineTool({
     "Busca clientes de produção por nome ou telefone e devolve id, nome, telefone e tipo (comum/MGMV).",
   inputSchema: {
     query: z.string().describe("Trecho do nome ou do telefone do cliente."),
-    limit: z.number().int().describe("Quantidade máxima de resultados (padrão 20)."ndefined as never).optional(),
+    limit: z.number().int().describe("Quantidade máxima de resultados (padrão 20).").optional(),
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async ({ query, limit }, ctx) => {
