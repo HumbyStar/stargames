@@ -394,6 +394,32 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
 }
 
 /**
+ * Leitura direcionada dos itens de um acordo MGMV. Esta consulta é usada como
+ * garantia antes da quitação e evita depender do carregamento da tabela inteira
+ * de produtos, que pode ser muito maior.
+ */
+export async function loadMGMVProductsForClient(clientId: string): Promise<Product[]> {
+  const env = await resolveCurrentEnv();
+  let query = sb()
+    .from("products")
+    .select("*")
+    .eq("client_id", clientId)
+    .eq("financial_status", "MGMV")
+    .eq("env", env);
+
+  if (env === "sandbox") {
+    const { data: userRes } = await supabase.auth.getUser();
+    const owner = userRes.user?.id;
+    if (!owner) throw new Error("Usuário do modo teste não identificado.");
+    query = query.eq("sandbox_owner", owner);
+  }
+
+  const { data, error } = await query.order("created_at", { ascending: false });
+  if (error) throw error;
+  return ((data ?? []) as DbProductRow[]).map(rowToProduct);
+}
+
+/**
  * Monta o snapshot do app a partir das linhas cruas das tabelas.
  * Usado tanto pelo carregamento na nuvem quanto pelo banco local (offline).
  */

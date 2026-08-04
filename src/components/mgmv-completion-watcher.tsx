@@ -17,8 +17,11 @@ export function MgmvCompletionWatcher() {
   const clients = useStore((s) => s.clients);
   const products = useStore((s) => s.products);
   const completeMGMVAgreement = useStore((s) => s.completeMGMVAgreement);
+  const ensureMGMVProductsLoaded = useStore((s) => s.ensureMGMVProductsLoaded);
   const openClient = useStore((s) => s.openClient);
   const [targetId, setTargetId] = useState<string | null>(null);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const loading = useRef<Set<string>>(new Set());
   /** Acordos já sinalizados nesta sessão (evita reabrir em loop). */
   const notified = useRef<Set<string>>(new Set());
 
@@ -27,14 +30,38 @@ export function MgmvCompletionWatcher() {
     for (const c of clients) {
       if (!c.mgmv) continue;
       const fullyPaid = !c.mgmv.completedAt && isAgreementFullyPaid(c.mgmv);
-      if (fullyPaid && !notified.current.has(c.id)) {
-        notified.current.add(c.id);
-        toOpen = toOpen ?? c.id;
+      if (fullyPaid && !notified.current.has(c.id) && !loading.current.has(c.id)) {
+        const alreadyLoaded = products.some(
+          (p) => p.clientId === c.id && p.financialStatus === "MGMV",
+        );
+        if (alreadyLoaded) {
+          notified.current.add(c.id);
+          toOpen = toOpen ?? c.id;
+        } else {
+          loading.current.add(c.id);
+          setProductsLoading(true);
+          void ensureMGMVProductsLoaded(c.id)
+            .then((loaded) => {
+              if (loaded.length === 0) {
+                toast.error("Não foi possível carregar os produtos do MGMV. A conclusão foi bloqueada.");
+                return;
+              }
+              notified.current.add(c.id);
+              setTargetId(c.id);
+            })
+            .catch(() => {
+              toast.error("Falha ao carregar os produtos do MGMV. Tente novamente antes de concluir.");
+            })
+            .finally(() => {
+              loading.current.delete(c.id);
+              setProductsLoading(false);
+            });
+        }
       }
       if (!fullyPaid) notified.current.delete(c.id);
     }
     if (toOpen) setTargetId(toOpen);
-  }, [clients]);
+  }, [clients, products, ensureMGMVProductsLoaded]);
 
   if (!targetId) return null;
   const client = clients.find((c) => c.id === targetId);
@@ -51,6 +78,7 @@ export function MgmvCompletionWatcher() {
       clientName={client.name}
       agreement={client.mgmv}
       products={mgmvProducts}
+      productsLoading={productsLoading}
       onClose={() => setTargetId(null)}
       onReview={() => {
         setTargetId(null);

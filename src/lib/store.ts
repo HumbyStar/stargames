@@ -16,6 +16,7 @@ import {
   queueClientUpsert,
   queueProductUpsert,
   loadSnapshot,
+  loadMGMVProductsForClient,
   migrateLocalStorageOnce,
   primeUiState,
   getUiValue,
@@ -501,6 +502,8 @@ interface State {
    * acordo em individuais "Pago" / "Em Aberto".
    */
   completeMGMVAgreement: (clientId: string) => { ok: boolean; movedProducts: number };
+  /** Garante uma leitura direcionada dos produtos MGMV antes da quitação. */
+  ensureMGMVProductsLoaded: (clientId: string) => Promise<Product[]>;
   applyAiReviewToAgreement: (
     clientId: string,
     nextAgreement: MGMVAgreement,
@@ -1005,6 +1008,12 @@ export const useStore = create<State>()((set, get) => ({
         const state = get();
         const client = state.clients.find((c) => c.id === clientId);
         if (!client?.mgmv) return { ok: false, movedProducts: 0 };
+        const loadedMGMVProducts = state.products.filter(
+          (p) => p.clientId === clientId && p.financialStatus === "MGMV",
+        );
+        // Um acordo ativo sempre possui itens. Nunca arquive o acordo quando a
+        // leitura dos produtos ainda não chegou ou falhou.
+        if (loadedMGMVProducts.length === 0) return { ok: false, movedProducts: 0 };
         let movedProducts = 0;
         const convertedProducts: Product[] = [];
         let updatedClient: Client | undefined;
@@ -1055,6 +1064,25 @@ export const useStore = create<State>()((set, get) => ({
           }
         })();
         return { ok: true, movedProducts };
+      },
+      ensureMGMVProductsLoaded: async (clientId) => {
+        const current = get().products.filter(
+          (p) => p.clientId === clientId && p.financialStatus === "MGMV",
+        );
+        if (current.length > 0) return current;
+
+        const loaded = await loadMGMVProductsForClient(clientId);
+        if (loaded.length === 0) return [];
+        set((s) => {
+          const loadedIds = new Set(loaded.map((p) => p.id));
+          return {
+            products: [
+              ...s.products.filter((p) => !loadedIds.has(p.id)),
+              ...loaded,
+            ],
+          };
+        });
+        return loaded;
       },
       setMGMVAgreement: (clientId, agreement) =>
         set((s) => {

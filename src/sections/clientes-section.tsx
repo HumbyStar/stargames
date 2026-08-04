@@ -1225,6 +1225,8 @@ function ClientDrawer({
   const [mgmvEditOpen, setMgmvEditOpen] = useState(false);
   const [mgmvCompleteOpen, setMgmvCompleteOpen] = useState(false);
   const completeMGMVAgreement = useStore((s) => s.completeMGMVAgreement);
+  const ensureMGMVProductsLoaded = useStore((s) => s.ensureMGMVProductsLoaded);
+  const [mgmvProductsLoading, setMgmvProductsLoading] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -1332,6 +1334,21 @@ function ClientDrawer({
     (b.registerDate ?? "").localeCompare(a.registerDate ?? "");
   const sortedProducts = [...products].sort(byRegisterDateDesc);
   const mgmvProducts = sortedProducts.filter((p) => p.financialStatus === "MGMV");
+  useEffect(() => {
+    if (!client.mgmv || client.mgmv.completedAt || mgmvProducts.length > 0) return;
+    let active = true;
+    setMgmvProductsLoading(true);
+    void ensureMGMVProductsLoaded(client.id)
+      .catch(() => {
+        if (active) toast.error("Falha ao carregar os produtos incluídos no MGMV.");
+      })
+      .finally(() => {
+        if (active) setMgmvProductsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [client.id, client.mgmv, mgmvProducts.length, ensureMGMVProductsLoaded]);
   const individualAll = sortedProducts.filter((p) => p.financialStatus !== "MGMV");
   // Retirado = arquivado: sai da lista ativa e migra para o histórico do
   // cliente. Mantido nas somas totais para não perder o histórico financeiro.
@@ -1590,6 +1607,7 @@ function ClientDrawer({
           clientName={client.name}
           agreement={client.mgmv}
           products={mgmvProducts}
+          productsLoading={mgmvProductsLoading}
           onClose={() => setMgmvCompleteOpen(false)}
           onReview={() => {
             setMgmvCompleteOpen(false);
@@ -1809,7 +1827,9 @@ function ClientDrawer({
                           colSpan={6}
                           className="py-4 px-3 text-center text-xs text-muted-foreground"
                         >
-                          Nenhum item carregado para este acordo no momento.
+                           {mgmvProductsLoading
+                             ? "Carregando os produtos incluídos no MGMV…"
+                             : "Não foi possível carregar os itens deste acordo. A conclusão permanecerá bloqueada."}
                         </td>
                       </tr>
                     )}

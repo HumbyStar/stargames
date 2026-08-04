@@ -242,6 +242,8 @@ export function MGMVSection({
   const registerMGMVPartialPayment = useStore((s) => s.registerMGMVPartialPayment);
   const setMGMVAgreement = useStore((s) => s.setMGMVAgreement);
   const completeMGMVAgreement = useStore((s) => s.completeMGMVAgreement);
+  const ensureMGMVProductsLoaded = useStore((s) => s.ensureMGMVProductsLoaded);
+  const [completionProductsLoading, setCompletionProductsLoading] = useState(false);
   const applyAiReviewToAgreement = useStore((s) => s.applyAiReviewToAgreement);
   const [chip, setChip] = usePersistedState<MgmvChip>("mgmv.chip", "todos");
   const [search, setSearch] = usePersistedState<string>("mgmv.search", "");
@@ -286,6 +288,36 @@ export function MGMVSection({
   const [aiTarget, setAiTarget] = useState<string | null>(null);
   const [editingAgreement, setEditingAgreement] = useState<string | null>(null);
   const [completeTarget, setCompleteTarget] = useState<string | null>(null);
+  useEffect(() => {
+    if (!completeTarget) {
+      setCompletionProductsLoading(false);
+      return;
+    }
+    const alreadyLoaded = products.some(
+      (p) => p.clientId === completeTarget && p.financialStatus === "MGMV",
+    );
+    if (alreadyLoaded) {
+      setCompletionProductsLoading(false);
+      return;
+    }
+    let active = true;
+    setCompletionProductsLoading(true);
+    void ensureMGMVProductsLoaded(completeTarget)
+      .then((loaded) => {
+        if (active && loaded.length === 0) {
+          toast.error("Não foi possível carregar os produtos do MGMV. A conclusão foi bloqueada.");
+        }
+      })
+      .catch(() => {
+        if (active) toast.error("Falha ao carregar os produtos do MGMV.");
+      })
+      .finally(() => {
+        if (active) setCompletionProductsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [completeTarget, products, ensureMGMVProductsLoaded]);
   const [reprocessing, setReprocessing] = useState(false);
   // IDs dos clientes cujos acordos foram efetivamente atualizados no último
   // reprocesso. Enquanto essa lista existir, a seção MGMV mostra apenas
@@ -1190,6 +1222,7 @@ export function MGMVSection({
             clientName={row.client.name}
             agreement={row.agreement}
             products={mgmvProducts}
+            productsLoading={completionProductsLoading}
             onClose={() => setCompleteTarget(null)}
             onReview={() => {
               setCompleteTarget(null);

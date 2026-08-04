@@ -62,6 +62,8 @@ interface CompleteModalProps {
   /** Abre o editor de parcelas para revisão. */
   onReview: () => void;
   onConfirm: () => void;
+  /** Impede concluir enquanto a leitura direcionada dos produtos não terminou. */
+  productsLoading?: boolean;
   /** Classe extra do conteúdo (usada para elevar o z-index sobre a ficha). */
   contentClassName?: string;
 }
@@ -79,6 +81,7 @@ export function MgmvCompleteModal({
   onClose,
   onReview,
   onConfirm,
+  productsLoading = false,
   contentClassName,
 }: CompleteModalProps) {
   const paidCount = agreement.installments.filter((i) => i.paid).length;
@@ -175,9 +178,11 @@ export function MgmvCompleteModal({
           <div className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">
             Produtos inclusos ({products.length})
           </div>
-          {products.length === 0 ? (
+          {productsLoading || products.length === 0 ? (
             <div className="rounded-md border border-dashed border-border/60 px-2 py-3 text-center text-xs text-muted-foreground">
-              Nenhum produto vinculado ao acordo.
+              {productsLoading
+                ? "Carregando os produtos incluídos no MGMV…"
+                : "Os produtos do MGMV ainda não foram carregados. A conclusão está bloqueada para evitar perda de itens."}
             </div>
           ) : (
             <div className="max-h-40 space-y-1 overflow-y-auto">
@@ -211,7 +216,9 @@ export function MgmvCompleteModal({
           <Button variant="outline" onClick={onClose}>
             Cancelar
           </Button>
-          <Button onClick={onConfirm}>Confirmar quitação</Button>
+          <Button disabled={productsLoading || products.length === 0} onClick={onConfirm}>
+            {productsLoading ? "Carregando produtos…" : "Confirmar quitação"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
