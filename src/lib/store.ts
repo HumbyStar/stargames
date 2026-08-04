@@ -1291,11 +1291,11 @@ export const useStore = create<State>()((set, get) => ({
         const snap = await loadSnapshot();
         if (token !== envToken) return;
         const env = snap.env ?? "producao";
-        envSnapshots.set(env, snap);
+        if (!snap.partial) envSnapshots.set(env, snap);
         set({
-          clients: snap.clients,
-          products: snap.products,
-          importHistory: snap.importHistory,
+          clients: keepOnPartial(snap.clients, get().clients, snap.partial),
+          products: keepOnPartial(snap.products, get().products, snap.partial),
+          importHistory: keepOnPartial(snap.importHistory, get().importHistory, snap.partial),
           preferences: { ...defaultPreferences, ...snap.preferences },
           rules: { ...defaultRules, ...snap.rules },
           security: { ...defaultSecurity, ...snap.security },
@@ -1329,11 +1329,11 @@ export const useStore = create<State>()((set, get) => ({
           const snap = await loadSnapshot();
           if (token !== envToken) return;
           const loadedEnv = snap.env ?? "producao";
-          envSnapshots.set(loadedEnv, snap);
+          if (!snap.partial) envSnapshots.set(loadedEnv, snap);
           set({
-            clients: snap.clients,
-            products: snap.products,
-            importHistory: snap.importHistory,
+            clients: keepOnPartial(snap.clients, get().clients, snap.partial),
+            products: keepOnPartial(snap.products, get().products, snap.partial),
+            importHistory: keepOnPartial(snap.importHistory, get().importHistory, snap.partial),
             preferences: { ...defaultPreferences, ...snap.preferences },
             rules: { ...defaultRules, ...snap.rules },
             security: { ...defaultSecurity, ...snap.security },
