@@ -10,6 +10,9 @@ import { SESSION_ID_KEY } from "@/components/session-guard";
 import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 
 export const Route = createFileRoute("/auth")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" && s.next.startsWith("/") && !s.next.startsWith("//") ? s.next : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Entrar — Star Games" },
@@ -29,15 +32,19 @@ function newSessionId() {
 
 function AuthPage() {
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) navigate({ to: "/", replace: true });
+      if (data.user) {
+        if (next) window.location.replace(next);
+        else navigate({ to: "/", replace: true });
+      }
     });
-  }, [navigate]);
+  }, [navigate, next]);
 
   async function attemptClaim() {
     const sessionId = newSessionId();
@@ -47,7 +54,8 @@ function AuthPage() {
         localStorage.setItem(SESSION_ID_KEY, sessionId);
       } catch {}
       toast.success("Bem-vindo!");
-      navigate({ to: "/", replace: true });
+      if (next) window.location.replace(next);
+      else navigate({ to: "/", replace: true });
       return;
     }
     if (res.reason === "no_internal_access") {
