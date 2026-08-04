@@ -1026,7 +1026,13 @@ export const useStore = create<State>()((set, get) => ({
                 : c,
             ),
             products: s.products.map((p) => {
-              if (p.clientId !== clientId || p.financialStatus !== "MGMV") return p;
+              if (p.clientId !== clientId) return p;
+              // Mesma condição da RPC: qualquer item vinculado ao acordo vira
+              // individual quitado, mesmo que tenha entrado no MGMV ainda como
+              // Reserva/Pendente (ex.: reserva vencida antes do acordo).
+              const belongsToAgreement =
+                p.financialStatus === "MGMV" || p.includedInMGMV === true;
+              if (!belongsToAgreement) return p;
               const keepsSituation =
                 p.situation === "Enviado" ||
                 p.situation === "Retirado" ||
@@ -1035,6 +1041,7 @@ export const useStore = create<State>()((set, get) => ({
                 ...p,
                 financialStatus: "Pago" as const,
                 paidValue: p.totalValue,
+                includedInMGMV: false,
                 situation: keepsSituation ? p.situation : ("Em Aberto" as Situation),
               };
             }),
