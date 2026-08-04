@@ -961,6 +961,12 @@ export function MGMVSection({
                     {isOpen && (
                       <tr className="border-b bg-accent/20">
                         <td colSpan={9} className="px-4 py-4">
+                          {fullyPaid && editingAgreement !== r.client.id && (
+                            <MgmvFullyPaidBanner
+                              onReview={() => setEditingAgreement(r.client.id)}
+                              onComplete={() => setCompleteTarget(r.client.id)}
+                            />
+                          )}
                           {editingAgreement === r.client.id ? (
                             <MgmvAgreementEditor
                               clientId={r.client.id}
