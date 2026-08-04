@@ -1172,6 +1172,43 @@ export function MGMVSection({
       </Card>
       {(() => {
         if (!aiTarget) return null;
+        return null;
+      })()}
+      {(() => {
+        if (!completeTarget) return null;
+        const row = rows.find((r) => r.client.id === completeTarget);
+        if (!row) return null;
+        const mgmvProducts = products.filter(
+          (p) => p.clientId === row.client.id && p.financialStatus === "MGMV",
+        );
+        return (
+          <MgmvCompleteModal
+            open={true}
+            clientName={row.client.name}
+            agreement={row.agreement}
+            products={mgmvProducts}
+            onClose={() => setCompleteTarget(null)}
+            onReview={() => {
+              setCompleteTarget(null);
+              setExpanded(row.client.id);
+              setEditingAgreement(row.client.id);
+            }}
+            onConfirm={() => {
+              const res = completeMGMVAgreement(row.client.id);
+              setCompleteTarget(null);
+              if (res.ok) {
+                toast.success(
+                  `MGMV concluído. ${res.movedProducts} produto(s) agora estão como Pago / Em Aberto.`,
+                );
+              } else {
+                toast.error("Não foi possível concluir o acordo.");
+              }
+            }}
+          />
+        );
+      })()}
+      {(() => {
+        if (!aiTarget) return null;
         const row = rows.find((r) => r.client.id === aiTarget);
         if (!row) return null;
         const productsOfClient = products
