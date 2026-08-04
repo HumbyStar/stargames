@@ -10,10 +10,6 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle2 } from "lucide-react";
 import { formatBRL, type MGMVAgreement, type Product } from "@/lib/store";
 
-interface Props {
-  open: boolean;
-}
-
 /**
  * Faixa de aviso exibida quando todas as parcelas do acordo estão pagas e a
  * quitação ainda não foi confirmada.
