@@ -84,10 +84,10 @@ export function MgmvCompletionWatcher() {
         setTargetId(null);
         openClient(client.id);
       }}
-      onConfirm={() => {
-        const res = completeMGMVAgreement(client.id);
-        setTargetId(null);
+      onConfirm={async () => {
+        const res = await completeMGMVAgreement(client.id);
         if (res.ok) {
+          setTargetId(null);
           toast.success(
             `MGMV concluído. ${res.movedProducts} produto(s) agora estão como Pago / Em Aberto.`,
           );

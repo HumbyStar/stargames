@@ -1618,10 +1618,10 @@ function ClientDrawer({
             setMgmvCompleteOpen(false);
             setMgmvEditOpen(true);
           }}
-          onConfirm={() => {
-            const res = completeMGMVAgreement(client.id);
-            setMgmvCompleteOpen(false);
+          onConfirm={async () => {
+            const res = await completeMGMVAgreement(client.id);
             if (res.ok) {
+              setMgmvCompleteOpen(false);
               toast.success(
                 `MGMV concluído. ${res.movedProducts} produto(s) agora estão como Pago / Em Aberto.`,
               );

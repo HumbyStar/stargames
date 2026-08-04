@@ -419,6 +419,32 @@ export async function loadMGMVProductsForClient(clientId: string): Promise<Produ
   return ((data ?? []) as DbProductRow[]).map(rowToProduct);
 }
 
+export interface CompleteMGMVResult {
+  ok: boolean;
+  movedProducts: number;
+  completedAt?: string;
+}
+
+/** Conclui o acordo e converte seus produtos em uma única transação no banco. */
+export async function dbCompleteMGMVAgreementAsync(
+  clientId: string,
+): Promise<CompleteMGMVResult> {
+  const { data, error } = await sb().rpc("complete_mgmv_agreement", {
+    _client_id: clientId,
+  });
+  if (error) throw error;
+  const result = data as {
+    ok?: boolean;
+    movedProducts?: number;
+    completedAt?: string;
+  } | null;
+  return {
+    ok: result?.ok === true,
+    movedProducts: Number(result?.movedProducts ?? 0) || 0,
+    completedAt: result?.completedAt,
+  };
+}
+
 /**
  * Monta o snapshot do app a partir das linhas cruas das tabelas.
  * Usado tanto pelo carregamento na nuvem quanto pelo banco local (offline).
@@ -471,6 +497,8 @@ export function buildSnapshotFromRows(raw: RawSnapshotRows): DbSnapshot {
     ai_review_applied_at?: string | null;
     ai_confidence?: number | string | null;
     ai_review_raw_result?: unknown;
+    status?: string | null;
+    completed_at?: string | null;
   }>) {
     const ins = (installmentsByAgreement.get(row.id) ?? []).sort(
       (a, b) => a.number - b.number,
@@ -488,6 +516,7 @@ export function buildSnapshotFromRows(raw: RawSnapshotRows): DbSnapshot {
       aiConfidence:
         row.ai_confidence == null ? undefined : Number(row.ai_confidence) || 0,
       aiReviewRawResult: row.ai_review_raw_result ?? undefined,
+      completedAt: row.completed_at ?? undefined,
     });
   }
 
@@ -869,6 +898,7 @@ export function buildAgreementRow(client: Client): Record<string, unknown> {
     paid_value: paidValue,
     remaining_value: remainingValue,
     status,
+    completed_at: mgmv.completedAt ?? null,
     needs_review: needsReview,
     review_status: reviewStatus,
     ai_reviewed: !!mgmv.aiReviewed,
@@ -912,6 +942,22 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
       .eq("client_id", client.id);
     if (resetFlags.error) logErr("syncAgreement.resetFlags", resetFlags.error);
     return;
+  }
+
+
+  // Uma gravação atrasada de uma parcela não pode reabrir um acordo que já
+  // foi concluído em outra operação/aba. A conclusão é monotônica.
+  if (!client.mgmv.completedAt) {
+    const existing = await sb()
+      .from("mgmv_agreements")
+      .select("completed_at")
+      .eq("id", agreementId)
+      .maybeSingle();
+    if (existing.error) {
+      logErr("syncAgreement.readCompletion", existing.error);
+      return;
+    }
+    if (existing.data?.completed_at) return;
   }
 
   const sorted = [...client.mgmv.installments].sort((a, b) => a.number - b.number);

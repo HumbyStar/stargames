@@ -392,6 +392,7 @@ export type Database = {
           client_id: string
           client_name: string
           client_phone: string
+          completed_at: string | null
           created_at: string
           detection_log: Json | null
           due_day: number | null
@@ -423,6 +424,7 @@ export type Database = {
           client_id: string
           client_name?: string
           client_phone?: string
+          completed_at?: string | null
           created_at?: string
           detection_log?: Json | null
           due_day?: number | null
@@ -454,6 +456,7 @@ export type Database = {
           client_id?: string
           client_name?: string
           client_phone?: string
+          completed_at?: string | null
           created_at?: string
           detection_log?: Json | null
           due_day?: number | null
@@ -1201,6 +1204,7 @@ export type Database = {
         Returns: boolean
       }
       can_view_team_tasks: { Args: { _user_id: string }; Returns: boolean }
+      complete_mgmv_agreement: { Args: { _client_id: string }; Returns: Json }
       current_env: {
         Args: never
         Returns: Database["public"]["Enums"]["app_env"]

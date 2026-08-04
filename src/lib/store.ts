@@ -23,6 +23,7 @@ import {
   setUiValue,
   dbSyncAgreementForClient,
   dbSyncAgreementForClientAsync,
+  dbCompleteMGMVAgreementAsync,
   dbInsertMgmvReviewAuditLog,
   dbSyncAgreementsBulkAsync,
   dbFetchDiagnostics,
@@ -501,7 +502,9 @@ interface State {
    * (arquivado), devolve o cliente ao tipo comum e converte os produtos do
    * acordo em individuais "Pago" / "Em Aberto".
    */
-  completeMGMVAgreement: (clientId: string) => { ok: boolean; movedProducts: number };
+  completeMGMVAgreement: (
+    clientId: string,
+  ) => Promise<{ ok: boolean; movedProducts: number }>;
   /** Garante uma leitura direcionada dos produtos MGMV antes da quitação. */
   ensureMGMVProductsLoaded: (clientId: string) => Promise<Product[]>;
   applyAiReviewToAgreement: (
@@ -1004,66 +1007,43 @@ export const useStore = create<State>()((set, get) => ({
         });
         return { ok: true, becameQuitado };
       },
-      completeMGMVAgreement: (clientId) => {
+      completeMGMVAgreement: async (clientId) => {
         const state = get();
         const client = state.clients.find((c) => c.id === clientId);
         if (!client?.mgmv) return { ok: false, movedProducts: 0 };
-        const loadedMGMVProducts = state.products.filter(
-          (p) => p.clientId === clientId && p.financialStatus === "MGMV",
-        );
-        // Um acordo ativo sempre possui itens. Nunca arquive o acordo quando a
-        // leitura dos produtos ainda não chegou ou falhou.
-        if (loadedMGMVProducts.length === 0) return { ok: false, movedProducts: 0 };
-        let movedProducts = 0;
-        const convertedProducts: Product[] = [];
-        let updatedClient: Client | undefined;
-        set((s) => {
-          const clients = s.clients.map((c) => {
-            if (c.id !== clientId || !c.mgmv) return c;
-            return {
-              ...c,
-              clientType: "common" as const,
-              mgmv: { ...c.mgmv, completedAt: new Date().toISOString() },
-            };
-          });
-          const products = s.products.map((p) => {
-            if (p.clientId !== clientId) return p;
-            if (p.financialStatus !== "MGMV") return p;
-            const keepsSituation =
-              p.situation !== "Em Aberto" && p.situation !== "Resolvido";
-            const next: Product = {
-              ...p,
-              financialStatus: "Pago",
-              paidValue: p.totalValue,
-              situation: keepsSituation ? p.situation : ("Em Aberto" as Situation),
-            };
-            movedProducts++;
-            convertedProducts.push(next);
-            return next;
-          });
-          const updated = clients.find((c) => c.id === clientId);
-          if (updated) {
-            updatedClient = updated;
-            queueClientUpsert(updated);
-          }
-          return { clients, products };
-        });
-        // Persistência ordenada: os produtos precisam estar gravados como
-        // "Pago" ANTES do sync do acordo, senão o sync ainda os enxerga como
-        // MGMV e reaplica included_in_mgmv/mgmv_agreement_id.
-        void (async () => {
-          try {
-            if (convertedProducts.length > 0) {
-              await dbUpsertProductsAsync(convertedProducts);
-            }
-            if (updatedClient) {
-              await dbSyncAgreementForClientAsync(updatedClient);
-            }
-          } catch (err) {
-            console.error("completeMGMVAgreement sync failed", err);
-          }
-        })();
-        return { ok: true, movedProducts };
+        try {
+          const result = await dbCompleteMGMVAgreementAsync(clientId);
+          if (!result.ok) return { ok: false, movedProducts: 0 };
+          const completedAt = result.completedAt ?? new Date().toISOString();
+          set((s) => ({
+            clients: s.clients.map((c) =>
+              c.id === clientId && c.mgmv
+                ? {
+                    ...c,
+                    clientType: "common" as const,
+                    mgmv: { ...c.mgmv, completedAt },
+                  }
+                : c,
+            ),
+            products: s.products.map((p) => {
+              if (p.clientId !== clientId || p.financialStatus !== "MGMV") return p;
+              const keepsSituation =
+                p.situation === "Enviado" ||
+                p.situation === "Retirado" ||
+                p.situation === "Removido";
+              return {
+                ...p,
+                financialStatus: "Pago" as const,
+                paidValue: p.totalValue,
+                situation: keepsSituation ? p.situation : ("Em Aberto" as Situation),
+              };
+            }),
+          }));
+          return { ok: true, movedProducts: result.movedProducts };
+        } catch (err) {
+          console.error("completeMGMVAgreement failed", err);
+          return { ok: false, movedProducts: 0 };
+        }
       },
       ensureMGMVProductsLoaded: async (clientId) => {
         const current = get().products.filter(
