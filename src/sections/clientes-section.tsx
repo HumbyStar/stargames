@@ -1821,14 +1821,6 @@ function ClientDrawer({
                   </tbody>
                 </table>
               </div>
-              <div className="mt-3">
-                <MgmvProductsPanel
-                  client={client}
-                  products={mgmvProducts}
-                  nfProductMap={nfProductMap}
-                  onNfSaved={() => void refreshNfInvoices()}
-                />
-              </div>
             </div>
           )}
           </>
