@@ -800,6 +800,9 @@ export function MGMVSection({
                       <td className="px-3 py-2">
                         <div className="flex flex-wrap gap-1">
                           <Tag variant={tagVariant}>{r.status}</Tag>
+                          {fullyPaid && (
+                            <Tag variant="success">Aguardando conclusão</Tag>
+                          )}
                           {reviewBadge && (
                             <Tag variant={reviewBadge.variant}>{reviewBadge.label}</Tag>
                           )}
