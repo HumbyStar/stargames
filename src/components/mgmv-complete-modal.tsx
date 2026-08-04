@@ -10,6 +10,13 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle2 } from "lucide-react";
 import { formatBRL, type MGMVAgreement, type Product } from "@/lib/store";
 
+function formatDate(iso?: string | null) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("pt-BR");
+}
+
 /**
  * Faixa de aviso exibida quando todas as parcelas do acordo estão pagas e a
  * quitação ainda não foi confirmada.
@@ -111,6 +118,42 @@ export function MgmvCompleteModal({
 
         <div className="mt-2">
           <div className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">
+            Parcelas ({agreement.installments.length})
+          </div>
+          <div className="max-h-40 space-y-1 overflow-y-auto">
+            {[...agreement.installments]
+              .sort((a, b) => a.number - b.number)
+              .map((i) => (
+                <div
+                  key={i.number}
+                  className="flex items-center gap-2 rounded-md border border-border/60 bg-card px-2 py-1 text-xs"
+                >
+                  <span className="w-12 shrink-0 font-medium tabular-nums">
+                    {i.number}/{agreement.installments.length}
+                  </span>
+                  <span className="flex-1 text-muted-foreground">
+                    venc. {formatDate(i.dueDate)}
+                    {i.paid ? ` · pago em ${formatDate(i.paidAt ?? i.dueDate)}` : ""}
+                  </span>
+                  <span className="w-20 text-right tabular-nums">
+                    {formatBRL(i.paidAmount ?? i.value ?? 0)}
+                  </span>
+                  <span
+                    className={
+                      i.paid
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-muted-foreground"
+                    }
+                  >
+                    {i.paid ? "Pago" : "Pendente"}
+                  </span>
+                </div>
+              ))}
+          </div>
+        </div>
+
+        <div className="mt-2">
+          <div className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">
             Produtos inclusos ({products.length})
           </div>
           {products.length === 0 ? (
@@ -118,7 +161,7 @@ export function MgmvCompleteModal({
               Nenhum produto vinculado ao acordo.
             </div>
           ) : (
-            <div className="max-h-48 space-y-1 overflow-y-auto">
+            <div className="max-h-40 space-y-1 overflow-y-auto">
               {products.map((p) => (
                 <div
                   key={p.id}
@@ -126,6 +169,7 @@ export function MgmvCompleteModal({
                 >
                   <span className="flex-1 truncate font-medium">{p.name}</span>
                   <span className="text-muted-foreground">{p.platform}</span>
+                  <span className="text-muted-foreground">MGMV → Pago / Em Aberto</span>
                   <span className="w-20 text-right tabular-nums">
                     {formatBRL(p.totalValue)}
                   </span>
