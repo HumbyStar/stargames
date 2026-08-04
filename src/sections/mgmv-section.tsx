@@ -16,7 +16,7 @@ import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
 // paginação client-side removida — mostrar todos os acordos MGMV de uma vez
 import { extractMGMVAgreementFromNotes } from "@/sections/import-section";
 import { reprocessMGMVFromNotes } from "@/lib/mgmv-reprocess";
-import { rebalanceAgreement } from "@/lib/mgmv-schedule";
+import { rebalanceAgreement, isAgreementFullyPaid } from "@/lib/mgmv-schedule";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { Eye, EyeOff } from "lucide-react";
@@ -32,6 +32,10 @@ import { useServerFn } from "@tanstack/react-start";
 import { cn } from "@/lib/utils";
 import { productStatusTone } from "@/lib/status-tone";
 import { StatusLegend } from "@/components/status-legend";
+import {
+  MgmvCompleteModal,
+  MgmvFullyPaidBanner,
+} from "@/components/mgmv-complete-modal";
 
 type MgmvChip =
   | "todos"
@@ -238,6 +242,7 @@ export function MGMVSection({
   const payMGMVInstallment = useStore((s) => s.payMGMVInstallment);
   const registerMGMVPartialPayment = useStore((s) => s.registerMGMVPartialPayment);
   const setMGMVAgreement = useStore((s) => s.setMGMVAgreement);
+  const completeMGMVAgreement = useStore((s) => s.completeMGMVAgreement);
   const applyAiReviewToAgreement = useStore((s) => s.applyAiReviewToAgreement);
   const [chip, setChip] = usePersistedState<MgmvChip>("mgmv.chip", "todos");
   const [search, setSearch] = usePersistedState<string>("mgmv.search", "");
@@ -280,6 +285,7 @@ export function MGMVSection({
   }, [expanded, listInvoicesFn]);
   const [aiTarget, setAiTarget] = useState<string | null>(null);
   const [editingAgreement, setEditingAgreement] = useState<string | null>(null);
+  const [completeTarget, setCompleteTarget] = useState<string | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
   // IDs dos clientes cujos acordos foram efetivamente atualizados no último
   // reprocesso. Enquanto essa lista existir, a seção MGMV mostra apenas
@@ -343,11 +349,12 @@ export function MGMVSection({
         c.clientType === "mgmv" || (!!c.mgmv && c.mgmv.installments.length > 0);
       if (!isMgmv || !c.mgmv) continue;
       if (onlySet && !onlySet.has(c.id)) continue;
+      // Acordos já concluídos (quitação confirmada) saem da listagem — o
+      // histórico continua acessível pela ficha do cliente. Acordos com todas
+      // as parcelas pagas mas sem confirmação permanecem para o usuário
+      // confirmar ou revisar.
+      if (c.mgmv.completedAt) continue;
       const row = buildRow(c, c.mgmv);
-      // A seção MGMV lista apenas acordos vivos: ativos, com pendências ou em
-      // atraso. Acordos já quitados saem da listagem (o histórico continua
-      // acessível pelo modal do cliente).
-      if (row.status === "Quitado") continue;
       list.push(row);
     }
     return list.sort((a, b) =>
@@ -664,6 +671,7 @@ export function MGMVSection({
                   );
                 const editing = mgmvEdit.isEditing(r.client.id);
                 const draft = mgmvEdit.draftValues;
+                const fullyPaid = isAgreementFullyPaid(r.agreement);
                 const tagVariant: "danger" | "warning" | "success" | "primary" | "neutral" =
                   r.status === "Em atraso"
                     ? "danger"
@@ -795,6 +803,9 @@ export function MGMVSection({
                       <td className="px-3 py-2">
                         <div className="flex flex-wrap gap-1">
                           <Tag variant={tagVariant}>{r.status}</Tag>
+                          {fullyPaid && (
+                            <Tag variant="success">Aguardando conclusão</Tag>
+                          )}
                           {reviewBadge && (
                             <Tag variant={reviewBadge.variant}>{reviewBadge.label}</Tag>
                           )}
@@ -952,6 +963,12 @@ export function MGMVSection({
                     {isOpen && (
                       <tr className="border-b bg-accent/20">
                         <td colSpan={9} className="px-4 py-4">
+                          {fullyPaid && editingAgreement !== r.client.id && (
+                            <MgmvFullyPaidBanner
+                              onReview={() => setEditingAgreement(r.client.id)}
+                              onComplete={() => setCompleteTarget(r.client.id)}
+                            />
+                          )}
                           {editingAgreement === r.client.id ? (
                             <MgmvAgreementEditor
                               clientId={r.client.id}
@@ -1154,6 +1171,39 @@ export function MGMVSection({
       )}
       </>
       </Card>
+      {(() => {
+        if (!completeTarget) return null;
+        const row = rows.find((r) => r.client.id === completeTarget);
+        if (!row) return null;
+        const mgmvProducts = products.filter(
+          (p) => p.clientId === row.client.id && p.financialStatus === "MGMV",
+        );
+        return (
+          <MgmvCompleteModal
+            open={true}
+            clientName={row.client.name}
+            agreement={row.agreement}
+            products={mgmvProducts}
+            onClose={() => setCompleteTarget(null)}
+            onReview={() => {
+              setCompleteTarget(null);
+              setExpanded(row.client.id);
+              setEditingAgreement(row.client.id);
+            }}
+            onConfirm={() => {
+              const res = completeMGMVAgreement(row.client.id);
+              setCompleteTarget(null);
+              if (res.ok) {
+                toast.success(
+                  `MGMV concluído. ${res.movedProducts} produto(s) agora estão como Pago / Em Aberto.`,
+                );
+              } else {
+                toast.error("Não foi possível concluir o acordo.");
+              }
+            }}
+          />
+        );
+      })()}
       {(() => {
         if (!aiTarget) return null;
         const row = rows.find((r) => r.client.id === aiTarget);

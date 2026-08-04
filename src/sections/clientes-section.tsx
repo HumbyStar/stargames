@@ -49,6 +49,11 @@ import { NotionHtmlActions } from "@/components/notion-html-actions";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
 import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
+import {
+  MgmvCompleteModal,
+  MgmvFullyPaidBanner,
+} from "@/components/mgmv-complete-modal";
+import { isAgreementFullyPaid } from "@/lib/mgmv-schedule";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { CustomerDataModal } from "@/components/customer-data-modal";
 import { isFichaComplete } from "@/lib/ficha-parse";
@@ -1217,6 +1222,8 @@ function ClientDrawer({
   const [notes, setNotes] = useState(client.notes ?? "");
   const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
   const [mgmvEditOpen, setMgmvEditOpen] = useState(false);
+  const [mgmvCompleteOpen, setMgmvCompleteOpen] = useState(false);
+  const completeMGMVAgreement = useStore((s) => s.completeMGMVAgreement);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -1565,6 +1572,30 @@ function ClientDrawer({
         />
       )}
 
+      {mgmvCompleteOpen && client.mgmv && (
+        <MgmvCompleteModal
+          open={true}
+          clientName={client.name}
+          agreement={client.mgmv}
+          products={mgmvProducts}
+          onClose={() => setMgmvCompleteOpen(false)}
+          onReview={() => {
+            setMgmvCompleteOpen(false);
+            setMgmvEditOpen(true);
+          }}
+          onConfirm={() => {
+            const res = completeMGMVAgreement(client.id);
+            setMgmvCompleteOpen(false);
+            if (res.ok) {
+              toast.success(
+                `MGMV concluído. ${res.movedProducts} produto(s) agora estão como Pago / Em Aberto.`,
+              );
+            } else {
+              toast.error("Não foi possível concluir o acordo.");
+            }
+          }}
+        />
+      )}
       {mgmv && (
         <Card
           title={`Acordo MGMV — ${mgmv.status}`}
@@ -1590,6 +1621,14 @@ function ClientDrawer({
             />
           ) : (
           <>
+          {client.mgmv &&
+            !client.mgmv.completedAt &&
+            isAgreementFullyPaid(client.mgmv) && (
+              <MgmvFullyPaidBanner
+                onReview={() => setMgmvEditOpen(true)}
+                onComplete={() => setMgmvCompleteOpen(true)}
+              />
+            )}
           <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
             <MetricCard
               label="Valor total do acordo"

@@ -286,6 +286,11 @@ export interface MGMVAgreement {
   aiConfidence?: number;
   /** Resultado bruto retornado pela IA (preservado para auditoria). */
   aiReviewRawResult?: unknown;
+  /**
+   * ISO da confirmação de quitação do acordo. Quando presente, o cliente saiu
+   * do programa MGMV e os produtos viraram individuais.
+   */
+  completedAt?: string;
 }
 
 export interface Product {
@@ -490,6 +495,12 @@ interface State {
     amount: number,
   ) => PartialPaymentResult;
   setMGMVAgreement: (clientId: string, agreement: MGMVAgreement | undefined) => void;
+  /**
+   * Confirma a quitação do acordo MGMV: marca o acordo como concluído
+   * (arquivado), devolve o cliente ao tipo comum e converte os produtos do
+   * acordo em individuais "Pago" / "Em Aberto".
+   */
+  completeMGMVAgreement: (clientId: string) => { ok: boolean; movedProducts: number };
   applyAiReviewToAgreement: (
     clientId: string,
     nextAgreement: MGMVAgreement,
@@ -981,6 +992,44 @@ export const useStore = create<State>()((set, get) => ({
           return { clients, products };
         });
         return { ok: true, becameQuitado };
+      },
+      completeMGMVAgreement: (clientId) => {
+        const state = get();
+        const client = state.clients.find((c) => c.id === clientId);
+        if (!client?.mgmv) return { ok: false, movedProducts: 0 };
+        let movedProducts = 0;
+        set((s) => {
+          const clients = s.clients.map((c) => {
+            if (c.id !== clientId || !c.mgmv) return c;
+            return {
+              ...c,
+              clientType: "common" as const,
+              mgmv: { ...c.mgmv, completedAt: new Date().toISOString() },
+            };
+          });
+          const products = s.products.map((p) => {
+            if (p.clientId !== clientId) return p;
+            if (p.financialStatus !== "MGMV") return p;
+            const keepsSituation =
+              p.situation !== "Em Aberto" && p.situation !== "Resolvido";
+            const next: Product = {
+              ...p,
+              financialStatus: "Pago",
+              paidValue: p.totalValue,
+              situation: keepsSituation ? p.situation : ("Em Aberto" as Situation),
+            };
+            movedProducts++;
+            queueProductUpsert(next);
+            return next;
+          });
+          const updated = clients.find((c) => c.id === clientId);
+          if (updated) {
+            queueClientUpsert(updated);
+            dbSyncAgreementForClient(updated);
+          }
+          return { clients, products };
+        });
+        return { ok: true, movedProducts };
       },
       setMGMVAgreement: (clientId, agreement) =>
         set((s) => {

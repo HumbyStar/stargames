@@ -182,3 +182,22 @@ export function rebalanceAgreement(
     remaining,
   };
 }
+/**
+ * True quando TODAS as parcelas do acordo estão marcadas como pagas e o valor
+ * pago cobre o total do acordo (tolerância de 1 centavo). Pagamentos parciais
+ * em parcelas ainda pendentes NÃO contam como quitação.
+ */
+export function isAgreementFullyPaid(agreement: MGMVAgreement | undefined | null): boolean {
+  if (!agreement) return false;
+  const list = agreement.installments ?? [];
+  if (list.length === 0) return false;
+  if (list.some((i) => !i.paid)) return false;
+  const paid = list.reduce((s, i) => s + (i.paidAmount ?? i.value ?? 0), 0);
+  const total = agreement.totalDebt ?? 0;
+  return paid + 0.01 >= total;
+}
+
+/** Acordo quitado e já confirmado pelo usuário (saiu do programa MGMV). */
+export function isAgreementCompleted(agreement: MGMVAgreement | undefined | null): boolean {
+  return !!agreement?.completedAt;
+}
