@@ -998,6 +998,8 @@ export const useStore = create<State>()((set, get) => ({
         const client = state.clients.find((c) => c.id === clientId);
         if (!client?.mgmv) return { ok: false, movedProducts: 0 };
         let movedProducts = 0;
+        const convertedProducts: Product[] = [];
+        let updatedClient: Client | undefined;
         set((s) => {
           const clients = s.clients.map((c) => {
             if (c.id !== clientId || !c.mgmv) return c;
@@ -1019,16 +1021,31 @@ export const useStore = create<State>()((set, get) => ({
               situation: keepsSituation ? p.situation : ("Em Aberto" as Situation),
             };
             movedProducts++;
-            queueProductUpsert(next);
+            convertedProducts.push(next);
             return next;
           });
           const updated = clients.find((c) => c.id === clientId);
           if (updated) {
+            updatedClient = updated;
             queueClientUpsert(updated);
-            dbSyncAgreementForClient(updated);
           }
           return { clients, products };
         });
+        // Persistência ordenada: os produtos precisam estar gravados como
+        // "Pago" ANTES do sync do acordo, senão o sync ainda os enxerga como
+        // MGMV e reaplica included_in_mgmv/mgmv_agreement_id.
+        void (async () => {
+          try {
+            if (convertedProducts.length > 0) {
+              await dbUpsertProductsAsync(convertedProducts);
+            }
+            if (updatedClient) {
+              await dbSyncAgreementForClientAsync(updatedClient);
+            }
+          } catch (err) {
+            console.error("completeMGMVAgreement sync failed", err);
+          }
+        })();
         return { ok: true, movedProducts };
       },
       setMGMVAgreement: (clientId, agreement) =>
