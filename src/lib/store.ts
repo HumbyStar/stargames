@@ -17,6 +17,7 @@ import {
   queueProductUpsert,
   loadSnapshot,
   loadMGMVProductsForClient,
+  loadProductsForClient,
   migrateLocalStorageOnce,
   primeUiState,
   getUiValue,
