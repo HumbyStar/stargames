@@ -1571,6 +1571,30 @@ function ClientDrawer({
         />
       )}
 
+      {mgmvCompleteOpen && client.mgmv && (
+        <MgmvCompleteModal
+          open={true}
+          clientName={client.name}
+          agreement={client.mgmv}
+          products={mgmvProducts}
+          onClose={() => setMgmvCompleteOpen(false)}
+          onReview={() => {
+            setMgmvCompleteOpen(false);
+            setMgmvEditOpen(true);
+          }}
+          onConfirm={() => {
+            const res = completeMGMVAgreement(client.id);
+            setMgmvCompleteOpen(false);
+            if (res.ok) {
+              toast.success(
+                `MGMV concluído. ${res.movedProducts} produto(s) agora estão como Pago / Em Aberto.`,
+              );
+            } else {
+              toast.error("Não foi possível concluir o acordo.");
+            }
+          }}
+        />
+      )}
       {mgmv && (
         <Card
           title={`Acordo MGMV — ${mgmv.status}`}
