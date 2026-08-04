@@ -54,7 +54,6 @@ import {
   MgmvFullyPaidBanner,
 } from "@/components/mgmv-complete-modal";
 import { isAgreementFullyPaid } from "@/lib/mgmv-schedule";
-import { MgmvProductsPanel } from "@/components/mgmv-products-panel";
 import { ProductBulkActionsBar } from "@/components/product-bulk-actions";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { CustomerDataModal } from "@/components/customer-data-modal";
