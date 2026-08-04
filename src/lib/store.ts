@@ -288,6 +288,7 @@ export interface MGMVAgreement {
   aiReviewRawResult?: unknown;
 }
 
+
 export interface Product {
   id: string;
   clientId: string;
