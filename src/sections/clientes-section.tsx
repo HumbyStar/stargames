@@ -1223,6 +1223,7 @@ function ClientDrawer({
   const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
   const [mgmvEditOpen, setMgmvEditOpen] = useState(false);
   const [mgmvCompleteOpen, setMgmvCompleteOpen] = useState(false);
+  const completeMGMVAgreement = useStore((s) => s.completeMGMVAgreement);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
