@@ -49,6 +49,11 @@ import { NotionHtmlActions } from "@/components/notion-html-actions";
 import { MgmvCreateModal } from "@/components/mgmv-create-modal";
 import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
 import { MgmvAgreementEditor } from "@/components/mgmv-agreement-editor";
+import {
+  MgmvCompleteModal,
+  MgmvFullyPaidBanner,
+} from "@/components/mgmv-complete-modal";
+import { isAgreementFullyPaid } from "@/lib/mgmv-schedule";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { CustomerDataModal } from "@/components/customer-data-modal";
 import { isFichaComplete } from "@/lib/ficha-parse";
@@ -1217,6 +1222,7 @@ function ClientDrawer({
   const [notes, setNotes] = useState(client.notes ?? "");
   const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
   const [mgmvEditOpen, setMgmvEditOpen] = useState(false);
+  const [mgmvCompleteOpen, setMgmvCompleteOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
