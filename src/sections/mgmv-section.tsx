@@ -284,6 +284,7 @@ export function MGMVSection({
   }, [expanded, listInvoicesFn]);
   const [aiTarget, setAiTarget] = useState<string | null>(null);
   const [editingAgreement, setEditingAgreement] = useState<string | null>(null);
+  const [completeTarget, setCompleteTarget] = useState<string | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
   // IDs dos clientes cujos acordos foram efetivamente atualizados no último
   // reprocesso. Enquanto essa lista existir, a seção MGMV mostra apenas
