@@ -1230,9 +1230,9 @@ export function MGMVSection({
               setEditingAgreement(row.client.id);
             }}
             onConfirm={() => {
-              const res = completeMGMVAgreement(row.client.id);
-              setCompleteTarget(null);
+              const res = await completeMGMVAgreement(row.client.id);
               if (res.ok) {
+                setCompleteTarget(null);
                 toast.success(
                   `MGMV concluído. ${res.movedProducts} produto(s) agora estão como Pago / Em Aberto.`,
                 );
