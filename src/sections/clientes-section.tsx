@@ -1246,6 +1246,17 @@ function ClientDrawer({
   useEffect(() => {
     writeStoredSituationFilter([...situationFilter]);
   }, [situationFilter]);
+  // Ao concluir o MGMV, os itens viram individuais (Pago / Em Aberto). Se
+  // houver filtro salvo escondendo esses estados, limpamos para que os
+  // produtos recém-convertidos apareçam na hora no histórico individual.
+  const completedAt = client.mgmv?.completedAt;
+  useEffect(() => {
+    if (!completedAt) return;
+    setStatusFilter((prev) => (prev.size === 0 || prev.has("Pago") ? prev : new Set()));
+    setSituationFilter((prev) =>
+      prev.size === 0 || prev.has("Em Aberto") ? prev : new Set(),
+    );
+  }, [completedAt]);
   const toggleSituationFilter = (s: Situation) => {
     setSituationFilter((prev) => {
       const next = new Set(prev);
