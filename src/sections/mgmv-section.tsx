@@ -36,6 +36,7 @@ import {
   MgmvCompleteModal,
   MgmvFullyPaidBanner,
 } from "@/components/mgmv-complete-modal";
+import { MgmvProductsPanel } from "@/components/mgmv-products-panel";
 
 type MgmvChip =
   | "todos"
@@ -249,6 +250,7 @@ export function MGMVSection({
   const [expanded, setExpanded] = useState<string | null>(null);
   // Notas fiscais já emitidas para o cliente aberto (badge "NF" nos produtos).
   const listInvoicesFn = useServerFn(listNfInvoices);
+  const [nfRefreshKey, setNfRefreshKey] = useState(0);
   const [nfProductMap, setNfProductMap] = useState<
     Map<string, { count: number; lastAt: string }>
   >(new Map());
@@ -282,7 +284,7 @@ export function MGMVSection({
     return () => {
       cancelled = true;
     };
-  }, [expanded, listInvoicesFn]);
+  }, [expanded, listInvoicesFn, nfRefreshKey]);
   const [aiTarget, setAiTarget] = useState<string | null>(null);
   const [editingAgreement, setEditingAgreement] = useState<string | null>(null);
   const [completeTarget, setCompleteTarget] = useState<string | null>(null);
