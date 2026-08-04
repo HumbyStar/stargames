@@ -1026,13 +1026,7 @@ export const useStore = create<State>()((set, get) => ({
                 : c,
             ),
             products: s.products.map((p) => {
-              if (p.clientId !== clientId) return p;
-              // Mesma condição da RPC: qualquer item vinculado ao acordo vira
-              // individual quitado, mesmo que tenha entrado no MGMV ainda como
-              // Reserva/Pendente (ex.: reserva vencida antes do acordo).
-              const belongsToAgreement =
-                p.financialStatus === "MGMV" || p.includedInMGMV === true;
-              if (!belongsToAgreement) return p;
+              if (p.clientId !== clientId || p.financialStatus !== "MGMV") return p;
               const keepsSituation =
                 p.situation === "Enviado" ||
                 p.situation === "Retirado" ||
@@ -1041,11 +1035,31 @@ export const useStore = create<State>()((set, get) => ({
                 ...p,
                 financialStatus: "Pago" as const,
                 paidValue: p.totalValue,
-                includedInMGMV: false,
                 situation: keepsSituation ? p.situation : ("Em Aberto" as Situation),
               };
             }),
           }));
+          // Releitura direcionada: itens que entraram no acordo ainda como
+          // Reserva/Pendente (ex.: reserva vencida antes do MGMV) só ficam
+          // corretos na UI com o estado real gravado pela transação.
+          try {
+            const fresh = await loadProductsForClient(clientId);
+            if (fresh.length > 0) {
+              set((s) => {
+                const freshIds = new Set(fresh.map((p) => p.id));
+                return {
+                  products: [
+                    ...s.products.filter(
+                      (p) => p.clientId !== clientId && !freshIds.has(p.id),
+                    ),
+                    ...fresh,
+                  ],
+                };
+              });
+            }
+          } catch (err) {
+            console.warn("completeMGMVAgreement: releitura de produtos falhou", err);
+          }
           return { ok: true, movedProducts: result.movedProducts };
         } catch (err) {
           console.error("completeMGMVAgreement failed", err);
