@@ -242,6 +242,7 @@ export function MGMVSection({
   const payMGMVInstallment = useStore((s) => s.payMGMVInstallment);
   const registerMGMVPartialPayment = useStore((s) => s.registerMGMVPartialPayment);
   const setMGMVAgreement = useStore((s) => s.setMGMVAgreement);
+  const completeMGMVAgreement = useStore((s) => s.completeMGMVAgreement);
   const applyAiReviewToAgreement = useStore((s) => s.applyAiReviewToAgreement);
   const [chip, setChip] = usePersistedState<MgmvChip>("mgmv.chip", "todos");
   const [search, setSearch] = usePersistedState<string>("mgmv.search", "");
@@ -1170,10 +1171,6 @@ export function MGMVSection({
       )}
       </>
       </Card>
-      {(() => {
-        if (!aiTarget) return null;
-        return null;
-      })()}
       {(() => {
         if (!completeTarget) return null;
         const row = rows.find((r) => r.client.id === completeTarget);
