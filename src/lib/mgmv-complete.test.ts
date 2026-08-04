@@ -147,4 +147,32 @@ describe("completeMGMVAgreement", () => {
     expect(calls.products[0]).toEqual(["p1", "p2"]);
     expect(calls.agreements).toEqual(["c1"]);
   });
+
+  it("bloqueia a conclusão quando os produtos MGMV ainda não foram carregados", () => {
+    const now = new Date().toISOString();
+    useStore.setState({
+      clients: [{
+        id: "c-sem-itens",
+        name: "Cliente MGMV",
+        phone: "11999999999",
+        clientType: "mgmv",
+        mgmv: {
+          startDate: now,
+          totalDebt: 100,
+          installments: [
+            { number: 1, total: 1, dueDate: now, value: 100, paid: true },
+          ],
+        },
+      }] as never,
+      products: [],
+    });
+
+    expect(useStore.getState().completeMGMVAgreement("c-sem-itens")).toEqual({
+      ok: false,
+      movedProducts: 0,
+    });
+    const client = useStore.getState().clients[0];
+    expect(client.clientType).toBe("mgmv");
+    expect(client.mgmv?.completedAt).toBeUndefined();
+  });
 });

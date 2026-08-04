@@ -288,6 +288,36 @@ export function MGMVSection({
   const [aiTarget, setAiTarget] = useState<string | null>(null);
   const [editingAgreement, setEditingAgreement] = useState<string | null>(null);
   const [completeTarget, setCompleteTarget] = useState<string | null>(null);
+  useEffect(() => {
+    if (!completeTarget) {
+      setCompletionProductsLoading(false);
+      return;
+    }
+    const alreadyLoaded = products.some(
+      (p) => p.clientId === completeTarget && p.financialStatus === "MGMV",
+    );
+    if (alreadyLoaded) {
+      setCompletionProductsLoading(false);
+      return;
+    }
+    let active = true;
+    setCompletionProductsLoading(true);
+    void ensureMGMVProductsLoaded(completeTarget)
+      .then((loaded) => {
+        if (active && loaded.length === 0) {
+          toast.error("Não foi possível carregar os produtos do MGMV. A conclusão foi bloqueada.");
+        }
+      })
+      .catch(() => {
+        if (active) toast.error("Falha ao carregar os produtos do MGMV.");
+      })
+      .finally(() => {
+        if (active) setCompletionProductsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [completeTarget, products, ensureMGMVProductsLoaded]);
   const [reprocessing, setReprocessing] = useState(false);
   // IDs dos clientes cujos acordos foram efetivamente atualizados no último
   // reprocesso. Enquanto essa lista existir, a seção MGMV mostra apenas
