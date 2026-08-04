@@ -12,6 +12,45 @@ import { formatBRL, type MGMVAgreement, type Product } from "@/lib/store";
 
 interface Props {
   open: boolean;
+}
+
+/**
+ * Faixa de aviso exibida quando todas as parcelas do acordo estão pagas e a
+ * quitação ainda não foi confirmada.
+ */
+export function MgmvFullyPaidBanner({
+  onReview,
+  onComplete,
+}: {
+  onReview: () => void;
+  onComplete: () => void;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs">
+      <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
+      <div className="flex-1 min-w-[200px]">
+        <div className="font-semibold text-emerald-700 dark:text-emerald-400">
+          Todas as parcelas foram pagas
+        </div>
+        <div className="text-muted-foreground">
+          Deseja incluir os produtos do MGMV como pagos em aberto e encerrar o
+          acordo? Se alguma parcela foi marcada por engano, revise antes.
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="outline" onClick={onReview}>
+          Revisar parcelas
+        </Button>
+        <Button size="sm" onClick={onComplete}>
+          Concluir MGMV
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface CompleteModalProps {
+  open: boolean;
   clientName: string;
   agreement: MGMVAgreement;
   /** Produtos atualmente incluídos no acordo (financialStatus === "MGMV"). */
@@ -35,7 +74,7 @@ export function MgmvCompleteModal({
   onClose,
   onReview,
   onConfirm,
-}: Props) {
+}: CompleteModalProps) {
   const paidCount = agreement.installments.filter((i) => i.paid).length;
   const paidValue = agreement.installments
     .filter((i) => i.paid)
