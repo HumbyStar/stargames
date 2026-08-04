@@ -726,8 +726,8 @@ export const useStore = create<State>()((set, get) => ({
             void flushUiStateNow();
           }
           set({
-            clients: snap.clients,
-            products: snap.products.map((p) =>
+            clients: keepOnPartial(snap.clients, get().clients, snap.partial),
+            products: keepOnPartial(snap.products, get().products, snap.partial).map((p) =>
               // Fix retroativo: produtos que já foram consolidados em MGMV
               // não devem permanecer com situation "Em Aberto" (causava dupla
               // cobrança e inflação em "Valores a Receber").
@@ -742,7 +742,7 @@ export const useStore = create<State>()((set, get) => ({
             hydrated: true,
             currentEnv: snap.env ?? "producao",
           });
-          envSnapshots.set(snap.env ?? "producao", snap);
+          if (!snap.partial) envSnapshots.set(snap.env ?? "producao", snap);
         })();
         await hydratePromise;
       },
@@ -761,10 +761,10 @@ export const useStore = create<State>()((set, get) => ({
             // Resposta de um ambiente que já não é o atual: descarta.
             if (token !== envToken) return;
             const env = snap.env ?? "producao";
-            envSnapshots.set(env, snap);
+            if (!snap.partial) envSnapshots.set(env, snap);
             set({
-              clients: snap.clients,
-              products: snap.products.map((p) =>
+              clients: keepOnPartial(snap.clients, get().clients, snap.partial),
+              products: keepOnPartial(snap.products, get().products, snap.partial).map((p) =>
                 p.financialStatus === "MGMV" && p.situation === "Em Aberto"
                   ? { ...p, situation: "Resolvido" as Situation }
                   : p,
