@@ -18,7 +18,7 @@ import { extractMGMVAgreementFromNotes } from "@/sections/import-section";
 import { reprocessMGMVFromNotes } from "@/lib/mgmv-reprocess";
 import { rebalanceAgreement, isAgreementFullyPaid } from "@/lib/mgmv-schedule";
 import { toast } from "sonner";
-import { X } from "lucide-react";
+import { CheckCircle2, X } from "lucide-react";
 import { Eye, EyeOff } from "lucide-react";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
@@ -362,6 +362,17 @@ export function MGMVSection({
     );
   }, [clients, lastUpdatedIds]);
 
+  const awaitingConfirmationCount = useMemo(
+    () =>
+      clients.filter(
+        (client) =>
+          client.mgmv &&
+          !client.mgmv.completedAt &&
+          isAgreementFullyPaid(client.mgmv),
+      ).length,
+    [clients],
+  );
+
   const stats = useMemo(() => {
     const ativos = rows.filter((r) => r.status === "Ativo").length;
     const atraso = rows.filter((r) => r.status === "Em atraso").length;
@@ -512,6 +523,18 @@ export function MGMVSection({
         description="Controle acordos MGMV, parcelas, vencimentos, saldos e clientes agrupados."
         actions={
           <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              disabled={awaitingConfirmationCount === 0}
+              onClick={() => {
+                setLastUpdatedIds(null);
+                applyCardFilter("quitados");
+              }}
+              title="Ver acordos quitados que ainda precisam de confirmação"
+            >
+              <CheckCircle2 className="mr-1.5 size-4" />
+              Ver quitados aguardando confirmação ({awaitingConfirmationCount})
+            </Button>
             {lastUpdatedIds && lastUpdatedIds.length > 0 && (
               <Button
                 variant="ghost"
