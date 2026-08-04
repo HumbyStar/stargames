@@ -84,7 +84,12 @@ export function MgmvCompleteModal({
   const paidCount = agreement.installments.filter((i) => i.paid).length;
   const paidValue = agreement.installments
     .filter((i) => i.paid)
-    .reduce((s, i) => s + (i.paidAmount ?? i.value ?? 0), 0);
+    .reduce(
+      (s, i) => s + (typeof i.paidAmount === "number" && i.paidAmount > 0
+        ? i.paidAmount
+        : i.value ?? 0),
+      0,
+    );
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -146,7 +151,11 @@ export function MgmvCompleteModal({
                     {i.paid ? ` · pago em ${formatDate(i.paidAt ?? i.dueDate)}` : ""}
                   </span>
                   <span className="w-20 text-right tabular-nums">
-                    {formatBRL(i.paidAmount ?? i.value ?? 0)}
+                    {formatBRL(
+                      typeof i.paidAmount === "number" && i.paidAmount > 0
+                        ? i.paidAmount
+                        : i.value ?? 0,
+                    )}
                   </span>
                   <span
                     className={

@@ -45,6 +45,36 @@ vi.mock("./db-sync", () => ({
 }));
 
 const { useStore } = await import("./store");
+const { isAgreementFullyPaid } = await import("./mgmv-schedule");
+
+describe("isAgreementFullyPaid", () => {
+  it("reconhece quitação de registros antigos com paidAmount zerado", () => {
+    expect(
+      isAgreementFullyPaid({
+        startDate: "2026-08-04T00:00:00.000Z",
+        totalDebt: 40,
+        installments: [
+          { number: 1, total: 3, dueDate: "2026-09-04", value: 13.33, paid: true, paidAmount: 13.33 },
+          { number: 2, total: 3, dueDate: "2026-09-04", value: 13.33, paid: true, paidAmount: 0 },
+          { number: 3, total: 3, dueDate: "2026-09-04", value: 13.33, paid: true, paidAmount: 0 },
+        ],
+      }),
+    ).toBe(true);
+  });
+
+  it("não reconhece quitação se alguma parcela continuar pendente", () => {
+    expect(
+      isAgreementFullyPaid({
+        startDate: "2026-08-04T00:00:00.000Z",
+        totalDebt: 40,
+        installments: [
+          { number: 1, total: 2, dueDate: "2026-09-04", value: 20, paid: true },
+          { number: 2, total: 2, dueDate: "2026-10-04", value: 20, paid: false },
+        ],
+      }),
+    ).toBe(false);
+  });
+});
 
 describe("completeMGMVAgreement", () => {
   beforeEach(() => {

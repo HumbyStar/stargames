@@ -183,18 +183,17 @@ export function rebalanceAgreement(
   };
 }
 /**
- * True quando TODAS as parcelas do acordo estão marcadas como pagas e o valor
- * pago cobre o total do acordo (tolerância de 1 centavo). Pagamentos parciais
- * em parcelas ainda pendentes NÃO contam como quitação.
+ * True quando TODAS as parcelas do acordo estão marcadas como pagas.
+ *
+ * Registros antigos podem guardar `paidAmount = 0` mesmo após a baixa integral
+ * da parcela. Por isso a confirmação de quitação usa o estado oficial `paid`
+ * de todas as parcelas, que também é a origem do saldo exibido pela interface.
  */
 export function isAgreementFullyPaid(agreement: MGMVAgreement | undefined | null): boolean {
   if (!agreement) return false;
   const list = agreement.installments ?? [];
   if (list.length === 0) return false;
-  if (list.some((i) => !i.paid)) return false;
-  const paid = list.reduce((s, i) => s + (i.paidAmount ?? i.value ?? 0), 0);
-  const total = agreement.totalDebt ?? 0;
-  return paid + 0.01 >= total;
+  return list.every((i) => i.paid);
 }
 
 /** Acordo quitado e já confirmado pelo usuário (saiu do programa MGMV). */
