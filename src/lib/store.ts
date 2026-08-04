@@ -685,6 +685,14 @@ const envSnapshots = new Map<AppEnv, DbSnapshot>();
 /** Token incrementado a cada troca de ambiente: descarta respostas antigas. */
 let envToken = 0;
 
+/**
+ * Leitura parcial (alguma tabela falhou, ex.: tempo limite): não apaga o que
+ * já está na tela — mantém as listas anteriores quando a nova veio vazia.
+ */
+function keepOnPartial<T>(next: T[], prev: T[], partial?: boolean): T[] {
+  return partial && next.length === 0 && prev.length > 0 ? prev : next;
+}
+
 export const RESET_VERSION_KEY = "import.resetVersion";
 export function getResetVersion(): string {
   return getUiValue<string>(RESET_VERSION_KEY, "");
