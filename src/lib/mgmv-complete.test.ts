@@ -5,38 +5,44 @@ const calls: { products: string[][]; agreements: string[] } = {
   agreements: [],
 };
 
-vi.mock("./db-sync", () => {
-  const noop = () => {};
-  const asyncNoop = async () => {};
-  return new Proxy(
-    {
-      dbUpsertProductsAsync: async (ps: { id: string }[]) => {
-        calls.products.push(ps.map((p) => p.id));
-      },
-      dbSyncAgreementForClientAsync: async (c: { id: string }) => {
-        calls.agreements.push(c.id);
-      },
-      loadSnapshot: async () => ({
-        clients: [],
-        products: [],
-        history: [],
-        settings: null,
-        env: "producao",
-      }),
-      resolveCurrentEnv: async () => "producao",
-      getUiValue: () => undefined,
-      dbFetchDiagnostics: asyncNoop,
-      migrateLocalStorageOnce: noop,
-      primeUiState: asyncNoop,
-    } as Record<string, unknown>,
-    {
-      get(target, prop: string) {
-        if (prop in target) return target[prop];
-        return prop.endsWith("Async") ? asyncNoop : noop;
-      },
-    },
-  );
-});
+vi.mock("./db-sync", () => ({
+  dbUpsertProductsAsync: async (ps: { id: string }[]) => {
+    calls.products.push(ps.map((p) => p.id));
+  },
+  dbSyncAgreementForClientAsync: async (c: { id: string }) => {
+    calls.agreements.push(c.id);
+  },
+  loadSnapshot: async () => ({ clients: [], products: [], history: [], settings: null, env: "producao" }),
+  resolveCurrentEnv: async () => "producao",
+  getUiValue: () => undefined,
+  dbFetchDiagnostics: async () => ({}),
+  migrateLocalStorageOnce: () => undefined,
+  primeUiState: async () => undefined,
+  dbDeleteAllClientsAsync: async () => undefined,
+  dbDeleteAllProductsAsync: async () => undefined,
+  dbDeleteAllMGMVAsync: async () => undefined,
+  dbDeleteAllTeamAsync: async () => undefined,
+  dbDeleteAllImportProgressAsync: async () => undefined,
+  clearImportRuntimeState: async () => undefined,
+  dbDeleteHistoryAllAsync: async () => undefined,
+  dbInsertHistory: async () => undefined,
+  dbUpsertClientsAsync: async () => undefined,
+  dbUpsertHistoryAsync: async () => undefined,
+  dbSaveSettings: async () => undefined,
+  flushUiStateNow: async () => undefined,
+  queueClientUpsert: async () => undefined,
+  queueProductUpsert: async () => undefined,
+  setUiValue: async () => undefined,
+  dbSyncAgreementForClient: async () => undefined,
+  dbInsertMgmvReviewAuditLog: async () => undefined,
+  dbSyncAgreementsBulkAsync: async () => undefined,
+  dbReassignProductsClientAsync: async () => undefined,
+  dbReassignAgreementClientAsync: async () => undefined,
+  dbDeleteClientsByIdsAsync: async () => undefined,
+  dbDeleteProductsByIdsAsync: async () => undefined,
+  suspendRealtimeRefresh: async () => undefined,
+  getCurrentUserInfo: async () => undefined,
+}));
 
 const { useStore } = await import("./store");
 
