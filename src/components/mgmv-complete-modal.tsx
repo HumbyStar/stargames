@@ -88,7 +88,14 @@ export function MgmvCompleteModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className={`max-w-lg ${contentClassName ?? ""}`}>
+      <DialogContent
+        className={`max-w-lg ${contentClassName ?? ""}`}
+        overlayClassName="z-[95]"
+        hideClose
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CheckCircle2 className="size-4 text-emerald-600" />
