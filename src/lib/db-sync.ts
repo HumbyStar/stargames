@@ -340,13 +340,28 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
     if (local) return { ...local, env: "producao" };
   }
   const envBefore = await resolveCurrentEnv();
+  let owner: string | null = null;
+  if (envBefore === "sandbox") {
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      owner = userRes.user?.id ?? null;
+    } catch {
+      owner = null;
+    }
+  }
+  const scope = { env: envBefore, owner };
   const [clientsRes, productsRes, historyRes, settingsRes, agreementsRes, installmentsRes] = await Promise.all([
-    fetchAllRows<Record<string, unknown>>("clients", "*"),
-    fetchAllRows<Record<string, unknown>>("products", "*"),
-    sb().from("import_history").select("*").order("date", { ascending: false }).limit(200),
+    fetchAllRows<Record<string, unknown>>("clients", "*", 1000, scope),
+    fetchAllRows<Record<string, unknown>>("products", "*", 1000, scope),
+    sb()
+      .from("import_history")
+      .select("*")
+      .eq("env", envBefore)
+      .order("date", { ascending: false })
+      .limit(200),
     sb().from("app_settings").select("*").eq("id", "default").maybeSingle(),
-    fetchAllRows<Record<string, unknown>>("mgmv_agreements", "*"),
-    fetchAllRows<Record<string, unknown>>("mgmv_installments", "*"),
+    fetchAllRows<Record<string, unknown>>("mgmv_agreements", "*", 1000, scope),
+    fetchAllRows<Record<string, unknown>>("mgmv_installments", "*", 1000, scope),
   ]);
   if (clientsRes.error) logErr("loadClients", clientsRes.error);
   if (productsRes.error) logErr("loadProducts", productsRes.error);
@@ -356,6 +371,12 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
   if (installmentsRes.error) logErr("loadInstallments", installmentsRes.error);
 
   const envAfter = await resolveCurrentEnv();
+  const partial = !!(
+    clientsRes.error ||
+    productsRes.error ||
+    agreementsRes.error ||
+    installmentsRes.error
+  );
 
   const snapshot = buildSnapshotFromRows({
     clients: (clientsRes.data ?? []) as Record<string, unknown>[],
@@ -369,7 +390,7 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
   // Se o ambiente mudou no meio da leitura, os dados são de um ambiente
   // que já não é o atual: relê uma única vez para não misturar snapshots.
   if (envBefore !== envAfter) return loadSnapshot();
-  return { ...snapshot, env: envAfter };
+  return { ...snapshot, env: envAfter, partial };
 }
 
 /**
