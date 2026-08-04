@@ -669,6 +669,7 @@ export function MGMVSection({
                   );
                 const editing = mgmvEdit.isEditing(r.client.id);
                 const draft = mgmvEdit.draftValues;
+                const fullyPaid = isAgreementFullyPaid(r.agreement);
                 const tagVariant: "danger" | "warning" | "success" | "primary" | "neutral" =
                   r.status === "Em atraso"
                     ? "danger"
