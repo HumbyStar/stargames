@@ -1091,38 +1091,12 @@ export function MGMVSection({
                               <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
                                 Produtos incluídos ({productsOfClient.length})
                               </div>
-                              <div className="space-y-1 text-xs">
-                                {productsOfClient.length === 0 && (
-                                  <p className="text-muted-foreground">
-                                    Nenhum produto vinculado.
-                                  </p>
-                                )}
-                                {productsOfClient.map((p) => (
-                                  <div
-                                    key={p.id}
-                                    className={cn(
-                                      "flex items-center justify-between rounded-md border border-border/60 px-2 py-1",
-                                      productStatusTone(p) || "bg-card",
-                                    )}
-                                  >
-                                    <span className="inline-flex min-w-0 items-center truncate font-medium">
-                                      {p.name}
-                                      {(() => {
-                                        const info = nfProductMap.get(p.id);
-                                        return info ? (
-                                          <NfEmittedBadge
-                                            count={info.count}
-                                            lastAt={info.lastAt}
-                                          />
-                                        ) : null;
-                                      })()}
-                                    </span>
-                                    <span className="text-muted-foreground">{p.platform}</span>
-                                    <span>{formatBRL(p.totalValue)}</span>
-                                    <Tag variant="primary">Incluído no MGMV</Tag>
-                                  </div>
-                                ))}
-                              </div>
+                              <MgmvProductsPanel
+                                client={r.client}
+                                products={productsOfClient}
+                                nfProductMap={nfProductMap}
+                                onNfSaved={() => setNfRefreshKey((k) => k + 1)}
+                              />
                               {r.client.notes && (
                                 <div className="mt-4">
                                   <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
