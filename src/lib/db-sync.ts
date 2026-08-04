@@ -218,20 +218,36 @@ export async function fetchAllRows<T = Record<string, unknown>>(
   table: "clients" | "products" | "mgmv_agreements" | "mgmv_installments",
   columns = "*",
   pageSize = 1000,
+  opts?: { env?: AppEnv; owner?: string | null },
 ): Promise<FetchAllPage<T>> {
   const out: T[] = [];
   let from = 0;
+  let size = pageSize;
+  let retries = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const res = await sb()
-      .from(table)
-      .select(columns)
-      .range(from, from + pageSize - 1);
-    if (res.error) return { data: null, error: res.error };
+    // Filtrar por ambiente no banco (em vez de deixar tudo para a RLS) evita
+    // varredura da tabela inteira — era o que estourava o tempo limite.
+    let q: any = sb().from(table).select(columns);
+    if (opts?.env) {
+      q = q.eq("env", opts.env);
+      if (opts.env === "sandbox" && opts.owner) q = q.eq("sandbox_owner", opts.owner);
+    }
+    const res = await q.range(from, from + size - 1);
+    if (res.error) {
+      const code = (res.error as { code?: string } | null)?.code;
+      // Tempo limite: tenta novamente com páginas menores antes de desistir.
+      if (code === "57014" && retries < 3 && size > 125) {
+        retries += 1;
+        size = Math.max(125, Math.floor(size / 2));
+        continue;
+      }
+      return { data: null, error: res.error };
+    }
     const rows = (res.data ?? []) as T[];
     out.push(...rows);
-    if (rows.length < pageSize) break;
-    from += pageSize;
+    if (rows.length < size) break;
+    from += size;
   }
   return { data: out, error: null };
 }
@@ -246,6 +262,8 @@ export interface DbSnapshot {
   uiState: Record<string, unknown>;
   /** Ambiente ao qual estes dados pertencem (produção ou modo teste). */
   env?: AppEnv;
+  /** Alguma tabela falhou na leitura: o snapshot está incompleto. */
+  partial?: boolean;
 }
 
 export type AppEnv = "producao" | "sandbox";
