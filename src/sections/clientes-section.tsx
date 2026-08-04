@@ -54,6 +54,8 @@ import {
   MgmvFullyPaidBanner,
 } from "@/components/mgmv-complete-modal";
 import { isAgreementFullyPaid } from "@/lib/mgmv-schedule";
+import { MgmvProductsPanel } from "@/components/mgmv-products-panel";
+import { ProductBulkActionsBar } from "@/components/product-bulk-actions";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { CustomerDataModal } from "@/components/customer-data-modal";
 import { isFichaComplete } from "@/lib/ficha-parse";
@@ -1909,102 +1911,41 @@ function ClientDrawer({
             </span>
           )}
         </div>
-        {selectedCount > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2">
-            <span className="text-sm font-medium">
-              {selectedCount} selecionado(s)
-            </span>
-            {selectedDuplicates.length > 0 && (
-              <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
-                {selectedDuplicates.length} já {selectedDuplicates.length > 1 ? "têm" : "tem"} NF
-              </span>
-            )}
-            <div className="ml-auto flex flex-wrap gap-1.5">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={bulkCopy}
-                title="Copiar produto - plataforma - total"
-              >
-                <Copy className="mr-1 h-3.5 w-3.5" />
-                Copiar
-              </Button>
-              <Button size="sm" variant="outline" onClick={bulkMarkPaid}>
-                Pago
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={bulkAddToMgmv}
-                disabled={!client.mgmv}
-                title={
-                  client.mgmv
-                    ? "Adicionar produtos selecionados ao acordo MGMV"
-                    : "Cliente sem acordo MGMV ativo"
-                }
-              >
-                Adicionar ao acordo
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  bulkChangeSituation(
-                    "Enviado",
-                    `Marcar ${selectedCount} produto(s) selecionado(s) como Enviado?`,
-                  )
-                }
-              >
-                Enviado
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  bulkChangeSituation(
-                    "Retirar",
-                    `Marcar ${selectedCount} produto(s) selecionado(s) para retirada?\n\nEles continuam vinculados ao cliente, mas ficam pendentes de retirada.`,
-                  )
-                }
-              >
-                Retirar
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  bulkChangeSituation(
-                    "Removido",
-                    `Marcar ${selectedCount} produto(s) selecionado(s) como Removido?\n\nEles saem da lista ativa do cliente.`,
-                  )
-                }
-              >
-                Removido
-              </Button>
-              <Button size="sm" variant="ghost" onClick={clearSelection}>
-                Limpar
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                disabled={deletingProducts}
-                onClick={() => void bulkDelete()}
-                title="Excluir definitivamente os produtos selecionados (ex.: item duplicado importado por engano)"
-              >
-                {deletingProducts ? "Excluindo..." : "Excluir"}
-              </Button>
-              <Button
-                size="sm"
-                variant="default"
-                onClick={handleGerarNf}
-                title="Classifica NCM via IA e gera texto pronto para o contador"
-              >
-                <Sparkles className="mr-1 h-3.5 w-3.5" />
-                Gerar Formato NF
-              </Button>
-            </div>
-          </div>
-        )}
+        <ProductBulkActionsBar
+          selectedCount={selectedCount}
+          duplicateCount={selectedDuplicates.length}
+          deleting={deletingProducts}
+          onCopy={() => void bulkCopy()}
+          onMarkPaid={bulkMarkPaid}
+          onAddToMgmv={bulkAddToMgmv}
+          addToMgmvDisabled={!client.mgmv}
+          addToMgmvTitle={
+            client.mgmv
+              ? "Adicionar produtos selecionados ao acordo MGMV"
+              : "Cliente sem acordo MGMV ativo"
+          }
+          onEnviado={() =>
+            bulkChangeSituation(
+              "Enviado",
+              `Marcar ${selectedCount} produto(s) selecionado(s) como Enviado?`,
+            )
+          }
+          onRetirar={() =>
+            bulkChangeSituation(
+              "Retirar",
+              `Marcar ${selectedCount} produto(s) selecionado(s) para retirada?\n\nEles continuam vinculados ao cliente, mas ficam pendentes de retirada.`,
+            )
+          }
+          onRemovido={() =>
+            bulkChangeSituation(
+              "Removido",
+              `Marcar ${selectedCount} produto(s) selecionado(s) como Removido?\n\nEles saem da lista ativa do cliente.`,
+            )
+          }
+          onClear={clearSelection}
+          onDelete={() => void bulkDelete()}
+          onGerarNf={handleGerarNf}
+        />
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
