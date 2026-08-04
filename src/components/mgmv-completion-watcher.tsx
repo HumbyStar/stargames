@@ -19,29 +19,20 @@ export function MgmvCompletionWatcher() {
   const completeMGMVAgreement = useStore((s) => s.completeMGMVAgreement);
   const openClient = useStore((s) => s.openClient);
   const [targetId, setTargetId] = useState<string | null>(null);
-  /** Estado anterior "estava totalmente pago?" por cliente. */
-  const prevPaid = useRef<Map<string, boolean>>(new Map());
   /** Acordos já sinalizados nesta sessão (evita reabrir em loop). */
   const notified = useRef<Set<string>>(new Set());
-  const initialized = useRef(false);
 
   useEffect(() => {
-    const next = new Map<string, boolean>();
     let toOpen: string | null = null;
     for (const c of clients) {
       if (!c.mgmv) continue;
       const fullyPaid = !c.mgmv.completedAt && isAgreementFullyPaid(c.mgmv);
-      next.set(c.id, fullyPaid);
-      if (!initialized.current) continue;
-      const was = prevPaid.current.get(c.id) ?? false;
-      if (fullyPaid && !was && !notified.current.has(c.id)) {
+      if (fullyPaid && !notified.current.has(c.id)) {
         notified.current.add(c.id);
         toOpen = toOpen ?? c.id;
       }
       if (!fullyPaid) notified.current.delete(c.id);
     }
-    prevPaid.current = next;
-    initialized.current = true;
     if (toOpen) setTargetId(toOpen);
   }, [clients]);
 
@@ -56,6 +47,7 @@ export function MgmvCompletionWatcher() {
   return (
     <MgmvCompleteModal
       open
+      contentClassName="z-[80]"
       clientName={client.name}
       agreement={client.mgmv}
       products={mgmvProducts}

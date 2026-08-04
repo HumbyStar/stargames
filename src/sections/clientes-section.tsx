@@ -54,7 +54,6 @@ import {
   MgmvFullyPaidBanner,
 } from "@/components/mgmv-complete-modal";
 import { isAgreementFullyPaid } from "@/lib/mgmv-schedule";
-import { MgmvProductsPanel } from "@/components/mgmv-products-panel";
 import { ProductBulkActionsBar } from "@/components/product-bulk-actions";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { CustomerDataModal } from "@/components/customer-data-modal";
@@ -1247,6 +1246,17 @@ function ClientDrawer({
   useEffect(() => {
     writeStoredSituationFilter([...situationFilter]);
   }, [situationFilter]);
+  // Ao concluir o MGMV, os itens viram individuais (Pago / Em Aberto). Se
+  // houver filtro salvo escondendo esses estados, limpamos para que os
+  // produtos recém-convertidos apareçam na hora no histórico individual.
+  const completedAt = client.mgmv?.completedAt;
+  useEffect(() => {
+    if (!completedAt) return;
+    setStatusFilter((prev) => (prev.size === 0 || prev.has("Pago") ? prev : new Set()));
+    setSituationFilter((prev) =>
+      prev.size === 0 || prev.has("Em Aberto") ? prev : new Set(),
+    );
+  }, [completedAt]);
   const toggleSituationFilter = (s: Situation) => {
     setSituationFilter((prev) => {
       const next = new Set(prev);
@@ -1821,14 +1831,6 @@ function ClientDrawer({
                     ))}
                   </tbody>
                 </table>
-              </div>
-              <div className="mt-3">
-                <MgmvProductsPanel
-                  client={client}
-                  products={mgmvProducts}
-                  nfProductMap={nfProductMap}
-                  onNfSaved={() => void refreshNfInvoices()}
-                />
               </div>
             </div>
           )}

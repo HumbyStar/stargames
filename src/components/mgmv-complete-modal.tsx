@@ -62,6 +62,8 @@ interface CompleteModalProps {
   /** Abre o editor de parcelas para revisão. */
   onReview: () => void;
   onConfirm: () => void;
+  /** Classe extra do conteúdo (usada para elevar o z-index sobre a ficha). */
+  contentClassName?: string;
 }
 
 /**
@@ -77,6 +79,7 @@ export function MgmvCompleteModal({
   onClose,
   onReview,
   onConfirm,
+  contentClassName,
 }: CompleteModalProps) {
   const paidCount = agreement.installments.filter((i) => i.paid).length;
   const paidValue = agreement.installments
@@ -85,7 +88,7 @@ export function MgmvCompleteModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className={`max-w-lg ${contentClassName ?? ""}`}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CheckCircle2 className="size-4 text-emerald-600" />
