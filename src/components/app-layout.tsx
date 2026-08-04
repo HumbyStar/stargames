@@ -1518,6 +1518,7 @@ function GlobalModals() {
       <TutorialRunner />
       <ConciergeModal />
       <OfflineNoticeModal />
+      <MgmvCompletionWatcher />
     </>
   );
 }
