@@ -362,6 +362,17 @@ export function MGMVSection({
     );
   }, [clients, lastUpdatedIds]);
 
+  const awaitingConfirmationCount = useMemo(
+    () =>
+      clients.filter(
+        (client) =>
+          client.mgmv &&
+          !client.mgmv.completedAt &&
+          isAgreementFullyPaid(client.mgmv),
+      ).length,
+    [clients],
+  );
+
   const stats = useMemo(() => {
     const ativos = rows.filter((r) => r.status === "Ativo").length;
     const atraso = rows.filter((r) => r.status === "Em atraso").length;
@@ -514,12 +525,15 @@ export function MGMVSection({
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
-              disabled={stats.quitados === 0}
-              onClick={() => applyCardFilter("quitados")}
+              disabled={awaitingConfirmationCount === 0}
+              onClick={() => {
+                setLastUpdatedIds(null);
+                applyCardFilter("quitados");
+              }}
               title="Ver acordos quitados que ainda precisam de confirmação"
             >
               <CheckCircle2 className="mr-1.5 size-4" />
-              Ver quitados aguardando confirmação ({stats.quitados})
+              Ver quitados aguardando confirmação ({awaitingConfirmationCount})
             </Button>
             {lastUpdatedIds && lastUpdatedIds.length > 0 && (
               <Button
