@@ -1590,6 +1590,14 @@ function ClientDrawer({
             />
           ) : (
           <>
+          {client.mgmv &&
+            !client.mgmv.completedAt &&
+            isAgreementFullyPaid(client.mgmv) && (
+              <MgmvFullyPaidBanner
+                onReview={() => setMgmvEditOpen(true)}
+                onComplete={() => setMgmvCompleteOpen(true)}
+              />
+            )}
           <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
             <MetricCard
               label="Valor total do acordo"
