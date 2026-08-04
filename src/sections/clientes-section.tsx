@@ -209,7 +209,9 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     }
     return clients
       .filter((c) => {
-        const isMgmv = c.clientType === "mgmv" || (!!c.mgmv && c.mgmv.installments.length > 0);
+        const isMgmv =
+          !c.mgmv?.completedAt &&
+          (c.clientType === "mgmv" || (!!c.mgmv && c.mgmv.installments.length > 0));
         if (!isMgmv) return true;
         // Cliente MGMV só aparece em Clientes se também tiver produtos
         // fora do acordo MGMV (comuns). MGMV puro fica só na seção MGMV.
@@ -1327,7 +1329,10 @@ function ClientDrawer({
     dueDate: string;
     notes: string;
   }>();
-  const mgmv = getMGMVDisplay(client);
+  // Acordo concluído (quitado e confirmado) deixa de contar como MGMV ativo:
+  // o cliente volta a ser tratado como comum até criar um novo acordo.
+  const activeAgreement = client.mgmv && !client.mgmv.completedAt ? client.mgmv : null;
+  const mgmv = activeAgreement ? getMGMVDisplay(client) : null;
   // Ordena produtos do mais recente para o mais antigo (por data de
   // cadastro), tanto individuais quanto os incluídos no acordo MGMV.
   const byRegisterDateDesc = (a: Product, b: Product) =>
@@ -1545,7 +1550,7 @@ function ClientDrawer({
         >
           Notas Fiscais
         </Button>
-        {!client.mgmv && products.length > 0 && (
+        {!activeAgreement && products.length > 0 && (
           <Button size="sm" variant="secondary" onClick={() => setMgmvCreateOpen(true)}>
             Criar acordo MGMV
           </Button>
@@ -1578,8 +1583,8 @@ function ClientDrawer({
         <MetricCard label="Produtos" value={products.length} />
         <MetricCard
           label="MGMV"
-          value={client.mgmv ? "Ativo" : "Inativo"}
-          status={client.mgmv ? "primary" : "default"}
+          value={activeAgreement ? "Ativo" : "Inativo"}
+          status={activeAgreement ? "primary" : "default"}
         />
       </div>
 
@@ -1950,9 +1955,9 @@ function ClientDrawer({
           onCopy={() => void bulkCopy()}
           onMarkPaid={bulkMarkPaid}
           onAddToMgmv={bulkAddToMgmv}
-          addToMgmvDisabled={!client.mgmv}
+          addToMgmvDisabled={!activeAgreement}
           addToMgmvTitle={
-            client.mgmv
+            activeAgreement
               ? "Adicionar produtos selecionados ao acordo MGMV"
               : "Cliente sem acordo MGMV ativo"
           }
