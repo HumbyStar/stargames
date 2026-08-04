@@ -446,12 +446,6 @@ export async function loadProductsForClient(clientId: string): Promise<Product[]
   return ((data ?? []) as DbProductRow[]).map(rowToProduct);
 }
 
-interface CompleteMGMVResultUnused {
-  ok: boolean;
-  movedProducts: number;
-  completedAt?: string;
-}
-
 /** Conclui o acordo e converte seus produtos em uma única transação no banco. */
 export async function dbCompleteMGMVAgreementAsync(
   clientId: string,
