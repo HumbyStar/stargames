@@ -286,8 +286,12 @@ export interface MGMVAgreement {
   aiConfidence?: number;
   /** Resultado bruto retornado pela IA (preservado para auditoria). */
   aiReviewRawResult?: unknown;
+  /**
+   * ISO da confirmação de quitação do acordo. Quando presente, o cliente saiu
+   * do programa MGMV e os produtos viraram individuais.
+   */
+  completedAt?: string;
 }
-
 
 export interface Product {
   id: string;
