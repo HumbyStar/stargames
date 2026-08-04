@@ -47,7 +47,7 @@ export function MgmvCompletionWatcher() {
   return (
     <MgmvCompleteModal
       open
-      contentClassName="z-[80]"
+      contentClassName="z-[100]"
       clientName={client.name}
       agreement={client.mgmv}
       products={mgmvProducts}

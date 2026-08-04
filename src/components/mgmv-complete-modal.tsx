@@ -94,7 +94,7 @@ export function MgmvCompleteModal({
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent
-        className={`max-w-lg ${contentClassName ?? ""}`}
+        className={`z-[100] max-w-lg ${contentClassName ?? ""}`}
         overlayClassName="z-[95]"
         hideClose
         onEscapeKeyDown={(e) => e.preventDefault()}
