@@ -1955,9 +1955,9 @@ function ClientDrawer({
           onCopy={() => void bulkCopy()}
           onMarkPaid={bulkMarkPaid}
           onAddToMgmv={bulkAddToMgmv}
-          addToMgmvDisabled={!client.mgmv}
+          addToMgmvDisabled={!activeAgreement}
           addToMgmvTitle={
-            client.mgmv
+            activeAgreement
               ? "Adicionar produtos selecionados ao acordo MGMV"
               : "Cliente sem acordo MGMV ativo"
           }
