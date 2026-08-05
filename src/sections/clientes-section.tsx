@@ -2544,26 +2544,30 @@ function ProductModal({
     if (computed !== financialStatus) setFinancialStatus(computed);
   }, [totalValue, paidValue, financialStatus]);
 
+  // Ao abrir o modal, reinicia o formulário e trava o cliente vinculado
+  // no cliente de origem (ficha aberta) ou no dono do produto editado.
+  const lockedClientId = state.clientId ?? state.product?.clientId ?? null;
+  useEffect(() => {
+    if (!state.open) return;
+    const p = state.product;
+    setClientId(lockedClientId ?? clients[0]?.id ?? "");
+    setName(p?.name ?? "");
+    setPlatform(p?.platform ?? "PS5");
+    setTotalValue(p?.totalValue ?? 0);
+    setPaidValue(p?.paidValue ?? 0);
+    setRegisterDate((p?.registerDate ?? new Date().toISOString()).slice(0, 10));
+    setDueDate((p?.dueDate ?? new Date(Date.now() + 30 * 86400000).toISOString()).slice(0, 10));
+    setFinancialStatus(p?.financialStatus ?? "Reserva");
+    setSituation(p?.situation ?? "Em Aberto");
+    setNotes(p?.notes ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.open, state.product, lockedClientId]);
+
   return (
     <Dialog
       open={state.open}
       onOpenChange={(o) => {
         if (!o) onClose();
-        else {
-          const p = state.product;
-          setClientId(state.clientId ?? clients[0]?.id ?? "");
-          setName(p?.name ?? "");
-          setPlatform(p?.platform ?? "PS5");
-          setTotalValue(p?.totalValue ?? 0);
-          setPaidValue(p?.paidValue ?? 0);
-          setRegisterDate((p?.registerDate ?? new Date().toISOString()).slice(0, 10));
-          setDueDate(
-            (p?.dueDate ?? new Date(Date.now() + 30 * 86400000).toISOString()).slice(0, 10),
-          );
-          setFinancialStatus(p?.financialStatus ?? "Reserva");
-          setSituation(p?.situation ?? "Em Aberto");
-          setNotes(p?.notes ?? "");
-        }
       }}
     >
  <DialogContent>
@@ -2575,17 +2579,25 @@ function ProductModal({
         <div className="grid gap-3 md:grid-cols-2">
           <div className="grid gap-1.5 md:col-span-2">
             <Label>Cliente vinculado</Label>
-            <select
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-            >
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} — {c.phone}
-                </option>
-              ))}
-            </select>
+            {lockedClientId ? (
+              <Input
+                value={client ? `${client.name} — ${client.phone}` : ""}
+                disabled
+                readOnly
+              />
+            ) : (
+              <select
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              >
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} — {c.phone}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
           <div className="grid gap-1.5">
             <Label>Nome do produto</Label>
