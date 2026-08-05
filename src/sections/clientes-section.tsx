@@ -145,6 +145,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   );
   const [periodFilter, setPeriodFilter] = usePersistedState<string>("clientes.period", "Todos");
   const [folderFilter, setFolderFilter] = usePersistedState<string>("clientes.folder", "Todas");
+  const platformOptions = usePlatformOptions();
   const compact = true;
   const [showFilters, setShowFilters] = useState(true);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
