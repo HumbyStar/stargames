@@ -529,6 +529,8 @@ export function ListImportModal({
     try {
       let clientsCreated = 0;
       let productsCreated = 0;
+      const createdClientIds: string[] = [];
+      const createdProductIds: string[] = [];
       let errorEntries = 0;
       const cache = new Map<string, string>();
       for (let i = 0; i < rowsToSave.length; i++) {
