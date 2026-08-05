@@ -1622,7 +1622,17 @@ export function suspendRealtimeRefresh(): () => void {
  * eventos continuam reiniciando o timer curto, mas garantimos no máximo um
  * refresh a cada `MAX_WAIT_MS`, e nunca um por evento.
  */
-export function subscribeRealtimeSnapshot(onRefresh: () => void): () => void {
+export interface RealtimeRowEvent {
+  table: string;
+  eventType: "INSERT" | "UPDATE" | "DELETE";
+  newRow: Record<string, unknown> | null;
+  oldRow: Record<string, unknown> | null;
+}
+
+export function subscribeRealtimeSnapshot(
+  onRefresh: () => void,
+  onRow?: (e: RealtimeRowEvent) => void,
+): () => void {
   // No Modo Local não há conexão com o banco na nuvem.
   if (isLocalMode()) return () => {};
   let timer: number | null = null;
@@ -1646,7 +1656,27 @@ export function subscribeRealtimeSnapshot(onRefresh: () => void): () => void {
     }
     onRefresh();
   };
-  const schedule = () => {
+  const schedule = (payload?: unknown) => {
+    if (onRow && payload && typeof payload === "object") {
+      const p = payload as {
+        table?: string;
+        eventType?: string;
+        new?: Record<string, unknown>;
+        old?: Record<string, unknown>;
+      };
+      if (p.table && p.eventType) {
+        try {
+          onRow({
+            table: p.table,
+            eventType: p.eventType as RealtimeRowEvent["eventType"],
+            newRow: p.new && Object.keys(p.new).length > 0 ? p.new : null,
+            oldRow: p.old && Object.keys(p.old).length > 0 ? p.old : null,
+          });
+        } catch {
+          /* aplicação pontual é best-effort; a releitura cobre o resto */
+        }
+      }
+    }
     const now = Date.now();
     if (!firstEventAt) firstEventAt = now;
     if (now - firstEventAt >= MAX_WAIT_MS) {
