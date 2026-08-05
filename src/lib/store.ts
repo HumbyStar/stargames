@@ -991,6 +991,11 @@ export const useStore = create<State>()((set, get) => ({
         const prod = { ...normalizeProductDueDateForCreate(p), id: uid() };
         queueProductUpsert(prod);
         set((s) => ({ products: [...s.products, prod] }));
+        // Releitura direcionada (só deste cliente) em vez de recarregar a
+        // base inteira: confirma a linha no banco sem risco de tempo limite.
+        void get()
+          .refreshClientData(prod.clientId)
+          .catch(() => undefined);
         return prod;
       },
       updateProduct: (id, patch) =>
