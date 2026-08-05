@@ -915,6 +915,9 @@ export const useStore = create<State>()((set, get) => ({
         // Remove do estado local imediatamente: cliente, produtos vinculados,
         // acordo MGMV e a referência aberta. O banco cascateia produtos e
         // mgmv_agreements via FK ON DELETE CASCADE.
+        const prevClients = get().clients;
+        const prevProducts = get().products;
+        markLocalMutation("client", [id], "delete");
         set((s) => ({
           clients: s.clients.filter((c) => c.id !== id),
           products: s.products.filter((p) => p.clientId !== id),
@@ -923,6 +926,8 @@ export const useStore = create<State>()((set, get) => ({
         try {
           await dbDeleteClientsByIdsAsync([id]);
         } catch (err) {
+          clearLocalMutation("client", [id]);
+          set({ clients: prevClients, products: prevProducts });
           console.error("deleteClient failed", err);
           throw err;
         }
