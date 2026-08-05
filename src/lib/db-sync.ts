@@ -315,9 +315,9 @@ export async function fetchAllRows<T = Record<string, unknown>>(
   opts?: { env?: AppEnv; owner?: string | null },
 ): Promise<FetchAllPage<T>> {
   const out: T[] = [];
-  let from = 0;
   let size = pageSize;
   let retries = 0;
+  let lastId: string | null = null;
   // eslint-disable-next-line no-constant-condition
   while (true) {
     // Filtrar por ambiente no banco (em vez de deixar tudo para a RLS) evita
@@ -327,7 +327,13 @@ export async function fetchAllRows<T = Record<string, unknown>>(
       q = q.eq("env", opts.env);
       if (opts.env === "sandbox" && opts.owner) q = q.eq("sandbox_owner", opts.owner);
     }
-    const res = await q.range(from, from + size - 1);
+    // Paginação por chave: sem ordem estável, o Postgres pode repetir uma
+    // linha em duas páginas e pular outra (era o que fazia produto recém
+    // criado sumir da tela). Avançar por `id` também mantém o custo de
+    // cada página constante.
+    q = q.order("id", { ascending: true });
+    if (lastId !== null) q = q.gt("id", lastId);
+    const res = await q.limit(size);
     if (res.error) {
       const code = (res.error as { code?: string } | null)?.code;
       // Tempo limite: tenta novamente com páginas menores antes de desistir.
@@ -341,7 +347,9 @@ export async function fetchAllRows<T = Record<string, unknown>>(
     const rows = (res.data ?? []) as T[];
     out.push(...rows);
     if (rows.length < size) break;
-    from += size;
+    const tail = rows[rows.length - 1] as { id?: string } | undefined;
+    if (!tail?.id) break;
+    lastId = String(tail.id);
   }
   return { data: out, error: null };
 }
