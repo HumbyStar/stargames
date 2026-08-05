@@ -1260,10 +1260,11 @@ export async function dbSyncAgreementsBulkAsync(clients: Client[]): Promise<void
 // ============= Diagnostics =============
 
 export interface ImportDiagnostics {
-  clientsCount: number;
-  productsCount: number;
-  agreementsCount: number;
-  installmentsCount: number;
+  /** `null` = a contagem falhou (tempo limite/erro), não é "zero no banco". */
+  clientsCount: number | null;
+  productsCount: number | null;
+  agreementsCount: number | null;
+  installmentsCount: number | null;
   /** Clientes marcados como MGMV mas sem registro em mgmv_agreements. */
   mgmvClientsWithoutAgreement: number;
   /** Produtos com included_in_mgmv = true mas sem mgmv_agreement_id. */
