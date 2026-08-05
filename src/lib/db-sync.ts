@@ -541,6 +541,57 @@ export async function loadProductsForClient(clientId: string): Promise<Product[]
 }
 
 /** Conclui o acordo e converte seus produtos em uma única transação no banco. */
+
+/** Releitura direcionada de produtos por id (usada após import/edição). */
+export async function loadProductsByIds(ids: string[]): Promise<Product[]> {
+  if (ids.length === 0) return [];
+  const env = await resolveCurrentEnv();
+  const out: Product[] = [];
+  const CHUNK = 100;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    let query = sb()
+      .from("products")
+      .select("*")
+      .in("id", ids.slice(i, i + CHUNK))
+      .eq("env", env);
+    if (env === "sandbox") {
+      const { data: userRes } = await supabase.auth.getUser();
+      const owner = userRes.user?.id;
+      if (!owner) throw new Error("Usuário do modo teste não identificado.");
+      query = query.eq("sandbox_owner", owner);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    out.push(...((data ?? []) as DbProductRow[]).map(rowToProduct));
+  }
+  return out;
+}
+
+/** Releitura direcionada de clientes por id (usada após import). */
+export async function loadClientsByIds(ids: string[]): Promise<Client[]> {
+  if (ids.length === 0) return [];
+  const env = await resolveCurrentEnv();
+  const out: Client[] = [];
+  const CHUNK = 100;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    let query = sb()
+      .from("clients")
+      .select("*")
+      .in("id", ids.slice(i, i + CHUNK))
+      .eq("env", env);
+    if (env === "sandbox") {
+      const { data: userRes } = await supabase.auth.getUser();
+      const owner = userRes.user?.id;
+      if (!owner) throw new Error("Usuário do modo teste não identificado.");
+      query = query.eq("sandbox_owner", owner);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    out.push(...((data ?? []) as DbClientRow[]).map(rowToClient));
+  }
+  return out;
+}
+
 export async function dbCompleteMGMVAgreementAsync(
   clientId: string,
 ): Promise<CompleteMGMVResult> {
