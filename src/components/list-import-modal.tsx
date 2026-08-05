@@ -57,7 +57,7 @@ import {
 import { canonicalPhone } from "@/lib/list-import-parser";
 import { reviewListImportLine } from "@/lib/list-import-ai.functions";
 import { parseClientHtml } from "@/lib/html-client-import-parser";
-import { flushAllPendingUpserts } from "@/lib/db-sync";
+import { flushAllPendingUpserts, awaitPendingWrites } from "@/lib/db-sync";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ZipImportReview } from "@/components/zip-import-review";
 
