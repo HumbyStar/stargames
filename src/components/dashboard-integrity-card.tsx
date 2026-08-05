@@ -1,14 +1,21 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { useStore, type ImportDiagnostics } from "@/lib/store";
-import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+
+/** Intervalo da reconferência automática. */
+const AUTO_CHECK_MS = 60_000;
+/** Agrupa rajadas de eventos em tempo real antes de reconferir. */
+const REALTIME_DEBOUNCE_MS = 1_500;
 
 /**
- * Verifica integridade entre contadores locais do dashboard (state em memória)
- * e o que está no banco oficial (mesma fonte usada em Configurações).
- * Mostra alerta se divergir e oferece botão para recarregar o snapshot.
+ * Verifica integridade entre os contadores locais do dashboard (state em
+ * memória) e o banco oficial. Roda sozinha: ao montar, ao trocar de ambiente,
+ * a cada minuto, ao voltar o foco da aba e a cada evento em tempo real.
+ * Ao detectar divergência, recarrega o snapshot automaticamente (uma vez por
+ * divergência) e reconfere.
  */
 export function DashboardIntegrityCard() {
   const clients = useStore((s) => s.clients);
@@ -21,41 +28,104 @@ export function DashboardIntegrityCard() {
   const [diag, setDiag] = useState<ImportDiagnostics | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  // Evita laço: só recarregamos o snapshot uma vez por "assinatura" de
+  // divergência (mesmos números locais/banco não disparam de novo).
+  const autoFixedRef = useRef<string | null>(null);
+  const runningRef = useRef(false);
 
   const localMgmv = clients.filter((c) => c.mgmv).length;
 
-  async function check() {
-    setLoading(true);
-    try {
-      const d = await fetchDiagnostics();
-      setDiag(d);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const check = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (runningRef.current) return;
+      runningRef.current = true;
+      if (!opts?.silent) setLoading(true);
+      try {
+        const d = await fetchDiagnostics();
+        setDiag(d);
+        setLastCheckedAt(Date.now());
 
+        // Auto-correção: divergência real (contagem disponível) recarrega o
+        // snapshot sozinha e reconfere uma única vez.
+        const st = useStore.getState();
+        const pairs: Array<[number, number | null]> = [
+          [st.clients.length, d.clientsCount],
+          [st.products.length, d.productsCount],
+          [st.clients.filter((c) => c.mgmv).length, d.agreementsCount],
+        ];
+        const diverged = pairs.some(([local, db]) => db !== null && local !== db);
+        const signature = pairs.map(([l, db]) => `${l}/${db ?? "x"}`).join("|");
+        if (diverged && autoFixedRef.current !== signature && !st.envSyncing) {
+          autoFixedRef.current = signature;
+          setRefreshing(true);
+          try {
+            await refreshSnapshot();
+            const again = await fetchDiagnostics();
+            setDiag(again);
+            setLastCheckedAt(Date.now());
+          } finally {
+            setRefreshing(false);
+          }
+        } else if (!diverged) {
+          autoFixedRef.current = null;
+        }
+      } catch {
+        // Falha de rede: mantém o último resultado e tenta de novo no ciclo.
+      } finally {
+        setLoading(false);
+        runningRef.current = false;
+      }
+    },
+    [fetchDiagnostics, refreshSnapshot],
+  );
+
+  // Ao montar e a cada troca de ambiente.
   useEffect(() => {
+    autoFixedRef.current = null;
     void check();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentEnv]);
+  }, [currentEnv, check]);
 
-  async function handleRefresh() {
-    setRefreshing(true);
-    try {
-      await refreshSnapshot();
-      const d = await fetchDiagnostics();
-      setDiag(d);
-      toast.success(
-        `Snapshot recarregado (${d.env === "sandbox" ? "Modo Teste" : "Produção"}).`,
-      );
-    } catch (err) {
-      toast.error("Falha ao recarregar snapshot.", {
-        description: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setRefreshing(false);
-    }
-  }
+  // Ciclo automático + foco da aba.
+  useEffect(() => {
+    const id = window.setInterval(() => void check({ silent: true }), AUTO_CHECK_MS);
+    const onFocus = () => {
+      if (document.visibilityState === "visible") void check({ silent: true });
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [check]);
+
+  // Reconferência em tempo real (agrupando rajadas de eventos).
+  useEffect(() => {
+    let timer: number | undefined;
+    const schedule = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => void check({ silent: true }), REALTIME_DEBOUNCE_MS);
+    };
+    const channel = supabase
+      .channel("dashboard-integrity")
+      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, schedule)
+      .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, schedule)
+      .on("postgres_changes", { event: "*", schema: "public", table: "mgmv_agreements" }, schedule)
+      .subscribe();
+    return () => {
+      window.clearTimeout(timer);
+      void supabase.removeChannel(channel);
+    };
+  }, [check]);
+
+  // Relógio do rótulo "verificado há X".
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 10_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const envLabel = currentEnv === "sandbox" ? "Modo Teste" : "Produção";
   const envMismatch = diag !== null && diag.env !== currentEnv;
@@ -76,22 +146,37 @@ export function DashboardIntegrityCard() {
   const allMatch =
     diag !== null && !syncing && divergences.length === 0 && unavailable.length === 0;
 
+  const agoLabel = (() => {
+    if (!lastCheckedAt) return null;
+    const secs = Math.max(0, Math.round((now - lastCheckedAt) / 1000));
+    if (secs < 15) return "agora mesmo";
+    if (secs < 60) return `há ${secs}s`;
+    return `há ${Math.round(secs / 60)} min`;
+  })();
+
   return (
     <Card title={`Verificação de integridade — ${envLabel}`}>
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm">
-            {loading || syncing ? (
+            {loading || refreshing || syncing ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 <span className="text-muted-foreground">
-                  {syncing ? "Sincronizando ambiente…" : "Consultando banco…"}
+                  {syncing
+                    ? "Sincronizando ambiente…"
+                    : refreshing
+                      ? "Atualizando snapshot automaticamente…"
+                      : "Consultando banco…"}
                 </span>
               </>
             ) : allMatch ? (
               <>
                 <CheckCircle2 className="h-4 w-4 text-[color:var(--success)]" />
-                <span>Dashboard sincronizado com o banco ({envLabel}).</span>
+                <span>
+                  Dashboard sincronizado com o banco ({envLabel})
+                  {agoLabel ? ` — verificado ${agoLabel}` : ""}.
+                </span>
               </>
             ) : diag ? (
               <>
@@ -104,7 +189,7 @@ export function DashboardIntegrityCard() {
                 />
                 <span className={divergences.length > 0 ? "text-destructive" : "text-muted-foreground"}>
                   {divergences.length > 0
-                    ? `${divergences.length} divergência(s) detectada(s) — recarregue o snapshot.`
+                    ? `${divergences.length} divergência(s) — reconciliando automaticamente…`
                     : "Não foi possível verificar alguma contagem no banco agora."}
                 </span>
               </>
@@ -113,17 +198,21 @@ export function DashboardIntegrityCard() {
             )}
           </div>
           <Button
-            size="sm"
-            variant={allMatch ? "outline" : "default"}
-            onClick={handleRefresh}
+            size="icon"
+            variant="ghost"
+            title="Reconferir agora"
+            aria-label="Reconferir agora"
+            onClick={() => {
+              autoFixedRef.current = null;
+              void check();
+            }}
             disabled={refreshing || loading || envSyncing}
           >
-            {refreshing ? (
+            {refreshing || loading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <RefreshCw className="h-4 w-4" />
             )}
-            Atualizar snapshot
           </Button>
         </div>
 
