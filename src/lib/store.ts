@@ -33,6 +33,17 @@ import {
   dbDeleteClientsByIdsAsync,
   dbDeleteProductsByIdsAsync,
 } from "./db-sync";
+import {
+  awaitPendingWrites,
+  reconcileWithLocalMutations,
+  clearLocalMutation,
+  markLocalMutation,
+  loadProductsByIds,
+  loadClientsByIds,
+  rowToClient,
+  rowToProduct,
+} from "./db-sync";
+import type { RealtimeRowEvent } from "./db-sync";
 import { suspendRealtimeRefresh } from "./db-sync";
 import { getCurrentUserInfo } from "./db-sync";
 import type { ImportDiagnostics } from "./db-sync";
