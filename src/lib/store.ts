@@ -779,14 +779,27 @@ export const useStore = create<State>()((set, get) => ({
         refreshInFlight = (async () => {
           const token = envToken;
           try {
+            // Barreira: nenhuma leitura corre na frente das escritas locais.
+            await awaitPendingWrites();
             const snap = await loadSnapshot();
             // Resposta de um ambiente que já não é o atual: descarta.
             if (token !== envToken) return;
             const env = snap.env ?? "producao";
             if (!snap.partial) envSnapshots.set(env, snap);
+            const prev = get();
+            const nextClients = reconcileWithLocalMutations(
+              "client",
+              keepOnPartial(snap.clients, prev.clients, snap.partial),
+              prev.clients,
+            );
+            const nextProducts = reconcileWithLocalMutations(
+              "product",
+              keepOnPartial(snap.products, prev.products, snap.partial),
+              prev.products,
+            );
             set({
-              clients: keepOnPartial(snap.clients, get().clients, snap.partial),
-              products: keepOnPartial(snap.products, get().products, snap.partial).map((p) =>
+              clients: nextClients,
+              products: nextProducts.map((p) =>
                 p.financialStatus === "MGMV" && p.situation === "Em Aberto"
                   ? { ...p, situation: "Resolvido" as Situation }
                   : p,
