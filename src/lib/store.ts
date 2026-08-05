@@ -419,6 +419,8 @@ export interface SystemPreferences {
   compactTables: boolean;
   showDashboardAlerts: boolean;
   theme: "light" | "dark" | "system";
+  /** Plataformas cadastradas manualmente pelo usuário. */
+  customPlatforms: string[];
 }
 
 export interface OperationalRules {
@@ -690,6 +692,7 @@ const defaultPreferences: SystemPreferences = {
   showDashboardAlerts: true,
   theme: "system",
 };
+
 
 const defaultRules: OperationalRules = {
   reservaDaysDefault: 30,
