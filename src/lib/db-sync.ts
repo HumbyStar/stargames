@@ -1010,6 +1010,7 @@ export async function dbReassignAgreementClientAsync(
 export async function dbDeleteClientsByIdsAsync(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   markLocalMutation("client", ids, "delete");
+  markLocalMutation("client", ids, "delete");
   const CHUNK = 100;
   await trackWrite(
     (async () => {
