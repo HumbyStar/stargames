@@ -1339,7 +1339,7 @@ export async function dbInsertMgmvReviewAuditLog(input: {
 
 export async function dbFetchDiagnostics(): Promise<ImportDiagnostics> {
   const env = await resolveCurrentEnv();
-  const owner = env === "sandbox" ? (await getCurrentUserId()) : null;
+  const owner = env === "sandbox" ? (getCurrentUserInfo().id ?? null) : null;
 
   // Contar sem filtrar o ambiente força a avaliação da tabela inteira pela
   // RLS — em bases grandes isso estoura o tempo limite e voltava como "0".
