@@ -38,6 +38,7 @@ import {
 } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
 import { setUiValue, subscribeRealtimeSnapshot } from "@/lib/db-sync";
+import { notifyRowConfirmed } from "@/lib/write-confirm";
 import { useQueryClient } from "@tanstack/react-query";
 import { HydrationSplash, useHydrationUserName } from "@/components/hydration-splash";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -1322,9 +1323,36 @@ export function AppLayout({ children }: { children?: ReactNode }) {
         // Aplicação pontual e imediata da linha alterada: a tela reflete
         // criação/edição/exclusão sem esperar a releitura completa.
         useStore.getState().applyRealtimeRow(event);
+        // Confirmação de escrita: libera os toasts de sucesso que aguardam
+        // o evento realtime da própria linha.
+        const kind =
+          event.table === "clients" ? "client" : event.table === "products" ? "product" : null;
+        const id = String((event.newRow ?? event.oldRow)?.id ?? "");
+        if (kind && id) {
+          notifyRowConfirmed(kind, id, event.eventType === "DELETE" ? "delete" : "upsert");
+        }
       },
     );
     return unsubscribe;
+  }, [hydrated]);
+  // Reconciliação após reconectar: se a aba ficou offline/em segundo plano,
+  // eventos do realtime podem ter se perdido. Ao voltar, o banco manda.
+  useEffect(() => {
+    if (!hydrated) return;
+    const reconcile = () => {
+      void useStore.getState().reconcileAfterReconnect();
+    };
+    const onVisible = () => {
+      if (!document.hidden) reconcile();
+    };
+    window.addEventListener("online", reconcile);
+    window.addEventListener("focus", reconcile);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("online", reconcile);
+      window.removeEventListener("focus", reconcile);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [hydrated]);
   // Reset global (excluir clientes/produtos/histórico/reset completo):
   // invalida todos os caches TanStack Query e força um refresh do snapshot,

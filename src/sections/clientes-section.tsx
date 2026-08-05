@@ -1316,6 +1316,9 @@ function ClientDrawer({
   const updateProduct = useStore((s) => s.updateProduct);
   const deleteProducts = useStore((s) => s.deleteProducts);
   const [deletingProducts, setDeletingProducts] = useState(false);
+  // Bloqueio por linha durante gravação/exclusão: evita cliques repetidos
+  // sem congelar a tela inteira.
+  const busyProductIds = useStore((s) => s.busyProductIds);
   // Edição por lápis dos produtos do cliente. Apenas Confirmar persiste;
   // Fechar descarta. Blur / click-outside são ignorados pelo hook.
   const productEdit = useRowEdit<{
@@ -2021,9 +2024,11 @@ function ClientDrawer({
                 return (
                   <tr
                     key={p.id}
+                    aria-busy={busyProductIds[p.id] ? true : undefined}
                     className={cn(
                       "border-b border-border/60 last:border-0",
                       productStatusTone(p),
+                      busyProductIds[p.id] && "pointer-events-none animate-pulse opacity-60",
                     )}
                   >
                     <td className="py-2 pr-2 align-middle">
@@ -2032,6 +2037,7 @@ function ClientDrawer({
                         aria-label={`Selecionar ${p.name}`}
                         className="h-4 w-4 cursor-pointer"
                         checked={selectedIds.has(p.id)}
+                        disabled={!!busyProductIds[p.id]}
                         onChange={() => toggleOne(p.id)}
                       />
                     </td>
