@@ -1338,20 +1338,34 @@ export async function dbInsertMgmvReviewAuditLog(input: {
 }
 
 export async function dbFetchDiagnostics(): Promise<ImportDiagnostics> {
-  const head = (q: ReturnType<typeof supabase.from>) =>
-    (q.select("*", { count: "exact", head: true }) as unknown as Promise<{ count: number | null; error: unknown }>);
-
   const env = await resolveCurrentEnv();
+  const owner = env === "sandbox" ? (await getCurrentUserId()) : null;
+
+  // Contar sem filtrar o ambiente força a avaliação da tabela inteira pela
+  // RLS — em bases grandes isso estoura o tempo limite e voltava como "0".
+  const scoped = (table: "clients" | "products" | "mgmv_agreements" | "mgmv_installments") => {
+    let q: any = sb().from(table).select("id", { count: "exact", head: true }).eq("env", env);
+    if (env === "sandbox" && owner) q = q.eq("sandbox_owner", owner);
+    return q as Promise<{ count: number | null; error: unknown }>;
+  };
+  /** Erro na contagem vira `null` (indisponível), nunca `0`. */
+  const countOf = (r: { count: number | null; error: unknown }): number | null =>
+    r.error ? null : (r.count ?? 0);
 
   const [c, p, a, i, mc, mp] = await Promise.all([
-    head(sb().from("clients")),
-    head(sb().from("products")),
-    head(sb().from("mgmv_agreements")),
-    head(sb().from("mgmv_installments")),
-    sb().from("clients").select("id", { count: "exact", head: true }).eq("client_type", "mgmv"),
+    scoped("clients"),
+    scoped("products"),
+    scoped("mgmv_agreements"),
+    scoped("mgmv_installments"),
+    sb()
+      .from("clients")
+      .select("id", { count: "exact", head: true })
+      .eq("env", env)
+      .eq("client_type", "mgmv"),
     sb()
       .from("products")
       .select("id", { count: "exact", head: true })
+      .eq("env", env)
       .eq("included_in_mgmv", true)
       .is("mgmv_agreement_id", null),
   ]);
@@ -1388,11 +1402,12 @@ export async function dbFetchDiagnostics(): Promise<ImportDiagnostics> {
   }
 
   return {
-    clientsCount: c.count ?? 0,
-    productsCount: p.count ?? 0,
-    agreementsCount: a.count ?? 0,
-    installmentsCount: i.count ?? 0,
-    mgmvClientsWithoutAgreement: mgmvClientsWithoutAgreement || (mc.count ?? 0) - (a.count ?? 0),
+    clientsCount: countOf(c),
+    productsCount: countOf(p),
+    agreementsCount: countOf(a),
+    installmentsCount: countOf(i),
+    mgmvClientsWithoutAgreement:
+      mgmvClientsWithoutAgreement || Math.max(0, (mc.count ?? 0) - (a.count ?? 0)),
     mgmvProductsWithoutAgreementId: mp.count ?? 0,
     importProgressRows,
     resetVersion: getUiValue<string>("import.resetVersion", ""),
