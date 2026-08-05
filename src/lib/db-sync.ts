@@ -206,6 +206,100 @@ function logErr(scope: string, err: unknown) {
   console.error(`[db-sync:${scope}]`, err);
 }
 
+// ============= Mutações locais recentes (anti-sobrescrita) =============
+//
+// Escritas saem em lote/debounce e as releituras completas são paginadas,
+// então um snapshot iniciado antes da gravação pode voltar com o estado
+// antigo e desfazer na tela o que o usuário acabou de fazer (item importado
+// some, produto excluído reaparece). O registro abaixo guarda por alguns
+// segundos o que foi criado/alterado/excluído localmente e é usado para
+// reconciliar qualquer snapshot vindo do banco.
+
+export type MutationKind = "client" | "product";
+type MutationOp = "upsert" | "delete";
+
+/** Janela de proteção: tempo suficiente para o banco confirmar a gravação. */
+const MUTATION_TTL_MS = 15_000;
+
+const recentMutations = new Map<string, { op: MutationOp; at: number }>();
+
+function mutationKey(kind: MutationKind, id: string) {
+  return `${kind}:${id}`;
+}
+
+function pruneMutations(now = Date.now()) {
+  for (const [key, entry] of recentMutations) {
+    if (now - entry.at > MUTATION_TTL_MS) recentMutations.delete(key);
+  }
+}
+
+export function markLocalMutation(kind: MutationKind, ids: string[], op: MutationOp): void {
+  const at = Date.now();
+  pruneMutations(at);
+  for (const id of ids) recentMutations.set(mutationKey(kind, id), { op, at });
+}
+
+/** Libera a proteção assim que o banco confirmou o mesmo estado. */
+export function clearLocalMutation(kind: MutationKind, ids: string[]): void {
+  for (const id of ids) recentMutations.delete(mutationKey(kind, id));
+}
+
+export function clearAllLocalMutations(): void {
+  recentMutations.clear();
+}
+
+function mutationFor(kind: MutationKind, id: string) {
+  const entry = recentMutations.get(mutationKey(kind, id));
+  if (!entry) return null;
+  if (Date.now() - entry.at > MUTATION_TTL_MS) {
+    recentMutations.delete(mutationKey(kind, id));
+    return null;
+  }
+  return entry;
+}
+
+/**
+ * Aplica um snapshot do banco respeitando as mutações locais recentes:
+ * - id excluído há pouco nunca ressuscita;
+ * - id criado/alterado há pouco e ausente na leitura é preservado.
+ */
+export function reconcileWithLocalMutations<T extends { id: string }>(
+  kind: MutationKind,
+  incoming: T[],
+  previous: T[],
+): T[] {
+  pruneMutations();
+  if (recentMutations.size === 0) return incoming;
+  const incomingIds = new Set(incoming.map((r) => r.id));
+  const out = incoming.filter((r) => mutationFor(kind, r.id)?.op !== "delete");
+  for (const row of previous) {
+    if (incomingIds.has(row.id)) continue;
+    if (mutationFor(kind, row.id)?.op === "upsert") out.push(row);
+  }
+  return out;
+}
+
+// ============= Barreira de escrita =============
+//
+// Nenhuma releitura pode correr na frente das próprias escritas do usuário.
+
+const inFlightWrites = new Set<Promise<unknown>>();
+
+function trackWrite<T>(p: Promise<T>): Promise<T> {
+  const tracked = p.finally(() => inFlightWrites.delete(tracked as Promise<unknown>));
+  inFlightWrites.add(tracked as Promise<unknown>);
+  return tracked;
+}
+
+/** Garante que tudo o que já foi disparado chegou ao banco antes de ler. */
+export async function awaitPendingWrites(): Promise<void> {
+  for (let i = 0; i < 5; i += 1) {
+    await flushAllPendingUpserts().catch(() => undefined);
+    if (inFlightWrites.size === 0) return;
+    await Promise.allSettled(Array.from(inFlightWrites));
+  }
+}
+
 // ============= Loaders =============
 
 /**
