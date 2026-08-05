@@ -57,7 +57,8 @@ import {
 import { canonicalPhone } from "@/lib/list-import-parser";
 import { reviewListImportLine } from "@/lib/list-import-ai.functions";
 import { parseClientHtml } from "@/lib/html-client-import-parser";
-import { flushAllPendingUpserts, awaitPendingWrites } from "@/lib/db-sync";
+import { flushAllPendingUpserts, awaitPendingWrites, dbRowsExist } from "@/lib/db-sync";
+import { waitForRowConfirmation } from "@/lib/write-confirm";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ZipImportReview } from "@/components/zip-import-review";
 
@@ -572,6 +573,7 @@ export function ListImportModal({
               clientType: "common",
             });
             clientId = created.id;
+            createdClientIds.push(created.id);
             clientsCreated++;
             wasNewClient = true;
           }
@@ -583,7 +585,7 @@ export function ListImportModal({
           financialStatusFinal === "Reserva"
             ? (headerDueISO ?? calculateReservaDueDate(now))
             : now;
-        addProduct({
+        const createdProduct = addProduct({
           clientId,
           name: r.productName || "(sem nome)",
           platform: r.platformOrCategory || "(sem plataforma)",
@@ -598,6 +600,7 @@ export function ListImportModal({
               ? `Importado por HTML de cliente • Grupo: ${r.sourceGroup}`
               : `Importado por lista colada • Grupo: ${r.sourceGroup}`,
         });
+        createdProductIds.push(createdProduct.id);
         productsCreated++;
         const snapshotClients = clientsCreated;
         const snapshotProducts = productsCreated;
@@ -627,6 +630,17 @@ export function ListImportModal({
       await flushAllPendingUpserts();
       // Confirma no banco tudo o que foi enfileirado antes de anunciar sucesso.
       await awaitPendingWrites();
+      // Confirmação real: cada cliente/produto criado precisa existir no banco
+      // (ou ter chegado pelo evento realtime) antes de exibirmos "sucesso".
+      const [clientConfirm, productConfirm] = await Promise.all([
+        waitForRowConfirmation("client", createdClientIds, "upsert", { verify: dbRowsExist }),
+        waitForRowConfirmation("product", createdProductIds, "upsert", { verify: dbRowsExist }),
+      ]);
+      if (!clientConfirm.ok || !productConfirm.ok) {
+        throw new Error(
+          "A importação não foi confirmada pelo banco. Nada foi anunciado como concluído — verifique a conexão e tente novamente.",
+        );
+      }
       addImportHistory({
         source: "Texto",
         file: `Lista colada (${preview?.groups.length ?? 0} grupos)`,
