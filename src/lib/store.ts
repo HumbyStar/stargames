@@ -847,14 +847,14 @@ export const useStore = create<State>()((set, get) => ({
           return;
         }
         if (e.table === "clients") {
-          const client = rowToClient(row as Parameters<typeof rowToClient>[0]);
+          const client = rowToClient(row as unknown as Parameters<typeof rowToClient>[0]);
           set((s) => ({
             clients: s.clients.some((c) => c.id === client.id)
               ? s.clients.map((c) => (c.id === client.id ? client : c))
               : [...s.clients, client],
           }));
         } else {
-          const product = rowToProduct(row as Parameters<typeof rowToProduct>[0]);
+          const product = rowToProduct(row as unknown as Parameters<typeof rowToProduct>[0]);
           set((s) => ({
             products: s.products.some((p) => p.id === product.id)
               ? s.products.map((p) => (p.id === product.id ? product : p))
