@@ -38,6 +38,7 @@ import {
 } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
 import { setUiValue, subscribeRealtimeSnapshot } from "@/lib/db-sync";
+import { notifyRowConfirmed } from "@/lib/write-confirm";
 import { useQueryClient } from "@tanstack/react-query";
 import { HydrationSplash, useHydrationUserName } from "@/components/hydration-splash";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
