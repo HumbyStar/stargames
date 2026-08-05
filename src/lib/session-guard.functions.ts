@@ -1,21 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { hasAnyInternalRole } from "./session-guard.server";
 
 export type ClaimResult =
   | { ok: true; sessionId: string }
   | { ok: false; reason: "no_internal_access" }
   | { ok: false; reason: "session_already_active"; lastSeen: string };
-
-async function hasAnyInternalRole(supabase: any, userId: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .limit(1);
-  if (error) throw new Error(error.message);
-  return (data ?? []).length > 0;
-}
 
 const claimSchema = z.object({
   sessionId: z.string().min(8).max(128),
