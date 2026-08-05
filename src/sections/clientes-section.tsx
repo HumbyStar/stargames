@@ -38,6 +38,8 @@ import {
   type PartialPaymentResult,
 } from "@/lib/store";
 import { toast } from "sonner";
+import { ProductNameCombobox } from "@/components/product-name-combobox";
+import { usePlatformOptions, useAddPlatform, normalizePlatform } from "@/lib/platforms";
 import { cn } from "@/lib/utils";
 import {
   productStatusTone,
@@ -576,11 +578,9 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                   className="h-9 rounded-md border border-input bg-background px-2 text-sm"
                 >
                   <option value="Todas">Plataforma</option>
-                  <option>PS5</option>
-                  <option>PS4</option>
-                  <option>PS2</option>
-                  <option>Xbox</option>
-                  <option>Colecionável</option>
+                  {platformOptions.map((p) => (
+                    <option key={p}>{p}</option>
+                  ))}
                 </select>
               </div>
 
