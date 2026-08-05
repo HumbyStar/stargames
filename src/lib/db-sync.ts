@@ -1341,33 +1341,34 @@ export async function dbFetchDiagnostics(): Promise<ImportDiagnostics> {
   const env = await resolveCurrentEnv();
   const owner = env === "sandbox" ? (getCurrentUserInfo().id ?? null) : null;
 
-  // Contar sem filtrar o ambiente força a avaliação da tabela inteira pela
-  // RLS — em bases grandes isso estoura o tempo limite e voltava como "0".
-  const scoped = (table: "clients" | "products" | "mgmv_agreements" | "mgmv_installments") => {
-    let q: any = sb().from(table).select("id", { count: "exact", head: true }).eq("env", env);
-    if (env === "sandbox" && owner) q = q.eq("sandbox_owner", owner);
-    return q as Promise<{ count: number | null; error: unknown }>;
+  // A contagem via PostgREST (`count: exact`) reavalia a regra de visibilidade
+  // linha a linha; com dezenas de milhares de produtos isso estoura o tempo
+  // limite e voltava como "indisponível". A RPC conta em uma única consulta.
+  const scoped = async (table: string): Promise<number | null> => {
+    try {
+      const { data, error } = await (sb() as any).rpc("count_env_rows", {
+        _table: table,
+        _env: env,
+        _owner: owner,
+      });
+      if (error) {
+        logErr(`diagnostics.count.${table}`, error);
+        return null;
+      }
+      return typeof data === "number" ? data : Number(data ?? 0);
+    } catch (err) {
+      logErr(`diagnostics.count.${table}`, err);
+      return null;
+    }
   };
-  /** Erro na contagem vira `null` (indisponível), nunca `0`. */
-  const countOf = (r: { count: number | null; error: unknown }): number | null =>
-    r.error ? null : (r.count ?? 0);
 
   const [c, p, a, i, mc, mp] = await Promise.all([
     scoped("clients"),
     scoped("products"),
     scoped("mgmv_agreements"),
     scoped("mgmv_installments"),
-    sb()
-      .from("clients")
-      .select("id", { count: "exact", head: true })
-      .eq("env", env)
-      .eq("client_type", "mgmv"),
-    sb()
-      .from("products")
-      .select("id", { count: "exact", head: true })
-      .eq("env", env)
-      .eq("included_in_mgmv", true)
-      .is("mgmv_agreement_id", null),
+    scoped("clients_mgmv"),
+    scoped("products_orphan_mgmv"),
   ]);
 
   // Inconsistência: clientes MGMV sem agreement correspondente.
@@ -1402,13 +1403,13 @@ export async function dbFetchDiagnostics(): Promise<ImportDiagnostics> {
   }
 
   return {
-    clientsCount: countOf(c),
-    productsCount: countOf(p),
-    agreementsCount: countOf(a),
-    installmentsCount: countOf(i),
+    clientsCount: c,
+    productsCount: p,
+    agreementsCount: a,
+    installmentsCount: i,
     mgmvClientsWithoutAgreement:
-      mgmvClientsWithoutAgreement || Math.max(0, (mc.count ?? 0) - (a.count ?? 0)),
-    mgmvProductsWithoutAgreementId: mp.count ?? 0,
+      mgmvClientsWithoutAgreement || Math.max(0, (mc ?? 0) - (a ?? 0)),
+    mgmvProductsWithoutAgreementId: mp ?? 0,
     importProgressRows,
     resetVersion: getUiValue<string>("import.resetVersion", ""),
     env,

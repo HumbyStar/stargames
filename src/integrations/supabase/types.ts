@@ -1205,6 +1205,14 @@ export type Database = {
       }
       can_view_team_tasks: { Args: { _user_id: string }; Returns: boolean }
       complete_mgmv_agreement: { Args: { _client_id: string }; Returns: Json }
+      count_env_rows: {
+        Args: {
+          _env: Database["public"]["Enums"]["app_env"]
+          _owner?: string
+          _table: string
+        }
+        Returns: number
+      }
       current_env: {
         Args: never
         Returns: Database["public"]["Enums"]["app_env"]
