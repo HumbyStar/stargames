@@ -542,6 +542,30 @@ export async function loadProductsForClient(clientId: string): Promise<Product[]
 
 /** Conclui o acordo e converte seus produtos em uma única transação no banco. */
 
+/**
+ * Verificação de presença: devolve, dentre `ids`, os que existem hoje no banco
+ * (no ambiente ativo). Base da confirmação de escrita — nenhum "sucesso" é
+ * exibido sem passar por aqui ou pelo evento realtime da linha.
+ */
+export async function dbRowsExist(kind: MutationKind, ids: string[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (ids.length === 0) return out;
+  if (isLocalMode()) return new Set(ids);
+  const table = kind === "client" ? "clients" : "products";
+  const env = await resolveCurrentEnv();
+  const CHUNK = 200;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const { data, error } = await sb()
+      .from(table)
+      .select("id")
+      .in("id", ids.slice(i, i + CHUNK))
+      .eq("env", env);
+    if (error) throw error;
+    for (const row of (data ?? []) as { id: string }[]) out.add(row.id);
+  }
+  return out;
+}
+
 /** Releitura direcionada de produtos por id (usada após import/edição). */
 export async function loadProductsByIds(ids: string[]): Promise<Product[]> {
   if (ids.length === 0) return [];
@@ -1009,7 +1033,6 @@ export async function dbReassignAgreementClientAsync(
 /** Apaga clientes pelos ids informados. */
 export async function dbDeleteClientsByIdsAsync(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
-  markLocalMutation("client", ids, "delete");
   markLocalMutation("client", ids, "delete");
   const CHUNK = 100;
   await trackWrite(
