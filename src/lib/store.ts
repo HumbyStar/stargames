@@ -953,10 +953,19 @@ export const useStore = create<State>()((set, get) => ({
       deleteProducts: async (ids) => {
         if (ids.length === 0) return;
         const idSet = new Set(ids);
+        const removed = get().products.filter((p) => idSet.has(p.id));
+        // Marca antes de tocar na tela: nenhuma releitura em voo pode
+        // ressuscitar estes ids enquanto o banco não confirmar.
+        markLocalMutation("product", ids, "delete");
         set((s) => ({ products: s.products.filter((p) => !idSet.has(p.id)) }));
         try {
           await dbDeleteProductsByIdsAsync(ids);
         } catch (err) {
+          // Falha real: devolve os itens à tela em vez de fingir sucesso.
+          clearLocalMutation("product", ids);
+          set((s) => ({
+            products: [...s.products.filter((p) => !idSet.has(p.id)), ...removed],
+          }));
           console.error("deleteProducts failed", err);
           throw err;
         }
