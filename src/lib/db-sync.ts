@@ -711,11 +711,13 @@ function scheduleClientFlush() {
 }
 
 export function queueProductUpsert(p: Product): void {
+  markLocalMutation("product", [p.id], "upsert");
   pendingProductUpserts.set(p.id, p);
   scheduleProductFlush();
 }
 
 export function queueClientUpsert(c: Client): void {
+  markLocalMutation("client", [c.id], "upsert");
   pendingClientUpserts.set(c.id, c);
   scheduleClientFlush();
 }
@@ -771,22 +773,38 @@ export async function dbUpsertHistoryAsync(h: ImportHistoryEntry): Promise<void>
 
 export async function dbUpsertClientsAsync(clients: Client[]): Promise<void> {
   if (clients.length === 0) return;
+  markLocalMutation("client", clients.map((c) => c.id), "upsert");
   const rows = clients.map((c) => clientToRow(c));
   const CHUNK = 200;
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const { error } = await sb().from("clients").upsert(rows.slice(i, i + CHUNK));
-    if (error) logErr("upsertClientsAsync", error);
-  }
+  await trackWrite(
+    (async () => {
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const { error } = await sb().from("clients").upsert(rows.slice(i, i + CHUNK));
+        if (error) {
+          logErr("upsertClientsAsync", error);
+          throw error;
+        }
+      }
+    })(),
+  );
 }
 
 export async function dbUpsertProductsAsync(products: Product[]): Promise<void> {
   if (products.length === 0) return;
+  markLocalMutation("product", products.map((p) => p.id), "upsert");
   const rows = products.map((p) => productToRow(p));
   const CHUNK = 200;
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const { error } = await sb().from("products").upsert(rows.slice(i, i + CHUNK));
-    if (error) logErr("upsertProductsAsync", error);
-  }
+  await trackWrite(
+    (async () => {
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const { error } = await sb().from("products").upsert(rows.slice(i, i + CHUNK));
+        if (error) {
+          logErr("upsertProductsAsync", error);
+          throw error;
+        }
+      }
+    })(),
+  );
 }
 
 export function dbDeleteHistoryAll(): void {
@@ -940,23 +958,39 @@ export async function dbReassignAgreementClientAsync(
 /** Apaga clientes pelos ids informados. */
 export async function dbDeleteClientsByIdsAsync(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
+  markLocalMutation("client", ids, "delete");
   const CHUNK = 100;
-  for (let i = 0; i < ids.length; i += CHUNK) {
-    const slice = ids.slice(i, i + CHUNK);
-    const { error } = await sb().from("clients").delete().in("id", slice);
-    if (error) logErr("deleteClientsByIds", error);
-  }
+  await trackWrite(
+    (async () => {
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const slice = ids.slice(i, i + CHUNK);
+        const { error } = await sb().from("clients").delete().in("id", slice);
+        if (error) {
+          logErr("deleteClientsByIds", error);
+          throw error;
+        }
+      }
+    })(),
+  );
 }
 
 /** Apaga produtos pelos ids informados. */
 export async function dbDeleteProductsByIdsAsync(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
+  markLocalMutation("product", ids, "delete");
   const CHUNK = 100;
-  for (let i = 0; i < ids.length; i += CHUNK) {
-    const slice = ids.slice(i, i + CHUNK);
-    const { error } = await sb().from("products").delete().in("id", slice);
-    if (error) logErr("deleteProductsByIds", error);
-  }
+  await trackWrite(
+    (async () => {
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const slice = ids.slice(i, i + CHUNK);
+        const { error } = await sb().from("products").delete().in("id", slice);
+        if (error) {
+          logErr("deleteProductsByIds", error);
+          throw error;
+        }
+      }
+    })(),
+  );
 }
 
 // ============= MGMV relational sync =============
