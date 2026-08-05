@@ -691,6 +691,7 @@ const defaultPreferences: SystemPreferences = {
   compactTables: false,
   showDashboardAlerts: true,
   theme: "system",
+  customPlatforms: [],
 };
 
 
