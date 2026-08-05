@@ -32,7 +32,9 @@ import {
   dbReassignAgreementClientAsync,
   dbDeleteClientsByIdsAsync,
   dbDeleteProductsByIdsAsync,
+  dbRowsExist,
 } from "./db-sync";
+import { waitForRowConfirmation } from "./write-confirm";
 import {
   awaitPendingWrites,
   reconcileWithLocalMutations,
@@ -479,6 +481,12 @@ interface State {
   security: SecuritySettings;
   importHistory: ImportHistoryEntry[];
   hydrated: boolean;
+  /** Linhas em operação (importação/edição/exclusão) — bloqueio por linha. */
+  busyClientIds: Record<string, true>;
+  busyProductIds: Record<string, true>;
+  setRowsBusy: (kind: "client" | "product", ids: string[], busy: boolean) => void;
+  /** Reconciliação após reconexão: relê o estado real do banco. */
+  reconcileAfterReconnect: () => Promise<void>;
   hydrate: () => Promise<void>;
   refreshFromDb: () => Promise<void>;
   /** Aplica um evento pontual do Realtime (sem releitura completa). */
@@ -768,6 +776,26 @@ export const useStore = create<State>()((set, get) => ({
         })();
         await hydratePromise;
       },
+      busyClientIds: {},
+      busyProductIds: {},
+      setRowsBusy: (kind, ids, busy) => {
+        if (ids.length === 0) return;
+        set((s) => {
+          const key = kind === "client" ? "busyClientIds" : "busyProductIds";
+          const next = { ...(s[key] as Record<string, true>) };
+          for (const id of ids) {
+            if (busy) next[id] = true;
+            else delete next[id];
+          }
+          return { [key]: next } as Partial<State>;
+        });
+      },
+      reconcileAfterReconnect: async () => {
+        // Um evento realtime perdido durante a queda deixaria a tela com um
+        // estado que o banco já não tem. Após reconectar, o banco manda.
+        await awaitPendingWrites();
+        await get().refreshFromDb();
+      },
       refreshFromDb: async () => {
         // Coalesce: chamadas concorrentes (Realtime + app:reset + modais)
         // compartilham o mesmo `loadSnapshot()` em voo; se algo chegar
@@ -923,13 +951,20 @@ export const useStore = create<State>()((set, get) => ({
           products: s.products.filter((p) => p.clientId !== id),
           openClientId: s.openClientId === id ? null : s.openClientId,
         }));
+        get().setRowsBusy("client", [id], true);
         try {
           await dbDeleteClientsByIdsAsync([id]);
+          const res = await waitForRowConfirmation("client", [id], "delete", {
+            verify: dbRowsExist,
+          });
+          if (!res.ok) throw new Error("A exclusão não foi confirmada pelo banco.");
         } catch (err) {
           clearLocalMutation("client", [id]);
           set({ clients: prevClients, products: prevProducts });
           console.error("deleteClient failed", err);
           throw err;
+        } finally {
+          get().setRowsBusy("client", [id], false);
         }
       },
       findClientByPhone: (phone) => {
@@ -963,16 +998,27 @@ export const useStore = create<State>()((set, get) => ({
         // ressuscitar estes ids enquanto o banco não confirmar.
         markLocalMutation("product", ids, "delete");
         set((s) => ({ products: s.products.filter((p) => !idSet.has(p.id)) }));
-        try {
-          await dbDeleteProductsByIdsAsync(ids);
-        } catch (err) {
-          // Falha real: devolve os itens à tela em vez de fingir sucesso.
+        get().setRowsBusy("product", ids, true);
+        const rollback = (err: unknown) => {
           clearLocalMutation("product", ids);
           set((s) => ({
             products: [...s.products.filter((p) => !idSet.has(p.id)), ...removed],
           }));
           console.error("deleteProducts failed", err);
+        };
+        try {
+          await dbDeleteProductsByIdsAsync(ids);
+          // Só é sucesso quando o banco (ou o evento realtime) confirma a
+          // ausência das linhas. Sem isso, a UI exibiria "sucesso falso".
+          const res = await waitForRowConfirmation("product", ids, "delete", {
+            verify: dbRowsExist,
+          });
+          if (!res.ok) throw new Error("A exclusão não foi confirmada pelo banco.");
+        } catch (err) {
+          rollback(err);
           throw err;
+        } finally {
+          get().setRowsBusy("product", ids, false);
         }
       },
       registerPayment: (productId, amount) =>
