@@ -1,25 +1,38 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock the supabase client BEFORE importing the module under test.
-type Range = { from: number; to: number };
+type Page = { after: string | null; limit: number };
 let pages: Record<string, unknown[]> = {};
-let calls: Record<string, Range[]> = {};
+let calls: Record<string, Page[]> = {};
 
 vi.mock("@/integrations/supabase/client", () => {
+  function builder(table: string) {
+    let after: string | null = null;
+    const api: any = {
+      order() {
+        return api;
+      },
+      gt(_col: string, value: string) {
+        after = value;
+        return api;
+      },
+      limit(n: number) {
+        calls[table] = calls[table] ?? [];
+        calls[table].push({ after, limit: n });
+        const all = (pages[table] ?? []) as Array<{ id: string }>;
+        const sorted = [...all].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        const start = after === null ? 0 : sorted.findIndex((r) => r.id === after) + 1;
+        return Promise.resolve({ data: sorted.slice(start, start + n), error: null });
+      },
+    };
+    return api;
+  }
   return {
     supabase: {
       from(table: string) {
         return {
           select(_columns: string) {
-            return {
-              range(from: number, to: number) {
-                calls[table] = calls[table] ?? [];
-                calls[table].push({ from, to });
-                const all = pages[table] ?? [];
-                const slice = all.slice(from, to + 1);
-                return Promise.resolve({ data: slice, error: null });
-              },
-            };
+            return builder(table);
           },
         };
       },
@@ -30,7 +43,9 @@ vi.mock("@/integrations/supabase/client", () => {
 import { fetchAllRows, rowToClient, clientToRow } from "./db-sync";
 
 function makeRows(n: number, prefix = "r") {
-  return Array.from({ length: n }, (_, i) => ({ id: `${prefix}-${i}` }));
+  return Array.from({ length: n }, (_, i) => ({
+    id: `${prefix}-${String(i).padStart(6, "0")}`,
+  }));
 }
 
 describe("fetchAllRows (anti-truncamento PostgREST)", () => {
@@ -44,15 +59,18 @@ describe("fetchAllRows (anti-truncamento PostgREST)", () => {
     const res = await fetchAllRows("clients");
     expect(res.error).toBeNull();
     expect(res.data).toHaveLength(2500);
+    // Paginação por chave: nenhuma linha repetida nem faltando.
+    const ids = new Set((res.data as Array<{ id: string }>).map((r) => r.id));
+    expect(ids.size).toBe(2500);
   });
 
-  it("pagina em lotes de 1000 (3 chamadas para 2500 linhas)", async () => {
+  it("pagina em lotes de 1000 avançando por chave (3 chamadas para 2500 linhas)", async () => {
     pages.products = makeRows(2500, "p");
     await fetchAllRows("products");
     expect(calls.products).toEqual([
-      { from: 0, to: 999 },
-      { from: 1000, to: 1999 },
-      { from: 2000, to: 2999 },
+      { after: null, limit: 1000 },
+      { after: "p-000999", limit: 1000 },
+      { after: "p-001999", limit: 1000 },
     ]);
   });
 
@@ -84,7 +102,9 @@ describe("fetchAllRows (anti-truncamento PostgREST)", () => {
     const original = mod.supabase.from;
     (mod.supabase as unknown as { from: unknown }).from = () => ({
       select: () => ({
-        range: () => Promise.resolve({ data: null, error: { message: "boom" } }),
+        order: () => ({
+          limit: () => Promise.resolve({ data: null, error: { message: "boom" } }),
+        }),
       }),
     });
     const res = await fetchAllRows("clients");

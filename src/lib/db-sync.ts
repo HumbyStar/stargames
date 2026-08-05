@@ -315,9 +315,9 @@ export async function fetchAllRows<T = Record<string, unknown>>(
   opts?: { env?: AppEnv; owner?: string | null },
 ): Promise<FetchAllPage<T>> {
   const out: T[] = [];
-  let from = 0;
   let size = pageSize;
   let retries = 0;
+  let lastId: string | null = null;
   // eslint-disable-next-line no-constant-condition
   while (true) {
     // Filtrar por ambiente no banco (em vez de deixar tudo para a RLS) evita
@@ -327,7 +327,13 @@ export async function fetchAllRows<T = Record<string, unknown>>(
       q = q.eq("env", opts.env);
       if (opts.env === "sandbox" && opts.owner) q = q.eq("sandbox_owner", opts.owner);
     }
-    const res = await q.range(from, from + size - 1);
+    // Paginação por chave: sem ordem estável, o Postgres pode repetir uma
+    // linha em duas páginas e pular outra (era o que fazia produto recém
+    // criado sumir da tela). Avançar por `id` também mantém o custo de
+    // cada página constante.
+    q = q.order("id", { ascending: true });
+    if (lastId !== null) q = q.gt("id", lastId);
+    const res = await q.limit(size);
     if (res.error) {
       const code = (res.error as { code?: string } | null)?.code;
       // Tempo limite: tenta novamente com páginas menores antes de desistir.
@@ -341,7 +347,9 @@ export async function fetchAllRows<T = Record<string, unknown>>(
     const rows = (res.data ?? []) as T[];
     out.push(...rows);
     if (rows.length < size) break;
-    from += size;
+    const tail = rows[rows.length - 1] as { id?: string } | undefined;
+    if (!tail?.id) break;
+    lastId = String(tail.id);
   }
   return { data: out, error: null };
 }
@@ -1252,10 +1260,11 @@ export async function dbSyncAgreementsBulkAsync(clients: Client[]): Promise<void
 // ============= Diagnostics =============
 
 export interface ImportDiagnostics {
-  clientsCount: number;
-  productsCount: number;
-  agreementsCount: number;
-  installmentsCount: number;
+  /** `null` = a contagem falhou (tempo limite/erro), não é "zero no banco". */
+  clientsCount: number | null;
+  productsCount: number | null;
+  agreementsCount: number | null;
+  installmentsCount: number | null;
   /** Clientes marcados como MGMV mas sem registro em mgmv_agreements. */
   mgmvClientsWithoutAgreement: number;
   /** Produtos com included_in_mgmv = true mas sem mgmv_agreement_id. */
@@ -1329,20 +1338,34 @@ export async function dbInsertMgmvReviewAuditLog(input: {
 }
 
 export async function dbFetchDiagnostics(): Promise<ImportDiagnostics> {
-  const head = (q: ReturnType<typeof supabase.from>) =>
-    (q.select("*", { count: "exact", head: true }) as unknown as Promise<{ count: number | null; error: unknown }>);
-
   const env = await resolveCurrentEnv();
+  const owner = env === "sandbox" ? (getCurrentUserInfo().id ?? null) : null;
+
+  // Contar sem filtrar o ambiente força a avaliação da tabela inteira pela
+  // RLS — em bases grandes isso estoura o tempo limite e voltava como "0".
+  const scoped = (table: "clients" | "products" | "mgmv_agreements" | "mgmv_installments") => {
+    let q: any = sb().from(table).select("id", { count: "exact", head: true }).eq("env", env);
+    if (env === "sandbox" && owner) q = q.eq("sandbox_owner", owner);
+    return q as Promise<{ count: number | null; error: unknown }>;
+  };
+  /** Erro na contagem vira `null` (indisponível), nunca `0`. */
+  const countOf = (r: { count: number | null; error: unknown }): number | null =>
+    r.error ? null : (r.count ?? 0);
 
   const [c, p, a, i, mc, mp] = await Promise.all([
-    head(sb().from("clients")),
-    head(sb().from("products")),
-    head(sb().from("mgmv_agreements")),
-    head(sb().from("mgmv_installments")),
-    sb().from("clients").select("id", { count: "exact", head: true }).eq("client_type", "mgmv"),
+    scoped("clients"),
+    scoped("products"),
+    scoped("mgmv_agreements"),
+    scoped("mgmv_installments"),
+    sb()
+      .from("clients")
+      .select("id", { count: "exact", head: true })
+      .eq("env", env)
+      .eq("client_type", "mgmv"),
     sb()
       .from("products")
       .select("id", { count: "exact", head: true })
+      .eq("env", env)
       .eq("included_in_mgmv", true)
       .is("mgmv_agreement_id", null),
   ]);
@@ -1379,11 +1402,12 @@ export async function dbFetchDiagnostics(): Promise<ImportDiagnostics> {
   }
 
   return {
-    clientsCount: c.count ?? 0,
-    productsCount: p.count ?? 0,
-    agreementsCount: a.count ?? 0,
-    installmentsCount: i.count ?? 0,
-    mgmvClientsWithoutAgreement: mgmvClientsWithoutAgreement || (mc.count ?? 0) - (a.count ?? 0),
+    clientsCount: countOf(c),
+    productsCount: countOf(p),
+    agreementsCount: countOf(a),
+    installmentsCount: countOf(i),
+    mgmvClientsWithoutAgreement:
+      mgmvClientsWithoutAgreement || Math.max(0, (mc.count ?? 0) - (a.count ?? 0)),
     mgmvProductsWithoutAgreementId: mp.count ?? 0,
     importProgressRows,
     resetVersion: getUiValue<string>("import.resetVersion", ""),

@@ -720,11 +720,17 @@ const envSnapshots = new Map<AppEnv, DbSnapshot>();
 let envToken = 0;
 
 /**
- * Leitura parcial (alguma tabela falhou, ex.: tempo limite): não apaga o que
- * já está na tela — mantém as listas anteriores quando a nova veio vazia.
+ * Leitura parcial (alguma tabela falhou, ex.: tempo limite): nunca apaga o
+ * que já está na tela. A leitura incompleta é MESCLADA com o estado atual —
+ * as linhas que não vieram permanecem. Só uma leitura completa pode remover.
  */
-function keepOnPartial<T>(next: T[], prev: T[], partial?: boolean): T[] {
-  return partial && next.length === 0 && prev.length > 0 ? prev : next;
+function keepOnPartial<T extends { id: string }>(next: T[], prev: T[], partial?: boolean): T[] {
+  if (!partial) return next;
+  if (prev.length === 0) return next;
+  if (next.length === 0) return prev;
+  const byId = new Map(prev.map((r) => [r.id, r]));
+  for (const row of next) byId.set(row.id, row);
+  return Array.from(byId.values());
 }
 
 export const RESET_VERSION_KEY = "import.resetVersion";
@@ -985,6 +991,11 @@ export const useStore = create<State>()((set, get) => ({
         const prod = { ...normalizeProductDueDateForCreate(p), id: uid() };
         queueProductUpsert(prod);
         set((s) => ({ products: [...s.products, prod] }));
+        // Releitura direcionada (só deste cliente) em vez de recarregar a
+        // base inteira: confirma a linha no banco sem risco de tempo limite.
+        void get()
+          .refreshClientData(prod.clientId)
+          .catch(() => undefined);
         return prod;
       },
       updateProduct: (id, patch) =>
