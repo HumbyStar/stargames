@@ -10,7 +10,7 @@ import { SESSION_ID_KEY } from "@/components/session-guard";
 import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 
 export const Route = createFileRoute("/auth")({
-  validateSearch: (s: Record<string, unknown>) => ({
+  validateSearch: (s: Record<string, unknown>): { next?: string } => ({
     next: typeof s.next === "string" && s.next.startsWith("/") && !s.next.startsWith("//") ? s.next : undefined,
   }),
   head: () => ({

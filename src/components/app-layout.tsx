@@ -1313,9 +1313,17 @@ export function AppLayout({ children }: { children?: ReactNode }) {
   // outras abas, dispositivos ou reconciliações do backend.
   useEffect(() => {
     if (!hydrated) return;
-    const unsubscribe = subscribeRealtimeSnapshot(() => {
-      void useStore.getState().refreshFromDb();
-    });
+    const unsubscribe = subscribeRealtimeSnapshot(
+      () => {
+        // Reconciliação de fundo (cobre o que a aplicação pontual não pegou).
+        void useStore.getState().refreshFromDb();
+      },
+      (event) => {
+        // Aplicação pontual e imediata da linha alterada: a tela reflete
+        // criação/edição/exclusão sem esperar a releitura completa.
+        useStore.getState().applyRealtimeRow(event);
+      },
+    );
     return unsubscribe;
   }, [hydrated]);
   // Reset global (excluir clientes/produtos/histórico/reset completo):

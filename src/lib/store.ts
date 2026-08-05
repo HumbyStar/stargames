@@ -33,6 +33,17 @@ import {
   dbDeleteClientsByIdsAsync,
   dbDeleteProductsByIdsAsync,
 } from "./db-sync";
+import {
+  awaitPendingWrites,
+  reconcileWithLocalMutations,
+  clearLocalMutation,
+  markLocalMutation,
+  loadProductsByIds,
+  loadClientsByIds,
+  rowToClient,
+  rowToProduct,
+} from "./db-sync";
+import type { RealtimeRowEvent } from "./db-sync";
 import { suspendRealtimeRefresh } from "./db-sync";
 import { getCurrentUserInfo } from "./db-sync";
 import type { ImportDiagnostics } from "./db-sync";
@@ -470,6 +481,10 @@ interface State {
   hydrated: boolean;
   hydrate: () => Promise<void>;
   refreshFromDb: () => Promise<void>;
+  /** Aplica um evento pontual do Realtime (sem releitura completa). */
+  applyRealtimeRow: (e: RealtimeRowEvent) => void;
+  /** Relê do banco apenas os registros de um cliente. */
+  refreshClientData: (clientId: string) => Promise<void>;
   reset: () => void;
   openClient: (id: string | null) => void;
   addClient: (c: Omit<Client, "id">) => Client;
@@ -764,14 +779,27 @@ export const useStore = create<State>()((set, get) => ({
         refreshInFlight = (async () => {
           const token = envToken;
           try {
+            // Barreira: nenhuma leitura corre na frente das escritas locais.
+            await awaitPendingWrites();
             const snap = await loadSnapshot();
             // Resposta de um ambiente que já não é o atual: descarta.
             if (token !== envToken) return;
             const env = snap.env ?? "producao";
             if (!snap.partial) envSnapshots.set(env, snap);
+            const prev = get();
+            const nextClients = reconcileWithLocalMutations(
+              "client",
+              keepOnPartial(snap.clients, prev.clients, snap.partial),
+              prev.clients,
+            );
+            const nextProducts = reconcileWithLocalMutations(
+              "product",
+              keepOnPartial(snap.products, prev.products, snap.partial),
+              prev.products,
+            );
             set({
-              clients: keepOnPartial(snap.clients, get().clients, snap.partial),
-              products: keepOnPartial(snap.products, get().products, snap.partial).map((p) =>
+              clients: nextClients,
+              products: nextProducts.map((p) =>
                 p.financialStatus === "MGMV" && p.situation === "Em Aberto"
                   ? { ...p, situation: "Resolvido" as Situation }
                   : p,
@@ -791,6 +819,70 @@ export const useStore = create<State>()((set, get) => ({
           }
         })();
         await refreshInFlight;
+      },
+      applyRealtimeRow: (e) => {
+        if (e.table !== "clients" && e.table !== "products") return;
+        const state = get();
+        const row = e.newRow ?? e.oldRow;
+        if (!row) return;
+        // Só aplica linhas do ambiente ativo (e, no modo teste, do próprio dono).
+        const rowEnv = (row.env as AppEnv | undefined) ?? "producao";
+        if (rowEnv !== state.currentEnv) return;
+        if (rowEnv === "sandbox") {
+          const me = getCurrentUserInfo().id;
+          if (me && row.sandbox_owner && row.sandbox_owner !== me) return;
+        }
+        const id = String(row.id ?? "");
+        if (!id) return;
+        if (e.eventType === "DELETE") {
+          if (e.table === "clients") {
+            set((s) => ({
+              clients: s.clients.filter((c) => c.id !== id),
+              products: s.products.filter((p) => p.clientId !== id),
+              openClientId: s.openClientId === id ? null : s.openClientId,
+            }));
+          } else {
+            set((s) => ({ products: s.products.filter((p) => p.id !== id) }));
+          }
+          return;
+        }
+        if (e.table === "clients") {
+          const client = rowToClient(row as unknown as Parameters<typeof rowToClient>[0]);
+          set((s) => ({
+            clients: s.clients.some((c) => c.id === client.id)
+              ? s.clients.map((c) => (c.id === client.id ? client : c))
+              : [...s.clients, client],
+          }));
+        } else {
+          const product = rowToProduct(row as unknown as Parameters<typeof rowToProduct>[0]);
+          set((s) => ({
+            products: s.products.some((p) => p.id === product.id)
+              ? s.products.map((p) => (p.id === product.id ? product : p))
+              : [...s.products, product],
+          }));
+        }
+      },
+      refreshClientData: async (clientId) => {
+        await awaitPendingWrites();
+        const [clients, products] = await Promise.all([
+          loadClientsByIds([clientId]),
+          loadProductsForClient(clientId),
+        ]);
+        const productIds = new Set(products.map((p) => p.id));
+        clearLocalMutation("client", [clientId]);
+        clearLocalMutation("product", Array.from(productIds));
+        set((s) => ({
+          clients:
+            clients.length > 0
+              ? s.clients.some((c) => c.id === clientId)
+                ? s.clients.map((c) => (c.id === clientId ? clients[0] : c))
+                : [...s.clients, clients[0]]
+              : s.clients.filter((c) => c.id !== clientId),
+          products: [
+            ...s.products.filter((p) => p.clientId !== clientId && !productIds.has(p.id)),
+            ...products,
+          ],
+        }));
       },
       reset: () => {
         hydratePromise = null;
@@ -823,6 +915,9 @@ export const useStore = create<State>()((set, get) => ({
         // Remove do estado local imediatamente: cliente, produtos vinculados,
         // acordo MGMV e a referência aberta. O banco cascateia produtos e
         // mgmv_agreements via FK ON DELETE CASCADE.
+        const prevClients = get().clients;
+        const prevProducts = get().products;
+        markLocalMutation("client", [id], "delete");
         set((s) => ({
           clients: s.clients.filter((c) => c.id !== id),
           products: s.products.filter((p) => p.clientId !== id),
@@ -831,6 +926,8 @@ export const useStore = create<State>()((set, get) => ({
         try {
           await dbDeleteClientsByIdsAsync([id]);
         } catch (err) {
+          clearLocalMutation("client", [id]);
+          set({ clients: prevClients, products: prevProducts });
           console.error("deleteClient failed", err);
           throw err;
         }
@@ -861,10 +958,19 @@ export const useStore = create<State>()((set, get) => ({
       deleteProducts: async (ids) => {
         if (ids.length === 0) return;
         const idSet = new Set(ids);
+        const removed = get().products.filter((p) => idSet.has(p.id));
+        // Marca antes de tocar na tela: nenhuma releitura em voo pode
+        // ressuscitar estes ids enquanto o banco não confirmar.
+        markLocalMutation("product", ids, "delete");
         set((s) => ({ products: s.products.filter((p) => !idSet.has(p.id)) }));
         try {
           await dbDeleteProductsByIdsAsync(ids);
         } catch (err) {
+          // Falha real: devolve os itens à tela em vez de fingir sucesso.
+          clearLocalMutation("product", ids);
+          set((s) => ({
+            products: [...s.products.filter((p) => !idSet.has(p.id)), ...removed],
+          }));
           console.error("deleteProducts failed", err);
           throw err;
         }

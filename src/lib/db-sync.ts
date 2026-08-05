@@ -206,6 +206,100 @@ function logErr(scope: string, err: unknown) {
   console.error(`[db-sync:${scope}]`, err);
 }
 
+// ============= Mutações locais recentes (anti-sobrescrita) =============
+//
+// Escritas saem em lote/debounce e as releituras completas são paginadas,
+// então um snapshot iniciado antes da gravação pode voltar com o estado
+// antigo e desfazer na tela o que o usuário acabou de fazer (item importado
+// some, produto excluído reaparece). O registro abaixo guarda por alguns
+// segundos o que foi criado/alterado/excluído localmente e é usado para
+// reconciliar qualquer snapshot vindo do banco.
+
+export type MutationKind = "client" | "product";
+type MutationOp = "upsert" | "delete";
+
+/** Janela de proteção: tempo suficiente para o banco confirmar a gravação. */
+const MUTATION_TTL_MS = 15_000;
+
+const recentMutations = new Map<string, { op: MutationOp; at: number }>();
+
+function mutationKey(kind: MutationKind, id: string) {
+  return `${kind}:${id}`;
+}
+
+function pruneMutations(now = Date.now()) {
+  for (const [key, entry] of recentMutations) {
+    if (now - entry.at > MUTATION_TTL_MS) recentMutations.delete(key);
+  }
+}
+
+export function markLocalMutation(kind: MutationKind, ids: string[], op: MutationOp): void {
+  const at = Date.now();
+  pruneMutations(at);
+  for (const id of ids) recentMutations.set(mutationKey(kind, id), { op, at });
+}
+
+/** Libera a proteção assim que o banco confirmou o mesmo estado. */
+export function clearLocalMutation(kind: MutationKind, ids: string[]): void {
+  for (const id of ids) recentMutations.delete(mutationKey(kind, id));
+}
+
+export function clearAllLocalMutations(): void {
+  recentMutations.clear();
+}
+
+function mutationFor(kind: MutationKind, id: string) {
+  const entry = recentMutations.get(mutationKey(kind, id));
+  if (!entry) return null;
+  if (Date.now() - entry.at > MUTATION_TTL_MS) {
+    recentMutations.delete(mutationKey(kind, id));
+    return null;
+  }
+  return entry;
+}
+
+/**
+ * Aplica um snapshot do banco respeitando as mutações locais recentes:
+ * - id excluído há pouco nunca ressuscita;
+ * - id criado/alterado há pouco e ausente na leitura é preservado.
+ */
+export function reconcileWithLocalMutations<T extends { id: string }>(
+  kind: MutationKind,
+  incoming: T[],
+  previous: T[],
+): T[] {
+  pruneMutations();
+  if (recentMutations.size === 0) return incoming;
+  const incomingIds = new Set(incoming.map((r) => r.id));
+  const out = incoming.filter((r) => mutationFor(kind, r.id)?.op !== "delete");
+  for (const row of previous) {
+    if (incomingIds.has(row.id)) continue;
+    if (mutationFor(kind, row.id)?.op === "upsert") out.push(row);
+  }
+  return out;
+}
+
+// ============= Barreira de escrita =============
+//
+// Nenhuma releitura pode correr na frente das próprias escritas do usuário.
+
+const inFlightWrites = new Set<Promise<unknown>>();
+
+function trackWrite<T>(p: Promise<T>): Promise<T> {
+  const tracked = p.finally(() => inFlightWrites.delete(tracked as Promise<unknown>));
+  inFlightWrites.add(tracked as Promise<unknown>);
+  return tracked;
+}
+
+/** Garante que tudo o que já foi disparado chegou ao banco antes de ler. */
+export async function awaitPendingWrites(): Promise<void> {
+  for (let i = 0; i < 5; i += 1) {
+    await flushAllPendingUpserts().catch(() => undefined);
+    if (inFlightWrites.size === 0) return;
+    await Promise.allSettled(Array.from(inFlightWrites));
+  }
+}
+
 // ============= Loaders =============
 
 /**
@@ -447,6 +541,57 @@ export async function loadProductsForClient(clientId: string): Promise<Product[]
 }
 
 /** Conclui o acordo e converte seus produtos em uma única transação no banco. */
+
+/** Releitura direcionada de produtos por id (usada após import/edição). */
+export async function loadProductsByIds(ids: string[]): Promise<Product[]> {
+  if (ids.length === 0) return [];
+  const env = await resolveCurrentEnv();
+  const out: Product[] = [];
+  const CHUNK = 100;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    let query = sb()
+      .from("products")
+      .select("*")
+      .in("id", ids.slice(i, i + CHUNK))
+      .eq("env", env);
+    if (env === "sandbox") {
+      const { data: userRes } = await supabase.auth.getUser();
+      const owner = userRes.user?.id;
+      if (!owner) throw new Error("Usuário do modo teste não identificado.");
+      query = query.eq("sandbox_owner", owner);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    out.push(...((data ?? []) as DbProductRow[]).map(rowToProduct));
+  }
+  return out;
+}
+
+/** Releitura direcionada de clientes por id (usada após import). */
+export async function loadClientsByIds(ids: string[]): Promise<Client[]> {
+  if (ids.length === 0) return [];
+  const env = await resolveCurrentEnv();
+  const out: Client[] = [];
+  const CHUNK = 100;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    let query = sb()
+      .from("clients")
+      .select("*")
+      .in("id", ids.slice(i, i + CHUNK))
+      .eq("env", env);
+    if (env === "sandbox") {
+      const { data: userRes } = await supabase.auth.getUser();
+      const owner = userRes.user?.id;
+      if (!owner) throw new Error("Usuário do modo teste não identificado.");
+      query = query.eq("sandbox_owner", owner);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    out.push(...((data ?? []) as DbClientRow[]).map(rowToClient));
+  }
+  return out;
+}
+
 export async function dbCompleteMGMVAgreementAsync(
   clientId: string,
 ): Promise<CompleteMGMVResult> {
@@ -617,11 +762,13 @@ function scheduleClientFlush() {
 }
 
 export function queueProductUpsert(p: Product): void {
+  markLocalMutation("product", [p.id], "upsert");
   pendingProductUpserts.set(p.id, p);
   scheduleProductFlush();
 }
 
 export function queueClientUpsert(c: Client): void {
+  markLocalMutation("client", [c.id], "upsert");
   pendingClientUpserts.set(c.id, c);
   scheduleClientFlush();
 }
@@ -677,22 +824,38 @@ export async function dbUpsertHistoryAsync(h: ImportHistoryEntry): Promise<void>
 
 export async function dbUpsertClientsAsync(clients: Client[]): Promise<void> {
   if (clients.length === 0) return;
+  markLocalMutation("client", clients.map((c) => c.id), "upsert");
   const rows = clients.map((c) => clientToRow(c));
   const CHUNK = 200;
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const { error } = await sb().from("clients").upsert(rows.slice(i, i + CHUNK));
-    if (error) logErr("upsertClientsAsync", error);
-  }
+  await trackWrite(
+    (async () => {
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const { error } = await sb().from("clients").upsert(rows.slice(i, i + CHUNK));
+        if (error) {
+          logErr("upsertClientsAsync", error);
+          throw error;
+        }
+      }
+    })(),
+  );
 }
 
 export async function dbUpsertProductsAsync(products: Product[]): Promise<void> {
   if (products.length === 0) return;
+  markLocalMutation("product", products.map((p) => p.id), "upsert");
   const rows = products.map((p) => productToRow(p));
   const CHUNK = 200;
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const { error } = await sb().from("products").upsert(rows.slice(i, i + CHUNK));
-    if (error) logErr("upsertProductsAsync", error);
-  }
+  await trackWrite(
+    (async () => {
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const { error } = await sb().from("products").upsert(rows.slice(i, i + CHUNK));
+        if (error) {
+          logErr("upsertProductsAsync", error);
+          throw error;
+        }
+      }
+    })(),
+  );
 }
 
 export function dbDeleteHistoryAll(): void {
@@ -846,23 +1009,39 @@ export async function dbReassignAgreementClientAsync(
 /** Apaga clientes pelos ids informados. */
 export async function dbDeleteClientsByIdsAsync(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
+  markLocalMutation("client", ids, "delete");
   const CHUNK = 100;
-  for (let i = 0; i < ids.length; i += CHUNK) {
-    const slice = ids.slice(i, i + CHUNK);
-    const { error } = await sb().from("clients").delete().in("id", slice);
-    if (error) logErr("deleteClientsByIds", error);
-  }
+  await trackWrite(
+    (async () => {
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const slice = ids.slice(i, i + CHUNK);
+        const { error } = await sb().from("clients").delete().in("id", slice);
+        if (error) {
+          logErr("deleteClientsByIds", error);
+          throw error;
+        }
+      }
+    })(),
+  );
 }
 
 /** Apaga produtos pelos ids informados. */
 export async function dbDeleteProductsByIdsAsync(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
+  markLocalMutation("product", ids, "delete");
   const CHUNK = 100;
-  for (let i = 0; i < ids.length; i += CHUNK) {
-    const slice = ids.slice(i, i + CHUNK);
-    const { error } = await sb().from("products").delete().in("id", slice);
-    if (error) logErr("deleteProductsByIds", error);
-  }
+  await trackWrite(
+    (async () => {
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const slice = ids.slice(i, i + CHUNK);
+        const { error } = await sb().from("products").delete().in("id", slice);
+        if (error) {
+          logErr("deleteProductsByIds", error);
+          throw error;
+        }
+      }
+    })(),
+  );
 }
 
 // ============= MGMV relational sync =============
@@ -1443,7 +1622,17 @@ export function suspendRealtimeRefresh(): () => void {
  * eventos continuam reiniciando o timer curto, mas garantimos no máximo um
  * refresh a cada `MAX_WAIT_MS`, e nunca um por evento.
  */
-export function subscribeRealtimeSnapshot(onRefresh: () => void): () => void {
+export interface RealtimeRowEvent {
+  table: string;
+  eventType: "INSERT" | "UPDATE" | "DELETE";
+  newRow: Record<string, unknown> | null;
+  oldRow: Record<string, unknown> | null;
+}
+
+export function subscribeRealtimeSnapshot(
+  onRefresh: () => void,
+  onRow?: (e: RealtimeRowEvent) => void,
+): () => void {
   // No Modo Local não há conexão com o banco na nuvem.
   if (isLocalMode()) return () => {};
   let timer: number | null = null;
@@ -1467,7 +1656,27 @@ export function subscribeRealtimeSnapshot(onRefresh: () => void): () => void {
     }
     onRefresh();
   };
-  const schedule = () => {
+  const schedule = (payload?: unknown) => {
+    if (onRow && payload && typeof payload === "object") {
+      const p = payload as {
+        table?: string;
+        eventType?: string;
+        new?: Record<string, unknown>;
+        old?: Record<string, unknown>;
+      };
+      if (p.table && p.eventType) {
+        try {
+          onRow({
+            table: p.table,
+            eventType: p.eventType as RealtimeRowEvent["eventType"],
+            newRow: p.new && Object.keys(p.new).length > 0 ? p.new : null,
+            oldRow: p.old && Object.keys(p.old).length > 0 ? p.old : null,
+          });
+        } catch {
+          /* aplicação pontual é best-effort; a releitura cobre o resto */
+        }
+      }
+    }
     const now = Date.now();
     if (!firstEventAt) firstEventAt = now;
     if (now - firstEventAt >= MAX_WAIT_MS) {

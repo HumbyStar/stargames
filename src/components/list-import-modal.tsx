@@ -57,7 +57,7 @@ import {
 import { canonicalPhone } from "@/lib/list-import-parser";
 import { reviewListImportLine } from "@/lib/list-import-ai.functions";
 import { parseClientHtml } from "@/lib/html-client-import-parser";
-import { flushAllPendingUpserts } from "@/lib/db-sync";
+import { flushAllPendingUpserts, awaitPendingWrites } from "@/lib/db-sync";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ZipImportReview } from "@/components/zip-import-review";
 
@@ -625,6 +625,8 @@ export function ListImportModal({
       // registrar o histórico. Sem isso, os produtos podem falhar por FK
       // (client_id ainda não commitado) e o import termina "vazio" na onepage.
       await flushAllPendingUpserts();
+      // Confirma no banco tudo o que foi enfileirado antes de anunciar sucesso.
+      await awaitPendingWrites();
       addImportHistory({
         source: "Texto",
         file: `Lista colada (${preview?.groups.length ?? 0} grupos)`,
