@@ -38,6 +38,8 @@ import {
   type PartialPaymentResult,
 } from "@/lib/store";
 import { toast } from "sonner";
+import { ProductNameCombobox } from "@/components/product-name-combobox";
+import { usePlatformOptions, useAddPlatform, normalizePlatform } from "@/lib/platforms";
 import { cn } from "@/lib/utils";
 import {
   productStatusTone,
@@ -143,6 +145,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   );
   const [periodFilter, setPeriodFilter] = usePersistedState<string>("clientes.period", "Todos");
   const [folderFilter, setFolderFilter] = usePersistedState<string>("clientes.folder", "Todas");
+  const platformOptions = usePlatformOptions();
   const compact = true;
   const [showFilters, setShowFilters] = useState(true);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
@@ -576,11 +579,9 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                   className="h-9 rounded-md border border-input bg-background px-2 text-sm"
                 >
                   <option value="Todas">Plataforma</option>
-                  <option>PS5</option>
-                  <option>PS4</option>
-                  <option>PS2</option>
-                  <option>Xbox</option>
-                  <option>Colecionável</option>
+                  {platformOptions.map((p) => (
+                    <option key={p}>{p}</option>
+                  ))}
                 </select>
               </div>
 
@@ -2531,6 +2532,17 @@ function ProductModal({
   );
   const [situation, setSituation] = useState<Situation>(initial?.situation ?? "Em Aberto");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const platformOptions = usePlatformOptions();
+  const addPlatform = useAddPlatform();
+  const [addingPlatform, setAddingPlatform] = useState(false);
+  const [newPlatform, setNewPlatform] = useState("");
+  const platformList = useMemo(
+    () =>
+      platform && !platformOptions.some((p) => p === platform)
+        ? [...platformOptions, platform]
+        : platformOptions,
+    [platformOptions, platform],
+  );
 
   const client = clients.find((c) => c.id === clientId);
   const mgmvActive = !!client?.mgmv && client.mgmv.installments.some((i) => !i.paid);
@@ -2560,6 +2572,8 @@ function ProductModal({
     setFinancialStatus(p?.financialStatus ?? "Reserva");
     setSituation(p?.situation ?? "Em Aberto");
     setNotes(p?.notes ?? "");
+    setAddingPlatform(false);
+    setNewPlatform("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.open, state.product, lockedClientId]);
 
@@ -2601,11 +2615,82 @@ function ProductModal({
           </div>
           <div className="grid gap-1.5">
             <Label>Nome do produto</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
+            <ProductNameCombobox
+              value={name}
+              onChange={setName}
+              onPick={(s) => {
+                if (s.platform) setPlatform(s.platform);
+              }}
+            />
           </div>
           <div className="grid gap-1.5">
             <Label>Plataforma</Label>
-            <Input value={platform} onChange={(e) => setPlatform(e.target.value)} />
+            {addingPlatform ? (
+              <div className="flex gap-2">
+                <Input
+                  autoFocus
+                  value={newPlatform}
+                  placeholder="Nome da nova plataforma"
+                  onChange={(e) => setNewPlatform(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const saved = addPlatform(newPlatform);
+                      if (!saved) return toast.error("Informe o nome da plataforma");
+                      setPlatform(saved);
+                      setAddingPlatform(false);
+                      setNewPlatform("");
+                    }
+                    if (e.key === "Escape") setAddingPlatform(false);
+                  }}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    const saved = addPlatform(newPlatform);
+                    if (!saved) return toast.error("Informe o nome da plataforma");
+                    setPlatform(saved);
+                    setAddingPlatform(false);
+                    setNewPlatform("");
+                    toast.success(`Plataforma "${saved}" salva`);
+                  }}
+                >
+                  Salvar
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setAddingPlatform(false);
+                    setNewPlatform("");
+                  }}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            ) : (
+              <select
+                value={platform}
+                onChange={(e) => {
+                  if (e.target.value === "__add__") {
+                    setNewPlatform("");
+                    setAddingPlatform(true);
+                    return;
+                  }
+                  setPlatform(normalizePlatform(e.target.value));
+                }}
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              >
+                {platformList.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+                <option value="__add__">+ Adicionar plataforma...</option>
+              </select>
+            )}
           </div>
           <div className="grid gap-1.5">
             <Label>Valor total</Label>
