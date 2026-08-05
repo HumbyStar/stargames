@@ -820,6 +820,70 @@ export const useStore = create<State>()((set, get) => ({
         })();
         await refreshInFlight;
       },
+      applyRealtimeRow: (e) => {
+        if (e.table !== "clients" && e.table !== "products") return;
+        const state = get();
+        const row = e.newRow ?? e.oldRow;
+        if (!row) return;
+        // Só aplica linhas do ambiente ativo (e, no modo teste, do próprio dono).
+        const rowEnv = (row.env as AppEnv | undefined) ?? "producao";
+        if (rowEnv !== state.currentEnv) return;
+        if (rowEnv === "sandbox") {
+          const me = getCurrentUserInfo().id;
+          if (me && row.sandbox_owner && row.sandbox_owner !== me) return;
+        }
+        const id = String(row.id ?? "");
+        if (!id) return;
+        if (e.eventType === "DELETE") {
+          if (e.table === "clients") {
+            set((s) => ({
+              clients: s.clients.filter((c) => c.id !== id),
+              products: s.products.filter((p) => p.clientId !== id),
+              openClientId: s.openClientId === id ? null : s.openClientId,
+            }));
+          } else {
+            set((s) => ({ products: s.products.filter((p) => p.id !== id) }));
+          }
+          return;
+        }
+        if (e.table === "clients") {
+          const client = rowToClient(row as Parameters<typeof rowToClient>[0]);
+          set((s) => ({
+            clients: s.clients.some((c) => c.id === client.id)
+              ? s.clients.map((c) => (c.id === client.id ? client : c))
+              : [...s.clients, client],
+          }));
+        } else {
+          const product = rowToProduct(row as Parameters<typeof rowToProduct>[0]);
+          set((s) => ({
+            products: s.products.some((p) => p.id === product.id)
+              ? s.products.map((p) => (p.id === product.id ? product : p))
+              : [...s.products, product],
+          }));
+        }
+      },
+      refreshClientData: async (clientId) => {
+        await awaitPendingWrites();
+        const [clients, products] = await Promise.all([
+          loadClientsByIds([clientId]),
+          loadProductsForClient(clientId),
+        ]);
+        const productIds = new Set(products.map((p) => p.id));
+        clearLocalMutation("client", [clientId]);
+        clearLocalMutation("product", Array.from(productIds));
+        set((s) => ({
+          clients:
+            clients.length > 0
+              ? s.clients.some((c) => c.id === clientId)
+                ? s.clients.map((c) => (c.id === clientId ? clients[0] : c))
+                : [...s.clients, clients[0]]
+              : s.clients.filter((c) => c.id !== clientId),
+          products: [
+            ...s.products.filter((p) => p.clientId !== clientId && !productIds.has(p.id)),
+            ...products,
+          ],
+        }));
+      },
       reset: () => {
         hydratePromise = null;
         set({
