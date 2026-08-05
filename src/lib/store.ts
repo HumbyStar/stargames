@@ -499,7 +499,7 @@ interface State {
   updateClient: (id: string, patch: Partial<Omit<Client, "id">>) => void;
   deleteClient: (id: string) => Promise<void>;
   findClientByPhone: (phone: string) => Client | undefined;
-  addProduct: (p: Omit<Product, "id">) => void;
+  addProduct: (p: Omit<Product, "id">) => Product;
   updateProduct: (id: string, patch: Partial<Omit<Product, "id">>) => void;
   /** Exclui definitivamente produtos (local + banco). */
   deleteProducts: (ids: string[]) => Promise<void>;
@@ -977,12 +977,12 @@ export const useStore = create<State>()((set, get) => ({
         if (!key) return undefined;
         return clients.find((c) => canonicalPhone(c.phone) === key);
       },
-      addProduct: (p) =>
-        set((s) => {
-          const prod = { ...normalizeProductDueDateForCreate(p), id: uid() };
-          queueProductUpsert(prod);
-          return { products: [...s.products, prod] };
-        }),
+      addProduct: (p) => {
+        const prod = { ...normalizeProductDueDateForCreate(p), id: uid() };
+        queueProductUpsert(prod);
+        set((s) => ({ products: [...s.products, prod] }));
+        return prod;
+      },
       updateProduct: (id, patch) =>
         set((s) => {
           const products = s.products.map((p) => (p.id === id ? { ...p, ...patch } : p));
