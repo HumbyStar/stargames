@@ -481,6 +481,10 @@ interface State {
   hydrated: boolean;
   hydrate: () => Promise<void>;
   refreshFromDb: () => Promise<void>;
+  /** Aplica um evento pontual do Realtime (sem releitura completa). */
+  applyRealtimeRow: (e: RealtimeRowEvent) => void;
+  /** Relê do banco apenas os registros de um cliente. */
+  refreshClientData: (clientId: string) => Promise<void>;
   reset: () => void;
   openClient: (id: string | null) => void;
   addClient: (c: Omit<Client, "id">) => Client;
