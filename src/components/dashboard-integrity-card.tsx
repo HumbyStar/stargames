@@ -69,8 +69,12 @@ export function DashboardIntegrityCard() {
       ]
     : [];
 
-  const divergences = rows.filter((r) => r.local !== r.db);
-  const allMatch = diag !== null && !syncing && divergences.length === 0;
+  // `db === null` = contagem indisponível (erro/tempo limite). Nunca tratar
+  // como zero: isso gerava alarme falso de divergência com o banco cheio.
+  const unavailable = rows.filter((r) => r.db === null);
+  const divergences = rows.filter((r) => r.db !== null && r.local !== r.db);
+  const allMatch =
+    diag !== null && !syncing && divergences.length === 0 && unavailable.length === 0;
 
   return (
     <Card title={`Verificação de integridade — ${envLabel}`}>
@@ -91,9 +95,17 @@ export function DashboardIntegrityCard() {
               </>
             ) : diag ? (
               <>
-                <AlertTriangle className="h-4 w-4 text-destructive" />
-                <span className="text-destructive">
-                  {divergences.length} divergência(s) detectada(s) — recarregue o snapshot.
+                <AlertTriangle
+                  className={
+                    divergences.length > 0
+                      ? "h-4 w-4 text-destructive"
+                      : "h-4 w-4 text-muted-foreground"
+                  }
+                />
+                <span className={divergences.length > 0 ? "text-destructive" : "text-muted-foreground"}>
+                  {divergences.length > 0
+                    ? `${divergences.length} divergência(s) detectada(s) — recarregue o snapshot.`
+                    : "Não foi possível verificar alguma contagem no banco agora."}
                 </span>
               </>
             ) : (
@@ -128,17 +140,19 @@ export function DashboardIntegrityCard() {
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const ok = r.local === r.db;
+                  const ok = r.db !== null && r.local === r.db;
                   return (
                     <tr key={r.label} className="border-t border-border">
                       <td className="px-3 py-2">{r.label}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{r.local}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{r.db}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{r.db ?? "—"}</td>
                       <td className="px-3 py-2 text-right">
                         {ok ? (
                           <span className="inline-flex items-center gap-1 text-[color:var(--success)]">
                             <CheckCircle2 className="h-3.5 w-3.5" /> OK
                           </span>
+                        ) : r.db === null ? (
+                          <span className="text-muted-foreground">indisponível</span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-destructive">
                             <AlertTriangle className="h-3.5 w-3.5" />
