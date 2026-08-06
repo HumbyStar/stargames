@@ -14,7 +14,9 @@ import {
   listNfInvoices,
   deleteNfInvoice,
   updateNfInvoice,
+  listNfInvoiceAudit,
   type NfInvoiceRow,
+  type NfAuditEntry,
 } from "@/lib/nf-history.functions";
 import { toast } from "sonner";
 import {
@@ -28,6 +30,7 @@ import {
   Save,
   Trash2,
   X,
+  History,
 } from "lucide-react";
 import { formatBRL } from "@/lib/store";
 import { downloadNfPdf } from "@/lib/nf-pdf";
@@ -37,6 +40,113 @@ interface Props {
   onClose: () => void;
   clientId: string;
   clientName: string;
+}
+
+function diffLines(oldText: string | null, newText: string | null) {
+  const oldLines = (oldText ?? "").split("\n");
+  const newLines = (newText ?? "").split("\n");
+  const oldSet = new Set(oldLines);
+  const newSet = new Set(newLines);
+  return {
+    removed: oldLines.filter((l) => l.trim() && !newSet.has(l)),
+    added: newLines.filter((l) => l.trim() && !oldSet.has(l)),
+  };
+}
+
+function NfAuditTrail({ invoiceId }: { invoiceId: string }) {
+  const listAudit = useServerFn(listNfInvoiceAudit);
+  const [open, setOpen] = useState(false);
+  const [entries, setEntries] = useState<NfAuditEntry[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && entries === null) {
+      setLoading(true);
+      setErr(null);
+      try {
+        setEntries(await listAudit({ data: { id: invoiceId } }));
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : "Falha ao carregar auditoria.");
+      } finally {
+        setLoading(false);
+      }
+    }
+  }
+
+  return (
+    <div className="rounded border border-border/60 bg-muted/20 p-2">
+      <button
+        type="button"
+        onClick={() => void toggle()}
+        className="flex w-full items-center gap-2 text-xs font-medium text-muted-foreground"
+      >
+        <History className="h-3.5 w-3.5" />
+        Histórico de edições
+        {open ? (
+          <ChevronUp className="ml-auto h-3.5 w-3.5" />
+        ) : (
+          <ChevronDown className="ml-auto h-3.5 w-3.5" />
+        )}
+      </button>
+      {open && (
+        <div className="mt-2 space-y-2 text-xs">
+          {loading && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando…
+            </div>
+          )}
+          {err && <div className="text-destructive">{err}</div>}
+          {!loading && !err && entries && entries.length === 0 && (
+            <div className="text-muted-foreground">Nenhum registro de auditoria.</div>
+          )}
+          {!loading &&
+            entries?.map((entry) => {
+              const { added, removed } = diffLines(entry.oldContent, entry.newContent);
+              const isEdit = entry.action === "UPDATE";
+              return (
+                <div key={entry.id} className="rounded border border-border/60 bg-card p-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium">
+                      {entry.action === "INSERT"
+                        ? "Nota gerada"
+                        : isEdit
+                          ? "Nota editada"
+                          : "Nota excluída"}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {new Date(entry.changedAt).toLocaleString("pt-BR")}
+                      {entry.userEmail ? ` · ${entry.userEmail}` : ""}
+                    </span>
+                  </div>
+                  {isEdit && (added.length > 0 || removed.length > 0) && (
+                    <pre className="mt-2 whitespace-pre-wrap font-mono text-[11px] leading-relaxed">
+                      {removed.map((l, i) => (
+                        <div key={`r${i}`} className="text-destructive">
+                          − {l}
+                        </div>
+                      ))}
+                      {added.map((l, i) => (
+                        <div key={`a${i}`} className="text-emerald-600 dark:text-emerald-400">
+                          + {l}
+                        </div>
+                      ))}
+                    </pre>
+                  )}
+                  {isEdit && added.length === 0 && removed.length === 0 && (
+                    <div className="mt-1 text-muted-foreground">
+                      Alteração sem mudança no texto da nota.
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function NfHistoryModal({ open, onClose, clientId, clientName }: Props) {
@@ -275,6 +385,7 @@ export function NfHistoryModal({ open, onClose, clientId, clientName }: Props) {
                       {!expanded && lines.length > 4 ? "\n…" : ""}
                     </pre>
                   )}
+                  <NfAuditTrail invoiceId={row.id} />
                 </li>
               );
             })}

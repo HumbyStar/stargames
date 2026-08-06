@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { hasAnyInternalRole } from "@/lib/session-guard.server";
 
 export interface NfInvoiceRow {
   id: string;
@@ -11,6 +12,45 @@ export interface NfInvoiceRow {
   createdAt: string;
   generatedBy: string | null;
 }
+
+export interface NfAuditEntry {
+  id: string;
+  action: string;
+  changedAt: string;
+  userEmail: string | null;
+  oldContent: string | null;
+  newContent: string | null;
+}
+
+/** Histórico de auditoria (quem editou, quando e o que mudou) de uma nota fiscal. */
+export const listNfInvoiceAudit = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { id: string }) =>
+    z.object({ id: z.string().uuid() }).parse(data),
+  )
+  .handler(async ({ data, context }): Promise<NfAuditEntry[]> => {
+    const allowed = await hasAnyInternalRole(context.supabase, context.userId);
+    if (!allowed) throw new Error("Sem permissão para ver a auditoria.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rows, error } = await supabaseAdmin
+      .from("audit_log")
+      .select("id, action, changed_at, user_email, old_data, new_data")
+      .eq("table_name", "nf_invoices")
+      .eq("row_id", data.id)
+      .order("changed_at", { ascending: false })
+      .limit(50);
+    if (error) throw new Error(error.message);
+    return (rows ?? []).map((r) => ({
+      id: r.id as string,
+      action: r.action as string,
+      changedAt: r.changed_at as string,
+      userEmail: (r.user_email as string | null) ?? null,
+      oldContent:
+        ((r.old_data as { content?: string } | null)?.content as string) ?? null,
+      newContent:
+        ((r.new_data as { content?: string } | null)?.content as string) ?? null,
+    }));
+  });
 
 const SaveSchema = z.object({
   clientId: z.string().uuid(),
