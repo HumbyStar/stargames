@@ -416,13 +416,46 @@ export function ProductsCatalogModal({
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
+                <Select
+                  value={ncmPlatform}
+                  onValueChange={(v) => {
+                    setNcmPlatform(v);
+                    setGen({
+                      running: false,
+                      paused: false,
+                      done: 0,
+                      total: 0,
+                      review: 0,
+                      log: "",
+                    });
+                  }}
+                >
+                  <SelectTrigger className="w-52" disabled={gen.running}>
+                    <SelectValue placeholder="Plataforma" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as plataformas</SelectItem>
+                    {platforms.map((p) => (
+                      <SelectItem key={p} value={p}>
+                        {p}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="text-xs text-muted-foreground">
+                  {pendingCount.isFetching
+                    ? "Contando itens sem NCM..."
+                    : `${pendingCount.data?.remaining ?? 0} item(ns) sem NCM`}
+                </span>
                 <Button className="gap-2" disabled={gen.running} onClick={runGeneration}>
                   {gen.running ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
                     <Sparkles className="size-4" />
                   )}
-                  {gen.running ? "Gerando..." : "Gerar NCM"}
+                  {gen.running
+                    ? "Gerando..."
+                    : `Gerar NCM${ncmPlatformValue ? ` (${ncmPlatformValue})` : ""}`}
                 </Button>
                 {gen.running ? (
                   <Button
