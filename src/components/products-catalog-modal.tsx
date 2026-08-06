@@ -110,6 +110,8 @@ export function ProductsCatalogModal({
   // ---- Geração de NCM em lote -------------------------------------------
   const callPending = useServerFn(listPendingNcmItems);
   const callClassify = useServerFn(classifyNcmBatch);
+  const [ncmPlatform, setNcmPlatform] = useState("all");
+  const ncmPlatformValue = ncmPlatform === "all" ? "" : ncmPlatform;
   const [gen, setGen] = useState<{
     running: boolean;
     paused: boolean;
@@ -121,6 +123,13 @@ export function ProductsCatalogModal({
 
   const pausedRef = useMemo(() => ({ current: false }), []);
 
+  const pendingCount = useQuery({
+    queryKey: ["ncm-pending", ncmPlatformValue],
+    enabled: open,
+    staleTime: 15_000,
+    queryFn: () => callPending({ data: { limit: 1, platform: ncmPlatformValue } }),
+  });
+
   async function runGeneration() {
     pausedRef.current = false;
     setGen((g) => ({ ...g, running: true, paused: false, log: "Levantando itens..." }));
@@ -130,9 +139,17 @@ export function ProductsCatalogModal({
       // Loop: sempre pega o próximo lote de itens ainda sem NCM.
       for (;;) {
         if (pausedRef.current) break;
-        const pending = await callPending({ data: { limit: BATCH_SIZE } });
+        const pending = await callPending({
+          data: { limit: BATCH_SIZE, platform: ncmPlatformValue },
+        });
         if (!pending.items.length) {
-          setGen((g) => ({ ...g, running: false, log: "Tudo classificado." }));
+          setGen((g) => ({
+            ...g,
+            running: false,
+            log: ncmPlatformValue
+              ? `Plataforma ${ncmPlatformValue} totalmente classificada.`
+              : "Tudo classificado.",
+          }));
           break;
         }
         setGen((g) => ({
@@ -156,6 +173,7 @@ export function ProductsCatalogModal({
         }
       }
       queryClient.invalidateQueries({ queryKey: ["product-catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["ncm-pending"] });
       toast.success("Geração de NCM concluída.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao gerar NCM.");
@@ -398,13 +416,46 @@ export function ProductsCatalogModal({
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
+                <Select
+                  value={ncmPlatform}
+                  onValueChange={(v) => {
+                    setNcmPlatform(v);
+                    setGen({
+                      running: false,
+                      paused: false,
+                      done: 0,
+                      total: 0,
+                      review: 0,
+                      log: "",
+                    });
+                  }}
+                >
+                  <SelectTrigger className="w-52" disabled={gen.running}>
+                    <SelectValue placeholder="Plataforma" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as plataformas</SelectItem>
+                    {platforms.map((p) => (
+                      <SelectItem key={p} value={p}>
+                        {p}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="text-xs text-muted-foreground">
+                  {pendingCount.isFetching
+                    ? "Contando itens sem NCM..."
+                    : `${pendingCount.data?.remaining ?? 0} item(ns) sem NCM`}
+                </span>
                 <Button className="gap-2" disabled={gen.running} onClick={runGeneration}>
                   {gen.running ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
                     <Sparkles className="size-4" />
                   )}
-                  {gen.running ? "Gerando..." : "Gerar NCM"}
+                  {gen.running
+                    ? "Gerando..."
+                    : `Gerar NCM${ncmPlatformValue ? ` (${ncmPlatformValue})` : ""}`}
                 </Button>
                 {gen.running ? (
                   <Button
