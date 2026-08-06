@@ -27,7 +27,10 @@ export const classifyNcmBatch = createServerFn({ method: "POST" })
     return { results, saved };
   });
 
-const PendingInput = z.object({ limit: z.number().int().min(1).max(2000).default(500) });
+const PendingInput = z.object({
+  limit: z.number().int().min(1).max(2000).default(500),
+  platform: z.string().default(""),
+});
 
 export const listPendingNcmItems = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -39,7 +42,7 @@ export const listPendingNcmItems = createServerFn({ method: "POST" })
     }): Promise<{ items: Array<{ name: string; platform: string }>; remaining: number }> => {
       const { data: rows, error } = await context.supabase.rpc("product_catalog", {
         _search: "",
-        _platform: "",
+        _platform: data.platform,
         _sort: "qty_desc",
         _page: 1,
         _page_size: Math.min(data.limit, 200),
