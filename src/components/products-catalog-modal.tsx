@@ -214,7 +214,8 @@ export function ProductsCatalogModal({
     URL.revokeObjectURL(url);
   }
 
-  const totalPages = Math.max(1, Math.ceil(table.total / table.pageSize));
+  const remaining = Math.max(0, table.total - table.rows.length);
+  const nextChunk = Math.min(25, remaining);
   const progress = gen.total > 0 ? Math.min(100, (gen.done / gen.total) * 100) : 0;
 
   return (
@@ -335,28 +336,16 @@ export function ProductsCatalogModal({
               </TableBody>
             </Table>
 
-            <div className="flex items-center justify-between pt-3 text-sm text-muted-foreground">
-              <span>
-                {table.total} combinação(ões) — página {table.page} de {totalPages}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={table.page <= 1}
-                  onClick={() => table.setPage(table.page - 1)}
-                >
-                  Anterior
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={table.page >= totalPages}
-                  onClick={() => table.setPage(table.page + 1)}
-                >
-                  Próxima
-                </Button>
-              </div>
+            <div className="space-y-3 pt-3">
+              {remaining > 0 && (
+                <LoadMoreButton
+                  count={nextChunk}
+                  onClick={() => table.setPageSize(table.pageSize + 25)}
+                />
+              )}
+              <p className="text-center text-sm text-muted-foreground">
+                Mostrando {table.rows.length} de {table.total} combinação(ões)
+              </p>
             </div>
           </TabsContent>
 
