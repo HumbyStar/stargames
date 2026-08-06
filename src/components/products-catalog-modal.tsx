@@ -38,6 +38,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useServerTable } from "@/lib/api/use-server-table";
+import { LoadMoreButton } from "@/components/load-more-button";
 import { listProductCatalog, getProductReports } from "@/lib/products-catalog.functions";
 import { classifyNcmBatch, listPendingNcmItems } from "@/lib/product-ncm.functions";
 import { usePlatformOptions } from "@/lib/platforms";
@@ -213,12 +214,13 @@ export function ProductsCatalogModal({
     URL.revokeObjectURL(url);
   }
 
-  const totalPages = Math.max(1, Math.ceil(table.total / table.pageSize));
+  const remaining = Math.max(0, table.total - table.rows.length);
+  const nextChunk = Math.min(25, remaining);
   const progress = gen.total > 0 ? Math.min(100, (gen.done / gen.total) * 100) : 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[92vh] overflow-hidden p-0">
+      <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto p-0">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle>Produtos</DialogTitle>
           <DialogDescription>
@@ -226,7 +228,7 @@ export function ProductsCatalogModal({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="catalog" className="flex max-h-[78vh] flex-col">
+        <Tabs defaultValue="catalog" className="flex flex-col">
           <div className="px-6 pt-4">
             <TabsList>
               <TabsTrigger value="catalog">Catálogo</TabsTrigger>
@@ -236,7 +238,7 @@ export function ProductsCatalogModal({
           </div>
 
           {/* ---------------- Catálogo ---------------- */}
-          <TabsContent value="catalog" className="min-h-0 flex-1 overflow-auto px-6 pb-6">
+          <TabsContent value="catalog" className="px-6 pb-6">
             <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 bg-background py-3">
               <div className="relative min-w-56 flex-1">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -334,33 +336,21 @@ export function ProductsCatalogModal({
               </TableBody>
             </Table>
 
-            <div className="flex items-center justify-between pt-3 text-sm text-muted-foreground">
-              <span>
-                {table.total} combinação(ões) — página {table.page} de {totalPages}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={table.page <= 1}
-                  onClick={() => table.setPage(table.page - 1)}
-                >
-                  Anterior
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={table.page >= totalPages}
-                  onClick={() => table.setPage(table.page + 1)}
-                >
-                  Próxima
-                </Button>
-              </div>
+            <div className="space-y-3 pt-3">
+              {remaining > 0 && (
+                <LoadMoreButton
+                  count={nextChunk}
+                  onClick={() => table.setPageSize(table.pageSize + 25)}
+                />
+              )}
+              <p className="text-center text-sm text-muted-foreground">
+                Mostrando {table.rows.length} de {table.total} combinação(ões)
+              </p>
             </div>
           </TabsContent>
 
           {/* ---------------- Relatórios ---------------- */}
-          <TabsContent value="reports" className="min-h-0 flex-1 overflow-auto px-6 pb-6">
+          <TabsContent value="reports" className="px-6 pb-6">
             {reports.isLoading && (
               <p className="py-10 text-center text-muted-foreground">Carregando relatórios...</p>
             )}
@@ -404,7 +394,7 @@ export function ProductsCatalogModal({
           </TabsContent>
 
           {/* ---------------- NCM ---------------- */}
-          <TabsContent value="ncm" className="min-h-0 flex-1 overflow-auto px-6 pb-6">
+          <TabsContent value="ncm" className="px-6 pb-6">
             <div className="space-y-4 pt-4">
               <div className="rounded-lg border border-border bg-background/40 p-4 text-sm text-muted-foreground">
                 A geração classifica cada combinação de <strong>produto + plataforma</strong> ainda
