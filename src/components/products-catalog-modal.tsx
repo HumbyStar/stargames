@@ -110,6 +110,8 @@ export function ProductsCatalogModal({
   // ---- Geração de NCM em lote -------------------------------------------
   const callPending = useServerFn(listPendingNcmItems);
   const callClassify = useServerFn(classifyNcmBatch);
+  const [ncmPlatform, setNcmPlatform] = useState("all");
+  const ncmPlatformValue = ncmPlatform === "all" ? "" : ncmPlatform;
   const [gen, setGen] = useState<{
     running: boolean;
     paused: boolean;
@@ -121,6 +123,13 @@ export function ProductsCatalogModal({
 
   const pausedRef = useMemo(() => ({ current: false }), []);
 
+  const pendingCount = useQuery({
+    queryKey: ["ncm-pending", ncmPlatformValue],
+    enabled: open,
+    staleTime: 15_000,
+    queryFn: () => callPending({ data: { limit: 1, platform: ncmPlatformValue } }),
+  });
+
   async function runGeneration() {
     pausedRef.current = false;
     setGen((g) => ({ ...g, running: true, paused: false, log: "Levantando itens..." }));
@@ -130,9 +139,17 @@ export function ProductsCatalogModal({
       // Loop: sempre pega o próximo lote de itens ainda sem NCM.
       for (;;) {
         if (pausedRef.current) break;
-        const pending = await callPending({ data: { limit: BATCH_SIZE } });
+        const pending = await callPending({
+          data: { limit: BATCH_SIZE, platform: ncmPlatformValue },
+        });
         if (!pending.items.length) {
-          setGen((g) => ({ ...g, running: false, log: "Tudo classificado." }));
+          setGen((g) => ({
+            ...g,
+            running: false,
+            log: ncmPlatformValue
+              ? `Plataforma ${ncmPlatformValue} totalmente classificada.`
+              : "Tudo classificado.",
+          }));
           break;
         }
         setGen((g) => ({
@@ -156,6 +173,7 @@ export function ProductsCatalogModal({
         }
       }
       queryClient.invalidateQueries({ queryKey: ["product-catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["ncm-pending"] });
       toast.success("Geração de NCM concluída.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao gerar NCM.");
