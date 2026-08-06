@@ -631,6 +631,63 @@ export type Database = {
           },
         ]
       }
+      product_ncm: {
+        Row: {
+          category: string
+          confidence: number | null
+          created_at: string
+          env: Database["public"]["Enums"]["app_env"]
+          id: string
+          name: string
+          name_key: string
+          ncm: string
+          platform: string
+          platform_key: string
+          rationale: string | null
+          sandbox_owner: string | null
+          source: string
+          status: string
+          updated_at: string
+          verified_at: string | null
+        }
+        Insert: {
+          category?: string
+          confidence?: number | null
+          created_at?: string
+          env?: Database["public"]["Enums"]["app_env"]
+          id?: string
+          name: string
+          name_key: string
+          ncm?: string
+          platform?: string
+          platform_key: string
+          rationale?: string | null
+          sandbox_owner?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Update: {
+          category?: string
+          confidence?: number | null
+          created_at?: string
+          env?: Database["public"]["Enums"]["app_env"]
+          id?: string
+          name?: string
+          name_key?: string
+          ncm?: string
+          platform?: string
+          platform_key?: string
+          rationale?: string | null
+          sandbox_owner?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           client_id: string
@@ -1254,6 +1311,33 @@ export type Database = {
           user_id: string
         }[]
       }
+      product_catalog: {
+        Args: {
+          _only_missing_ncm?: boolean
+          _page?: number
+          _page_size?: number
+          _platform?: string
+          _search?: string
+          _sort?: string
+        }
+        Returns: {
+          name: string
+          ncm: string
+          ncm_category: string
+          ncm_confidence: number
+          ncm_rationale: string
+          ncm_source: string
+          ncm_status: string
+          open_qty: number
+          paid_qty: number
+          paid_value: number
+          platform: string
+          total_count: number
+          total_qty: number
+          total_value: number
+        }[]
+      }
+      product_reports: { Args: { _limit?: number }; Returns: Json }
       set_system_backup_schedule: {
         Args: {
           _frequency: string

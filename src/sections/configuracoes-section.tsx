@@ -87,6 +87,8 @@ import type { ImportHistoryEntry } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Wrench } from "lucide-react";
+import { Package } from "lucide-react";
+import { ProductsCatalogModal } from "@/components/products-catalog-modal";
 
 type View =
   | "home"
@@ -398,6 +400,7 @@ export function ConfiguracoesSection() {
   const [mergeBusy, setMergeBusy] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
   const [aiTrainingOpen, setAiTrainingOpen] = useState(false);
+  const [productsOpen, setProductsOpen] = useState(false);
   const duplicateGroups = findDuplicateClientGroups();
 
   const refreshDiag = async () => {
@@ -719,6 +722,12 @@ export function ConfiguracoesSection() {
 
           {/* Cards secundários */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <SecondaryCard
+              icon={Package}
+              title="Produtos"
+              summary="Catálogo completo, filtros por plataforma, relatórios e geração de NCM."
+              onOpen={() => setProductsOpen(true)}
+            />
             <SecondaryCard
               icon={Sun}
               title="Tema e aparência"
@@ -1627,6 +1636,7 @@ export function ConfiguracoesSection() {
       </Dialog>
 
       <AccessManagementDialog open={accessOpen} onOpenChange={setAccessOpen} />
+      <ProductsCatalogModal open={productsOpen} onOpenChange={setProductsOpen} />
       <AiTrainingModal open={aiTrainingOpen} onOpenChange={setAiTrainingOpen} />
       <RestoreBackupModal
         open={restoreModalOpen}
