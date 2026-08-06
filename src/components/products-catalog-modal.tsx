@@ -99,13 +99,13 @@ export function ProductsCatalogModal({
     { initialPageSize: 25, filters, enabled: open },
   );
 
+  const callReports = useServerFn(getProductReports);
   const reports = useQuery({
     queryKey: ["product-reports"],
     enabled: open,
     staleTime: 60_000,
     queryFn: () => callReports({ data: { limit: 20 } }),
   });
-  const callReports = useServerFn(getProductReports);
 
   // ---- Geração de NCM em lote -------------------------------------------
   const callPending = useServerFn(listPendingNcmItems);
