@@ -4,7 +4,7 @@ import { z } from "zod";
 
 const ListInput = z.object({
   page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(200).default(25),
+  pageSize: z.number().int().min(1).max(2000).default(25),
   search: z.string().default(""),
   platform: z.string().default(""),
   sort: z
