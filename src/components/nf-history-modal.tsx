@@ -8,15 +8,29 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { useServerFn } from "@tanstack/react-start";
 import {
   listNfInvoices,
   deleteNfInvoice,
+  updateNfInvoice,
   type NfInvoiceRow,
 } from "@/lib/nf-history.functions";
 import { toast } from "sonner";
-import { Copy, Loader2, Receipt, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Download,
+  Loader2,
+  Pencil,
+  Receipt,
+  Save,
+  Trash2,
+  X,
+} from "lucide-react";
 import { formatBRL } from "@/lib/store";
+import { downloadNfPdf } from "@/lib/nf-pdf";
 
 interface Props {
   open: boolean;
@@ -28,10 +42,15 @@ interface Props {
 export function NfHistoryModal({ open, onClose, clientId, clientName }: Props) {
   const list = useServerFn(listNfInvoices);
   const remove = useServerFn(deleteNfInvoice);
+  const update = useServerFn(updateNfInvoice);
   const [rows, setRows] = useState<NfInvoiceRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [savingId, setSavingId] = useState<string | null>(null);
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -49,6 +68,52 @@ export function NfHistoryModal({ open, onClose, clientId, clientName }: Props) {
   useEffect(() => {
     if (open) refetch();
   }, [open, refetch]);
+
+  useEffect(() => {
+    if (!open) {
+      setExpandedId(null);
+      setEditingId(null);
+      setDraft("");
+    }
+  }, [open]);
+
+  function startEdit(row: NfInvoiceRow) {
+    setEditingId(row.id);
+    setExpandedId(row.id);
+    setDraft(row.content);
+  }
+
+  async function saveEdit(row: NfInvoiceRow) {
+    const content = draft.trim();
+    if (!content) {
+      toast.error("A nota não pode ficar vazia.");
+      return;
+    }
+    setSavingId(row.id);
+    try {
+      const updated = await update({ data: { id: row.id, content } });
+      setRows((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
+      setEditingId(null);
+      toast.success("Nota atualizada.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao salvar nota.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function handlePdf(row: NfInvoiceRow) {
+    try {
+      await downloadNfPdf({
+        clientName,
+        content: editingId === row.id ? draft : row.content,
+        createdAt: row.createdAt,
+        totalCents: row.totalCents,
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao gerar PDF.");
+    }
+  }
 
   async function handleCopy(row: NfInvoiceRow) {
     try {
@@ -108,7 +173,10 @@ export function NfHistoryModal({ open, onClose, clientId, clientName }: Props) {
           <ul className="space-y-3">
             {rows.map((row) => {
               const date = new Date(row.createdAt);
-              const preview = row.content.split("\n").slice(0, 4).join("\n");
+              const lines = row.content.split("\n");
+              const preview = lines.slice(0, 4).join("\n");
+              const expanded = expandedId === row.id;
+              const editing = editingId === row.id;
               return (
                 <li
                   key={row.id}
@@ -124,7 +192,60 @@ export function NfHistoryModal({ open, onClose, clientId, clientName }: Props) {
                         {formatBRL(row.totalCents / 100)}
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setExpandedId(expanded && !editing ? null : row.id)
+                        }
+                        disabled={editing}
+                      >
+                        {expanded ? (
+                          <><ChevronUp className="mr-2 h-4 w-4" /> Recolher</>
+                        ) : (
+                          <><ChevronDown className="mr-2 h-4 w-4" /> Expandir</>
+                        )}
+                      </Button>
+                      {editing ? (
+                        <>
+                          <Button
+                            size="sm"
+                            onClick={() => saveEdit(row)}
+                            disabled={savingId === row.id}
+                          >
+                            {savingId === row.id ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Save className="mr-2 h-4 w-4" />
+                            )}
+                            Salvar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditingId(null)}
+                            disabled={savingId === row.id}
+                          >
+                            <X className="mr-2 h-4 w-4" /> Cancelar
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => startEdit(row)}
+                        >
+                          <Pencil className="mr-2 h-4 w-4" /> Editar
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handlePdf(row)}
+                      >
+                        <Download className="mr-2 h-4 w-4" /> PDF
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"
@@ -136,16 +257,24 @@ export function NfHistoryModal({ open, onClose, clientId, clientName }: Props) {
                         size="sm"
                         variant="ghost"
                         onClick={() => handleDelete(row)}
-                        disabled={deletingId === row.id}
+                        disabled={deletingId === row.id || editing}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
-                  <pre className="whitespace-pre-wrap rounded bg-muted/40 p-2 text-xs font-mono text-muted-foreground">
-                    {preview}
-                    {row.content.split("\n").length > 4 ? "\n…" : ""}
-                  </pre>
+                  {editing ? (
+                    <Textarea
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      className="min-h-72 font-mono text-xs"
+                    />
+                  ) : (
+                    <pre className="whitespace-pre-wrap rounded bg-muted/40 p-2 text-xs font-mono text-muted-foreground">
+                      {expanded ? row.content : preview}
+                      {!expanded && lines.length > 4 ? "\n…" : ""}
+                    </pre>
+                  )}
                 </li>
               );
             })}

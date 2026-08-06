@@ -21,7 +21,8 @@ import {
   type NfProduct,
 } from "@/lib/nf-format";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, Sparkles, AlertCircle } from "lucide-react";
+import { CheckCircle2, Download, Loader2, Sparkles, AlertCircle } from "lucide-react";
+import { downloadNfPdf } from "@/lib/nf-pdf";
 import type { Client } from "@/lib/store";
 
 interface Props {
@@ -124,6 +125,15 @@ export function NfFormatModal({ open, onClose, client, products, onSaved }: Prop
     }
   }
 
+  async function handlePdf() {
+    if (!client || !text) return;
+    try {
+      await downloadNfPdf({ clientName: client.name, content: text, totalCents });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao gerar PDF.");
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl">
@@ -168,7 +178,8 @@ export function NfFormatModal({ open, onClose, client, products, onSaved }: Prop
               className="min-h-72 font-mono text-xs"
             />
             <p className="text-xs text-muted-foreground">
-              Texto pronto para envio ao contador. Você pode ajustar antes de copiar.
+              Texto editável e pronto para envio ao contador. Ajuste antes de
+              confirmar ou baixar em PDF.
             </p>
           </>
         )}
@@ -176,6 +187,9 @@ export function NfFormatModal({ open, onClose, client, products, onSaved }: Prop
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
             Fechar
+          </Button>
+          <Button variant="outline" onClick={handlePdf} disabled={!text || loading}>
+            <Download className="mr-2 h-4 w-4" /> Baixar PDF
           </Button>
           <Button onClick={confirmNota} disabled={!text || loading || saving}>
             {saving ? (

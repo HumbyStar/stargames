@@ -83,3 +83,29 @@ export const deleteNfInvoice = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true } as const;
   });
+
+export const updateNfInvoice = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { id: string; content: string }) =>
+    z
+      .object({ id: z.string().uuid(), content: z.string().min(1) })
+      .parse(data),
+  )
+  .handler(async ({ data, context }): Promise<NfInvoiceRow> => {
+    const { data: row, error } = await context.supabase
+      .from("nf_invoices")
+      .update({ content: data.content })
+      .eq("id", data.id)
+      .select("*")
+      .single();
+    if (error || !row) throw new Error(error?.message ?? "Falha ao atualizar nota");
+    return {
+      id: row.id,
+      clientId: row.client_id,
+      content: row.content,
+      totalCents: row.total_cents,
+      productIds: row.product_ids ?? [],
+      createdAt: row.created_at,
+      generatedBy: row.generated_by,
+    };
+  });
