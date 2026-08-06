@@ -119,24 +119,7 @@ export const saveProductNcm = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => SaveInput.parse(d))
   .handler(async ({ data, context }) => {
-    const digits = data.ncm.replace(/\D/g, "");
-    const key = (v: string) => v.trim().toLowerCase();
-    const { error } = await context.supabase.from("product_ncm").upsert(
-      {
-        name_key: key(data.name),
-        platform_key: key(data.platform),
-        name: data.name.trim(),
-        platform: data.platform.trim(),
-        ncm: digits,
-        category: data.category.trim(),
-        source: "manual",
-        status: digits.length === 8 ? "ok" : "review",
-        confidence: 1,
-        rationale: "Definido manualmente pelo usuário.",
-        verified_at: new Date().toISOString(),
-      },
-      { onConflict: "env,sandbox_owner,name_key,platform_key" },
-    );
-    if (error) throw new Error(error.message);
+    const { saveManualNcm } = await import("@/lib/product-ncm.server");
+    await saveManualNcm(context.supabase, data);
     return { ok: true };
   });
