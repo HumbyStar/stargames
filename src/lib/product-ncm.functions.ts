@@ -32,6 +32,37 @@ const PendingInput = z.object({
   platform: z.string().default(""),
 });
 
+export const applyNcmRules = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => PendingInput.parse(d ?? {}))
+  .handler(
+    async ({
+      data,
+      context,
+    }): Promise<{ processed: number; saved: number; remaining: number }> => {
+      const { data: rows, error } = await context.supabase.rpc("product_catalog", {
+        _search: "",
+        _platform: data.platform,
+        _sort: "qty_desc",
+        _page: 1,
+        _page_size: Math.min(data.limit, 200),
+        _only_missing_ncm: true,
+      });
+      if (error) throw new Error(error.message);
+      const list = (rows ?? []) as Array<Record<string, unknown>>;
+      const items = list.map((r) => ({
+        name: String(r.name ?? ""),
+        platform: String(r.platform ?? ""),
+      }));
+      const remaining = Number(list[0]?.total_count ?? 0);
+      if (!items.length) return { processed: 0, saved: 0, remaining: 0 };
+      const { classifyByRules, upsertNcmRows } = await import("@/lib/product-ncm.server");
+      const results = classifyByRules(items);
+      const saved = await upsertNcmRows(context.supabase, results);
+      return { processed: results.length, saved, remaining };
+    },
+  );
+
 export const listPendingNcmItems = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => PendingInput.parse(d ?? {}))
