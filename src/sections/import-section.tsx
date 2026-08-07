@@ -2057,6 +2057,32 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       await wait(450);
     }
 
+    // Confirmação de exibição: só liberamos a saída da importação assistida
+    // depois que clientes/produtos aparecem de fato nas listas da tela.
+    const zipVisible = await waitUntilVisibleInStore(
+      zipCreatedClientIds,
+      zipCreatedProductIds,
+      {
+        refreshClientIds: Array.from(zipTouchedClientIds),
+        onProgress: (msg) =>
+          setImportProgress((prev) =>
+            prev ? { ...prev, messages: [...prev.messages, msg] } : prev,
+          ),
+      },
+    );
+    if (!zipVisible.ok) {
+      setImportProgress((prev) =>
+        prev
+          ? {
+              ...prev,
+              errors: [
+                ...prev.errors,
+                `Gravado no banco, mas ${zipVisible.missingClients.length} cliente(s) e ${zipVisible.missingProducts.length} produto(s) ainda não apareceram na tela.`,
+              ],
+            }
+          : prev,
+      );
+    }
     addImportHistory({
       source: "HTML Notion",
       file: zipData.zipName,
