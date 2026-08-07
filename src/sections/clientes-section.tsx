@@ -1838,6 +1838,7 @@ function ClientDrawer({
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                      <th className="py-2 px-2 font-medium w-8" />
                       <th className="py-2 px-3 font-medium">Produto</th>
                       <th className="py-2 px-3 font-medium">Plataforma</th>
                       <th className="py-2 px-3 font-medium">Valor Total</th>
@@ -1850,7 +1851,7 @@ function ClientDrawer({
                     {mgmvProducts.length === 0 && (
                       <tr>
                         <td
-                          colSpan={6}
+                          colSpan={7}
                           className="py-4 px-3 text-center text-xs text-muted-foreground"
                         >
                            {mgmvProductsLoading
@@ -1860,7 +1861,14 @@ function ClientDrawer({
                       </tr>
                     )}
                     {mgmvProducts.map((p) => (
-                       <tr key={p.id} className="border-b border-border/60 last:border-0">
+                      <Fragment key={p.id}>
+                       <tr className="border-b border-border/60 last:border-0">
+                        <td className="py-2 px-2 align-middle">
+                          <NcmExpandToggle
+                            expanded={ncmOpenIds.has(p.id)}
+                            onToggle={() => toggleNcmRow(p.id)}
+                          />
+                        </td>
                         <td className="py-2 px-3 font-medium">
                           <span className="inline-flex items-center">
                             {p.name}
@@ -1884,6 +1892,15 @@ function ClientDrawer({
                           {formatDateBR(p.registerDate)}
                         </td>
                       </tr>
+                       {ncmOpenIds.has(p.id) && (
+                         <NcmDetailRow
+                           name={p.name}
+                           platform={p.platform}
+                           colSpan={7}
+                           onEdit={openNcmEdit}
+                         />
+                       )}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
