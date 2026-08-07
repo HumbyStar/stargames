@@ -40,6 +40,7 @@ import {
   estimateBackup,
   getBackupDownloadUrl,
   getBackupSchedule,
+  getBackupBaseInfo,
   listBackups,
   resumeBackup,
   cancelBackup,
@@ -48,6 +49,7 @@ import {
   type BackupDebugEntry,
   type BackupErrorDetails,
   type BackupEstimate,
+  type BackupBaseInfo,
   type BackupRow,
   type BackupScheduleInfo,
 } from "@/lib/backup.functions";
@@ -375,6 +377,16 @@ function _formatBytesLoose(n: number): string {
 }
 
 function formatDurationShort(ms: number): string {
+  return formatDurationShortImpl(ms);
+}
+
+function formatDateTimeBR(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
+function formatDurationShortImpl(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return "—";
   const totalSec = Math.round(ms / 1000);
   if (totalSec < 60) return `${totalSec}s`;
@@ -391,6 +403,8 @@ function BackupPreflightModal({
   loading,
   estimate,
   error,
+  mode,
+  baseGeneratedAt,
   onCancel,
   onConfirm,
   onRetry,
@@ -399,12 +413,14 @@ function BackupPreflightModal({
   loading: boolean;
   estimate: BackupEstimate | null;
   error: string | null;
+  mode: "full" | "incremental";
+  baseGeneratedAt: string | null;
   onCancel: () => void;
   onConfirm: () => void;
   onRetry: () => void;
 }) {
-  const topTables = useMemo(
-    () => (estimate?.tables ?? []).slice().sort((a, b) => b.rows - a.rows).slice(0, 8),
+  const allTables = useMemo(
+    () => (estimate?.tables ?? []).slice().sort((a, b) => b.rows - a.rows),
     [estimate],
   );
   return (
@@ -415,8 +431,9 @@ function BackupPreflightModal({
             <BarChart3 className="size-5" /> Prévia do backup
           </DialogTitle>
           <DialogDescription>
-            Estimativa de tamanho e conteúdo antes de iniciar. Se ultrapassar os limites,
-            o backup ainda pode ser gerado, mas conteúdos serão truncados.
+            {mode === "incremental"
+              ? `Atualização do backup atual${baseGeneratedAt ? ` (gerado em ${formatDateTimeBR(baseGeneratedAt)})` : ""}: só o que mudou desde a última execução é lido do banco.`
+              : "Estimativa de tamanho e conteúdo antes de iniciar. Se ultrapassar os limites, o backup ainda pode ser gerado, mas conteúdos serão truncados."}
           </DialogDescription>
         </DialogHeader>
 
@@ -502,10 +519,10 @@ function BackupPreflightModal({
 
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Maiores tabelas
+                Todas as tabelas ({allTables.length})
               </div>
-              <div className="grid gap-1 text-xs sm:grid-cols-2">
-                {topTables.map((t) => (
+              <div className="grid max-h-64 gap-1 overflow-y-auto pr-1 text-xs sm:grid-cols-2">
+                {allTables.map((t) => (
                   <div key={t.name} className="flex items-center justify-between gap-2">
                     <span className="truncate">{t.name}</span>
                     <span className="tabular-nums text-muted-foreground">
@@ -526,7 +543,11 @@ function BackupPreflightModal({
                 className={estimate.exceedsLimits ? "bg-amber-600 hover:bg-amber-700 text-white" : undefined}
               >
                 <Play className="mr-2 size-4" />
-                {estimate.exceedsLimits ? "Gerar mesmo assim" : "Gerar backup"}
+                {estimate.exceedsLimits
+                  ? "Gerar mesmo assim"
+                  : mode === "incremental"
+                    ? "Atualizar backup"
+                    : "Gerar backup"}
               </Button>
             </div>
           </div>
@@ -733,6 +754,7 @@ export function BackupsPanel() {
   const getUrl = useServerFn(getBackupDownloadUrl);
   const getSchedule = useServerFn(getBackupSchedule);
   const putSchedule = useServerFn(setBackupSchedule);
+  const getBaseInfo = useServerFn(getBackupBaseInfo);
 
   const [rows, setRows] = useState<BackupRow[]>([]);
   // Histórico é sempre de um ambiente por vez; começa no ambiente atual.
@@ -759,6 +781,9 @@ export function BackupsPanel() {
   const [preflightLoading, setPreflightLoading] = useState(false);
   const [preflightData, setPreflightData] = useState<BackupEstimate | null>(null);
   const [preflightError, setPreflightError] = useState<string | null>(null);
+  // "incremental" atualiza o backup existente; "full" refaz do zero.
+  const [pendingMode, setPendingMode] = useState<"full" | "incremental">("incremental");
+  const [baseInfo, setBaseInfo] = useState<BackupBaseInfo | null>(null);
   const setSettingsLocked = useUiStore((s) => s.setSettingsLocked);
 
   useEffect(() => {
@@ -775,12 +800,14 @@ export function BackupsPanel() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [rowsRes, schedRes] = await Promise.all([
+      const [rowsRes, schedRes, baseRes] = await Promise.all([
         list({ data: { env: listEnv } }),
         getSchedule(),
+        getBaseInfo().catch(() => null),
       ]);
       setRows(rowsRes);
       setSchedule(schedRes);
+      setBaseInfo(baseRes);
       if (schedRes.frequency !== "off") {
         const local = utcToLocal(schedRes.hourUtc, schedRes.minuteUtc, schedRes.weekday);
         setLocalTime(local.time);
@@ -791,7 +818,7 @@ export function BackupsPanel() {
     } finally {
       setLoading(false);
     }
-  }, [list, getSchedule, listEnv]);
+  }, [list, getSchedule, getBaseInfo, listEnv]);
 
   useEffect(() => {
     void refresh();
@@ -902,8 +929,21 @@ export function BackupsPanel() {
     [activeRow, preflightData, elapsed],
   );
 
-  const openPreflight = async () => {
+  const loadBaseInfo = useCallback(async () => {
+    try {
+      setBaseInfo(await getBaseInfo());
+    } catch {
+      setBaseInfo(null);
+    }
+  }, [getBaseInfo]);
+
+  useEffect(() => {
+    void loadBaseInfo();
+  }, [loadBaseInfo, listEnv]);
+
+  const openPreflight = async (mode: "full" | "incremental" = "full") => {
     if (running) return;
+    setPendingMode(mode);
     setPreflightOpen(true);
     setPreflightData(null);
     setPreflightError(null);
@@ -924,7 +964,10 @@ export function BackupsPanel() {
     setRunning(true);
     setRunningSince(Date.now());
     setElapsed(0);
-    toast.loading("Gerando backup completo…", { id: "backup-run" });
+    toast.loading(
+      pendingMode === "incremental" ? "Atualizando o backup…" : "Gerando backup completo…",
+      { id: "backup-run" },
+    );
     const attemptLog: BackupDebugEntry[] = [];
     const isTransient = (e: any): boolean => {
       const msg = String(e?.message ?? e ?? "").toLowerCase();
@@ -957,7 +1000,7 @@ export function BackupsPanel() {
           message: `Tentativa ${attempt}/${MAX_ATTEMPTS} de iniciar backup.`,
         });
         try {
-          const res = await create();
+          const res = await create({ data: { mode: pendingMode } });
           attemptLog.push({
             at: new Date().toISOString(),
             level: "info",
@@ -1054,6 +1097,10 @@ export function BackupsPanel() {
           },
         ],
         businessSummary: null,
+        mode: "full",
+        baseGeneratedAt: null,
+        addedRows: 0,
+        removedRows: 0,
       });
       setFailureOpen(true);
       setRunning(false);
@@ -1229,7 +1276,11 @@ export function BackupsPanel() {
             </div>
             <div className="text-2xl font-semibold tabular-nums">{completedCount}</div>
             <div className="text-xs text-muted-foreground">
-              Apenas 1 backup por ambiente: o novo substitui o anterior
+              {baseInfo?.exists && baseInfo.generatedAt
+                ? `Atualizado em ${formatDateTimeBR(baseInfo.generatedAt)} · completo em ${
+                    baseInfo.lastFullAt ? formatDateTimeBR(baseInfo.lastFullAt) : "—"
+                  }`
+                : "Apenas 1 backup por ambiente: o novo substitui o anterior"}
             </div>
           </div>
           <div className="rounded-lg border border-border bg-card/50 p-3">
@@ -1265,14 +1316,27 @@ export function BackupsPanel() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button onClick={() => void openPreflight()} disabled={running}>
+          <Button
+            onClick={() => void openPreflight(baseInfo?.exists ? "incremental" : "full")}
+            disabled={running}
+          >
             {running ? (
               <Loader2 className="mr-2 size-4 animate-spin" />
             ) : (
               <Play className="mr-2 size-4" />
             )}
-            Gerar backup agora
+            {baseInfo?.exists ? "Atualizar backup" : "Gerar backup agora"}
           </Button>
+          {baseInfo?.exists && (
+            <Button
+              variant="outline"
+              onClick={() => void openPreflight("full")}
+              disabled={running}
+            >
+              <RefreshCcw className="mr-2 size-4" />
+              Refazer do zero
+            </Button>
+          )}
           <Button variant="outline" onClick={() => void refresh()} disabled={loading || running}>
             <RefreshCcw className={cn("mr-2 size-4", loading && "animate-spin")} />
             Atualizar
@@ -1542,8 +1606,10 @@ export function BackupsPanel() {
         loading={preflightLoading}
         estimate={preflightData}
         error={preflightError}
+        mode={pendingMode}
+        baseGeneratedAt={baseInfo?.generatedAt ?? null}
         onCancel={() => setPreflightOpen(false)}
-        onRetry={() => void openPreflight()}
+        onRetry={() => void openPreflight(pendingMode)}
         onConfirm={() => void handleGenerate()}
       />
     </div>
