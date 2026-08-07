@@ -1432,6 +1432,53 @@ async function removeBackupFile(admin: any, storagePath: string | null): Promise
   if (error) throw new Error(error.message);
 }
 
+async function listBackupFilesRecursive(
+  admin: any,
+  prefix: string,
+  depth = 0,
+): Promise<string[]> {
+  if (depth > 4) return [];
+  const { data, error } = await admin.storage
+    .from(BACKUP_BUCKET)
+    .list(prefix, { limit: 1000, sortBy: { column: "name", order: "asc" } });
+  if (error || !data) return [];
+  const out: string[] = [];
+  for (const entry of data) {
+    const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if ((entry as any).id === null || !(entry as any).metadata) {
+      out.push(...(await listBackupFilesRecursive(admin, path, depth + 1)));
+    } else {
+      out.push(path);
+    }
+  }
+  return out;
+}
+
+/**
+ * Remove arquivos no bucket que não têm mais registro correspondente
+ * (sobras de execuções antigas, canceladas ou interrompidas).
+ */
+async function cleanupOrphanBackupFiles(admin: any) {
+  try {
+    const { data: rows } = await admin.from("system_backups").select("storage_path");
+    const known = new Set(
+      (rows ?? [])
+        .map((r: any) => r.storage_path as string | null)
+        .filter((p: string | null): p is string => Boolean(p)),
+    );
+    const files: string[] = [];
+    for (const env of ["producao", "sandbox"]) {
+      files.push(...(await listBackupFilesRecursive(admin, env)));
+    }
+    const orphans = files.filter((p) => !known.has(p));
+    for (let i = 0; i < orphans.length; i += 100) {
+      await admin.storage.from(BACKUP_BUCKET).remove(orphans.slice(i, i + 100));
+    }
+  } catch (error) {
+    console.error("[backup] orphan cleanup failed:", error);
+  }
+}
+
 async function enforceBackupRetention(admin: any) {
   const { data } = await admin
     .from("system_backups")
