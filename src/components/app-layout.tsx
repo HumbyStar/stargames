@@ -40,6 +40,8 @@ import { useUiStore } from "@/lib/ui-store";
 import { setUiValue, subscribeRealtimeSnapshot } from "@/lib/db-sync";
 import { notifyRowConfirmed } from "@/lib/write-confirm";
 import { useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { getDashboardAggregates } from "@/lib/api/queries.functions";
 import { HydrationSplash, useHydrationUserName } from "@/components/hydration-splash";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -1306,6 +1308,32 @@ export function AppLayout({ children }: { children?: ReactNode }) {
   const queryClient = useQueryClient();
   const userName = useHydrationUserName();
   const [warm, setWarm] = useState(false);
+  // Os cards do dashboard só devem aparecer com números reais. Pré-carregamos
+  // os agregados durante o splash, com limite curto para não atrasar a abertura.
+  const [metricsReady, setMetricsReady] = useState(false);
+  const aggregatesFn = useServerFn(getDashboardAggregates);
+  useEffect(() => {
+    let cancelled = false;
+    const done = () => {
+      if (!cancelled) setMetricsReady(true);
+    };
+    const timeout = window.setTimeout(done, 1200);
+    void queryClient
+      .prefetchQuery({
+        queryKey: ["dashboard-aggregates"],
+        queryFn: () => aggregatesFn(),
+        staleTime: 30_000,
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        window.clearTimeout(timeout);
+        done();
+      });
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [queryClient, aggregatesFn]);
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
@@ -1404,7 +1432,7 @@ export function AppLayout({ children }: { children?: ReactNode }) {
     };
   }, []);
 
-  if (!hydrated || !warm) {
+  if (!hydrated || !warm || !metricsReady) {
     return <HydrationSplash userName={userName} />;
   }
 

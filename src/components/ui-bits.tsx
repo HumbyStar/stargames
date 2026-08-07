@@ -11,6 +11,7 @@ export function MetricCard({
   hint,
   onClick,
   tooltip,
+  loading = false,
 }: {
   label: string;
   value: string | number;
@@ -18,6 +19,8 @@ export function MetricCard({
   hint?: string;
   onClick?: () => void;
   tooltip?: string;
+  /** Mostra um placeholder animado no lugar do valor enquanto carrega. */
+  loading?: boolean;
 }) {
   const valueClass = {
     default: "text-foreground",
@@ -27,12 +30,22 @@ export function MetricCard({
     warning: "text-[color:var(--warning-foreground)]",
   }[status];
 
+  const valueNode = loading ? (
+    <span
+      aria-hidden
+      className="mt-2 block h-8 w-16 animate-pulse rounded-md bg-muted"
+    />
+  ) : (
+    <p className={cn("mt-2 text-2xl font-semibold tabular-nums", valueClass)}>{value}</p>
+  );
+
   if (onClick) {
     return (
       <button
         type="button"
         onClick={onClick}
         title={tooltip ?? `Ver ${label.toLowerCase()}`}
+        aria-busy={loading}
         className={cn(
           "group relative w-full text-left rounded-xl border border-border bg-card p-4 shadow-xs cursor-pointer transition-all",
           "hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md hover:shadow-primary/10",
@@ -43,16 +56,16 @@ export function MetricCard({
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
           <ChevronRight className="size-4 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
         </div>
-        <p className={cn("mt-2 text-2xl font-semibold tabular-nums", valueClass)}>{value}</p>
+        {valueNode}
         {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
       </button>
     );
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
+    <div className="rounded-xl border border-border bg-card p-4 shadow-xs" aria-busy={loading}>
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={cn("mt-2 text-2xl font-semibold tabular-nums", valueClass)}>{value}</p>
+      {valueNode}
       {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
     </div>
   );
@@ -135,9 +148,28 @@ export function PageHeader({
 
 export function StackedBar({
   segments,
+  loading = false,
 }: {
   segments: { label: string; percent: number; color: string }[];
+  /** Placeholder animado enquanto os percentuais não estão disponíveis. */
+  loading?: boolean;
 }) {
+  if (loading) {
+    return (
+      <div className="space-y-3" aria-busy>
+        <div className="h-3 w-full animate-pulse rounded-full bg-muted" />
+        <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
+          {segments.map((s) => (
+            <div key={s.label} className="flex items-center gap-2">
+              <span className="size-2 rounded-full bg-muted" />
+              <span className="text-muted-foreground">{s.label}</span>
+              <span className="inline-block h-3 w-7 animate-pulse rounded bg-muted" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="space-y-3">
       <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">

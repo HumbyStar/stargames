@@ -16,6 +16,32 @@ import { ClientesSection } from "@/sections/clientes-section";
 import { scrollToSection } from "@/lib/scroll-to-section";
 import { setUiValue } from "@/lib/db-sync";
 import { useListExpansionStore, type ListSection } from "@/lib/list-expansion";
+import { useSandbox } from "@/lib/use-sandbox";
+import type { DashboardAggregates } from "@/lib/api/queries.functions";
+
+// Cache local dos últimos agregados por ambiente: ao recarregar, a tela abre
+// com os últimos números conhecidos (nunca com zeros falsos) e só atualiza
+// quando a consulta responde.
+const AGG_CACHE_PREFIX = "sg_dashboard_aggregates:";
+
+function readAggregatesCache(env: string): DashboardAggregates | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(AGG_CACHE_PREFIX + env);
+    return raw ? (JSON.parse(raw) as DashboardAggregates) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeAggregatesCache(env: string, data: DashboardAggregates) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(AGG_CACHE_PREFIX + env, JSON.stringify(data));
+  } catch {
+    /* quota cheia: cache é apenas otimização */
+  }
+}
 
 const CollectionSection = lazy(() =>
   import("@/sections/collection-section").then((m) => ({ default: m.CollectionSection })),
@@ -61,6 +87,10 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
   // cada clique aplica o filtro correspondente na seção-alvo, expande a
   // lista e faz scroll até lá.
   const aggregatesFn = useServerFn(getDashboardAggregates);
+  const { state: sandboxState } = useSandbox();
+  const env = sandboxState.active ? "sandbox" : "producao";
+  const cachedRef = useRef<DashboardAggregates | null>(null);
+  if (cachedRef.current === null) cachedRef.current = readAggregatesCache(env);
   const aggregatesQuery = useQuery({
     queryKey: ["dashboard-aggregates"],
     queryFn: () => aggregatesFn(),
@@ -104,7 +134,9 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
 
   // Instrumentamos o badge com o tempo do fetch server-side (round-trip).
   const perfStartRef = useRef<number>(performance.now());
-  const aggregates = aggregatesQuery.data ?? {
+  const cached = cachedRef.current;
+  const aggregates: DashboardAggregates = aggregatesQuery.data ??
+    cached ?? {
     totalClients: 0,
     totalProducts: 0,
     reservasAtivas: 0,
@@ -135,7 +167,15 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
       financialStatus: string;
     }>,
   };
+  // Sem dados reais nem cache → placeholders (nunca zeros falsos).
+  const metricsLoading = !aggregatesQuery.data && !cached;
   const isSuccess = aggregatesQuery.isSuccess;
+
+  // Persiste o último resultado para a próxima abertura do sistema.
+  useEffect(() => {
+    if (aggregatesQuery.data) writeAggregatesCache(env, aggregatesQuery.data);
+  }, [aggregatesQuery.data, env]);
+
   // IMPORTANTE: reportar métricas SEMPRE em efeito (nunca durante o render).
   // Emitir durante o render atualiza o estado do badge no meio da fase de
   // render e faz o React reiniciar a renderização em loop infinito
@@ -206,15 +246,15 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
-        <MetricCard label="Total Clientes" value={totalClients} onClick={openHandlers["total-clients"]} tooltip="Ver clientes cadastrados" />
-        <MetricCard label="Reservas Ativas" value={reservasAtivas} status="primary" onClick={openHandlers["active-reservations"]} tooltip="Ver reservas ativas" />
-        <MetricCard label="Reservas Vencidas" value={reservasVencidas} status="danger" onClick={openHandlers["overdue-reservations"]} tooltip="Ver reservas vencidas" />
-        <MetricCard label="Pendências" value={pendencias} status="danger" onClick={openHandlers.pending} tooltip="Ver pendências em aberto" />
-        <MetricCard label="Clientes MGMV" value={clientesMGMV} onClick={openHandlers["mgmv-clients"]} tooltip="Ver clientes MGMV" />
-        <MetricCard label="MGMV Vencidas" value={mgmvVencidas} status="danger" onClick={openHandlers["mgmv-overdue"]} tooltip="Ver MGMV vencidas" />
-        <MetricCard label="Pagos Ag. Envio" value={pagosAgEnvio} status="success" onClick={openHandlers["paid-awaiting-shipment"]} tooltip="Ver pagos aguardando envio" />
-        <MetricCard label="Desistências" value={desistencias} onClick={openHandlers.withdrawals} tooltip="Ver desistências" />
-        <MetricCard label="Abandonos" value={abandonos} onClick={openHandlers.abandons} tooltip="Ver abandonos" />
+        <MetricCard loading={metricsLoading} label="Total Clientes" value={totalClients} onClick={openHandlers["total-clients"]} tooltip="Ver clientes cadastrados" />
+        <MetricCard loading={metricsLoading} label="Reservas Ativas" value={reservasAtivas} status="primary" onClick={openHandlers["active-reservations"]} tooltip="Ver reservas ativas" />
+        <MetricCard loading={metricsLoading} label="Reservas Vencidas" value={reservasVencidas} status="danger" onClick={openHandlers["overdue-reservations"]} tooltip="Ver reservas vencidas" />
+        <MetricCard loading={metricsLoading} label="Pendências" value={pendencias} status="danger" onClick={openHandlers.pending} tooltip="Ver pendências em aberto" />
+        <MetricCard loading={metricsLoading} label="Clientes MGMV" value={clientesMGMV} onClick={openHandlers["mgmv-clients"]} tooltip="Ver clientes MGMV" />
+        <MetricCard loading={metricsLoading} label="MGMV Vencidas" value={mgmvVencidas} status="danger" onClick={openHandlers["mgmv-overdue"]} tooltip="Ver MGMV vencidas" />
+        <MetricCard loading={metricsLoading} label="Pagos Ag. Envio" value={pagosAgEnvio} status="success" onClick={openHandlers["paid-awaiting-shipment"]} tooltip="Ver pagos aguardando envio" />
+        <MetricCard loading={metricsLoading} label="Desistências" value={desistencias} onClick={openHandlers.withdrawals} tooltip="Ver desistências" />
+        <MetricCard loading={metricsLoading} label="Abandonos" value={abandonos} onClick={openHandlers.abandons} tooltip="Ver abandonos" />
       </div>
 
       <div className="mt-6 flex flex-wrap gap-2">
@@ -225,17 +265,20 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <Card title="Status Financeiro">
-          <StackedBar segments={financialSegments} />
+          <StackedBar segments={financialSegments} loading={metricsLoading} />
         </Card>
         <Card title="Situação dos Produtos">
-          <StackedBar segments={situationSegments} />
+          <StackedBar segments={situationSegments} loading={metricsLoading} />
         </Card>
       </div>
 
       <div className="mt-6">
         <Card title="Alertas Operacionais">
           <div className="space-y-3">
-            {topAlerts.map((a) => (
+            {metricsLoading && (
+              <div className="h-14 w-full animate-pulse rounded-lg bg-muted" aria-hidden />
+            )}
+            {!metricsLoading && topAlerts.map((a) => (
               <Alert
                 key={a.productId}
                 type="danger"
@@ -253,7 +296,7 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
                 tooltip="Abrir lista filtrada"
               />
             ))}
-            {pagosAgEnvio > 0 && (
+            {!metricsLoading && pagosAgEnvio > 0 && (
               <Alert
                 type="success"
                 title="Pagos aguardando envio"
@@ -262,7 +305,7 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
                 tooltip="Ver pagos aguardando envio"
               />
             )}
-            {mgmvVencidas > 0 && (
+            {!metricsLoading && mgmvVencidas > 0 && (
               <Alert
                 type="warning"
                 title="Parcelas MGMV vencidas"
