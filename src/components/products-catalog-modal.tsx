@@ -180,7 +180,16 @@ export function ProductsCatalogModal({
       queryClient.invalidateQueries({ queryKey: ["product-catalog"] });
       queryClient.invalidateQueries({ queryKey: ["ncm-pending"] });
       await table.refetch();
-      setGen({ running: false, paused: false, done: 0, total: 0, review: 0, log: "", steps: [] });
+      setGen({
+        running: false,
+        mode: "none",
+        paused: false,
+        done: 0,
+        total: 0,
+        review: 0,
+        log: "",
+        steps: [],
+      });
       toast.success(`${res.deleted} classificação(ões) removida(s).`);
       setResetOpen(false);
     } catch (e) {
@@ -195,6 +204,7 @@ export function ProductsCatalogModal({
     setGen((g) => ({
       ...g,
       running: true,
+      mode: "rules",
       paused: false,
       log: "Carregando itens...",
       steps: ["Carregando itens..."],
