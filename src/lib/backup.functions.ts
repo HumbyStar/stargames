@@ -68,6 +68,19 @@ interface BackupProgress {
   paused?: boolean;
   pausedAt?: string;
   runs?: number;
+  /** Metadados da atualização incremental (sobrevivem às continuações). */
+  incremental?: IncrementalMeta;
+}
+
+/** Resumo da atualização incremental gravado no manifesto e no painel. */
+export interface IncrementalMeta {
+  mode: "incremental";
+  baseGeneratedAt: string;
+  lastFullAt: string;
+  incrementalRuns: number;
+  addedRows: number;
+  removedRows: number;
+  refreshedTables: string[];
 }
 
 function emptyProgress(): BackupProgress {
