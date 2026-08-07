@@ -246,15 +246,15 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
-        <MetricCard label="Total Clientes" value={totalClients} onClick={openHandlers["total-clients"]} tooltip="Ver clientes cadastrados" />
-        <MetricCard label="Reservas Ativas" value={reservasAtivas} status="primary" onClick={openHandlers["active-reservations"]} tooltip="Ver reservas ativas" />
-        <MetricCard label="Reservas Vencidas" value={reservasVencidas} status="danger" onClick={openHandlers["overdue-reservations"]} tooltip="Ver reservas vencidas" />
-        <MetricCard label="Pendências" value={pendencias} status="danger" onClick={openHandlers.pending} tooltip="Ver pendências em aberto" />
-        <MetricCard label="Clientes MGMV" value={clientesMGMV} onClick={openHandlers["mgmv-clients"]} tooltip="Ver clientes MGMV" />
-        <MetricCard label="MGMV Vencidas" value={mgmvVencidas} status="danger" onClick={openHandlers["mgmv-overdue"]} tooltip="Ver MGMV vencidas" />
-        <MetricCard label="Pagos Ag. Envio" value={pagosAgEnvio} status="success" onClick={openHandlers["paid-awaiting-shipment"]} tooltip="Ver pagos aguardando envio" />
-        <MetricCard label="Desistências" value={desistencias} onClick={openHandlers.withdrawals} tooltip="Ver desistências" />
-        <MetricCard label="Abandonos" value={abandonos} onClick={openHandlers.abandons} tooltip="Ver abandonos" />
+        <MetricCard loading={metricsLoading} label="Total Clientes" value={totalClients} onClick={openHandlers["total-clients"]} tooltip="Ver clientes cadastrados" />
+        <MetricCard loading={metricsLoading} label="Reservas Ativas" value={reservasAtivas} status="primary" onClick={openHandlers["active-reservations"]} tooltip="Ver reservas ativas" />
+        <MetricCard loading={metricsLoading} label="Reservas Vencidas" value={reservasVencidas} status="danger" onClick={openHandlers["overdue-reservations"]} tooltip="Ver reservas vencidas" />
+        <MetricCard loading={metricsLoading} label="Pendências" value={pendencias} status="danger" onClick={openHandlers.pending} tooltip="Ver pendências em aberto" />
+        <MetricCard loading={metricsLoading} label="Clientes MGMV" value={clientesMGMV} onClick={openHandlers["mgmv-clients"]} tooltip="Ver clientes MGMV" />
+        <MetricCard loading={metricsLoading} label="MGMV Vencidas" value={mgmvVencidas} status="danger" onClick={openHandlers["mgmv-overdue"]} tooltip="Ver MGMV vencidas" />
+        <MetricCard loading={metricsLoading} label="Pagos Ag. Envio" value={pagosAgEnvio} status="success" onClick={openHandlers["paid-awaiting-shipment"]} tooltip="Ver pagos aguardando envio" />
+        <MetricCard loading={metricsLoading} label="Desistências" value={desistencias} onClick={openHandlers.withdrawals} tooltip="Ver desistências" />
+        <MetricCard loading={metricsLoading} label="Abandonos" value={abandonos} onClick={openHandlers.abandons} tooltip="Ver abandonos" />
       </div>
 
       <div className="mt-6 flex flex-wrap gap-2">
@@ -265,17 +265,20 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <Card title="Status Financeiro">
-          <StackedBar segments={financialSegments} />
+          <StackedBar segments={financialSegments} loading={metricsLoading} />
         </Card>
         <Card title="Situação dos Produtos">
-          <StackedBar segments={situationSegments} />
+          <StackedBar segments={situationSegments} loading={metricsLoading} />
         </Card>
       </div>
 
       <div className="mt-6">
         <Card title="Alertas Operacionais">
           <div className="space-y-3">
-            {topAlerts.map((a) => (
+            {metricsLoading && (
+              <div className="h-14 w-full animate-pulse rounded-lg bg-muted" aria-hidden />
+            )}
+            {!metricsLoading && topAlerts.map((a) => (
               <Alert
                 key={a.productId}
                 type="danger"
@@ -293,7 +296,7 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
                 tooltip="Abrir lista filtrada"
               />
             ))}
-            {pagosAgEnvio > 0 && (
+            {!metricsLoading && pagosAgEnvio > 0 && (
               <Alert
                 type="success"
                 title="Pagos aguardando envio"
@@ -302,7 +305,7 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
                 tooltip="Ver pagos aguardando envio"
               />
             )}
-            {mgmvVencidas > 0 && (
+            {!metricsLoading && mgmvVencidas > 0 && (
               <Alert
                 type="warning"
                 title="Parcelas MGMV vencidas"
