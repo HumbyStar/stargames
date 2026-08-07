@@ -2017,7 +2017,15 @@ async function enforceBackupRetention(admin: any, phase: "before" | "after" = "a
 
 // Exposto para o endpoint público (cron) executar sem passar por RPC.
 export async function runScheduledBackup(): Promise<{ id: string; sizeBytes: number }> {
-  const r = await runBackup({ type: "scheduled", createdBy: null });
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  // Agendado atualiza o backup existente; se a base estiver velha ou ausente,
+  // runBackup cai automaticamente para completo.
+  const base = await readBaseManifest(supabaseAdmin, baseKeyFor("producao", null));
+  const r = await runBackup({
+    type: "scheduled",
+    createdBy: null,
+    mode: base ? "incremental" : "full",
+  });
   return { id: r.id, sizeBytes: r.sizeBytes };
 }
 
@@ -2031,7 +2039,7 @@ export async function continueBackupById(
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: row } = await supabaseAdmin
     .from("system_backups")
-    .select("id, storage_path, status, env, type")
+    .select("id, storage_path, status, env, type, progress")
     .eq("id", backupId)
     .maybeSingle();
   if (!row) throw new Error("Backup não encontrado");
@@ -2042,6 +2050,7 @@ export async function continueBackupById(
     type: (row.type as "manual" | "scheduled") ?? "scheduled",
     createdBy: null,
     env: (row.env as "producao" | "sandbox") ?? "producao",
+    mode: (row as any)?.progress?.mode === "incremental" ? "incremental" : "full",
     existing: { id: row.id as string, storagePath: (row.storage_path as string) ?? "" },
   });
   return { id: r.id, sizeBytes: r.sizeBytes, incomplete: Boolean(r.incomplete) };
