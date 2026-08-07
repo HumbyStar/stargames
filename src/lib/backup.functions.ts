@@ -952,6 +952,16 @@ async function runBackup(opts: {
 
   await cleanupStaleBackups(supabaseAdmin);
 
+  // Libera espaço antes de começar: sobras de execuções falhas/canceladas e
+  // backups antigos saem agora, para que o novo arquivo não dispute espaço.
+  if (!opts.existing) {
+    try {
+      await enforceBackupRetention(supabaseAdmin, "before");
+    } catch (error) {
+      console.error("[backup] pre-run cleanup failed:", error);
+    }
+  }
+
   // Backup sempre pertence a um único ambiente. Sem ambiente explícito
   // (cron), assume produção.
   const backupEnv: "producao" | "sandbox" = opts.env ?? "producao";
