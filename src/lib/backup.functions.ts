@@ -2028,7 +2028,7 @@ const JOB_NAME = "system-backup-daily";
 
 export interface BackupScheduleInfo {
   active: boolean;
-  frequency: "off" | "daily" | "weekly";
+  frequency: "off" | "every_10h" | "daily" | "weekly";
   cron: string | null;
   jobId: number | null;
   /** Hora/minuto em UTC extraídos do cron. */
@@ -2060,20 +2060,21 @@ export const getBackupSchedule = createServerFn({ method: "GET" })
     const parts = cron.trim().split(/\s+/);
     if (parts.length !== 5) return off;
     const [min, hour, , , dow] = parts;
-    const frequency: BackupScheduleInfo["frequency"] = dow === "*" ? "daily" : "weekly";
+    const frequency: BackupScheduleInfo["frequency"] =
+      hour.includes("/") ? "every_10h" : dow === "*" ? "daily" : "weekly";
     return {
       active: Boolean(row.active),
       frequency,
       cron: cron || null,
       jobId: row.jobid ?? null,
-      hourUtc: Number.isFinite(Number(hour)) ? Number(hour) : 3,
+      hourUtc: Number.isFinite(Number(hour.split("/")[0])) ? Number(hour.split("/")[0]) : 3,
       minuteUtc: Number.isFinite(Number(min)) ? Number(min) : 0,
       weekday: Number.isFinite(Number(dow)) ? Number(dow) : 0,
     };
   });
 
 const scheduleSchema = z.object({
-  frequency: z.enum(["off", "daily", "weekly"]),
+  frequency: z.enum(["off", "every_10h", "daily", "weekly"]),
   hourUtc: z.number().int().min(0).max(23).default(3),
   minuteUtc: z.number().int().min(0).max(59).default(0),
   weekday: z.number().int().min(0).max(6).default(0),
