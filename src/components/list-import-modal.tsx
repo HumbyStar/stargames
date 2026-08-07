@@ -62,6 +62,8 @@ import { waitForRowConfirmation } from "@/lib/write-confirm";
 import { waitUntilVisibleInStore } from "@/lib/import-visibility";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ZipImportReview } from "@/components/zip-import-review";
+import { ListImportClientPreview } from "@/components/list-import-client-preview";
+import { StatusLegend } from "@/components/status-legend";
 
 type FilterKey =
   | "all"
@@ -127,6 +129,7 @@ export function ListImportModal({
   const [preview, setPreview] = useState<ListImportPreview | null>(null);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [filterGroup, setFilterGroup] = useState<string | null>(null);
+  const [previewView, setPreviewView] = useState<"clients" | "rows">("clients");
   const [editing, setEditing] = useState<ListImportRow | null>(null);
   const [aiBusyId, setAiBusyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -485,6 +488,10 @@ export function ListImportModal({
     }
     savingRef.current = true;
     setSaving(true);
+    // Toast único de progresso: só vira "sucesso" quando o banco confirma e os
+    // registros já aparecem nas listas da tela (sem F5).
+    const toastId = `list-import-${Date.now()}`;
+    toast.loading("Importando… preparando registros", { id: toastId });
     // Data marcada no cabeçalho da lista (ex.: "25/06/2026"). Quando presente,
     // os produtos importados refletem nessa data em vez de "hoje".
     const headerISO = preview?.headerDate
@@ -632,9 +639,11 @@ export function ListImportModal({
       // Garante que clientes e produtos foram gravados no backend antes de
       // registrar o histórico. Sem isso, os produtos podem falhar por FK
       // (client_id ainda não commitado) e o import termina "vazio" na onepage.
+      toast.loading("Importando… salvando no banco", { id: toastId });
       await flushAllPendingUpserts();
       // Confirma no banco tudo o que foi enfileirado antes de anunciar sucesso.
       await awaitPendingWrites();
+      toast.loading("Importando… confirmando gravação", { id: toastId });
       // Confirmação real: cada cliente/produto criado precisa existir no banco
       // (ou ter chegado pelo evento realtime) antes de exibirmos "sucesso".
       const [clientConfirm, productConfirm] = await Promise.all([
@@ -648,6 +657,7 @@ export function ListImportModal({
       }
       // Confirmação de exibição: a tela de importação assistida só libera a
       // saída depois que os clientes/produtos aparecem de fato nas listas.
+      toast.loading("Importando… carregando na tela em tempo real", { id: toastId });
       const visible = await waitUntilVisibleInStore(createdClientIds, createdProductIds, {
         refreshClientIds: Array.from(touchedClientIds),
         onProgress: (msg) =>
@@ -688,7 +698,20 @@ export function ListImportModal({
             }
           : prev,
       );
-      toast.success(`${clientsCreated} cliente(s) e ${productsCreated} produto(s) salvos.`);
+      // Releitura direcionada final: garante que o drawer do cliente já abra
+      // com os produtos recém-importados, sem recarregar a página.
+      await Promise.all(
+        Array.from(touchedClientIds).map((cid) =>
+          useStore
+            .getState()
+            .refreshClientData(cid)
+            .catch(() => undefined),
+        ),
+      );
+      toast.success(
+        `${clientsCreated} cliente(s) e ${productsCreated} produto(s) já disponíveis no sistema.`,
+        { id: toastId },
+      );
     } catch (e) {
       setProgressState((prev) =>
         prev
@@ -699,7 +722,7 @@ export function ListImportModal({
             }
           : prev,
       );
-      toast.error(e instanceof Error ? e.message : "Falha ao salvar.");
+      toast.error(e instanceof Error ? e.message : "Falha ao salvar.", { id: toastId });
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -1004,6 +1027,36 @@ export function ListImportModal({
               )}
             </div>
 
+            <StatusLegend />
+
+            <div className="flex items-center gap-1 rounded-md border bg-muted/30 p-1 text-xs">
+              <Button
+                size="sm"
+                variant={previewView === "clients" ? "secondary" : "ghost"}
+                className="h-7 px-3 text-xs"
+                onClick={() => setPreviewView("clients")}
+              >
+                <Users className="mr-1 h-3.5 w-3.5" /> Por cliente
+              </Button>
+              <Button
+                size="sm"
+                variant={previewView === "rows" ? "secondary" : "ghost"}
+                className="h-7 px-3 text-xs"
+                onClick={() => setPreviewView("rows")}
+              >
+                <Layers className="mr-1 h-3.5 w-3.5" /> Linhas
+              </Button>
+            </div>
+
+            {previewView === "clients" ? (
+              <ListImportClientPreview
+                rows={filteredRows}
+                aiBusyId={aiBusyId}
+                onEdit={setEditing}
+                onReview={(r) => void reviewWithAI(r)}
+                onIgnore={ignoreRow}
+              />
+            ) : (
             <div className="max-h-[40vh] overflow-auto rounded-md border">
               <table className="w-full text-xs">
                 <thead className="sticky top-0 bg-muted/40">
@@ -1118,6 +1171,7 @@ export function ListImportModal({
                 </tbody>
               </table>
             </div>
+            )}
 
             {preview.totals.errorRows + preview.totals.reviewRows > 0 && (
               <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-700">
