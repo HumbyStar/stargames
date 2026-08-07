@@ -1285,6 +1285,21 @@ function ClientDrawer({
   const [nfWarnOpen, setNfWarnOpen] = useState(false);
   const [nfPendingSelection, setNfPendingSelection] = useState<Product[]>([]);
   const [nfHistoryOpen, setNfHistoryOpen] = useState(false);
+  // Linha expansível com NCM / categoria fiscal por produto.
+  const [ncmOpenIds, setNcmOpenIds] = useState<Set<string>>(new Set());
+  const [ncmTarget, setNcmTarget] = useState<NcmTarget | null>(null);
+  const [ncmDialogOpen, setNcmDialogOpen] = useState(false);
+  const toggleNcmRow = (id: string) =>
+    setNcmOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const openNcmEdit = (t: NcmTarget) => {
+    setNcmTarget(t);
+    setNcmDialogOpen(true);
+  };
   const listInvoicesFn = useServerFn(listNfInvoices);
   const [nfInvoices, setNfInvoices] = useState<NfInvoiceRow[]>([]);
   const refreshNfInvoices = useMemo(
