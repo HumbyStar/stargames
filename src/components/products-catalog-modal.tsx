@@ -281,7 +281,7 @@ export function ProductsCatalogModal({
 
   async function runGeneration() {
     pausedRef.current = false;
-    setGen((g) => ({ ...g, running: true, paused: false, log: "Levantando itens..." }));
+    setGen((g) => ({ ...g, running: true, mode: "ai", paused: false, log: "Levantando itens..." }));
     try {
       let processed = 0;
       let review = 0;
