@@ -157,6 +157,7 @@ export function NfHistoryModal({ open, onClose, clientId, clientName }: Props) {
   const list = useServerFn(listNfInvoices);
   const remove = useServerFn(deleteNfInvoice);
   const update = useServerFn(updateNfInvoice);
+  const [view, setView] = useState<"cliente" | "contador">("cliente");
   const [rows, setRows] = useState<NfInvoiceRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -188,6 +189,7 @@ export function NfHistoryModal({ open, onClose, clientId, clientName }: Props) {
       setExpandedId(null);
       setEditingId(null);
       setDraft("");
+      setView("cliente");
     }
   }, [open]);
 
@@ -265,6 +267,28 @@ export function NfHistoryModal({ open, onClose, clientId, clientName }: Props) {
           </DialogDescription>
         </DialogHeader>
 
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant={view === "cliente" ? "default" : "outline"}
+            onClick={() => setView("cliente")}
+          >
+            <Users className="mr-2 h-4 w-4" /> Nota Fiscal (Cliente)
+          </Button>
+          <Button
+            size="sm"
+            variant={view === "contador" ? "default" : "outline"}
+            onClick={() => setView("contador")}
+          >
+            <FileText className="mr-2 h-4 w-4" /> Nota Contador
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {view === "cliente"
+            ? "Versão original em lotes por NCM."
+            : "Versão item a item (sem lotes), gerada a partir dos produtos da nota."}
+        </p>
+
         {loading && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
@@ -283,7 +307,15 @@ export function NfHistoryModal({ open, onClose, clientId, clientName }: Props) {
           </div>
         )}
 
-        {!loading && rows.length > 0 && (
+        {!loading && rows.length > 0 && view === "contador" && (
+          <ul className="space-y-3">
+            {rows.map((row) => (
+              <AccountantInvoiceCard key={row.id} row={row} clientName={clientName} />
+            ))}
+          </ul>
+        )}
+
+        {!loading && rows.length > 0 && view === "cliente" && (
           <ul className="space-y-3">
             {rows.map((row) => {
               const date = new Date(row.createdAt);
