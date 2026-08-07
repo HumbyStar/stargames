@@ -59,6 +59,7 @@ import { reviewListImportLine } from "@/lib/list-import-ai.functions";
 import { parseClientHtml } from "@/lib/html-client-import-parser";
 import { flushAllPendingUpserts, awaitPendingWrites, dbRowsExist } from "@/lib/db-sync";
 import { waitForRowConfirmation } from "@/lib/write-confirm";
+import { waitUntilVisibleInStore } from "@/lib/import-visibility";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ZipImportReview } from "@/components/zip-import-review";
 
