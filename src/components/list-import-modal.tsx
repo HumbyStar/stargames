@@ -62,6 +62,8 @@ import { waitForRowConfirmation } from "@/lib/write-confirm";
 import { waitUntilVisibleInStore } from "@/lib/import-visibility";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ZipImportReview } from "@/components/zip-import-review";
+import { ListImportClientPreview } from "@/components/list-import-client-preview";
+import { StatusLegend } from "@/components/status-legend";
 
 type FilterKey =
   | "all"
@@ -127,6 +129,7 @@ export function ListImportModal({
   const [preview, setPreview] = useState<ListImportPreview | null>(null);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [filterGroup, setFilterGroup] = useState<string | null>(null);
+  const [previewView, setPreviewView] = useState<"clients" | "rows">("clients");
   const [editing, setEditing] = useState<ListImportRow | null>(null);
   const [aiBusyId, setAiBusyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
