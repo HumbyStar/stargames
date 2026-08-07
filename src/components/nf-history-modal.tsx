@@ -34,6 +34,10 @@ import {
 } from "lucide-react";
 import { formatBRL } from "@/lib/store";
 import { downloadNfPdf } from "@/lib/nf-pdf";
+import { buildAccountantNf } from "@/lib/nf-accountant.functions";
+import { renderAccountantNfText } from "@/lib/nf-format";
+import { cn } from "@/lib/utils";
+import { FileText, Users } from "lucide-react";
 
 interface Props {
   open: boolean;
