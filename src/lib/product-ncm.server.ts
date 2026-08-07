@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
+import { aderirNCM, ncmEntrada } from "@/lib/ncm-rules";
 
 export type Db = SupabaseClient<Database>;
 
@@ -14,6 +15,24 @@ export interface NcmResult extends NcmItem {
   confidence: number;
   rationale: string;
   status: "ok" | "review";
+  source?: "ai" | "rule";
+}
+
+/** Classificação determinística (regra de negócio AderirNCM). */
+export function classifyByRules(items: NcmItem[]): NcmResult[] {
+  return items.map((p) => {
+    const r = aderirNCM(ncmEntrada(p.name, p.platform));
+    return {
+      name: p.name,
+      platform: p.platform,
+      ncm: r.ncm,
+      category: r.descricao,
+      confidence: 1,
+      rationale: `${r.regra}. ${r.motivo}`.slice(0, 200),
+      status: "ok" as const,
+      source: "rule" as const,
+    };
+  });
 }
 
 export function ncmKey(value: string): string {
@@ -214,7 +233,7 @@ export async function upsertNcmRows(db: Db, rows: NcmResult[]): Promise<number> 
       category: r.category,
       confidence: r.confidence,
       rationale: r.rationale,
-      source: "ai",
+      source: r.source ?? "ai",
       status: r.status,
       verified_at: new Date().toISOString(),
     };
