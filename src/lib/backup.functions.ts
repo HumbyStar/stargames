@@ -1479,28 +1479,24 @@ async function cleanupOrphanBackupFiles(admin: any) {
   }
 }
 
-async function enforceBackupRetention(admin: any) {
+async function enforceBackupRetention(admin: any, phase: "before" | "after" = "after") {
   const { data } = await admin
     .from("system_backups")
     .select("id, storage_path, status, size_bytes, created_at, env")
     .eq("status", "completed")
     .order("created_at", { ascending: false });
-  if (!data?.length) return;
-
-  // Retenção é contada por ambiente: 3 backups de produção E 3 de teste.
+  // Rotação estilo WhatsApp: guardamos apenas o backup completo mais recente
+  // de cada ambiente. Todos os anteriores (e seus arquivos) são apagados.
   const retainedByEnv: Record<string, number> = {};
   let retainedBytes = 0;
   const toDelete: any[] = [];
-  const latestByEnv = new Set<string>();
-  for (const row of data) {
+  for (const row of data ?? []) {
     const size = Math.max(0, Number(row.size_bytes ?? 0));
     const env = (row.env as string) ?? "producao";
-    const mustKeepLatest = !latestByEnv.has(env);
-    latestByEnv.add(env);
     const fits =
       (retainedByEnv[env] ?? 0) < BACKUP_RETENTION_COUNT &&
       retainedBytes + size <= BACKUP_RETENTION_BYTES;
-    if (mustKeepLatest || fits) {
+    if (fits) {
       retainedByEnv[env] = (retainedByEnv[env] ?? 0) + 1;
       retainedBytes += size;
     } else {
@@ -1517,12 +1513,12 @@ async function enforceBackupRetention(admin: any) {
     }
   }
 
-  const failedCutoff = new Date(Date.now() - FAILED_BACKUP_RETENTION_MS).toISOString();
+  // Execuções falhas/canceladas não guardam dado útil: saem na hora, para
+  // não ocuparem espaço nem confundirem a leitura do painel.
   const { data: obsoleteRows } = await admin
     .from("system_backups")
     .select("id, storage_path")
-    .in("status", ["failed", "cancelled"])
-    .lt("created_at", failedCutoff);
+    .in("status", ["failed", "cancelled"]);
   for (const row of obsoleteRows ?? []) {
     try {
       await removeBackupFile(admin, row.storage_path as string | null);
@@ -1531,6 +1527,8 @@ async function enforceBackupRetention(admin: any) {
       console.error(`[backup] obsolete cleanup failed for ${row.id}:`, error);
     }
   }
+
+  if (phase === "after") await cleanupOrphanBackupFiles(admin);
 }
 
 // Exposto para o endpoint público (cron) executar sem passar por RPC.
