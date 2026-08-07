@@ -1,4 +1,5 @@
 import { BackupImportCard } from "@/components/backup-import-card";
+import { waitUntilVisibleInStore } from "@/lib/import-visibility";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
