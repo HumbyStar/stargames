@@ -1255,7 +1255,11 @@ export function BackupsPanel() {
             </div>
             <div className="text-2xl font-semibold tabular-nums">{completedCount}</div>
             <div className="text-xs text-muted-foreground">
-              Apenas 1 backup por ambiente: o novo substitui o anterior
+              {baseInfo?.exists && baseInfo.generatedAt
+                ? `Atualizado em ${formatDateTimeBR(baseInfo.generatedAt)} · completo em ${
+                    baseInfo.lastFullAt ? formatDateTimeBR(baseInfo.lastFullAt) : "—"
+                  }`
+                : "Apenas 1 backup por ambiente: o novo substitui o anterior"}
             </div>
           </div>
           <div className="rounded-lg border border-border bg-card/50 p-3">
@@ -1581,8 +1585,10 @@ export function BackupsPanel() {
         loading={preflightLoading}
         estimate={preflightData}
         error={preflightError}
+        mode={pendingMode}
+        baseGeneratedAt={baseInfo?.generatedAt ?? null}
         onCancel={() => setPreflightOpen(false)}
-        onRetry={() => void openPreflight()}
+        onRetry={() => void openPreflight(pendingMode)}
         onConfirm={() => void handleGenerate()}
       />
     </div>
