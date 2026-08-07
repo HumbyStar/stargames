@@ -947,6 +947,393 @@ async function cleanupBackupParts(admin: any, progress: BackupProgress) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Base incremental (estilo WhatsApp): um único backup que vai sendo atualizado
+// ---------------------------------------------------------------------------
+// Ao terminar um backup, os blocos exportados (JSONL por tabela) são movidos
+// para `_base/<chave>/` e viram a "base". Na próxima execução em modo
+// atualização, lemos do banco apenas o que mudou desde a base, aplicamos por
+// cima e regravamos o mesmo pacote — sem reler linha por linha de tudo.
+
+const BASE_PREFIX = "_base";
+/** A cada 7 dias fazemos um backup completo para garantir integridade. */
+const INCREMENTAL_FULL_REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
+/** Acima disso, atualizar sai mais caro que refazer a tabela inteira. */
+const INCREMENTAL_MAX_DELTA_ROWS = 60_000;
+const CHANGE_COLUMN_CANDIDATES = [
+  "updated_at",
+  "changed_at",
+  "created_at",
+  "last_seen",
+  "punched_at",
+];
+/** Tabelas pequenas/sem data confiável: sempre reexportadas por inteiro. */
+const ALWAYS_FULL_TABLES = new Set<string>([
+  "role_permissions",
+  "app_settings",
+  "sandbox_state",
+  "active_sessions",
+  "system_backups",
+]);
+
+export interface BackupBaseManifest {
+  version: 1;
+  key: string;
+  generatedAt: string;
+  lastFullAt: string;
+  incrementalRuns: number;
+  totalRows: number;
+  parts: Record<string, BackupPartState>;
+}
+
+function baseKeyFor(env: "producao" | "sandbox", owner: string | null | undefined): string {
+  return env === "sandbox" ? `sandbox/${owner ?? "anon"}` : "producao";
+}
+
+function baseManifestPath(key: string): string {
+  return `${BASE_PREFIX}/${key}/base.json`;
+}
+
+function basePartPath(key: string, table: string, index: number): string {
+  return `${BASE_PREFIX}/${key}/${table}.${String(index).padStart(4, "0")}.jsonl`;
+}
+
+async function readBaseManifest(admin: any, key: string): Promise<BackupBaseManifest | null> {
+  try {
+    const { data, error } = await admin.storage.from(BACKUP_BUCKET).download(baseManifestPath(key));
+    if (error || !data) return null;
+    const parsed = JSON.parse(await data.text());
+    if (!parsed || parsed.version !== 1 || !parsed.parts) return null;
+    return parsed as BackupBaseManifest;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Move os blocos do backup recém-concluído para a base do ambiente, para que
+ * a próxima execução possa apenas atualizá-los.
+ */
+async function promoteProgressToBase(
+  admin: any,
+  key: string,
+  progress: BackupProgress,
+  meta: { generatedAt: string; lastFullAt: string; incrementalRuns: number },
+): Promise<void> {
+  const baseParts: Record<string, BackupPartState> = {};
+  const keep = new Set<string>();
+  for (const [table, state] of Object.entries(progress.parts)) {
+    const chunks: string[] = [];
+    for (let i = 0; i < state.chunks.length; i++) {
+      const from = state.chunks[i]!;
+      const to = basePartPath(key, table, i);
+      if (from === to) {
+        chunks.push(to);
+        keep.add(to);
+        continue;
+      }
+      await admin.storage.from(BACKUP_BUCKET).remove([to]).catch(() => undefined);
+      const { error } = await admin.storage.from(BACKUP_BUCKET).move(from, to);
+      if (error) throw new Error(`base:${table} ${error.message}`);
+      chunks.push(to);
+      keep.add(to);
+    }
+    baseParts[table] = { ...state, chunks };
+  }
+  const manifest: BackupBaseManifest = {
+    version: 1,
+    key,
+    generatedAt: meta.generatedAt,
+    lastFullAt: meta.lastFullAt,
+    incrementalRuns: meta.incrementalRuns,
+    totalRows: Object.values(baseParts).reduce((acc, s) => acc + s.rows, 0),
+    parts: baseParts,
+  };
+  const { error: upErr } = await admin.storage
+    .from(BACKUP_BUCKET)
+    .upload(baseManifestPath(key), new TextEncoder().encode(JSON.stringify(manifest)), {
+      contentType: "application/json",
+      upsert: true,
+    });
+  if (upErr) throw new Error(upErr.message);
+
+  // Sobras da base anterior que não foram reaproveitadas saem agora.
+  const stale = (await listBackupFilesRecursive(admin, `${BASE_PREFIX}/${key}`)).filter(
+    (p) => !keep.has(p) && !p.endsWith("base.json"),
+  );
+  for (let i = 0; i < stale.length; i += 100) {
+    await admin.storage.from(BACKUP_BUCKET).remove(stale.slice(i, i + 100));
+  }
+}
+
+const changeColumnCache = new Map<string, string | null>();
+
+async function resolveChangeColumn(admin: any, table: string): Promise<string | null> {
+  if (changeColumnCache.has(table)) return changeColumnCache.get(table) ?? null;
+  for (const column of CHANGE_COLUMN_CANDIDATES) {
+    const { error } = await admin.from(table).select(column).limit(1);
+    if (!error) {
+      changeColumnCache.set(table, column);
+      return column;
+    }
+  }
+  changeColumnCache.set(table, null);
+  return null;
+}
+
+/** Descobre o que foi excluído desde a base, usando o registro de auditoria. */
+async function fetchDeletedKeys(
+  admin: any,
+  env: "producao" | "sandbox",
+  since: string,
+): Promise<Map<string, Set<string>> | null> {
+  const byTable = new Map<string, Set<string>>();
+  let from = 0;
+  const page = 1000;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { data, error } = await admin
+      .from("audit_log")
+      .select("table_name,row_id")
+      .eq("action", "DELETE")
+      .eq("env", env)
+      .gt("changed_at", since)
+      .order("changed_at", { ascending: true })
+      .range(from, from + page - 1);
+    if (error) return null;
+    if (!data || data.length === 0) break;
+    for (const row of data) {
+      const table = String((row as any).table_name ?? "");
+      const id = (row as any).row_id;
+      if (!table || id === null || id === undefined) continue;
+      if (!byTable.has(table)) byTable.set(table, new Set());
+      byTable.get(table)!.add(String(id));
+    }
+    if (data.length < page) break;
+    from += page;
+    if (from > 200_000) return null; // volume alto demais: melhor refazer tudo
+  }
+  return byTable;
+}
+
+/** Lê do banco somente as linhas alteradas/criadas depois da base. */
+async function fetchChangedRows(
+  admin: any,
+  table: string,
+  column: string,
+  since: string,
+  env: "producao" | "sandbox",
+  sandboxOwner: string | null | undefined,
+): Promise<any[] | null> {
+  const rows: any[] = [];
+  let from = 0;
+  const page = 1000;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    let query = admin.from(table).select("*").gt(column, since);
+    if (ENV_SCOPED_TABLES.has(table)) {
+      query = query.eq("env", env);
+      if (env === "sandbox" && sandboxOwner) query = query.eq("sandbox_owner", sandboxOwner);
+    }
+    const { data, error } = await query
+      .order(column, { ascending: true })
+      .range(from, from + page - 1);
+    if (error) throw new Error(`[${table}] ${error.message}`);
+    if (!data || data.length === 0) break;
+    rows.push(...data.map((r: any) => stripSearchNoise(table, r)));
+    if (data.length < page) break;
+    from += page;
+    if (rows.length >= INCREMENTAL_MAX_DELTA_ROWS) return null; // vale mais refazer
+  }
+  return rows;
+}
+
+/**
+ * Reescreve os blocos de uma tabela: mantém as linhas da base que não mudaram,
+ * remove as excluídas e acrescenta as novas/alteradas.
+ */
+async function rebuildTablePart(
+  admin: any,
+  opts: {
+    backupId: string;
+    table: string;
+    baseState: BackupPartState;
+    drop: Set<string>;
+    appended: any[];
+  },
+): Promise<{ state: BackupPartState; removed: number }> {
+  const { crc32Init, crc32Update } = await import("@/lib/zip-store-writer");
+  const encoder = new TextEncoder();
+  const { table } = opts;
+  const state: BackupPartState = {
+    chunks: [],
+    rows: 0,
+    bytes: 0,
+    crcState: crc32Init(),
+    offset: 0,
+    done: true,
+    capped: opts.baseState.capped,
+    skipped: opts.baseState.skipped,
+  };
+  let buffer: string[] = [];
+  let bufferRows = 0;
+  let removed = 0;
+
+  const flush = async () => {
+    if (bufferRows === 0) return;
+    const text = (state.rows === bufferRows ? "" : "\n") + buffer.join("\n");
+    const bytes = encoder.encode(text);
+    const path = partPath(opts.backupId, table, state.chunks.length);
+    const { error } = await admin.storage
+      .from(BACKUP_BUCKET)
+      .upload(path, bytes, { contentType: "application/x-ndjson", upsert: true });
+    if (error) throw new Error(`[${table}] ${error.message}`);
+    state.chunks.push(path);
+    state.bytes += bytes.byteLength;
+    state.crcState = crc32Update(state.crcState, bytes);
+    buffer = [];
+    bufferRows = 0;
+  };
+
+  const push = async (line: string) => {
+    buffer.push(line);
+    bufferRows++;
+    state.rows++;
+    if (bufferRows >= PART_CHUNK_ROWS) await flush();
+  };
+
+  for (const path of opts.baseState.chunks) {
+    const { data, error } = await admin.storage.from(BACKUP_BUCKET).download(path);
+    if (error) throw new Error(`[${table}] ${error.message}`);
+    const text = await data.text();
+    for (const rawLine of text.split("\n")) {
+      const line = rawLine.trim();
+      if (!line) continue;
+      let parsed: any;
+      try {
+        parsed = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      const key = restoreRowKey(table, parsed);
+      if (key !== null && opts.drop.has(key)) {
+        removed++;
+        continue;
+      }
+      await push(line);
+    }
+  }
+  for (const row of opts.appended) {
+    await push(JSON.stringify(row));
+  }
+  await flush();
+  return { state, removed };
+}
+
+/**
+ * Monta o estado do backup a partir da base existente + apenas as mudanças.
+ * Retorna `null` quando não dá para atualizar com segurança (sem base, base
+ * corrompida, auditoria insuficiente) — nesse caso o backup sai completo.
+ */
+async function prepareIncrementalSeed(
+  admin: any,
+  opts: {
+    backupId: string;
+    env: "producao" | "sandbox";
+    sandboxOwner: string | null | undefined;
+    onInfo?: (message: string, meta?: Record<string, unknown>) => void;
+  },
+): Promise<{ parts: Record<string, BackupPartState>; totalRows: number; meta: IncrementalMeta } | null> {
+  const key = baseKeyFor(opts.env, opts.sandboxOwner);
+  const base = await readBaseManifest(admin, key);
+  if (!base || !base.generatedAt) return null;
+  if (Date.now() - Date.parse(base.lastFullAt ?? base.generatedAt) > INCREMENTAL_FULL_REFRESH_MS) {
+    opts.onInfo?.("Base com mais de 7 dias — gerando backup completo para garantir integridade.");
+    return null;
+  }
+  const deletedByTable = await fetchDeletedKeys(admin, opts.env, base.generatedAt);
+  if (!deletedByTable) {
+    opts.onInfo?.("Não foi possível ler as exclusões desde o último backup — gerando completo.");
+    return null;
+  }
+
+  const parts: Record<string, BackupPartState> = {};
+  const refreshedTables: string[] = [];
+  let addedRows = 0;
+  let removedRows = 0;
+
+  for (const table of BACKUP_TABLES) {
+    const baseState = base.parts[table];
+    if (!baseState || ALWAYS_FULL_TABLES.has(table)) {
+      refreshedTables.push(table);
+      continue; // sem estado: runBackup exporta essa tabela do zero
+    }
+    const column = await resolveChangeColumn(admin, table);
+    if (!column) {
+      refreshedTables.push(table);
+      continue;
+    }
+    let changed: any[] | null;
+    try {
+      changed = await fetchChangedRows(
+        admin,
+        table,
+        column,
+        base.generatedAt,
+        opts.env,
+        opts.sandboxOwner,
+      );
+    } catch {
+      refreshedTables.push(table);
+      continue;
+    }
+    if (changed === null) {
+      refreshedTables.push(table);
+      continue;
+    }
+    const deleted = deletedByTable.get(table) ?? new Set<string>();
+    if (changed.length === 0 && deleted.size === 0) {
+      parts[table] = { ...baseState, done: true };
+      continue;
+    }
+    const drop = new Set<string>(deleted);
+    for (const row of changed) {
+      const rowKey = restoreRowKey(table, row);
+      if (rowKey !== null) drop.add(rowKey);
+    }
+    const rebuilt = await rebuildTablePart(admin, {
+      backupId: opts.backupId,
+      table,
+      baseState,
+      drop,
+      appended: changed,
+    });
+    parts[table] = rebuilt.state;
+    addedRows += changed.length;
+    removedRows += Math.max(0, rebuilt.removed - changed.length);
+    opts.onInfo?.(
+      `Tabela ${table} atualizada: ${changed.length.toLocaleString("pt-BR")} registro(s) novo(s)/alterado(s).`,
+      { table, changed: changed.length, removed: rebuilt.removed },
+    );
+  }
+
+  if (Object.keys(parts).length === 0) return null;
+
+  return {
+    parts,
+    totalRows: Object.values(parts).reduce((acc, s) => acc + s.rows, 0),
+    meta: {
+      mode: "incremental",
+      baseGeneratedAt: base.generatedAt,
+      lastFullAt: base.lastFullAt ?? base.generatedAt,
+      incrementalRuns: (base.incrementalRuns ?? 0) + 1,
+      addedRows,
+      removedRows,
+      refreshedTables,
+    },
+  };
+}
+
 async function runBackup(opts: {
   type: "manual" | "scheduled";
   createdBy: string | null;
