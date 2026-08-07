@@ -1806,6 +1806,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       skippedAfterCorrection: 0,
     };
     const ignoredItems: NonNullable<ImportProgressState["ignoredItems"]> = [];
+    // Ids criados nesta importação — usados na confirmação de exibição na tela.
+    const zipCreatedClientIds: string[] = [];
+    const zipCreatedProductIds: string[] = [];
+    const zipTouchedClientIds = new Set<string>();
 
     // Agrupa entradas por pasta para processamento lazy/calmo.
     const byFolder = new Map<string, typeof zipData.entries>();
