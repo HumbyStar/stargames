@@ -395,6 +395,7 @@ export function ProductsCatalogModal({
                   <TableHead>NCM</TableHead>
                   <TableHead>Categoria fiscal</TableHead>
                   <TableHead>Origem</TableHead>
+                  <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -423,11 +424,28 @@ export function ProductsCatalogModal({
                             ? "IA"
                             : "—"}
                     </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Editar NCM"
+                        onClick={() =>
+                          openEditor({
+                            name: r.name,
+                            platform: r.platform,
+                            ncm: r.ncm,
+                            category: r.category,
+                          })
+                        }
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {!table.rows.length && (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                    <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                       {table.isFetching ? "Carregando..." : "Nenhum produto encontrado."}
                     </TableCell>
                   </TableRow>
