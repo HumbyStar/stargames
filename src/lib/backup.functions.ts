@@ -2444,6 +2444,11 @@ export interface BackupRow {
   errorDetails: BackupErrorDetails | null;
   debugLog: BackupDebugEntry[];
   businessSummary: BusinessSummary | null;
+  /** "incremental" quando o backup foi apenas atualizado a partir do anterior. */
+  mode: "full" | "incremental";
+  baseGeneratedAt: string | null;
+  addedRows: number;
+  removedRows: number;
 }
 
 export const listBackups = createServerFn({ method: "GET" })
@@ -2485,6 +2490,10 @@ export const listBackups = createServerFn({ method: "GET" })
         r.business_summary && Object.keys(r.business_summary).length > 0
           ? (r.business_summary as BusinessSummary)
           : null,
+      mode: (r.progress as any)?.mode === "incremental" ? "incremental" : "full",
+      baseGeneratedAt: (r.progress as any)?.baseGeneratedAt ?? null,
+      addedRows: Number((r.progress as any)?.addedRows ?? 0),
+      removedRows: Number((r.progress as any)?.removedRows ?? 0),
     }));
   });
 
