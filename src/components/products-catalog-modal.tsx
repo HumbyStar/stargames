@@ -352,6 +352,7 @@ export function ProductsCatalogModal({
                   <TableHead className="text-right">Valor total</TableHead>
                   <TableHead>NCM</TableHead>
                   <TableHead>Categoria fiscal</TableHead>
+                  <TableHead>Origem</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -371,11 +372,20 @@ export function ProductsCatalogModal({
                     <TableCell className="max-w-56 truncate text-muted-foreground">
                       {r.status === "review" && r.ncm === "" ? "Revisar" : r.category || "—"}
                     </TableCell>
+                    <TableCell className="text-xs uppercase text-muted-foreground">
+                      {r.source === "rule"
+                        ? "Regra"
+                        : r.source === "manual"
+                          ? "Manual"
+                          : r.source === "ai"
+                            ? "IA"
+                            : "—"}
+                    </TableCell>
                   </TableRow>
                 ))}
                 {!table.rows.length && (
                   <TableRow>
-                    <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                    <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                       {table.isFetching ? "Carregando..." : "Nenhum produto encontrado."}
                     </TableCell>
                   </TableRow>
@@ -447,7 +457,7 @@ export function ProductsCatalogModal({
                 A classificação segue a <strong>regra de negócio</strong>: menção a videogame/jogo →
                 9504.50.00 “Videogame ou jogo”; boneco original → 9503.00.99 “Boneco colecionável”;
                 pop alternativo/pelúcia → 9503.00.31 “Boneco pelúcia”; figure 3D → 9503.00.80
-                “Figure 3D”; nenhum dos casos → 9504.00.00 padrão “Figure” (3926.40.00). A regra é
+                “Figure 3D”; nenhum dos casos → 3926.40.00 “Figure”. A regra é
                 instantânea e não consome créditos de IA. A geração por IA continua disponível para
                 conferência pontual, em lotes de {BATCH_SIZE}. Classificações editadas manualmente
                 nunca são sobrescritas.
