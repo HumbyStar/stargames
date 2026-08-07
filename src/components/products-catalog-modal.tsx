@@ -6,8 +6,10 @@ import {
   Download,
   Loader2,
   Pause,
+  Pencil,
   Play,
   RefreshCw,
+  RotateCcw,
   Search,
   Sparkles,
   Wand2,
@@ -45,7 +47,20 @@ import {
   applyNcmRules,
   classifyNcmBatch,
   listPendingNcmItems,
+  resetNcmClassifications,
 } from "@/lib/product-ncm.functions";
+import { NcmFlow } from "@/components/ncm-flow";
+import { NcmEditDialog, type NcmTarget } from "@/components/ncm-edit-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { usePlatformOptions } from "@/lib/platforms";
 import { formatBRL } from "@/lib/store";
 import { formatNcm } from "@/lib/nf-format";
@@ -117,7 +132,12 @@ export function ProductsCatalogModal({
   const callPending = useServerFn(listPendingNcmItems);
   const callClassify = useServerFn(classifyNcmBatch);
   const callRules = useServerFn(applyNcmRules);
+  const callReset = useServerFn(resetNcmClassifications);
   const [ncmPlatform, setNcmPlatform] = useState("all");
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<NcmTarget | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const ncmPlatformValue = ncmPlatform === "all" ? "" : ncmPlatform;
   const [gen, setGen] = useState<{
     running: boolean;
@@ -129,6 +149,28 @@ export function ProductsCatalogModal({
   }>({ running: false, paused: false, done: 0, total: 0, review: 0, log: "" });
 
   const pausedRef = useMemo(() => ({ current: false }), []);
+
+  function openEditor(target: NcmTarget | null) {
+    setEditTarget(target);
+    setEditOpen(true);
+  }
+
+  async function runReset() {
+    setResetting(true);
+    try {
+      const res = await callReset({ data: { platform: ncmPlatformValue, includeManual: false } });
+      queryClient.invalidateQueries({ queryKey: ["product-catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["ncm-pending"] });
+      await table.refetch();
+      setGen({ running: false, paused: false, done: 0, total: 0, review: 0, log: "" });
+      toast.success(`${res.deleted} classificação(ões) removida(s).`);
+      setResetOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao resetar NCM.");
+    } finally {
+      setResetting(false);
+    }
+  }
 
   async function runRules() {
     pausedRef.current = false;
@@ -353,6 +395,7 @@ export function ProductsCatalogModal({
                   <TableHead>NCM</TableHead>
                   <TableHead>Categoria fiscal</TableHead>
                   <TableHead>Origem</TableHead>
+                  <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -381,11 +424,28 @@ export function ProductsCatalogModal({
                             ? "IA"
                             : "—"}
                     </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Editar NCM"
+                        onClick={() =>
+                          openEditor({
+                            name: r.name,
+                            platform: r.platform,
+                            ncm: r.ncm,
+                            category: r.category,
+                          })
+                        }
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {!table.rows.length && (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                    <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                       {table.isFetching ? "Carregando..." : "Nenhum produto encontrado."}
                     </TableCell>
                   </TableRow>
@@ -453,15 +513,7 @@ export function ProductsCatalogModal({
           {/* ---------------- NCM ---------------- */}
           <TabsContent value="ncm" className="px-6 pb-6">
             <div className="space-y-4 pt-4">
-              <div className="rounded-lg border border-border bg-background/40 p-4 text-sm text-muted-foreground">
-                A classificação segue a <strong>regra de negócio</strong>: menção a videogame/jogo →
-                9504.50.00 “Videogame ou jogo”; boneco original → 9503.00.99 “Boneco colecionável”;
-                pop alternativo/pelúcia → 9503.00.31 “Boneco pelúcia”; figure 3D → 9503.00.80
-                “Figure 3D”; nenhum dos casos → 3926.40.00 “Figure”. A regra é
-                instantânea e não consome créditos de IA. A geração por IA continua disponível para
-                conferência pontual, em lotes de {BATCH_SIZE}. Classificações editadas manualmente
-                nunca são sobrescritas.
-              </div>
+              <NcmFlow />
 
               <div className="flex flex-wrap items-center gap-2">
                 <Select
@@ -518,6 +570,22 @@ export function ProductsCatalogModal({
                   )}
                   Conferir com IA
                 </Button>
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  disabled={gen.running}
+                  onClick={() => openEditor(null)}
+                >
+                  <Pencil className="size-4" /> Editar NCM de um produto
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="gap-2"
+                  disabled={gen.running || resetting}
+                  onClick={() => setResetOpen(true)}
+                >
+                  <RotateCcw className="size-4" /> Resetar NCM
+                </Button>
                 {gen.running ? (
                   <Button
                     variant="outline"
@@ -544,10 +612,42 @@ export function ProductsCatalogModal({
                   </p>
                 </div>
               )}
+              <p className="text-xs text-muted-foreground">
+                A regra é instantânea e não consome créditos de IA. A conferência por IA roda em
+                lotes de {BATCH_SIZE}. Classificações manuais nunca são sobrescritas.
+              </p>
             </div>
           </TabsContent>
         </Tabs>
       </DialogContent>
+
+      <NcmEditDialog open={editOpen} onOpenChange={setEditOpen} target={editTarget} />
+
+      <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Resetar classificações de NCM?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso apaga os NCMs gerados pela regra e pela IA
+              {ncmPlatformValue ? ` na plataforma ${ncmPlatformValue}` : " de todos os produtos"}.
+              As classificações definidas manualmente são preservadas. Depois você pode aplicar a
+              regra novamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={resetting}
+              onClick={(e) => {
+                e.preventDefault();
+                void runReset();
+              }}
+            >
+              {resetting ? "Resetando..." : "Resetar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
