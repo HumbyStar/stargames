@@ -800,12 +800,14 @@ export function BackupsPanel() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [rowsRes, schedRes] = await Promise.all([
+      const [rowsRes, schedRes, baseRes] = await Promise.all([
         list({ data: { env: listEnv } }),
         getSchedule(),
+        getBaseInfo().catch(() => null),
       ]);
       setRows(rowsRes);
       setSchedule(schedRes);
+      setBaseInfo(baseRes);
       if (schedRes.frequency !== "off") {
         const local = utcToLocal(schedRes.hourUtc, schedRes.minuteUtc, schedRes.weekday);
         setLocalTime(local.time);
