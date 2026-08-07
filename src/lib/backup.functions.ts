@@ -1825,6 +1825,7 @@ async function runBackup(opts: {
       durationMs: duration,
       storageObjectCount,
     });
+    const incrementalMeta = progress.incremental ?? null;
     await supabaseAdmin
       .from("system_backups")
       .update({
@@ -1838,8 +1839,28 @@ async function runBackup(opts: {
         finished_at: new Date().toISOString(),
         business_summary: businessSummary as any,
         debug_log: debugLog,
+        progress: {
+          mode: incrementalMeta ? "incremental" : "full",
+          baseGeneratedAt: incrementalMeta?.baseGeneratedAt ?? null,
+          lastFullAt: incrementalMeta?.lastFullAt ?? now.toISOString(),
+          incrementalRuns: incrementalMeta?.incrementalRuns ?? 0,
+          addedRows: incrementalMeta?.addedRows ?? 0,
+          removedRows: incrementalMeta?.removedRows ?? 0,
+        } as any,
       } as any)
       .eq("id", backupId);
+
+    // A base do ambiente passa a ser este backup: os blocos são movidos (sem
+    // recompactar nem baixar) para `_base/<chave>/`.
+    try {
+      await promoteProgressToBase(supabaseAdmin, baseKeyFor(backupEnv, opts.createdBy), progress, {
+        generatedAt: now.toISOString(),
+        lastFullAt: incrementalMeta?.lastFullAt ?? now.toISOString(),
+        incrementalRuns: incrementalMeta?.incrementalRuns ?? 0,
+      });
+    } catch (error) {
+      console.error("[backup] promote base failed:", error);
+    }
 
     await enforceBackupRetention(supabaseAdmin);
     await cleanupBackupParts(supabaseAdmin, progress);
