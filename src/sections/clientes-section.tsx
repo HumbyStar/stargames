@@ -2038,6 +2038,7 @@ function ClientDrawer({
                     disabled={individualProducts.length === 0}
                   />
                 </th>
+                <th className="py-2 pr-2 font-medium w-8" />
                 <th className="py-2 pr-3 font-medium">Produto</th>
                 <th className="py-2 pr-3 font-medium">Plataforma</th>
                 <th className="py-2 pr-3 font-medium">Total</th>
@@ -2057,8 +2058,8 @@ function ClientDrawer({
                 const editing = productEdit.isEditing(p.id);
                 const draft = productEdit.draftValues;
                 return (
+                  <Fragment key={p.id}>
                   <tr
-                    key={p.id}
                     aria-busy={busyProductIds[p.id] ? true : undefined}
                     className={cn(
                       "border-b border-border/60 last:border-0",
@@ -2074,6 +2075,12 @@ function ClientDrawer({
                         checked={selectedIds.has(p.id)}
                         disabled={!!busyProductIds[p.id]}
                         onChange={() => toggleOne(p.id)}
+                      />
+                    </td>
+                    <td className="py-2 pr-2 align-middle">
+                      <NcmExpandToggle
+                        expanded={ncmOpenIds.has(p.id)}
+                        onToggle={() => toggleNcmRow(p.id)}
                       />
                     </td>
                     <td className="py-2 pr-3 font-medium">
