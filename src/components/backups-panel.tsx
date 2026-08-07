@@ -818,7 +818,7 @@ export function BackupsPanel() {
     } finally {
       setLoading(false);
     }
-  }, [list, getSchedule, listEnv]);
+  }, [list, getSchedule, getBaseInfo, listEnv]);
 
   useEffect(() => {
     void refresh();
