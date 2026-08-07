@@ -943,7 +943,10 @@ export function BackupsPanel() {
     setRunning(true);
     setRunningSince(Date.now());
     setElapsed(0);
-    toast.loading("Gerando backup completo…", { id: "backup-run" });
+    toast.loading(
+      pendingMode === "incremental" ? "Atualizando o backup…" : "Gerando backup completo…",
+      { id: "backup-run" },
+    );
     const attemptLog: BackupDebugEntry[] = [];
     const isTransient = (e: any): boolean => {
       const msg = String(e?.message ?? e ?? "").toLowerCase();
@@ -1288,14 +1291,27 @@ export function BackupsPanel() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button onClick={() => void openPreflight()} disabled={running}>
+          <Button
+            onClick={() => void openPreflight(baseInfo?.exists ? "incremental" : "full")}
+            disabled={running}
+          >
             {running ? (
               <Loader2 className="mr-2 size-4 animate-spin" />
             ) : (
               <Play className="mr-2 size-4" />
             )}
-            Gerar backup agora
+            {baseInfo?.exists ? "Atualizar backup" : "Gerar backup agora"}
           </Button>
+          {baseInfo?.exists && (
+            <Button
+              variant="outline"
+              onClick={() => void openPreflight("full")}
+              disabled={running}
+            >
+              <RefreshCcw className="mr-2 size-4" />
+              Refazer do zero
+            </Button>
+          )}
           <Button variant="outline" onClick={() => void refresh()} disabled={loading || running}>
             <RefreshCcw className={cn("mr-2 size-4", loading && "animate-spin")} />
             Atualizar
