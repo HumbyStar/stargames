@@ -600,12 +600,12 @@ export function ProductsCatalogModal({
                     : `${pendingCount.data?.remaining ?? 0} item(ns) sem NCM`}
                 </span>
                 <Button className="gap-2" disabled={gen.running} onClick={runRules}>
-                  {gen.running ? (
+                  {gen.running && gen.mode === "rules" ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
                     <Wand2 className="size-4" />
                   )}
-                  {gen.running
+                  {gen.running && gen.mode === "rules"
                     ? "Aplicando..."
                     : `Aplicar regra NCM${ncmPlatformValue ? ` (${ncmPlatformValue})` : ""}`}
                 </Button>
@@ -615,12 +615,12 @@ export function ProductsCatalogModal({
                   disabled={gen.running}
                   onClick={runGeneration}
                 >
-                  {gen.running ? (
+                  {gen.running && gen.mode === "ai" ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
                     <Sparkles className="size-4" />
                   )}
-                  Conferir com IA
+                  {gen.running && gen.mode === "ai" ? "Conferindo com IA..." : "Conferir com IA"}
                 </Button>
                 <Button
                   variant="outline"
