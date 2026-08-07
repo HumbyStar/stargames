@@ -141,13 +141,23 @@ export function ProductsCatalogModal({
   const ncmPlatformValue = ncmPlatform === "all" ? "" : ncmPlatform;
   const [gen, setGen] = useState<{
     running: boolean;
+    mode: "none" | "rules" | "ai";
     paused: boolean;
     done: number;
     total: number;
     review: number;
     log: string;
     steps: string[];
-  }>({ running: false, paused: false, done: 0, total: 0, review: 0, log: "", steps: [] });
+  }>({
+    running: false,
+    mode: "none",
+    paused: false,
+    done: 0,
+    total: 0,
+    review: 0,
+    log: "",
+    steps: [],
+  });
 
   /** Adiciona uma etapa ao histórico visível do processamento. */
   function pushStep(message: string) {
@@ -170,7 +180,16 @@ export function ProductsCatalogModal({
       queryClient.invalidateQueries({ queryKey: ["product-catalog"] });
       queryClient.invalidateQueries({ queryKey: ["ncm-pending"] });
       await table.refetch();
-      setGen({ running: false, paused: false, done: 0, total: 0, review: 0, log: "", steps: [] });
+      setGen({
+        running: false,
+        mode: "none",
+        paused: false,
+        done: 0,
+        total: 0,
+        review: 0,
+        log: "",
+        steps: [],
+      });
       toast.success(`${res.deleted} classificação(ões) removida(s).`);
       setResetOpen(false);
     } catch (e) {
@@ -185,6 +204,7 @@ export function ProductsCatalogModal({
     setGen((g) => ({
       ...g,
       running: true,
+      mode: "rules",
       paused: false,
       log: "Carregando itens...",
       steps: ["Carregando itens..."],
@@ -261,7 +281,7 @@ export function ProductsCatalogModal({
 
   async function runGeneration() {
     pausedRef.current = false;
-    setGen((g) => ({ ...g, running: true, paused: false, log: "Levantando itens..." }));
+    setGen((g) => ({ ...g, running: true, mode: "ai", paused: false, log: "Levantando itens..." }));
     try {
       let processed = 0;
       let review = 0;
@@ -559,15 +579,7 @@ export function ProductsCatalogModal({
                   value={ncmPlatform}
                   onValueChange={(v) => {
                     setNcmPlatform(v);
-                    setGen({
-                      running: false,
-                      paused: false,
-                      done: 0,
-                      total: 0,
-                      review: 0,
-                      log: "",
-                      steps: [],
-                    });
+                    setGen({ running: false, mode: "none", paused: false, done: 0, total: 0, review: 0, log: "", steps: [] });
                   }}
                 >
                   <SelectTrigger className="w-52" disabled={gen.running}>
@@ -588,12 +600,12 @@ export function ProductsCatalogModal({
                     : `${pendingCount.data?.remaining ?? 0} item(ns) sem NCM`}
                 </span>
                 <Button className="gap-2" disabled={gen.running} onClick={runRules}>
-                  {gen.running ? (
+                  {gen.running && gen.mode === "rules" ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
                     <Wand2 className="size-4" />
                   )}
-                  {gen.running
+                  {gen.running && gen.mode === "rules"
                     ? "Aplicando..."
                     : `Aplicar regra NCM${ncmPlatformValue ? ` (${ncmPlatformValue})` : ""}`}
                 </Button>
@@ -603,12 +615,12 @@ export function ProductsCatalogModal({
                   disabled={gen.running}
                   onClick={runGeneration}
                 >
-                  {gen.running ? (
+                  {gen.running && gen.mode === "ai" ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
                     <Sparkles className="size-4" />
                   )}
-                  Conferir com IA
+                  {gen.running && gen.mode === "ai" ? "Conferindo com IA..." : "Conferir com IA"}
                 </Button>
                 <Button
                   variant="outline"
