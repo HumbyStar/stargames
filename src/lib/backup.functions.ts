@@ -33,7 +33,6 @@ const STORAGE_MIRROR_MAX_BYTES = 500 * 1024 * 1024;
 const STORAGE_MIRROR_MAX_FILES = 10_000;
 const BACKUP_RETENTION_COUNT = 1;
 const BACKUP_RETENTION_BYTES = 1024 * 1024 * 1024;
-const FAILED_BACKUP_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 // Heurística: cada linha ocupa ~800 bytes em JSONL (chaves + valores).
 const ESTIMATED_BYTES_PER_ROW = 800;
 
