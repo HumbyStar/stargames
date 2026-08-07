@@ -908,8 +908,21 @@ export function BackupsPanel() {
     [activeRow, preflightData, elapsed],
   );
 
-  const openPreflight = async () => {
+  const loadBaseInfo = useCallback(async () => {
+    try {
+      setBaseInfo(await getBaseInfo());
+    } catch {
+      setBaseInfo(null);
+    }
+  }, [getBaseInfo]);
+
+  useEffect(() => {
+    void loadBaseInfo();
+  }, [loadBaseInfo, listEnv]);
+
+  const openPreflight = async (mode: "full" | "incremental" = "full") => {
     if (running) return;
+    setPendingMode(mode);
     setPreflightOpen(true);
     setPreflightData(null);
     setPreflightError(null);
@@ -963,7 +976,7 @@ export function BackupsPanel() {
           message: `Tentativa ${attempt}/${MAX_ATTEMPTS} de iniciar backup.`,
         });
         try {
-          const res = await create();
+          const res = await create({ data: { mode: pendingMode } });
           attemptLog.push({
             at: new Date().toISOString(),
             level: "info",
