@@ -58,6 +58,8 @@ import {
 import { isAgreementFullyPaid } from "@/lib/mgmv-schedule";
 import { ProductBulkActionsBar } from "@/components/product-bulk-actions";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
+import { NcmDetailRow, NcmExpandToggle } from "@/components/product-ncm-row";
+import { NcmEditDialog, type NcmTarget } from "@/components/ncm-edit-dialog";
 import { CustomerDataModal } from "@/components/customer-data-modal";
 import { isFichaComplete } from "@/lib/ficha-parse";
 import { NfFormatModal } from "@/components/nf-format-modal";
