@@ -1,4 +1,5 @@
 import { BackupImportCard } from "@/components/backup-import-card";
+import { waitUntilVisibleInStore } from "@/lib/import-visibility";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
@@ -1806,6 +1807,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       skippedAfterCorrection: 0,
     };
     const ignoredItems: NonNullable<ImportProgressState["ignoredItems"]> = [];
+    // Ids criados nesta importação — usados na confirmação de exibição na tela.
+    const zipCreatedClientIds: string[] = [];
+    const zipCreatedProductIds: string[] = [];
+    const zipTouchedClientIds = new Set<string>();
 
     // Agrupa entradas por pasta para processamento lazy/calmo.
     const byFolder = new Map<string, typeof zipData.entries>();
@@ -1859,6 +1864,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           folder: entry.folderName,
         });
         stats.createdClients++;
+        zipCreatedClientIds.push(client.id);
       } else {
         if (!client.folder && entry.folderName && entry.folderName !== "(raiz)") {
           updateClient(client.id, { folder: entry.folderName });
@@ -1898,7 +1904,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             ? calculateReservaDueDate(regISO)
             : new Date(`${p.dueDate}T12:00:00`).toISOString()
           : calculateDueDateForStatus(effectiveStatus, regISO);
-        addProduct({
+        const createdZipProduct = addProduct({
           clientId: client!.id,
           name: p.product,
           platform: p.platform || "—",
@@ -1910,6 +1916,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           dueDate: dueISO,
         });
         stats.createdProducts++;
+        zipCreatedProductIds.push(createdZipProduct.id);
+        zipTouchedClientIds.add(client!.id);
       });
       if (entry.notes) {
         const existing = client!.notes ? client!.notes + "\n\n" : "";
@@ -2050,6 +2058,32 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       await wait(450);
     }
 
+    // Confirmação de exibição: só liberamos a saída da importação assistida
+    // depois que clientes/produtos aparecem de fato nas listas da tela.
+    const zipVisible = await waitUntilVisibleInStore(
+      zipCreatedClientIds,
+      zipCreatedProductIds,
+      {
+        refreshClientIds: Array.from(zipTouchedClientIds),
+        onProgress: (msg) =>
+          setImportProgress((prev) =>
+            prev ? { ...prev, messages: [...prev.messages, msg] } : prev,
+          ),
+      },
+    );
+    if (!zipVisible.ok) {
+      setImportProgress((prev) =>
+        prev
+          ? {
+              ...prev,
+              errors: [
+                ...prev.errors,
+                `Gravado no banco, mas ${zipVisible.missingClients.length} cliente(s) e ${zipVisible.missingProducts.length} produto(s) ainda não apareceram na tela.`,
+              ],
+            }
+          : prev,
+      );
+    }
     addImportHistory({
       source: "HTML Notion",
       file: zipData.zipName,
