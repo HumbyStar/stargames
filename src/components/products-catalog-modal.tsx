@@ -566,6 +566,7 @@ export function ProductsCatalogModal({
                       total: 0,
                       review: 0,
                       log: "",
+                      steps: [],
                     });
                   }}
                 >
