@@ -24,6 +24,37 @@ async function assertAdmin(ctx: { supabase: any; userId: string }) {
   }
 }
 
+/** Somente admin_master pode conceder ou remover o perfil admin_master. */
+async function assertCanAssignRoles(
+  ctx: { supabase: any; userId: string },
+  desiredRoles: AppRole[],
+  targetUserId?: string,
+) {
+  const { data, error } = await ctx.supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", ctx.userId)
+    .eq("role", "admin_master");
+  if (error) throw new Error(error.message);
+  const isMaster = Boolean(data && data.length > 0);
+  if (isMaster) return;
+
+  if (desiredRoles.includes("admin_master")) {
+    throw new Error("Somente um admin master pode conceder o perfil admin master.");
+  }
+  if (targetUserId) {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: current } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", targetUserId)
+      .eq("role", "admin_master");
+    if (current && current.length > 0) {
+      throw new Error("Somente um admin master pode alterar os perfis de outro admin master.");
+    }
+  }
+}
+
 export interface AdminUserRow {
   id: string;
   email: string | null;
@@ -122,6 +153,7 @@ export const createUser = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => createUserSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
+    await assertCanAssignRoles(context, data.roles);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // Verificação de duplicidade: rejeita antes de criar para não disparar
@@ -174,6 +206,7 @@ export const updateUserRoles = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => updateRolesSchema.parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
+    await assertCanAssignRoles(context, data.roles, data.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const desired = Array.from(new Set(data.roles));
     if (desired.length === 0) {
