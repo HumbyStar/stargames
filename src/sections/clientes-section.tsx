@@ -2286,11 +2286,20 @@ function ClientDrawer({
                       </div>
                     </td>
                   </tr>
+                  {ncmOpenIds.has(p.id) && (
+                    <NcmDetailRow
+                      name={p.name}
+                      platform={p.platform}
+                      colSpan={12}
+                      onEdit={openNcmEdit}
+                    />
+                  )}
+                  </Fragment>
                 );
               })}
               {individualProducts.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={12} className="py-6 text-center text-muted-foreground">
                     Nenhum produto.
                   </td>
                 </tr>
