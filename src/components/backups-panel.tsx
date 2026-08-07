@@ -393,6 +393,8 @@ function BackupPreflightModal({
   loading,
   estimate,
   error,
+  mode,
+  baseGeneratedAt,
   onCancel,
   onConfirm,
   onRetry,
@@ -401,12 +403,14 @@ function BackupPreflightModal({
   loading: boolean;
   estimate: BackupEstimate | null;
   error: string | null;
+  mode: "full" | "incremental";
+  baseGeneratedAt: string | null;
   onCancel: () => void;
   onConfirm: () => void;
   onRetry: () => void;
 }) {
-  const topTables = useMemo(
-    () => (estimate?.tables ?? []).slice().sort((a, b) => b.rows - a.rows).slice(0, 8),
+  const allTables = useMemo(
+    () => (estimate?.tables ?? []).slice().sort((a, b) => b.rows - a.rows),
     [estimate],
   );
   return (
@@ -417,8 +421,9 @@ function BackupPreflightModal({
             <BarChart3 className="size-5" /> Prévia do backup
           </DialogTitle>
           <DialogDescription>
-            Estimativa de tamanho e conteúdo antes de iniciar. Se ultrapassar os limites,
-            o backup ainda pode ser gerado, mas conteúdos serão truncados.
+            {mode === "incremental"
+              ? "Atualização do backup atual: só o que mudou desde a última execução é lido do banco."
+              : "Estimativa de tamanho e conteúdo antes de iniciar. Se ultrapassar os limites, o backup ainda pode ser gerado, mas conteúdos serão truncados."}
           </DialogDescription>
         </DialogHeader>
 
@@ -504,10 +509,10 @@ function BackupPreflightModal({
 
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Maiores tabelas
+                Todas as tabelas ({allTables.length})
               </div>
-              <div className="grid gap-1 text-xs sm:grid-cols-2">
-                {topTables.map((t) => (
+              <div className="grid max-h-64 gap-1 overflow-y-auto pr-1 text-xs sm:grid-cols-2">
+                {allTables.map((t) => (
                   <div key={t.name} className="flex items-center justify-between gap-2">
                     <span className="truncate">{t.name}</span>
                     <span className="tabular-nums text-muted-foreground">
@@ -528,7 +533,11 @@ function BackupPreflightModal({
                 className={estimate.exceedsLimits ? "bg-amber-600 hover:bg-amber-700 text-white" : undefined}
               >
                 <Play className="mr-2 size-4" />
-                {estimate.exceedsLimits ? "Gerar mesmo assim" : "Gerar backup"}
+                {estimate.exceedsLimits
+                  ? "Gerar mesmo assim"
+                  : mode === "incremental"
+                    ? "Atualizar backup"
+                    : "Gerar backup"}
               </Button>
             </div>
           </div>
