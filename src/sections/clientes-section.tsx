@@ -2480,6 +2480,11 @@ function ClientDrawer({
         clientId={client.id}
         clientName={client.name}
       />
+      <NcmEditDialog
+        open={ncmDialogOpen}
+        onOpenChange={setNcmDialogOpen}
+        target={ncmTarget}
+      />
     </div>
   );
 }
