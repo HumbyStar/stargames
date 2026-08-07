@@ -648,8 +648,25 @@ export function ProductsCatalogModal({
                 <div className="space-y-2">
                   <Progress value={progress} />
                   <p className="text-xs text-muted-foreground">
-                    {gen.done} de {gen.total || gen.done} — {gen.review} para revisar. {gen.log}
+                    {Math.round(progress)}% — {gen.done} de {gen.total || gen.done} — {gen.review}{" "}
+                    para revisar. {gen.log}
                   </p>
+                  {gen.steps.length > 0 && (
+                    <ul className="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
+                      {gen.steps.map((s, i) => (
+                        <li key={`${i}-${s}`} className="flex items-center gap-2">
+                          <span
+                            className={
+                              i === gen.steps.length - 1 && gen.running
+                                ? "size-1.5 rounded-full bg-primary animate-pulse"
+                                : "size-1.5 rounded-full bg-muted-foreground/50"
+                            }
+                          />
+                          {s}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
               <p className="text-xs text-muted-foreground">
