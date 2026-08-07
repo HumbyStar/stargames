@@ -40,6 +40,7 @@ import {
   estimateBackup,
   getBackupDownloadUrl,
   getBackupSchedule,
+  getBackupBaseInfo,
   listBackups,
   resumeBackup,
   cancelBackup,
@@ -48,6 +49,7 @@ import {
   type BackupDebugEntry,
   type BackupErrorDetails,
   type BackupEstimate,
+  type BackupBaseInfo,
   type BackupRow,
   type BackupScheduleInfo,
 } from "@/lib/backup.functions";
@@ -733,6 +735,7 @@ export function BackupsPanel() {
   const getUrl = useServerFn(getBackupDownloadUrl);
   const getSchedule = useServerFn(getBackupSchedule);
   const putSchedule = useServerFn(setBackupSchedule);
+  const getBaseInfo = useServerFn(getBackupBaseInfo);
 
   const [rows, setRows] = useState<BackupRow[]>([]);
   // Histórico é sempre de um ambiente por vez; começa no ambiente atual.
@@ -1057,6 +1060,10 @@ export function BackupsPanel() {
           },
         ],
         businessSummary: null,
+        mode: "full",
+        baseGeneratedAt: null,
+        addedRows: 0,
+        removedRows: 0,
       });
       setFailureOpen(true);
       setRunning(false);
