@@ -916,9 +916,16 @@ export const useStore = create<State>()((set, get) => ({
                 ? s.clients.map((c) => (c.id === clientId ? clients[0] : c))
                 : [...s.clients, clients[0]]
               : s.clients.filter((c) => c.id !== clientId),
+          // Uma leitura que ainda não enxerga a linha recém-criada não pode
+          // apagá-la da tela: preservamos os itens marcados como criados
+          // localmente até o banco confirmá-los.
           products: [
             ...s.products.filter((p) => p.clientId !== clientId && !productIds.has(p.id)),
-            ...products,
+            ...reconcileWithLocalMutations(
+              "product",
+              products,
+              s.products.filter((p) => p.clientId === clientId),
+            ),
           ],
         }));
       },
@@ -989,13 +996,27 @@ export const useStore = create<State>()((set, get) => ({
       },
       addProduct: (p) => {
         const prod = { ...normalizeProductDueDateForCreate(p), id: uid() };
+        // Protege a linha nova de qualquer releitura em voo até o banco
+        // confirmá-la — assim ela não some do modal do cliente.
+        markLocalMutation("product", [prod.id], "upsert");
         queueProductUpsert(prod);
         set((s) => ({ products: [...s.products, prod] }));
         // Releitura direcionada (só deste cliente) em vez de recarregar a
         // base inteira: confirma a linha no banco sem risco de tempo limite.
-        void get()
-          .refreshClientData(prod.clientId)
-          .catch(() => undefined);
+        void (async () => {
+          try {
+            await get().refreshClientData(prod.clientId);
+            const res = await waitForRowConfirmation("product", [prod.id], "upsert", {
+              verify: dbRowsExist,
+            });
+            if (res.ok) {
+              clearLocalMutation("product", [prod.id]);
+              await get().refreshClientData(prod.clientId);
+            }
+          } catch {
+            /* a linha continua visível; a reconciliação de fundo resolve */
+          }
+        })();
         return prod;
       },
       updateProduct: (id, patch) =>
