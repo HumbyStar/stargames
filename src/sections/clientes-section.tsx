@@ -58,6 +58,8 @@ import {
 import { isAgreementFullyPaid } from "@/lib/mgmv-schedule";
 import { ProductBulkActionsBar } from "@/components/product-bulk-actions";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
+import { NcmDetailRow, NcmExpandToggle } from "@/components/product-ncm-row";
+import { NcmEditDialog, type NcmTarget } from "@/components/ncm-edit-dialog";
 import { CustomerDataModal } from "@/components/customer-data-modal";
 import { isFichaComplete } from "@/lib/ficha-parse";
 import { NfFormatModal } from "@/components/nf-format-modal";
@@ -1283,6 +1285,21 @@ function ClientDrawer({
   const [nfWarnOpen, setNfWarnOpen] = useState(false);
   const [nfPendingSelection, setNfPendingSelection] = useState<Product[]>([]);
   const [nfHistoryOpen, setNfHistoryOpen] = useState(false);
+  // Linha expansível com NCM / categoria fiscal por produto.
+  const [ncmOpenIds, setNcmOpenIds] = useState<Set<string>>(new Set());
+  const [ncmTarget, setNcmTarget] = useState<NcmTarget | null>(null);
+  const [ncmDialogOpen, setNcmDialogOpen] = useState(false);
+  const toggleNcmRow = (id: string) =>
+    setNcmOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const openNcmEdit = (t: NcmTarget) => {
+    setNcmTarget(t);
+    setNcmDialogOpen(true);
+  };
   const listInvoicesFn = useServerFn(listNfInvoices);
   const [nfInvoices, setNfInvoices] = useState<NfInvoiceRow[]>([]);
   const refreshNfInvoices = useMemo(
@@ -1821,6 +1838,7 @@ function ClientDrawer({
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                      <th className="py-2 px-2 font-medium w-8" />
                       <th className="py-2 px-3 font-medium">Produto</th>
                       <th className="py-2 px-3 font-medium">Plataforma</th>
                       <th className="py-2 px-3 font-medium">Valor Total</th>
@@ -1833,7 +1851,7 @@ function ClientDrawer({
                     {mgmvProducts.length === 0 && (
                       <tr>
                         <td
-                          colSpan={6}
+                          colSpan={7}
                           className="py-4 px-3 text-center text-xs text-muted-foreground"
                         >
                            {mgmvProductsLoading
@@ -1843,7 +1861,14 @@ function ClientDrawer({
                       </tr>
                     )}
                     {mgmvProducts.map((p) => (
-                       <tr key={p.id} className="border-b border-border/60 last:border-0">
+                      <Fragment key={p.id}>
+                       <tr className="border-b border-border/60 last:border-0">
+                        <td className="py-2 px-2 align-middle">
+                          <NcmExpandToggle
+                            expanded={ncmOpenIds.has(p.id)}
+                            onToggle={() => toggleNcmRow(p.id)}
+                          />
+                        </td>
                         <td className="py-2 px-3 font-medium">
                           <span className="inline-flex items-center">
                             {p.name}
@@ -1867,6 +1892,15 @@ function ClientDrawer({
                           {formatDateBR(p.registerDate)}
                         </td>
                       </tr>
+                       {ncmOpenIds.has(p.id) && (
+                         <NcmDetailRow
+                           name={p.name}
+                           platform={p.platform}
+                           colSpan={7}
+                           onEdit={openNcmEdit}
+                         />
+                       )}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -2004,6 +2038,7 @@ function ClientDrawer({
                     disabled={individualProducts.length === 0}
                   />
                 </th>
+                <th className="py-2 pr-2 font-medium w-8" />
                 <th className="py-2 pr-3 font-medium">Produto</th>
                 <th className="py-2 pr-3 font-medium">Plataforma</th>
                 <th className="py-2 pr-3 font-medium">Total</th>
@@ -2023,8 +2058,8 @@ function ClientDrawer({
                 const editing = productEdit.isEditing(p.id);
                 const draft = productEdit.draftValues;
                 return (
+                  <Fragment key={p.id}>
                   <tr
-                    key={p.id}
                     aria-busy={busyProductIds[p.id] ? true : undefined}
                     className={cn(
                       "border-b border-border/60 last:border-0",
@@ -2040,6 +2075,12 @@ function ClientDrawer({
                         checked={selectedIds.has(p.id)}
                         disabled={!!busyProductIds[p.id]}
                         onChange={() => toggleOne(p.id)}
+                      />
+                    </td>
+                    <td className="py-2 pr-2 align-middle">
+                      <NcmExpandToggle
+                        expanded={ncmOpenIds.has(p.id)}
+                        onToggle={() => toggleNcmRow(p.id)}
                       />
                     </td>
                     <td className="py-2 pr-3 font-medium">
@@ -2245,11 +2286,20 @@ function ClientDrawer({
                       </div>
                     </td>
                   </tr>
+                  {ncmOpenIds.has(p.id) && (
+                    <NcmDetailRow
+                      name={p.name}
+                      platform={p.platform}
+                      colSpan={12}
+                      onEdit={openNcmEdit}
+                    />
+                  )}
+                  </Fragment>
                 );
               })}
               {individualProducts.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={12} className="py-6 text-center text-muted-foreground">
                     Nenhum produto.
                   </td>
                 </tr>
@@ -2429,6 +2479,11 @@ function ClientDrawer({
         onClose={() => setNfHistoryOpen(false)}
         clientId={client.id}
         clientName={client.name}
+      />
+      <NcmEditDialog
+        open={ncmDialogOpen}
+        onOpenChange={setNcmDialogOpen}
+        target={ncmTarget}
       />
     </div>
   );

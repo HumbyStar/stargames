@@ -88,6 +88,7 @@ export function NcmEditDialog({
       });
       queryClient.invalidateQueries({ queryKey: ["product-catalog"] });
       queryClient.invalidateQueries({ queryKey: ["ncm-pending"] });
+      queryClient.invalidateQueries({ queryKey: ["product-ncm-detail"] });
       toast.success("NCM atualizado.");
       onOpenChange(false);
     } catch (e) {
