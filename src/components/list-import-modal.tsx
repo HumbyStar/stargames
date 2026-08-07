@@ -1007,6 +1007,36 @@ export function ListImportModal({
               )}
             </div>
 
+            <StatusLegend />
+
+            <div className="flex items-center gap-1 rounded-md border bg-muted/30 p-1 text-xs">
+              <Button
+                size="sm"
+                variant={previewView === "clients" ? "secondary" : "ghost"}
+                className="h-7 px-3 text-xs"
+                onClick={() => setPreviewView("clients")}
+              >
+                <Users className="mr-1 h-3.5 w-3.5" /> Por cliente
+              </Button>
+              <Button
+                size="sm"
+                variant={previewView === "rows" ? "secondary" : "ghost"}
+                className="h-7 px-3 text-xs"
+                onClick={() => setPreviewView("rows")}
+              >
+                <Layers className="mr-1 h-3.5 w-3.5" /> Linhas
+              </Button>
+            </div>
+
+            {previewView === "clients" ? (
+              <ListImportClientPreview
+                rows={filteredRows}
+                aiBusyId={aiBusyId}
+                onEdit={setEditing}
+                onReview={(r) => void reviewWithAI(r)}
+                onIgnore={ignoreRow}
+              />
+            ) : (
             <div className="max-h-[40vh] overflow-auto rounded-md border">
               <table className="w-full text-xs">
                 <thead className="sticky top-0 bg-muted/40">
@@ -1121,6 +1151,7 @@ export function ListImportModal({
                 </tbody>
               </table>
             </div>
+            )}
 
             {preview.totals.errorRows + preview.totals.reviewRows > 0 && (
               <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-700">
