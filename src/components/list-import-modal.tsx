@@ -639,9 +639,11 @@ export function ListImportModal({
       // Garante que clientes e produtos foram gravados no backend antes de
       // registrar o histórico. Sem isso, os produtos podem falhar por FK
       // (client_id ainda não commitado) e o import termina "vazio" na onepage.
+      toast.loading("Importando… salvando no banco", { id: toastId });
       await flushAllPendingUpserts();
       // Confirma no banco tudo o que foi enfileirado antes de anunciar sucesso.
       await awaitPendingWrites();
+      toast.loading("Importando… confirmando gravação", { id: toastId });
       // Confirmação real: cada cliente/produto criado precisa existir no banco
       // (ou ter chegado pelo evento realtime) antes de exibirmos "sucesso".
       const [clientConfirm, productConfirm] = await Promise.all([
@@ -655,6 +657,7 @@ export function ListImportModal({
       }
       // Confirmação de exibição: a tela de importação assistida só libera a
       // saída depois que os clientes/produtos aparecem de fato nas listas.
+      toast.loading("Importando… carregando na tela em tempo real", { id: toastId });
       const visible = await waitUntilVisibleInStore(createdClientIds, createdProductIds, {
         refreshClientIds: Array.from(touchedClientIds),
         onProgress: (msg) =>
@@ -695,7 +698,20 @@ export function ListImportModal({
             }
           : prev,
       );
-      toast.success(`${clientsCreated} cliente(s) e ${productsCreated} produto(s) salvos.`);
+      // Releitura direcionada final: garante que o drawer do cliente já abra
+      // com os produtos recém-importados, sem recarregar a página.
+      await Promise.all(
+        Array.from(touchedClientIds).map((cid) =>
+          useStore
+            .getState()
+            .refreshClientData(cid)
+            .catch(() => undefined),
+        ),
+      );
+      toast.success(
+        `${clientsCreated} cliente(s) e ${productsCreated} produto(s) já disponíveis no sistema.`,
+        { id: toastId },
+      );
     } catch (e) {
       setProgressState((prev) =>
         prev
@@ -706,7 +722,7 @@ export function ListImportModal({
             }
           : prev,
       );
-      toast.error(e instanceof Error ? e.message : "Falha ao salvar.");
+      toast.error(e instanceof Error ? e.message : "Falha ao salvar.", { id: toastId });
     } finally {
       savingRef.current = false;
       setSaving(false);
