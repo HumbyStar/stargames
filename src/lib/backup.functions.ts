@@ -31,9 +31,8 @@ const STALE_BACKUP_MS = 5 * 60 * 1000;
 const RESUME_STALE_MS = 90 * 1000;
 const STORAGE_MIRROR_MAX_BYTES = 500 * 1024 * 1024;
 const STORAGE_MIRROR_MAX_FILES = 10_000;
-const BACKUP_RETENTION_COUNT = 3;
+const BACKUP_RETENTION_COUNT = 1;
 const BACKUP_RETENTION_BYTES = 1024 * 1024 * 1024;
-const FAILED_BACKUP_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 // Heurística: cada linha ocupa ~800 bytes em JSONL (chaves + valores).
 const ESTIMATED_BYTES_PER_ROW = 800;
 
@@ -953,6 +952,16 @@ async function runBackup(opts: {
 
   await cleanupStaleBackups(supabaseAdmin);
 
+  // Libera espaço antes de começar: sobras de execuções falhas/canceladas e
+  // backups antigos saem agora, para que o novo arquivo não dispute espaço.
+  if (!opts.existing) {
+    try {
+      await enforceBackupRetention(supabaseAdmin, "before");
+    } catch (error) {
+      console.error("[backup] pre-run cleanup failed:", error);
+    }
+  }
+
   // Backup sempre pertence a um único ambiente. Sem ambiente explícito
   // (cron), assume produção.
   const backupEnv: "producao" | "sandbox" = opts.env ?? "producao";
@@ -1432,28 +1441,71 @@ async function removeBackupFile(admin: any, storagePath: string | null): Promise
   if (error) throw new Error(error.message);
 }
 
-async function enforceBackupRetention(admin: any) {
+async function listBackupFilesRecursive(
+  admin: any,
+  prefix: string,
+  depth = 0,
+): Promise<string[]> {
+  if (depth > 4) return [];
+  const { data, error } = await admin.storage
+    .from(BACKUP_BUCKET)
+    .list(prefix, { limit: 1000, sortBy: { column: "name", order: "asc" } });
+  if (error || !data) return [];
+  const out: string[] = [];
+  for (const entry of data) {
+    const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if ((entry as any).id === null || !(entry as any).metadata) {
+      out.push(...(await listBackupFilesRecursive(admin, path, depth + 1)));
+    } else {
+      out.push(path);
+    }
+  }
+  return out;
+}
+
+/**
+ * Remove arquivos no bucket que não têm mais registro correspondente
+ * (sobras de execuções antigas, canceladas ou interrompidas).
+ */
+async function cleanupOrphanBackupFiles(admin: any) {
+  try {
+    const { data: rows } = await admin.from("system_backups").select("storage_path");
+    const known = new Set(
+      (rows ?? [])
+        .map((r: any) => r.storage_path as string | null)
+        .filter((p: string | null): p is string => Boolean(p)),
+    );
+    const files: string[] = [];
+    for (const env of ["producao", "sandbox"]) {
+      files.push(...(await listBackupFilesRecursive(admin, env)));
+    }
+    const orphans = files.filter((p) => !known.has(p));
+    for (let i = 0; i < orphans.length; i += 100) {
+      await admin.storage.from(BACKUP_BUCKET).remove(orphans.slice(i, i + 100));
+    }
+  } catch (error) {
+    console.error("[backup] orphan cleanup failed:", error);
+  }
+}
+
+async function enforceBackupRetention(admin: any, phase: "before" | "after" = "after") {
   const { data } = await admin
     .from("system_backups")
     .select("id, storage_path, status, size_bytes, created_at, env")
     .eq("status", "completed")
     .order("created_at", { ascending: false });
-  if (!data?.length) return;
-
-  // Retenção é contada por ambiente: 3 backups de produção E 3 de teste.
+  // Rotação estilo WhatsApp: guardamos apenas o backup completo mais recente
+  // de cada ambiente. Todos os anteriores (e seus arquivos) são apagados.
   const retainedByEnv: Record<string, number> = {};
   let retainedBytes = 0;
   const toDelete: any[] = [];
-  const latestByEnv = new Set<string>();
-  for (const row of data) {
+  for (const row of data ?? []) {
     const size = Math.max(0, Number(row.size_bytes ?? 0));
     const env = (row.env as string) ?? "producao";
-    const mustKeepLatest = !latestByEnv.has(env);
-    latestByEnv.add(env);
     const fits =
       (retainedByEnv[env] ?? 0) < BACKUP_RETENTION_COUNT &&
       retainedBytes + size <= BACKUP_RETENTION_BYTES;
-    if (mustKeepLatest || fits) {
+    if (fits) {
       retainedByEnv[env] = (retainedByEnv[env] ?? 0) + 1;
       retainedBytes += size;
     } else {
@@ -1470,12 +1522,12 @@ async function enforceBackupRetention(admin: any) {
     }
   }
 
-  const failedCutoff = new Date(Date.now() - FAILED_BACKUP_RETENTION_MS).toISOString();
+  // Execuções falhas/canceladas não guardam dado útil: saem na hora, para
+  // não ocuparem espaço nem confundirem a leitura do painel.
   const { data: obsoleteRows } = await admin
     .from("system_backups")
     .select("id, storage_path")
-    .in("status", ["failed", "cancelled"])
-    .lt("created_at", failedCutoff);
+    .in("status", ["failed", "cancelled"]);
   for (const row of obsoleteRows ?? []) {
     try {
       await removeBackupFile(admin, row.storage_path as string | null);
@@ -1484,6 +1536,8 @@ async function enforceBackupRetention(admin: any) {
       console.error(`[backup] obsolete cleanup failed for ${row.id}:`, error);
     }
   }
+
+  if (phase === "after") await cleanupOrphanBackupFiles(admin);
 }
 
 // Exposto para o endpoint público (cron) executar sem passar por RPC.
@@ -1974,7 +2028,7 @@ const JOB_NAME = "system-backup-daily";
 
 export interface BackupScheduleInfo {
   active: boolean;
-  frequency: "off" | "daily" | "weekly";
+  frequency: "off" | "every_10h" | "daily" | "weekly";
   cron: string | null;
   jobId: number | null;
   /** Hora/minuto em UTC extraídos do cron. */
@@ -2006,20 +2060,21 @@ export const getBackupSchedule = createServerFn({ method: "GET" })
     const parts = cron.trim().split(/\s+/);
     if (parts.length !== 5) return off;
     const [min, hour, , , dow] = parts;
-    const frequency: BackupScheduleInfo["frequency"] = dow === "*" ? "daily" : "weekly";
+    const frequency: BackupScheduleInfo["frequency"] =
+      hour.includes("/") ? "every_10h" : dow === "*" ? "daily" : "weekly";
     return {
       active: Boolean(row.active),
       frequency,
       cron: cron || null,
       jobId: row.jobid ?? null,
-      hourUtc: Number.isFinite(Number(hour)) ? Number(hour) : 3,
+      hourUtc: Number.isFinite(Number(hour.split("/")[0])) ? Number(hour.split("/")[0]) : 3,
       minuteUtc: Number.isFinite(Number(min)) ? Number(min) : 0,
       weekday: Number.isFinite(Number(dow)) ? Number(dow) : 0,
     };
   });
 
 const scheduleSchema = z.object({
-  frequency: z.enum(["off", "daily", "weekly"]),
+  frequency: z.enum(["off", "every_10h", "daily", "weekly"]),
   hourUtc: z.number().int().min(0).max(23).default(3),
   minuteUtc: z.number().int().min(0).max(59).default(0),
   weekday: z.number().int().min(0).max(6).default(0),

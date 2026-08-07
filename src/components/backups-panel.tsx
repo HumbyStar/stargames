@@ -1125,7 +1125,7 @@ export function BackupsPanel() {
   };
 
   const applySchedule = async (
-    freq: "off" | "daily" | "weekly",
+    freq: "off" | "every_10h" | "daily" | "weekly",
     time = localTime,
     weekday = localWeekday,
   ) => {
@@ -1143,7 +1143,9 @@ export function BackupsPanel() {
       toast.success(
         freq === "off"
           ? "Agendamento automático desativado."
-          : freq === "daily"
+          : freq === "every_10h"
+            ? `Backup a cada 10 horas agendado, a partir de ${time} (seu horário).`
+            : freq === "daily"
             ? `Backup diário agendado para ${time} (seu horário).`
             : `Backup semanal agendado: ${WEEKDAYS[weekday]} às ${time} (seu horário).`,
       );
@@ -1159,7 +1161,8 @@ export function BackupsPanel() {
     }
   };
 
-  const handleScheduleChange = (freq: "off" | "daily" | "weekly") => void applySchedule(freq);
+  const handleScheduleChange = (freq: "off" | "every_10h" | "daily" | "weekly") =>
+    void applySchedule(freq);
 
   return (
     <div className="space-y-4">
@@ -1222,11 +1225,11 @@ export function BackupsPanel() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-border bg-card/50 p-3">
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-              <HardDrive className="size-3.5" /> Backups guardados
+              <HardDrive className="size-3.5" /> Backup atual
             </div>
             <div className="text-2xl font-semibold tabular-nums">{completedCount}</div>
             <div className="text-xs text-muted-foreground">
-              Retenção: até 10 versões ou 1 GB
+              Apenas 1 backup por ambiente: o novo substitui o anterior
             </div>
           </div>
           <div className="rounded-lg border border-border bg-card/50 p-3">
@@ -1243,15 +1246,19 @@ export function BackupsPanel() {
               <CalendarClock className="size-3.5" /> Agenda
             </div>
             <div className="text-2xl font-semibold">
-              {schedule?.frequency === "daily"
-                ? "Diário"
-                : schedule?.frequency === "weekly"
-                  ? "Semanal"
-                  : "Desligado"}
+              {schedule?.frequency === "every_10h"
+                ? "A cada 10h"
+                : schedule?.frequency === "daily"
+                  ? "Diário"
+                  : schedule?.frequency === "weekly"
+                    ? "Semanal"
+                    : "Desligado"}
             </div>
             <div className="text-xs text-muted-foreground">
               {schedule?.frequency && schedule.frequency !== "off"
-                ? `Executa ${schedule.frequency === "weekly" ? `${WEEKDAYS[localWeekday]} ` : ""}às ${localTime} (seu horário)`
+                ? schedule.frequency === "every_10h"
+                  ? `Repete de 10 em 10 horas, a partir de ${localTime} (seu horário)`
+                  : `Executa ${schedule.frequency === "weekly" ? `${WEEKDAYS[localWeekday]} ` : ""}às ${localTime} (seu horário)`
                 : "Ative para rodar automaticamente"}
             </div>
           </div>
@@ -1278,7 +1285,9 @@ export function BackupsPanel() {
             <span className="text-xs text-muted-foreground">Agendamento:</span>
             <Select
               value={schedule?.frequency ?? "off"}
-              onValueChange={(v) => handleScheduleChange(v as "off" | "daily" | "weekly")}
+              onValueChange={(v) =>
+                handleScheduleChange(v as "off" | "every_10h" | "daily" | "weekly")
+              }
               disabled={savingSchedule || running}
             >
               <SelectTrigger className="h-8 w-40 text-xs">
@@ -1286,6 +1295,7 @@ export function BackupsPanel() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="off">Desligado</SelectItem>
+                <SelectItem value="every_10h">A cada 10 horas</SelectItem>
                 <SelectItem value="daily">Diário</SelectItem>
                 <SelectItem value="weekly">Semanal</SelectItem>
               </SelectContent>
