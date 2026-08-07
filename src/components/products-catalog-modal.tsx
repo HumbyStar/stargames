@@ -513,15 +513,7 @@ export function ProductsCatalogModal({
           {/* ---------------- NCM ---------------- */}
           <TabsContent value="ncm" className="px-6 pb-6">
             <div className="space-y-4 pt-4">
-              <div className="rounded-lg border border-border bg-background/40 p-4 text-sm text-muted-foreground">
-                A classificação segue a <strong>regra de negócio</strong>: menção a videogame/jogo →
-                9504.50.00 “Videogame ou jogo”; boneco original → 9503.00.99 “Boneco colecionável”;
-                pop alternativo/pelúcia → 9503.00.31 “Boneco pelúcia”; figure 3D → 9503.00.80
-                “Figure 3D”; nenhum dos casos → 3926.40.00 “Figure”. A regra é
-                instantânea e não consome créditos de IA. A geração por IA continua disponível para
-                conferência pontual, em lotes de {BATCH_SIZE}. Classificações editadas manualmente
-                nunca são sobrescritas.
-              </div>
+              <NcmFlow />
 
               <div className="flex flex-wrap items-center gap-2">
                 <Select
