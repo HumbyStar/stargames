@@ -1863,6 +1863,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           folder: entry.folderName,
         });
         stats.createdClients++;
+        zipCreatedClientIds.push(client.id);
       } else {
         if (!client.folder && entry.folderName && entry.folderName !== "(raiz)") {
           updateClient(client.id, { folder: entry.folderName });
@@ -1902,7 +1903,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             ? calculateReservaDueDate(regISO)
             : new Date(`${p.dueDate}T12:00:00`).toISOString()
           : calculateDueDateForStatus(effectiveStatus, regISO);
-        addProduct({
+        const createdZipProduct = addProduct({
           clientId: client!.id,
           name: p.product,
           platform: p.platform || "—",
@@ -1914,6 +1915,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           dueDate: dueISO,
         });
         stats.createdProducts++;
+        zipCreatedProductIds.push(createdZipProduct.id);
+        zipTouchedClientIds.add(client!.id);
       });
       if (entry.notes) {
         const existing = client!.notes ? client!.notes + "\n\n" : "";
