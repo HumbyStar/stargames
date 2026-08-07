@@ -30,7 +30,13 @@ function missingIds(clientIds: string[], productIds: string[]) {
 export async function waitUntilVisibleInStore(
   clientIds: string[],
   productIds: string[],
-  opts: { timeoutMs?: number; pollMs?: number; onProgress?: (msg: string) => void } = {},
+  opts: {
+    timeoutMs?: number;
+    pollMs?: number;
+    /** Clientes cujos dados devem ser relidos enquanto faltar algo. */
+    refreshClientIds?: string[];
+    onProgress?: (msg: string) => void;
+  } = {},
 ): Promise<VisibilityResult> {
   const timeoutMs = opts.timeoutMs ?? 15000;
   const pollMs = opts.pollMs ?? 500;
@@ -52,6 +58,7 @@ export async function waitUntilVisibleInStore(
       if (known) affected.add(known.clientId);
     }
     for (const cid of clientIds) affected.add(cid);
+    for (const cid of opts.refreshClientIds ?? []) affected.add(cid);
     for (const cid of Array.from(affected)) {
       try {
         await useStore.getState().refreshClientData(cid);
