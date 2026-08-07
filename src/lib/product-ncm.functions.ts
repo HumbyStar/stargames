@@ -90,3 +90,39 @@ export const listPendingNcmItems = createServerFn({ method: "POST" })
       };
     },
   );
+
+const ResetInput = z.object({
+  platform: z.string().default(""),
+  includeManual: z.boolean().default(false),
+});
+
+/** Apaga as classificações de NCM já geradas (mantendo, por padrão, as manuais). */
+export const resetNcmClassifications = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => ResetInput.parse(d ?? {}))
+  .handler(async ({ data, context }): Promise<{ deleted: number }> => {
+    let query = context.supabase.from("product_ncm").delete({ count: "exact" });
+    if (!data.includeManual) query = query.neq("source", "manual");
+    if (data.platform) query = query.eq("platform_key", data.platform.trim().toLowerCase());
+    else query = query.not("name_key", "is", null);
+    const { error, count } = await query;
+    if (error) throw new Error(error.message);
+    return { deleted: count ?? 0 };
+  });
+
+const ManualInput = z.object({
+  name: z.string().min(1),
+  platform: z.string().default(""),
+  ncm: z.string().default(""),
+  category: z.string().default(""),
+});
+
+/** Define manualmente o NCM de um produto do catálogo. */
+export const saveNcmManual = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => ManualInput.parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    const { saveManualNcm } = await import("@/lib/product-ncm.server");
+    await saveManualNcm(context.supabase, data);
+    return { ok: true };
+  });
