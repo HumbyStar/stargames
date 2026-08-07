@@ -132,7 +132,12 @@ export function ProductsCatalogModal({
   const callPending = useServerFn(listPendingNcmItems);
   const callClassify = useServerFn(classifyNcmBatch);
   const callRules = useServerFn(applyNcmRules);
+  const callReset = useServerFn(resetNcmClassifications);
   const [ncmPlatform, setNcmPlatform] = useState("all");
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<NcmTarget | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const ncmPlatformValue = ncmPlatform === "all" ? "" : ncmPlatform;
   const [gen, setGen] = useState<{
     running: boolean;
@@ -144,6 +149,28 @@ export function ProductsCatalogModal({
   }>({ running: false, paused: false, done: 0, total: 0, review: 0, log: "" });
 
   const pausedRef = useMemo(() => ({ current: false }), []);
+
+  function openEditor(target: NcmTarget | null) {
+    setEditTarget(target);
+    setEditOpen(true);
+  }
+
+  async function runReset() {
+    setResetting(true);
+    try {
+      const res = await callReset({ data: { platform: ncmPlatformValue, includeManual: false } });
+      queryClient.invalidateQueries({ queryKey: ["product-catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["ncm-pending"] });
+      await table.refetch();
+      setGen({ running: false, paused: false, done: 0, total: 0, review: 0, log: "" });
+      toast.success(`${res.deleted} classificação(ões) removida(s).`);
+      setResetOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao resetar NCM.");
+    } finally {
+      setResetting(false);
+    }
+  }
 
   async function runRules() {
     pausedRef.current = false;
