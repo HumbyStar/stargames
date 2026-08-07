@@ -532,6 +532,7 @@ export function ListImportModal({
       let productsCreated = 0;
       const createdClientIds: string[] = [];
       const createdProductIds: string[] = [];
+      const touchedClientIds = new Set<string>();
       let errorEntries = 0;
       const cache = new Map<string, string>();
       for (let i = 0; i < rowsToSave.length; i++) {
@@ -604,6 +605,7 @@ export function ListImportModal({
               : `Importado por lista colada • Grupo: ${r.sourceGroup}`,
         });
         createdProductIds.push(createdProduct.id);
+        touchedClientIds.add(clientId);
         productsCreated++;
         const snapshotClients = clientsCreated;
         const snapshotProducts = productsCreated;
@@ -642,6 +644,20 @@ export function ListImportModal({
       if (!clientConfirm.ok || !productConfirm.ok) {
         throw new Error(
           "A importação não foi confirmada pelo banco. Nada foi anunciado como concluído — verifique a conexão e tente novamente.",
+        );
+      }
+      // Confirmação de exibição: a tela de importação assistida só libera a
+      // saída depois que os clientes/produtos aparecem de fato nas listas.
+      const visible = await waitUntilVisibleInStore(createdClientIds, createdProductIds, {
+        refreshClientIds: Array.from(touchedClientIds),
+        onProgress: (msg) =>
+          setProgressState((prev) =>
+            prev ? { ...prev, messages: [...prev.messages.slice(-29), msg] } : prev,
+          ),
+      });
+      if (!visible.ok) {
+        throw new Error(
+          `Os registros foram gravados, mas ainda não apareceram na tela (${visible.missingClients.length} cliente(s) e ${visible.missingProducts.length} produto(s)). A importação continua aberta — tente novamente ou verifique a conexão.`,
         );
       }
       addImportHistory({
