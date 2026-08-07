@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Search,
   Sparkles,
+  Wand2,
 } from "lucide-react";
 import {
   Dialog,
@@ -40,7 +41,11 @@ import {
 import { useServerTable } from "@/lib/api/use-server-table";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { listProductCatalog, getProductReports } from "@/lib/products-catalog.functions";
-import { classifyNcmBatch, listPendingNcmItems } from "@/lib/product-ncm.functions";
+import {
+  applyNcmRules,
+  classifyNcmBatch,
+  listPendingNcmItems,
+} from "@/lib/product-ncm.functions";
 import { usePlatformOptions } from "@/lib/platforms";
 import { formatBRL } from "@/lib/store";
 import { formatNcm } from "@/lib/nf-format";
@@ -111,6 +116,7 @@ export function ProductsCatalogModal({
   // ---- Geração de NCM em lote -------------------------------------------
   const callPending = useServerFn(listPendingNcmItems);
   const callClassify = useServerFn(classifyNcmBatch);
+  const callRules = useServerFn(applyNcmRules);
   const [ncmPlatform, setNcmPlatform] = useState("all");
   const ncmPlatformValue = ncmPlatform === "all" ? "" : ncmPlatform;
   const [gen, setGen] = useState<{
@@ -123,6 +129,47 @@ export function ProductsCatalogModal({
   }>({ running: false, paused: false, done: 0, total: 0, review: 0, log: "" });
 
   const pausedRef = useMemo(() => ({ current: false }), []);
+
+  async function runRules() {
+    pausedRef.current = false;
+    setGen((g) => ({ ...g, running: true, paused: false, log: "Aplicando a regra..." }));
+    try {
+      let processed = 0;
+      for (;;) {
+        if (pausedRef.current) break;
+        const res = await callRules({ data: { limit: 200, platform: ncmPlatformValue } });
+        if (!res.processed) {
+          setGen((g) => ({
+            ...g,
+            running: false,
+            log: ncmPlatformValue
+              ? `Plataforma ${ncmPlatformValue} totalmente classificada.`
+              : "Tudo classificado pela regra.",
+          }));
+          break;
+        }
+        processed += res.processed;
+        setGen((g) => ({
+          ...g,
+          done: processed,
+          total: Math.max(g.total, processed + Math.max(0, res.remaining - res.processed)),
+          log: `${processed} item(ns) classificado(s) pela regra.`,
+        }));
+        await table.refetch();
+        if (res.saved === 0) {
+          setGen((g) => ({ ...g, running: false, log: "Nada novo para salvar." }));
+          break;
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: ["product-catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["ncm-pending"] });
+      toast.success("Regra de NCM aplicada.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao aplicar a regra.");
+    } finally {
+      setGen((g) => ({ ...g, running: false }));
+    }
+  }
 
   const pendingCount = useQuery({
     queryKey: ["ncm-pending", ncmPlatformValue],
@@ -397,12 +444,13 @@ export function ProductsCatalogModal({
           <TabsContent value="ncm" className="px-6 pb-6">
             <div className="space-y-4 pt-4">
               <div className="rounded-lg border border-border bg-background/40 p-4 text-sm text-muted-foreground">
-                A geração classifica cada combinação de <strong>produto + plataforma</strong> ainda
-                sem NCM, em lotes de {BATCH_SIZE}. Cada lote passa por duas conferências
-                independentes da IA: o que não bate entre as duas, ou não corresponde a um NCM
-                plausível para o segmento, fica marcado como <strong>Revisar</strong> em vez de
-                receber um código inventado. Classificações editadas manualmente nunca são
-                sobrescritas.
+                A classificação segue a <strong>regra de negócio</strong>: menção a videogame/jogo →
+                9504.50.00 “Videogame ou jogo”; boneco original → 9503.00.99 “Boneco colecionável”;
+                pop alternativo/pelúcia → 9503.00.31 “Boneco pelúcia”; figure 3D → 9503.00.80
+                “Figure 3D”; nenhum dos casos → 9504.00.00 padrão “Figure” (3926.40.00). A regra é
+                instantânea e não consome créditos de IA. A geração por IA continua disponível para
+                conferência pontual, em lotes de {BATCH_SIZE}. Classificações editadas manualmente
+                nunca são sobrescritas.
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -437,15 +485,28 @@ export function ProductsCatalogModal({
                     ? "Contando itens sem NCM..."
                     : `${pendingCount.data?.remaining ?? 0} item(ns) sem NCM`}
                 </span>
-                <Button className="gap-2" disabled={gen.running} onClick={runGeneration}>
+                <Button className="gap-2" disabled={gen.running} onClick={runRules}>
+                  {gen.running ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Wand2 className="size-4" />
+                  )}
+                  {gen.running
+                    ? "Aplicando..."
+                    : `Aplicar regra NCM${ncmPlatformValue ? ` (${ncmPlatformValue})` : ""}`}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  disabled={gen.running}
+                  onClick={runGeneration}
+                >
                   {gen.running ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
                     <Sparkles className="size-4" />
                   )}
-                  {gen.running
-                    ? "Gerando..."
-                    : `Gerar NCM${ncmPlatformValue ? ` (${ncmPlatformValue})` : ""}`}
+                  Conferir com IA
                 </Button>
                 {gen.running ? (
                   <Button
@@ -459,7 +520,7 @@ export function ProductsCatalogModal({
                     <Pause className="size-4" /> Pausar
                   </Button>
                 ) : gen.done > 0 ? (
-                  <Button variant="outline" className="gap-2" onClick={runGeneration}>
+                  <Button variant="outline" className="gap-2" onClick={runRules}>
                     <Play className="size-4" /> Continuar
                   </Button>
                 ) : null}
