@@ -146,7 +146,15 @@ export function ProductsCatalogModal({
     total: number;
     review: number;
     log: string;
-  }>({ running: false, paused: false, done: 0, total: 0, review: 0, log: "" });
+    steps: string[];
+  }>({ running: false, paused: false, done: 0, total: 0, review: 0, log: "", steps: [] });
+
+  /** Adiciona uma etapa ao histórico visível do processamento. */
+  function pushStep(message: string) {
+    setGen((g) => ({ ...g, log: message, steps: [...g.steps, message].slice(-8) }));
+  }
+
+  const tick = () => new Promise((r) => setTimeout(r, 220));
 
   const pausedRef = useMemo(() => ({ current: false }), []);
 
@@ -162,7 +170,7 @@ export function ProductsCatalogModal({
       queryClient.invalidateQueries({ queryKey: ["product-catalog"] });
       queryClient.invalidateQueries({ queryKey: ["ncm-pending"] });
       await table.refetch();
-      setGen({ running: false, paused: false, done: 0, total: 0, review: 0, log: "" });
+      setGen({ running: false, paused: false, done: 0, total: 0, review: 0, log: "", steps: [] });
       toast.success(`${res.deleted} classificação(ões) removida(s).`);
       setResetOpen(false);
     } catch (e) {
@@ -174,34 +182,65 @@ export function ProductsCatalogModal({
 
   async function runRules() {
     pausedRef.current = false;
-    setGen((g) => ({ ...g, running: true, paused: false, log: "Aplicando a regra..." }));
+    setGen((g) => ({
+      ...g,
+      running: true,
+      paused: false,
+      log: "Carregando itens...",
+      steps: ["Carregando itens..."],
+    }));
     try {
+      const start = await callPending({ data: { limit: 1, platform: ncmPlatformValue } });
+      const totalToDo = start.remaining;
+      setGen((g) => ({ ...g, total: totalToDo }));
+      pushStep(
+        totalToDo
+          ? `${totalToDo} item(ns) sem NCM encontrados${ncmPlatformValue ? ` em ${ncmPlatformValue}` : ""}.`
+          : "Nenhum item pendente.",
+      );
+      await tick();
       let processed = 0;
+      let lote = 0;
       for (;;) {
         if (pausedRef.current) break;
+        lote += 1;
+        pushStep(`Lote ${lote}: avaliando plataforma e título...`);
+        await tick();
         const res = await callRules({ data: { limit: 200, platform: ncmPlatformValue } });
         if (!res.processed) {
           setGen((g) => ({
             ...g,
             running: false,
+            total: g.total || g.done,
+            done: g.total || g.done,
             log: ncmPlatformValue
               ? `Plataforma ${ncmPlatformValue} totalmente classificada.`
               : "Tudo classificado pela regra.",
+            steps: [...g.steps, "Concluído — 100%."].slice(-8),
           }));
           break;
         }
+        pushStep(`Lote ${lote}: atribuindo NCM a ${res.processed} item(ns)...`);
         processed += res.processed;
         setGen((g) => ({
           ...g,
           done: processed,
           total: Math.max(g.total, processed + Math.max(0, res.remaining - res.processed)),
           log: `${processed} item(ns) classificado(s) pela regra.`,
+          steps: [...g.steps, `${processed} de ${Math.max(g.total, processed)} classificados.`].slice(-8),
         }));
         await table.refetch();
         if (res.saved === 0) {
-          setGen((g) => ({ ...g, running: false, log: "Nada novo para salvar." }));
+          setGen((g) => ({
+            ...g,
+            running: false,
+            log: "Nada novo para salvar.",
+            steps: [...g.steps, "Nada novo para salvar."].slice(-8),
+          }));
           break;
         }
+        pushStep("Indo para o próximo lote...");
+        await tick();
       }
       queryClient.invalidateQueries({ queryKey: ["product-catalog"] });
       queryClient.invalidateQueries({ queryKey: ["ncm-pending"] });
@@ -527,6 +566,7 @@ export function ProductsCatalogModal({
                       total: 0,
                       review: 0,
                       log: "",
+                      steps: [],
                     });
                   }}
                 >
@@ -608,8 +648,25 @@ export function ProductsCatalogModal({
                 <div className="space-y-2">
                   <Progress value={progress} />
                   <p className="text-xs text-muted-foreground">
-                    {gen.done} de {gen.total || gen.done} — {gen.review} para revisar. {gen.log}
+                    {Math.round(progress)}% — {gen.done} de {gen.total || gen.done} — {gen.review}{" "}
+                    para revisar. {gen.log}
                   </p>
+                  {gen.steps.length > 0 && (
+                    <ul className="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
+                      {gen.steps.map((s, i) => (
+                        <li key={`${i}-${s}`} className="flex items-center gap-2">
+                          <span
+                            className={
+                              i === gen.steps.length - 1 && gen.running
+                                ? "size-1.5 rounded-full bg-primary animate-pulse"
+                                : "size-1.5 rounded-full bg-muted-foreground/50"
+                            }
+                          />
+                          {s}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
               <p className="text-xs text-muted-foreground">
