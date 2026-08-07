@@ -570,6 +570,22 @@ export function ProductsCatalogModal({
                   )}
                   Conferir com IA
                 </Button>
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  disabled={gen.running}
+                  onClick={() => openEditor(null)}
+                >
+                  <Pencil className="size-4" /> Editar NCM de um produto
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="gap-2"
+                  disabled={gen.running || resetting}
+                  onClick={() => setResetOpen(true)}
+                >
+                  <RotateCcw className="size-4" /> Resetar NCM
+                </Button>
                 {gen.running ? (
                   <Button
                     variant="outline"
@@ -596,10 +612,42 @@ export function ProductsCatalogModal({
                   </p>
                 </div>
               )}
+              <p className="text-xs text-muted-foreground">
+                A regra é instantânea e não consome créditos de IA. A conferência por IA roda em
+                lotes de {BATCH_SIZE}. Classificações manuais nunca são sobrescritas.
+              </p>
             </div>
           </TabsContent>
         </Tabs>
       </DialogContent>
+
+      <NcmEditDialog open={editOpen} onOpenChange={setEditOpen} target={editTarget} />
+
+      <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Resetar classificações de NCM?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso apaga os NCMs gerados pela regra e pela IA
+              {ncmPlatformValue ? ` na plataforma ${ncmPlatformValue}` : " de todos os produtos"}.
+              As classificações definidas manualmente são preservadas. Depois você pode aplicar a
+              regra novamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={resetting}
+              onClick={(e) => {
+                e.preventDefault();
+                void runReset();
+              }}
+            >
+              {resetting ? "Resetando..." : "Resetar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
