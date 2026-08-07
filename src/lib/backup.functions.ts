@@ -2062,8 +2062,10 @@ export async function continueBackupById(
 
 export const createBackupNow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((input?: { mode?: "full" | "incremental" }) => input ?? {})
+  .handler(async ({ context, data }) => {
     await assertAdmin(context);
+    const mode: "full" | "incremental" = data?.mode === "incremental" ? "incremental" : "full";
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await cleanupStaleBackups(supabaseAdmin);
     const backupEnv = await resolveTargetEnv(supabaseAdmin, context.userId);
@@ -2099,6 +2101,7 @@ export const createBackupNow = createServerFn({ method: "POST" })
           status: "pending",
           storage_path: storagePath,
           env: backupEnv,
+          progress: { mode } as any,
         })
         .select("id")
         .single();
@@ -2124,7 +2127,7 @@ export const executeBackupNow = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await supabaseAdmin
       .from("system_backups")
-      .select("id, storage_path, status, created_by, env")
+      .select("id, storage_path, status, created_by, env, progress")
       .eq("id", data.id)
       .maybeSingle();
     if (error || !row) throw new Error(error?.message ?? "Backup não encontrado.");
@@ -2138,9 +2141,40 @@ export const executeBackupNow = createServerFn({ method: "POST" })
       type: "manual",
       createdBy: context.userId,
       env: (row.env as "producao" | "sandbox" | null) ?? "producao",
+      mode: (row as any)?.progress?.mode === "incremental" ? "incremental" : "full",
       existing: { id: row.id as string, storagePath: row.storage_path as string },
     });
     return { id: row.id as string, status: "completed" as const };
+  });
+
+// ---------------------------------------------------------------------------
+// Estado da base incremental (usado pelo painel)
+// ---------------------------------------------------------------------------
+
+export interface BackupBaseInfo {
+  exists: boolean;
+  env: "producao" | "sandbox";
+  generatedAt: string | null;
+  lastFullAt: string | null;
+  incrementalRuns: number;
+  totalRows: number;
+}
+
+export const getBackupBaseInfo = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<BackupBaseInfo> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const env = await resolveTargetEnv(supabaseAdmin, context.userId);
+    const base = await readBaseManifest(supabaseAdmin, baseKeyFor(env, context.userId));
+    return {
+      exists: Boolean(base),
+      env,
+      generatedAt: base?.generatedAt ?? null,
+      lastFullAt: base?.lastFullAt ?? null,
+      incrementalRuns: base?.incrementalRuns ?? 0,
+      totalRows: base?.totalRows ?? 0,
+    };
   });
 
 // ---------------------------------------------------------------------------
