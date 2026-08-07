@@ -488,6 +488,10 @@ export function ListImportModal({
     }
     savingRef.current = true;
     setSaving(true);
+    // Toast único de progresso: só vira "sucesso" quando o banco confirma e os
+    // registros já aparecem nas listas da tela (sem F5).
+    const toastId = `list-import-${Date.now()}`;
+    toast.loading("Importando… preparando registros", { id: toastId });
     // Data marcada no cabeçalho da lista (ex.: "25/06/2026"). Quando presente,
     // os produtos importados refletem nessa data em vez de "hoje".
     const headerISO = preview?.headerDate
