@@ -16,6 +16,32 @@ import { ClientesSection } from "@/sections/clientes-section";
 import { scrollToSection } from "@/lib/scroll-to-section";
 import { setUiValue } from "@/lib/db-sync";
 import { useListExpansionStore, type ListSection } from "@/lib/list-expansion";
+import { useSandbox } from "@/lib/use-sandbox";
+import type { DashboardAggregates } from "@/lib/api/queries.functions";
+
+// Cache local dos últimos agregados por ambiente: ao recarregar, a tela abre
+// com os últimos números conhecidos (nunca com zeros falsos) e só atualiza
+// quando a consulta responde.
+const AGG_CACHE_PREFIX = "sg_dashboard_aggregates:";
+
+function readAggregatesCache(env: string): DashboardAggregates | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(AGG_CACHE_PREFIX + env);
+    return raw ? (JSON.parse(raw) as DashboardAggregates) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeAggregatesCache(env: string, data: DashboardAggregates) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(AGG_CACHE_PREFIX + env, JSON.stringify(data));
+  } catch {
+    /* quota cheia: cache é apenas otimização */
+  }
+}
 
 const CollectionSection = lazy(() =>
   import("@/sections/collection-section").then((m) => ({ default: m.CollectionSection })),
@@ -61,6 +87,10 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
   // cada clique aplica o filtro correspondente na seção-alvo, expande a
   // lista e faz scroll até lá.
   const aggregatesFn = useServerFn(getDashboardAggregates);
+  const { state: sandboxState } = useSandbox();
+  const env = sandboxState.active ? "sandbox" : "producao";
+  const cachedRef = useRef<DashboardAggregates | null>(null);
+  if (cachedRef.current === null) cachedRef.current = readAggregatesCache(env);
   const aggregatesQuery = useQuery({
     queryKey: ["dashboard-aggregates"],
     queryFn: () => aggregatesFn(),
@@ -104,7 +134,9 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
 
   // Instrumentamos o badge com o tempo do fetch server-side (round-trip).
   const perfStartRef = useRef<number>(performance.now());
-  const aggregates = aggregatesQuery.data ?? {
+  const cached = cachedRef.current;
+  const aggregates: DashboardAggregates = aggregatesQuery.data ??
+    cached ?? {
     totalClients: 0,
     totalProducts: 0,
     reservasAtivas: 0,
@@ -135,7 +167,15 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
       financialStatus: string;
     }>,
   };
+  // Sem dados reais nem cache → placeholders (nunca zeros falsos).
+  const metricsLoading = !aggregatesQuery.data && !cached;
   const isSuccess = aggregatesQuery.isSuccess;
+
+  // Persiste o último resultado para a próxima abertura do sistema.
+  useEffect(() => {
+    if (aggregatesQuery.data) writeAggregatesCache(env, aggregatesQuery.data);
+  }, [aggregatesQuery.data, env]);
+
   // IMPORTANTE: reportar métricas SEMPRE em efeito (nunca durante o render).
   // Emitir durante o render atualiza o estado do badge no meio da fase de
   // render e faz o React reiniciar a renderização em loop infinito
