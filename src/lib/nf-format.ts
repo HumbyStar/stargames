@@ -141,3 +141,33 @@ export function renderNfText(header: string, groups: NfGroup[]): string {
   blocks.push(`✅ VALOR TOTAL DA NOTA: ${formatBRL(total)}`);
   return blocks.join("\n\n");
 }
+
+export interface NfAccountantLineItem {
+  name: string;
+  platform: string;
+  totalValue: number;
+  ncm: string;
+  category: string;
+}
+
+/** Versão para o contador: item a item, sem agrupamento em lotes. */
+export function renderAccountantNfText(
+  header: string,
+  items: NfAccountantLineItem[],
+): string {
+  const total = items.reduce((s, i) => s + i.totalValue, 0);
+  const blocks: string[] = [header];
+  items.forEach((it, i) => {
+    blocks.push(
+      [
+        `Item ${i + 1} – ${it.name}${it.platform ? ` (${it.platform})` : ""}`,
+        `Quantidade: 1`,
+        `NCM: ${it.ncm}`,
+        `Categoria fiscal: ${it.category}`,
+        `Valor: ${formatBRL(it.totalValue)}`,
+      ].join("\n"),
+    );
+  });
+  blocks.push(`✅ VALOR TOTAL DA NOTA: ${formatBRL(total)}`);
+  return blocks.join("\n\n");
+}
