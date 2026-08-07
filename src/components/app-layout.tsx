@@ -40,6 +40,8 @@ import { useUiStore } from "@/lib/ui-store";
 import { setUiValue, subscribeRealtimeSnapshot } from "@/lib/db-sync";
 import { notifyRowConfirmed } from "@/lib/write-confirm";
 import { useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { getDashboardAggregates } from "@/lib/api/queries.functions";
 import { HydrationSplash, useHydrationUserName } from "@/components/hydration-splash";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
