@@ -6,8 +6,10 @@ import {
   Download,
   Loader2,
   Pause,
+  Pencil,
   Play,
   RefreshCw,
+  RotateCcw,
   Search,
   Sparkles,
   Wand2,
@@ -45,7 +47,20 @@ import {
   applyNcmRules,
   classifyNcmBatch,
   listPendingNcmItems,
+  resetNcmClassifications,
 } from "@/lib/product-ncm.functions";
+import { NcmFlow } from "@/components/ncm-flow";
+import { NcmEditDialog, type NcmTarget } from "@/components/ncm-edit-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { usePlatformOptions } from "@/lib/platforms";
 import { formatBRL } from "@/lib/store";
 import { formatNcm } from "@/lib/nf-format";
