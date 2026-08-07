@@ -31,7 +31,7 @@ const STALE_BACKUP_MS = 5 * 60 * 1000;
 const RESUME_STALE_MS = 90 * 1000;
 const STORAGE_MIRROR_MAX_BYTES = 500 * 1024 * 1024;
 const STORAGE_MIRROR_MAX_FILES = 10_000;
-const BACKUP_RETENTION_COUNT = 3;
+const BACKUP_RETENTION_COUNT = 1;
 const BACKUP_RETENTION_BYTES = 1024 * 1024 * 1024;
 const FAILED_BACKUP_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 // Heurística: cada linha ocupa ~800 bytes em JSONL (chaves + valores).
