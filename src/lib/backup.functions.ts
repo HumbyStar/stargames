@@ -1338,6 +1338,8 @@ async function runBackup(opts: {
   type: "manual" | "scheduled";
   createdBy: string | null;
   env?: "producao" | "sandbox";
+  /** "incremental" atualiza o backup existente; "full" refaz do zero. */
+  mode?: "full" | "incremental";
   existing?: { id: string; storagePath: string };
 }): Promise<{ id: string; storagePath: string; sizeBytes: number; incomplete?: boolean }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -1455,6 +1457,54 @@ async function runBackup(opts: {
     const rowCounts: Record<string, number> = {};
     for (const [table, state] of Object.entries(progress.parts)) {
       rowCounts[table] = state.rows;
+    }
+
+    // Atualização incremental: reaproveita o backup anterior e lê do banco
+    // apenas o que mudou desde então.
+    if (
+      opts.mode === "incremental" &&
+      !progress.incremental &&
+      Object.keys(progress.parts).length === 0
+    ) {
+      try {
+        pushDebug("info", "incremental", "Procurando o backup atual para atualizar…");
+        await persistBackupDebug(supabaseAdmin, backupId, debugLog);
+        const seed = await prepareIncrementalSeed(supabaseAdmin, {
+          backupId,
+          env: backupEnv,
+          sandboxOwner: opts.createdBy,
+          onInfo: (message, meta) => pushDebug("info", "incremental", message, meta),
+        });
+        if (seed) {
+          progress.parts = seed.parts;
+          progress.totalRows = seed.totalRows;
+          progress.incremental = seed.meta;
+          for (const [table, state] of Object.entries(seed.parts)) rowCounts[table] = state.rows;
+          pushDebug(
+            "info",
+            "incremental",
+            `Backup atualizado a partir de ${new Date(seed.meta.baseGeneratedAt).toLocaleString("pt-BR")}: ${seed.meta.addedRows.toLocaleString("pt-BR")} registro(s) novo(s)/alterado(s).`,
+            { added: seed.meta.addedRows, removed: seed.meta.removedRows },
+          );
+        } else {
+          pushDebug(
+            "warn",
+            "incremental",
+            "Não há backup base utilizável — este backup sairá completo.",
+          );
+        }
+      } catch (err) {
+        pushDebug(
+          "warn",
+          "incremental",
+          `Falha ao atualizar a partir do backup atual; gerando completo (${err instanceof Error ? err.message : String(err)})`,
+        );
+        progress.parts = {};
+        progress.incremental = undefined;
+      }
+      await persistBackupDebug(supabaseAdmin, backupId, debugLog, {
+        error_details: { resume: progress } as any,
+      });
     }
 
     // Exportação em etapas: cada tabela é gravada em blocos no armazenamento
@@ -1652,6 +1702,10 @@ async function runBackup(opts: {
       generatedAt: now.toISOString(),
       type: opts.type,
       env: backupEnv,
+      mode: progress.incremental ? "incremental" : "full",
+      baseGeneratedAt: progress.incremental?.baseGeneratedAt ?? null,
+      lastFullAt: progress.incremental?.lastFullAt ?? now.toISOString(),
+      incrementalRuns: progress.incremental?.incrementalRuns ?? 0,
       rowCounts,
       storageObjectCount,
       storageSkippedReason,
