@@ -377,6 +377,16 @@ function _formatBytesLoose(n: number): string {
 }
 
 function formatDurationShort(ms: number): string {
+  return formatDurationShortImpl(ms);
+}
+
+function formatDateTimeBR(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
+function formatDurationShortImpl(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return "—";
   const totalSec = Math.round(ms / 1000);
   if (totalSec < 60) return `${totalSec}s`;
