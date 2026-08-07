@@ -759,6 +759,9 @@ export function BackupsPanel() {
   const [preflightLoading, setPreflightLoading] = useState(false);
   const [preflightData, setPreflightData] = useState<BackupEstimate | null>(null);
   const [preflightError, setPreflightError] = useState<string | null>(null);
+  // "incremental" atualiza o backup existente; "full" refaz do zero.
+  const [pendingMode, setPendingMode] = useState<"full" | "incremental">("incremental");
+  const [baseInfo, setBaseInfo] = useState<BackupBaseInfo | null>(null);
   const setSettingsLocked = useUiStore((s) => s.setSettingsLocked);
 
   useEffect(() => {
