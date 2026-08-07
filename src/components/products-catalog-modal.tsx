@@ -569,15 +569,7 @@ export function ProductsCatalogModal({
                   value={ncmPlatform}
                   onValueChange={(v) => {
                     setNcmPlatform(v);
-                    setGen({
-                      running: false,
-                      paused: false,
-                      done: 0,
-                      total: 0,
-                      review: 0,
-                      log: "",
-                      steps: [],
-                    });
+                    setGen({ running: false, mode: "none", paused: false, done: 0, total: 0, review: 0, log: "", steps: [] });
                   }}
                 >
                   <SelectTrigger className="w-52" disabled={gen.running}>
