@@ -141,13 +141,23 @@ export function ProductsCatalogModal({
   const ncmPlatformValue = ncmPlatform === "all" ? "" : ncmPlatform;
   const [gen, setGen] = useState<{
     running: boolean;
+    mode: "none" | "rules" | "ai";
     paused: boolean;
     done: number;
     total: number;
     review: number;
     log: string;
     steps: string[];
-  }>({ running: false, paused: false, done: 0, total: 0, review: 0, log: "", steps: [] });
+  }>({
+    running: false,
+    mode: "none",
+    paused: false,
+    done: 0,
+    total: 0,
+    review: 0,
+    log: "",
+    steps: [],
+  });
 
   /** Adiciona uma etapa ao histórico visível do processamento. */
   function pushStep(message: string) {
