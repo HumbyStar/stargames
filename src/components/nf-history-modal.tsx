@@ -154,6 +154,103 @@ function NfAuditTrail({ invoiceId }: { invoiceId: string }) {
 }
 
 export function NfHistoryModal({ open, onClose, clientId, clientName }: Props) {
+  return <NfHistoryModalInner open={open} onClose={onClose} clientId={clientId} clientName={clientName} />;
+}
+
+function AccountantInvoiceCard({
+  row,
+  clientName,
+}: {
+  row: NfInvoiceRow;
+  clientName: string;
+}) {
+  const build = useServerFn(buildAccountantNf);
+  const [text, setText] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setErr(null);
+      try {
+        const payload = await build({ data: { id: row.id } });
+        if (cancelled) return;
+        setText(renderAccountantNfText(payload.header, payload.items));
+      } catch (e) {
+        if (!cancelled) setErr(e instanceof Error ? e.message : "Falha ao montar nota.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [build, row.id]);
+
+  const date = new Date(row.createdAt);
+
+  return (
+    <li className={cn("space-y-2 rounded-md border border-border bg-card p-3")}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm">
+          <div className="font-medium">{date.toLocaleString("pt-BR")}</div>
+          <div className="text-xs text-muted-foreground">
+            {row.productIds.length} produto(s) · {formatBRL(row.totalCents / 100)}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!text}
+            onClick={() =>
+              text &&
+              downloadNfPdf({
+                clientName: `${clientName} - contador`,
+                content: text,
+                createdAt: row.createdAt,
+                totalCents: row.totalCents,
+              }).catch(() => toast.error("Falha ao gerar PDF."))
+            }
+          >
+            <Download className="mr-2 h-4 w-4" /> PDF
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!text}
+            onClick={async () => {
+              if (!text) return;
+              try {
+                await navigator.clipboard.writeText(text);
+                toast.success("Nota do contador copiada.");
+              } catch {
+                toast.error("Não foi possível copiar.");
+              }
+            }}
+          >
+            <Copy className="mr-2 h-4 w-4" /> Copiar
+          </Button>
+        </div>
+      </div>
+      {loading && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Montando nota item a item…
+        </div>
+      )}
+      {err && <div className="text-xs text-destructive">{err}</div>}
+      {text && (
+        <pre className="whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-xs text-muted-foreground">
+          {text}
+        </pre>
+      )}
+    </li>
+  );
+}
+
+function NfHistoryModalInner({ open, onClose, clientId, clientName }: Props) {
   const list = useServerFn(listNfInvoices);
   const remove = useServerFn(deleteNfInvoice);
   const update = useServerFn(updateNfInvoice);
