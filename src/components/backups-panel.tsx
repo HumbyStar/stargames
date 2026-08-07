@@ -432,7 +432,7 @@ function BackupPreflightModal({
           </DialogTitle>
           <DialogDescription>
             {mode === "incremental"
-              ? "Atualização do backup atual: só o que mudou desde a última execução é lido do banco."
+              ? `Atualização do backup atual${baseGeneratedAt ? ` (gerado em ${formatDateTimeBR(baseGeneratedAt)})` : ""}: só o que mudou desde a última execução é lido do banco.`
               : "Estimativa de tamanho e conteúdo antes de iniciar. Se ultrapassar os limites, o backup ainda pode ser gerado, mas conteúdos serão truncados."}
           </DialogDescription>
         </DialogHeader>
