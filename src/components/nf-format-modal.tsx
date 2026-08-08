@@ -16,9 +16,9 @@ import { classifyProductsForNf } from "@/lib/nf-format.functions";
 import { saveNfInvoice } from "@/lib/nf-history.functions";
 import {
   buildFiscalHeader,
-  groupByNcm,
   missingFiscalFields,
-  renderNfText,
+  renderAccountantNfText,
+  formatNcm,
   type NfProduct,
 } from "@/lib/nf-format";
 import { toast } from "sonner";
@@ -88,9 +88,19 @@ export function NfFormatModal({ open, onClose, client, products, onSaved }: Prop
         });
         if (cancelled) return;
         const header = buildFiscalHeader(fiscal);
-        const groups = groupByNcm(products, classifications);
-        setText(renderNfText(header, groups));
-        const total = groups.reduce((s, g) => s + g.subtotal, 0);
+        const byId = new Map(classifications.map((c) => [c.id, c]));
+        const items = products.map((p) => {
+          const c = byId.get(p.id);
+          return {
+            name: p.name,
+            platform: p.platform ?? "",
+            totalValue: p.totalValue,
+            ncm: c?.ncm ? formatNcm(c.ncm) : "—",
+            category: c?.category?.trim() || "Sem classificação (revisar)",
+          };
+        });
+        setText(renderAccountantNfText(header, items));
+        const total = items.reduce((s, i) => s + i.totalValue, 0);
         setTotalCents(Math.round(total * 100));
       } catch (e) {
         if (cancelled) return;
@@ -153,7 +163,7 @@ export function NfFormatModal({ open, onClose, client, products, onSaved }: Prop
         {loading && (
           <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-4 text-sm">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Aplicando regra de NCM e montando lotes…
+            Aplicando regra de NCM e montando os itens…
           </div>
         )}
 
