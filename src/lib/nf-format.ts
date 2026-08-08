@@ -160,7 +160,7 @@ export function renderAccountantNfText(
   items.forEach((it, i) => {
     blocks.push(
       [
-        `Item ${i + 1} – ${it.name}${it.platform ? ` (${it.platform})` : ""}`,
+        `Item ${i + 1} – ${it.name}`,
         `Quantidade: 1`,
         `NCM: ${it.ncm}`,
         `Categoria fiscal: ${it.category}`,
