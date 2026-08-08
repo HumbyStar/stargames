@@ -153,7 +153,7 @@ export function NfFormatModal({ open, onClose, client, products, onSaved }: Prop
         {loading && (
           <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-4 text-sm">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Classificando NCM via IA e montando lotes…
+            Aplicando regra de NCM e montando lotes…
           </div>
         )}
 
