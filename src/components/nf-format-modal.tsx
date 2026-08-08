@@ -10,7 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useServerFn } from "@tanstack/react-start";
-import { analyzeCustomerData, type CustomerFiscalData } from "@/lib/customer-data-ai.functions";
+import type { CustomerFiscalData } from "@/lib/customer-data-ai.functions";
+import { fiscalDataFromFichaText } from "@/lib/ficha-parse";
 import { classifyProductsForNf } from "@/lib/nf-format.functions";
 import { saveNfInvoice } from "@/lib/nf-history.functions";
 import {
@@ -34,7 +35,6 @@ interface Props {
 }
 
 export function NfFormatModal({ open, onClose, client, products, onSaved }: Props) {
-  const analyze = useServerFn(analyzeCustomerData);
   const classify = useServerFn(classifyProductsForNf);
   const save = useServerFn(saveNfInvoice);
   const [loading, setLoading] = useState(false);
@@ -65,8 +65,9 @@ export function NfFormatModal({ open, onClose, client, products, onSaved }: Prop
     (async () => {
       setLoading(true);
       try {
-        const fiscal: CustomerFiscalData = await analyze({ data: { text: raw } });
-        if (cancelled) return;
+        const fiscal: CustomerFiscalData = fiscalDataFromFichaText(raw, {
+          phone: client.phone,
+        });
         const miss = missingFiscalFields(fiscal);
         if (miss.length > 0) {
           setMissing(miss);
@@ -101,7 +102,7 @@ export function NfFormatModal({ open, onClose, client, products, onSaved }: Prop
     return () => {
       cancelled = true;
     };
-  }, [open, client, products, analyze, classify]);
+  }, [open, client, products, classify]);
 
   async function confirmNota() {
     if (!client || !text) return;
@@ -152,7 +153,7 @@ export function NfFormatModal({ open, onClose, client, products, onSaved }: Prop
         {loading && (
           <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-4 text-sm">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Classificando NCM via IA e montando lotes…
+            Aplicando regra de NCM e montando lotes…
           </div>
         )}
 

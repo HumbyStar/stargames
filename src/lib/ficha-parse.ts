@@ -116,3 +116,38 @@ export function fichaFromTextWithDefaults(
   }
   return parsed;
 }
+
+const FISCAL_KEYS: Array<Exclude<keyof CustomerFiscalData, "missing">> = [
+  "fullName",
+  "cpfCnpj",
+  "email",
+  "phone",
+  "cep",
+  "street",
+  "number",
+  "complement",
+  "neighborhood",
+  "city",
+  "state",
+  "notes",
+];
+
+/**
+ * Converte a ficha em `CustomerFiscalData` completo, 100% determinístico
+ * (sem IA). Usa o parser canônico e preenche `missing` com os campos vazios.
+ */
+export function fiscalDataFromFichaText(
+  text: string | null | undefined,
+  defaults: { phone?: string } = {},
+): CustomerFiscalData {
+  const parsed = fichaFromTextWithDefaults(text, defaults);
+  const out = {} as CustomerFiscalData;
+  const missing: string[] = [];
+  for (const key of FISCAL_KEYS) {
+    const value = typeof parsed[key] === "string" ? (parsed[key] as string).trim() : "";
+    out[key] = value;
+    if (!value) missing.push(key);
+  }
+  out.missing = missing;
+  return out;
+}
