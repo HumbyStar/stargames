@@ -34,10 +34,6 @@ import {
 } from "lucide-react";
 import { formatBRL } from "@/lib/store";
 import { downloadNfPdf } from "@/lib/nf-pdf";
-import { buildAccountantNf } from "@/lib/nf-accountant.functions";
-import { renderAccountantNfText } from "@/lib/nf-format";
-import { cn } from "@/lib/utils";
-import { FileText, Users } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -157,104 +153,10 @@ export function NfHistoryModal({ open, onClose, clientId, clientName }: Props) {
   return <NfHistoryModalInner open={open} onClose={onClose} clientId={clientId} clientName={clientName} />;
 }
 
-function AccountantInvoiceCard({
-  row,
-  clientName,
-}: {
-  row: NfInvoiceRow;
-  clientName: string;
-}) {
-  const build = useServerFn(buildAccountantNf);
-  const [text, setText] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setErr(null);
-      try {
-        const payload = await build({ data: { id: row.id } });
-        if (cancelled) return;
-        setText(renderAccountantNfText(payload.header, payload.items));
-      } catch (e) {
-        if (!cancelled) setErr(e instanceof Error ? e.message : "Falha ao montar nota.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [build, row.id]);
-
-  const date = new Date(row.createdAt);
-
-  return (
-    <li className={cn("space-y-2 rounded-md border border-border bg-card p-3")}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-sm">
-          <div className="font-medium">{date.toLocaleString("pt-BR")}</div>
-          <div className="text-xs text-muted-foreground">
-            {row.productIds.length} produto(s) · {formatBRL(row.totalCents / 100)}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!text}
-            onClick={() =>
-              text &&
-              downloadNfPdf({
-                clientName: `${clientName} - contador`,
-                content: text,
-                createdAt: row.createdAt,
-                totalCents: row.totalCents,
-              }).catch(() => toast.error("Falha ao gerar PDF."))
-            }
-          >
-            <Download className="mr-2 h-4 w-4" /> PDF
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!text}
-            onClick={async () => {
-              if (!text) return;
-              try {
-                await navigator.clipboard.writeText(text);
-                toast.success("Nota do contador copiada.");
-              } catch {
-                toast.error("Não foi possível copiar.");
-              }
-            }}
-          >
-            <Copy className="mr-2 h-4 w-4" /> Copiar
-          </Button>
-        </div>
-      </div>
-      {loading && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Montando nota item a item…
-        </div>
-      )}
-      {err && <div className="text-xs text-destructive">{err}</div>}
-      {text && (
-        <pre className="whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-xs text-muted-foreground">
-          {text}
-        </pre>
-      )}
-    </li>
-  );
-}
-
 function NfHistoryModalInner({ open, onClose, clientId, clientName }: Props) {
   const list = useServerFn(listNfInvoices);
   const remove = useServerFn(deleteNfInvoice);
   const update = useServerFn(updateNfInvoice);
-  const [view, setView] = useState<"cliente" | "contador">("cliente");
   const [rows, setRows] = useState<NfInvoiceRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -286,7 +188,178 @@ function NfHistoryModalInner({ open, onClose, clientId, clientName }: Props) {
       setExpandedId(null);
       setEditingId(null);
       setDraft("");
-      setView("cliente");
+    }
+  }, [open]);
+
+  function startEdit(row: NfInvoiceRow) {
+    setEditingId(row.id);
+    setExpandedId(row.id);
+    setDraft(row.content);
+  }
+
+  async function saveEdit(row: NfInvoiceRow) {
+    const content = draft.trim();
+    if (!content) {
+      toast.error("A nota não pode ficar vazia.");
+      return;
+    }
+    setSavingId(row.id);
+    try {
+      const updated = await update({ data: { id: row.id, content } });
+      setRows((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
+      setEditingId(null);
+      toast.success("Nota atualizada.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao salvar nota.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function handlePdf(row: NfInvoiceRow) {
+    try {
+      await downloadNfPdf({
+        clientName,
+        content: editingId === row.id ? draft : row.content,
+        createdAt: row.createdAt,
+        totalCents: row.totalCents,
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao gerar PDF.");
+    }
+  }
+
+  async function handleCopy(row: NfInvoiceRow) {
+    try {
+      await navigator.clipboard.writeText(row.content);
+      toast.success("Nota copiada para envio ao contador.");
+    } catch {
+      toast.error("Não foi possível copiar.");
+    }
+  }
+
+  async function handleDelete(row: NfInvoiceRow) {
+    if (!window.confirm("Excluir esta nota fiscal do histórico?")) return;
+    setDeletingId(row.id);
+    try {
+      await remove({ data: { id: row.id } });
+      setRows((prev) => prev.filter((r) => r.id !== row.id));
+      toast.success("Nota excluída.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao excluir.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Receipt className="h-4 w-4 text-primary" />
+            Notas Fiscais — {clientName}
+          </DialogTitle>
+          <DialogDescription>
+            Histórico de notas geradas. Use Copiar para enviar ao contador.
+          </DialogDescription>
+        </DialogHeader>
+
+        {loading && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando…
+            </div>
+          )}
+          {err && <div className="text-destructive">{err}</div>}
+          {!loading && !err && entries && entries.length === 0 && (
+            <div className="text-muted-foreground">Nenhum registro de auditoria.</div>
+          )}
+          {!loading &&
+            entries?.map((entry) => {
+              const { added, removed } = diffLines(entry.oldContent, entry.newContent);
+              const isEdit = entry.action === "UPDATE";
+              return (
+                <div key={entry.id} className="rounded border border-border/60 bg-card p-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium">
+                      {entry.action === "INSERT"
+                        ? "Nota gerada"
+                        : isEdit
+                          ? "Nota editada"
+                          : "Nota excluída"}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {new Date(entry.changedAt).toLocaleString("pt-BR")}
+                      {entry.userEmail ? ` · ${entry.userEmail}` : ""}
+                    </span>
+                  </div>
+                  {isEdit && (added.length > 0 || removed.length > 0) && (
+                    <pre className="mt-2 whitespace-pre-wrap font-mono text-[11px] leading-relaxed">
+                      {removed.map((l, i) => (
+                        <div key={`r${i}`} className="text-destructive">
+                          − {l}
+                        </div>
+                      ))}
+                      {added.map((l, i) => (
+                        <div key={`a${i}`} className="text-emerald-600 dark:text-emerald-400">
+                          + {l}
+                        </div>
+                      ))}
+                    </pre>
+                  )}
+                  {isEdit && added.length === 0 && removed.length === 0 && (
+                    <div className="mt-1 text-muted-foreground">
+                      Alteração sem mudança no texto da nota.
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function NfHistoryModal({ open, onClose, clientId, clientName }: Props) {
+  return <NfHistoryModalInner open={open} onClose={onClose} clientId={clientId} clientName={clientName} />;
+}
+
+function NfHistoryModalInner({ open, onClose, clientId, clientName }: Props) {
+  const list = useServerFn(listNfInvoices);
+  const remove = useServerFn(deleteNfInvoice);
+  const update = useServerFn(updateNfInvoice);
+  const [rows, setRows] = useState<NfInvoiceRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await list({ data: { clientId } });
+      setRows(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Falha ao carregar histórico.");
+    } finally {
+      setLoading(false);
+    }
+  }, [list, clientId]);
+
+  useEffect(() => {
+    if (open) refetch();
+  }, [open, refetch]);
+
+  useEffect(() => {
+    if (!open) {
+      setExpandedId(null);
+      setEditingId(null);
+      setDraft("");
     }
   }, [open]);
 
@@ -404,15 +477,7 @@ function NfHistoryModalInner({ open, onClose, clientId, clientName }: Props) {
           </div>
         )}
 
-        {!loading && rows.length > 0 && view === "contador" && (
-          <ul className="space-y-3">
-            {rows.map((row) => (
-              <AccountantInvoiceCard key={row.id} row={row} clientName={clientName} />
-            ))}
-          </ul>
-        )}
-
-        {!loading && rows.length > 0 && view === "cliente" && (
+        {!loading && rows.length > 0 && (
           <ul className="space-y-3">
             {rows.map((row) => {
               const date = new Date(row.createdAt);
