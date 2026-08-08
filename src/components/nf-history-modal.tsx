@@ -34,10 +34,6 @@ import {
 } from "lucide-react";
 import { formatBRL } from "@/lib/store";
 import { downloadNfPdf } from "@/lib/nf-pdf";
-import { buildAccountantNf } from "@/lib/nf-accountant.functions";
-import { renderAccountantNfText } from "@/lib/nf-format";
-import { cn } from "@/lib/utils";
-import { FileText, Users } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -157,104 +153,10 @@ export function NfHistoryModal({ open, onClose, clientId, clientName }: Props) {
   return <NfHistoryModalInner open={open} onClose={onClose} clientId={clientId} clientName={clientName} />;
 }
 
-function AccountantInvoiceCard({
-  row,
-  clientName,
-}: {
-  row: NfInvoiceRow;
-  clientName: string;
-}) {
-  const build = useServerFn(buildAccountantNf);
-  const [text, setText] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setErr(null);
-      try {
-        const payload = await build({ data: { id: row.id } });
-        if (cancelled) return;
-        setText(renderAccountantNfText(payload.header, payload.items));
-      } catch (e) {
-        if (!cancelled) setErr(e instanceof Error ? e.message : "Falha ao montar nota.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [build, row.id]);
-
-  const date = new Date(row.createdAt);
-
-  return (
-    <li className={cn("space-y-2 rounded-md border border-border bg-card p-3")}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-sm">
-          <div className="font-medium">{date.toLocaleString("pt-BR")}</div>
-          <div className="text-xs text-muted-foreground">
-            {row.productIds.length} produto(s) · {formatBRL(row.totalCents / 100)}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!text}
-            onClick={() =>
-              text &&
-              downloadNfPdf({
-                clientName: `${clientName} - contador`,
-                content: text,
-                createdAt: row.createdAt,
-                totalCents: row.totalCents,
-              }).catch(() => toast.error("Falha ao gerar PDF."))
-            }
-          >
-            <Download className="mr-2 h-4 w-4" /> PDF
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!text}
-            onClick={async () => {
-              if (!text) return;
-              try {
-                await navigator.clipboard.writeText(text);
-                toast.success("Nota do contador copiada.");
-              } catch {
-                toast.error("Não foi possível copiar.");
-              }
-            }}
-          >
-            <Copy className="mr-2 h-4 w-4" /> Copiar
-          </Button>
-        </div>
-      </div>
-      {loading && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Montando nota item a item…
-        </div>
-      )}
-      {err && <div className="text-xs text-destructive">{err}</div>}
-      {text && (
-        <pre className="whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-xs text-muted-foreground">
-          {text}
-        </pre>
-      )}
-    </li>
-  );
-}
-
 function NfHistoryModalInner({ open, onClose, clientId, clientName }: Props) {
   const list = useServerFn(listNfInvoices);
   const remove = useServerFn(deleteNfInvoice);
   const update = useServerFn(updateNfInvoice);
-  const [view, setView] = useState<"cliente" | "contador">("cliente");
   const [rows, setRows] = useState<NfInvoiceRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -286,7 +188,6 @@ function NfHistoryModalInner({ open, onClose, clientId, clientName }: Props) {
       setExpandedId(null);
       setEditingId(null);
       setDraft("");
-      setView("cliente");
     }
   }, [open]);
 
@@ -360,31 +261,10 @@ function NfHistoryModalInner({ open, onClose, clientId, clientName }: Props) {
             Notas Fiscais — {clientName}
           </DialogTitle>
           <DialogDescription>
-            Histórico de notas geradas. Use Copiar para enviar ao contador.
+            Histórico de notas geradas no formato item a item. Use Copiar para
+            enviar ao contador.
           </DialogDescription>
         </DialogHeader>
-
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant={view === "cliente" ? "default" : "outline"}
-            onClick={() => setView("cliente")}
-          >
-            <Users className="mr-2 h-4 w-4" /> Nota Fiscal (Cliente)
-          </Button>
-          <Button
-            size="sm"
-            variant={view === "contador" ? "default" : "outline"}
-            onClick={() => setView("contador")}
-          >
-            <FileText className="mr-2 h-4 w-4" /> Nota Contador
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {view === "cliente"
-            ? "Versão original em lotes por NCM."
-            : "Versão item a item (sem lotes), gerada a partir dos produtos da nota."}
-        </p>
 
         {loading && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -404,15 +284,7 @@ function NfHistoryModalInner({ open, onClose, clientId, clientName }: Props) {
           </div>
         )}
 
-        {!loading && rows.length > 0 && view === "contador" && (
-          <ul className="space-y-3">
-            {rows.map((row) => (
-              <AccountantInvoiceCard key={row.id} row={row} clientName={clientName} />
-            ))}
-          </ul>
-        )}
-
-        {!loading && rows.length > 0 && view === "cliente" && (
+        {!loading && rows.length > 0 && (
           <ul className="space-y-3">
             {rows.map((row) => {
               const date = new Date(row.createdAt);
