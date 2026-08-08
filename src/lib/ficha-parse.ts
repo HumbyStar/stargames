@@ -117,7 +117,7 @@ export function fichaFromTextWithDefaults(
   return parsed;
 }
 
-const FISCAL_KEYS: Array<keyof CustomerFiscalData> = [
+const FISCAL_KEYS: Array<Exclude<keyof CustomerFiscalData, "missing">> = [
   "fullName",
   "cpfCnpj",
   "email",
