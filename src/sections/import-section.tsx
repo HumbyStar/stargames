@@ -1,5 +1,5 @@
 import { BackupImportCard } from "@/components/backup-import-card";
-import { waitUntilVisibleInStore } from "@/lib/import-visibility";
+import { confirmImportedRows } from "@/lib/import-visibility";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
@@ -2060,30 +2060,15 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
 
     // Confirmação de exibição: só liberamos a saída da importação assistida
     // depois que clientes/produtos aparecem de fato nas listas da tela.
-    const zipVisible = await waitUntilVisibleInStore(
-      zipCreatedClientIds,
-      zipCreatedProductIds,
-      {
-        refreshClientIds: Array.from(zipTouchedClientIds),
-        onProgress: (msg) =>
-          setImportProgress((prev) =>
-            prev ? { ...prev, messages: [...prev.messages, msg] } : prev,
-          ),
-      },
-    );
-    if (!zipVisible.ok) {
-      setImportProgress((prev) =>
-        prev
-          ? {
-              ...prev,
-              errors: [
-                ...prev.errors,
-                `Gravado no banco, mas ${zipVisible.missingClients.length} cliente(s) e ${zipVisible.missingProducts.length} produto(s) ainda não apareceram na tela.`,
-              ],
-            }
-          : prev,
-      );
-    }
+    await confirmImportedRows({
+      clientIds: zipCreatedClientIds,
+      productIds: zipCreatedProductIds,
+      touchedClientIds: Array.from(zipTouchedClientIds),
+      onProgress: (msg) =>
+        setImportProgress((prev) =>
+          prev ? { ...prev, messages: [...prev.messages, msg] } : prev,
+        ),
+    });
     addImportHistory({
       source: "HTML Notion",
       file: zipData.zipName,
@@ -2288,6 +2273,8 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       let promotedMgmv = 0;
       let addedToExisting = 0;
       const affectedClientIds = new Set<string>();
+      const createdClientIds: string[] = [];
+      const createdProductIds: string[] = [];
       const productsBefore = useStore.getState().products.length;
       ready.forEach((r) => {
       let client = findClientByPhone(r.phone);
@@ -2299,6 +2286,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           phone: r.phone,
           ...(r.clientCategory === "mgmv" ? { clientType: "mgmv" as const } : {}),
         });
+        createdClientIds.push(client.id);
         createdClients++;
       } else {
         addedToExisting++;
@@ -2322,7 +2310,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         finalStatus === "Reserva"
           ? calculateReservaDueDate(regISO)
           : r.dueDate ?? calculateDueDateForStatus(finalStatus, regISO);
-      addProduct({
+      const createdProduct = addProduct({
         clientId: client.id,
         name: r.product,
         platform: r.platform || "—",
@@ -2334,6 +2322,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         dueDate: dueISO,
         notes: r.notes,
       });
+      createdProductIds.push(createdProduct.id);
       });
       const importSource = tab === "csv" ? "CSV" : tab === "excel" ? "Excel" : "Texto";
       const fileHash = await sha1Hex(JSON.stringify(ready));
@@ -2361,6 +2350,11 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         history: savedHistory,
       });
       }
+      await confirmImportedRows({
+        clientIds: createdClientIds,
+        productIds: createdProductIds,
+        touchedClientIds: Array.from(affectedClientIds),
+      });
       toast.success(
         `${ready.length} registro(s) importados • ${createdClients} cliente(s) novos • ${addedToExisting} produto(s) adicionados a clientes existentes${promotedMgmv ? ` • ${promotedMgmv} promovido(s) a MGMV` : ""} • ${rows.length - ready.length} erro(s) ignorados`,
         { id: toastId },
@@ -2398,6 +2392,9 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     let createdClients = 0;
     let createdAgreements = 0;
     let firstClientId: string | null = null;
+    const createdClientIds: string[] = [];
+    const createdProductIds: string[] = [];
+    const touchedClientIds = new Set<string>();
     usableClients.forEach((block) => {
       const validProducts = block.products.filter((p) => p.product && p.errors.length === 0);
       let client = findClientByPhone(block.client.phone);
@@ -2406,8 +2403,10 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           name: block.client.name,
           phone: block.client.phoneDisplay || block.client.phone,
         });
+        createdClientIds.push(client.id);
         createdClients++;
       }
+      touchedClientIds.add(client.id);
       if (!firstClientId) firstClientId = client.id;
       validProducts.forEach((p) => {
         const regISO = p.registerDate ? new Date(`${p.registerDate}T12:00:00`).toISOString() : todayISO;
@@ -2416,7 +2415,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
             ? calculateReservaDueDate(regISO)
             : new Date(`${p.dueDate}T12:00:00`).toISOString()
           : calculateDueDateForStatus(p.financialStatus, regISO);
-        addProduct({
+        const createdProduct = addProduct({
           clientId: client!.id,
           name: p.product,
           platform: p.platform || "—",
@@ -2427,6 +2426,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           registerDate: regISO,
           dueDate: dueISO,
         });
+        createdProductIds.push(createdProduct.id);
         totalProducts++;
       });
       if (block.notes) {
@@ -2459,6 +2459,11 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         history: savedHistory,
       });
     }
+    await confirmImportedRows({
+      clientIds: createdClientIds,
+      productIds: createdProductIds,
+      touchedClientIds: Array.from(touchedClientIds),
+    });
     toast.success(
       `${usableClients.length} cliente(s) • ${totalProducts} produto(s) • ${createdAgreements} acordo(s) MGMV • ${createdClients} novo(s)`,
     );
