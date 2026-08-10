@@ -566,13 +566,21 @@ export async function dbRowsExist(kind: MutationKind, ids: string[]): Promise<Se
   if (isLocalMode()) return new Set(ids);
   const table = kind === "client" ? "clients" : "products";
   const env = await resolveCurrentEnv();
+  let sandboxOwner: string | null = null;
+  if (env === "sandbox") {
+    const { data: userRes } = await supabase.auth.getUser();
+    sandboxOwner = userRes.user?.id ?? null;
+    if (!sandboxOwner) throw new Error("Usuário do modo teste não identificado.");
+  }
   const CHUNK = 200;
   for (let i = 0; i < ids.length; i += CHUNK) {
-    const { data, error } = await sb()
+    let query = sb()
       .from(table)
       .select("id")
       .in("id", ids.slice(i, i + CHUNK))
       .eq("env", env);
+    if (sandboxOwner) query = query.eq("sandbox_owner", sandboxOwner);
+    const { data, error } = await query;
     if (error) throw error;
     for (const row of (data ?? []) as { id: string }[]) out.add(row.id);
   }
@@ -780,7 +788,7 @@ function scheduleProductFlush() {
     // Await any pending client flush before pushing products to avoid FK violations
     // during bulk imports where a new client and its products are queued together.
     void (async () => {
-      if (pendingClientUpserts.size > 0 || clientFlushTimer) {
+      if (pendingClientUpserts.size > 0 || clientFlushTimer || clientFlushInFlight) {
         if (clientFlushTimer) {
           clearTimeout(clientFlushTimer);
           clientFlushTimer = null;
@@ -788,7 +796,10 @@ function scheduleProductFlush() {
         await flushPendingClientUpserts();
       }
       await flushPendingProductUpserts();
-    })();
+    })().catch((error) => {
+      logErr("scheduledProductFlush", error);
+      if (pendingProductUpserts.size > 0) scheduleProductFlush();
+    });
   }, FLUSH_DELAY_MS);
 }
 
@@ -796,7 +807,10 @@ function scheduleClientFlush() {
   if (clientFlushTimer) return;
   clientFlushTimer = setTimeout(() => {
     clientFlushTimer = null;
-    void flushPendingClientUpserts();
+    void flushPendingClientUpserts().catch((error) => {
+      logErr("scheduledClientFlush", error);
+      if (pendingClientUpserts.size > 0) scheduleClientFlush();
+    });
   }, FLUSH_DELAY_MS);
 }
 
