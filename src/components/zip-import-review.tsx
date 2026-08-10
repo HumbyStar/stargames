@@ -334,7 +334,7 @@ export function ZipImportReview({ onDone }: { onDone: () => void }) {
         }
       }
       await confirmImportedRows({
-        clientIds: createdClientIds,
+        clientIds: Array.from(touchedClientIds),
         productIds: createdProductIds,
         touchedClientIds: Array.from(touchedClientIds),
       });

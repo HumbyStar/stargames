@@ -647,7 +647,7 @@ export function ListImportModal({
       // Confirmação real: cada cliente/produto criado precisa existir no banco
       // (ou ter chegado pelo evento realtime) antes de exibirmos "sucesso".
       const [clientConfirm, productConfirm] = await Promise.all([
-        waitForRowConfirmation("client", createdClientIds, "upsert", { verify: dbRowsExist }),
+        waitForRowConfirmation("client", Array.from(touchedClientIds), "upsert", { verify: dbRowsExist }),
         waitForRowConfirmation("product", createdProductIds, "upsert", { verify: dbRowsExist }),
       ]);
       if (!clientConfirm.ok || !productConfirm.ok) {
@@ -658,7 +658,7 @@ export function ListImportModal({
       // Confirmação de exibição: a tela de importação assistida só libera a
       // saída depois que os clientes/produtos aparecem de fato nas listas.
       toast.loading("Importando… carregando na tela em tempo real", { id: toastId });
-      const visible = await waitUntilVisibleInStore(createdClientIds, createdProductIds, {
+      const visible = await waitUntilVisibleInStore(Array.from(touchedClientIds), createdProductIds, {
         refreshClientIds: Array.from(touchedClientIds),
         onProgress: (msg) =>
           setProgressState((prev) =>

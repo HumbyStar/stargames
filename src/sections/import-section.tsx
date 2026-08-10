@@ -1871,6 +1871,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         }
         stats.updatedClients++;
       }
+      zipTouchedClientIds.add(client.id);
       entry.products.forEach((p) => {
         if (!p.selected || p.errors.length > 0 || !p.product) return;
         if (p.duplicate) {
@@ -1917,7 +1918,6 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
         });
         stats.createdProducts++;
         zipCreatedProductIds.push(createdZipProduct.id);
-        zipTouchedClientIds.add(client!.id);
       });
       if (entry.notes) {
         const existing = client!.notes ? client!.notes + "\n\n" : "";
@@ -2061,7 +2061,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     // Confirmação de exibição: só liberamos a saída da importação assistida
     // depois que clientes/produtos aparecem de fato nas listas da tela.
     await confirmImportedRows({
-      clientIds: zipCreatedClientIds,
+      clientIds: Array.from(zipTouchedClientIds),
       productIds: zipCreatedProductIds,
       touchedClientIds: Array.from(zipTouchedClientIds),
       onProgress: (msg) =>
@@ -2351,7 +2351,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       });
       }
       await confirmImportedRows({
-        clientIds: createdClientIds,
+        clientIds: Array.from(affectedClientIds),
         productIds: createdProductIds,
         touchedClientIds: Array.from(affectedClientIds),
       });
@@ -2460,7 +2460,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       });
     }
     await confirmImportedRows({
-      clientIds: createdClientIds,
+      clientIds: Array.from(touchedClientIds),
       productIds: createdProductIds,
       touchedClientIds: Array.from(touchedClientIds),
     });
