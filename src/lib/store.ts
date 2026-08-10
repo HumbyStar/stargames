@@ -734,12 +734,18 @@ function keepOnPartial<T extends { id: string }>(next: T[], prev: T[], partial?:
 }
 
 export const RESET_VERSION_KEY = "import.resetVersion";
+function userResetVersionKey(): string {
+  return `${RESET_VERSION_KEY}:${getCurrentUserInfo().id ?? "sessao"}`;
+}
 export function getResetVersion(): string {
-  return getUiValue<string>(RESET_VERSION_KEY, "");
+  if (typeof window === "undefined") return "";
+  return window.sessionStorage.getItem(userResetVersionKey()) ?? "";
 }
 function bumpResetVersion() {
   const version = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  setUiValue(RESET_VERSION_KEY, version);
+  if (typeof window !== "undefined") {
+    window.sessionStorage.setItem(userResetVersionKey(), version);
+  }
   return version;
 }
 
@@ -1381,9 +1387,8 @@ export const useStore = create<State>()((set, get) => ({
           };
         }),
       persistConfirmedImport: async ({ clients, products, history }) => {
-        // Paraleliza os 3 upserts principais — cada um já faz chunks internos.
-        // Ganho grande vs. o await sequencial anterior, sobretudo em confirmações
-        // pequenas onde a latência de rede domina.
+        // Respeita as dependências referenciais: o cliente precisa estar
+        // confirmado antes de produtos e acordos apontarem para ele.
         const mgmvClients = clients.filter(
           (c) => c.mgmv && c.mgmv.installments.length > 0,
         );
@@ -1402,14 +1407,14 @@ export const useStore = create<State>()((set, get) => ({
         // a UI (sobretudo no Modo Teste) travaria até o fim da importação.
         const resumeRealtime = suspendRealtimeRefresh();
         try {
+          await dbUpsertClientsAsync(clients);
           await Promise.all([
-            dbUpsertClientsAsync(clients),
             dbUpsertProductsAsync(products),
             dbUpsertHistoryAsync(history),
-            mgmvClients.length > 0
-              ? dbSyncAgreementsBulkAsync(mgmvClients)
-              : Promise.resolve(),
           ]);
+          if (mgmvClients.length > 0) {
+            await dbSyncAgreementsBulkAsync(mgmvClients);
+          }
         } finally {
           resumeRealtime();
         }

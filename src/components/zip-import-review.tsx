@@ -31,6 +31,7 @@ import { RowEditActions, RowEditPencil } from "@/components/row-edit-controls";
 import { useRowEdit } from "@/lib/use-row-edit";
 import { uploadNotionHtml } from "@/lib/notion-html-storage";
 import { NotionHtmlInlineActions } from "@/components/notion-html-actions";
+import { confirmImportedRows } from "@/lib/import-visibility";
 
 type PreviewRow = HtmlImportRow & {
   ignored?: boolean;
@@ -268,6 +269,8 @@ export function ZipImportReview({ onDone }: { onDone: () => void }) {
     let productsCreated = 0;
     let htmlSaved = 0;
     let htmlFailed = 0;
+    const createdProductIds: string[] = [];
+    const touchedClientIds = new Set<string>();
     try {
       for (const c of clientsState) {
         const header = c.entry.preview.clientHeader;
@@ -284,6 +287,7 @@ export function ZipImportReview({ onDone }: { onDone: () => void }) {
           clientId = created.id;
           clientsCreated++;
         }
+        touchedClientIds.add(clientId);
         // Upload do HTML original — só grava se o storage aceitar (RLS).
         try {
           const uploaded = await uploadNotionHtml({
@@ -307,7 +311,7 @@ export function ZipImportReview({ onDone }: { onDone: () => void }) {
         for (const r of c.rows) {
           if (r.ignored) continue;
           const now = new Date().toISOString();
-          addProduct({
+          const createdProduct = addProduct({
             clientId,
             name: r.productName || "(sem nome)",
             platform: r.platformOrCategory || "(sem plataforma)",
@@ -323,9 +327,15 @@ export function ZipImportReview({ onDone }: { onDone: () => void }) {
                 : ""
             }`,
           });
+          createdProductIds.push(createdProduct.id);
           productsCreated++;
         }
       }
+      await confirmImportedRows({
+        clientIds: Array.from(touchedClientIds),
+        productIds: createdProductIds,
+        touchedClientIds: Array.from(touchedClientIds),
+      });
       addImportHistory({
         source: "HTML Notion",
         file: zipName ?? "ZIP Notion",

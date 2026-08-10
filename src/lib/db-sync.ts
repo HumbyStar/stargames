@@ -294,9 +294,14 @@ function trackWrite<T>(p: Promise<T>): Promise<T> {
 /** Garante que tudo o que já foi disparado chegou ao banco antes de ler. */
 export async function awaitPendingWrites(): Promise<void> {
   for (let i = 0; i < 5; i += 1) {
-    await flushAllPendingUpserts().catch(() => undefined);
+    // Erros não podem ser engolidos: o fluxo de importação precisa permanecer
+    // aberto e informar falha, em vez de anunciar sucesso e exigir reimportação.
+    await flushAllPendingUpserts();
     if (inFlightWrites.size === 0) return;
-    await Promise.allSettled(Array.from(inFlightWrites));
+    await Promise.all(Array.from(inFlightWrites));
+  }
+  if (inFlightWrites.size > 0) {
+    throw new Error("Ainda existem gravações pendentes da importação.");
   }
 }
 
@@ -561,13 +566,21 @@ export async function dbRowsExist(kind: MutationKind, ids: string[]): Promise<Se
   if (isLocalMode()) return new Set(ids);
   const table = kind === "client" ? "clients" : "products";
   const env = await resolveCurrentEnv();
+  let sandboxOwner: string | null = null;
+  if (env === "sandbox") {
+    const { data: userRes } = await supabase.auth.getUser();
+    sandboxOwner = userRes.user?.id ?? null;
+    if (!sandboxOwner) throw new Error("Usuário do modo teste não identificado.");
+  }
   const CHUNK = 200;
   for (let i = 0; i < ids.length; i += CHUNK) {
-    const { data, error } = await sb()
+    let query = sb()
       .from(table)
       .select("id")
       .in("id", ids.slice(i, i + CHUNK))
       .eq("env", env);
+    if (sandboxOwner) query = query.eq("sandbox_owner", sandboxOwner);
+    const { data, error } = await query;
     if (error) throw error;
     for (const row of (data ?? []) as { id: string }[]) out.add(row.id);
   }
@@ -763,6 +776,8 @@ const pendingProductUpserts = new Map<string, Product>();
 const pendingClientUpserts = new Map<string, Client>();
 let productFlushTimer: ReturnType<typeof setTimeout> | null = null;
 let clientFlushTimer: ReturnType<typeof setTimeout> | null = null;
+let clientFlushInFlight: Promise<void> | null = null;
+let productFlushInFlight: Promise<void> | null = null;
 const FLUSH_DELAY_MS = 250;
 
 function scheduleProductFlush() {
@@ -773,7 +788,7 @@ function scheduleProductFlush() {
     // Await any pending client flush before pushing products to avoid FK violations
     // during bulk imports where a new client and its products are queued together.
     void (async () => {
-      if (pendingClientUpserts.size > 0 || clientFlushTimer) {
+      if (pendingClientUpserts.size > 0 || clientFlushTimer || clientFlushInFlight) {
         if (clientFlushTimer) {
           clearTimeout(clientFlushTimer);
           clientFlushTimer = null;
@@ -781,7 +796,10 @@ function scheduleProductFlush() {
         await flushPendingClientUpserts();
       }
       await flushPendingProductUpserts();
-    })();
+    })().catch((error) => {
+      logErr("scheduledProductFlush", error);
+      if (pendingProductUpserts.size > 0) scheduleProductFlush();
+    });
   }, FLUSH_DELAY_MS);
 }
 
@@ -789,7 +807,10 @@ function scheduleClientFlush() {
   if (clientFlushTimer) return;
   clientFlushTimer = setTimeout(() => {
     clientFlushTimer = null;
-    void flushPendingClientUpserts();
+    void flushPendingClientUpserts().catch((error) => {
+      logErr("scheduledClientFlush", error);
+      if (pendingClientUpserts.size > 0) scheduleClientFlush();
+    });
   }, FLUSH_DELAY_MS);
 }
 
@@ -806,17 +827,57 @@ export function queueClientUpsert(c: Client): void {
 }
 
 export async function flushPendingProductUpserts(): Promise<void> {
+  if (productFlushInFlight) {
+    await productFlushInFlight;
+    if (pendingProductUpserts.size > 0) return flushPendingProductUpserts();
+    return;
+  }
   if (pendingProductUpserts.size === 0) return;
-  const batch = Array.from(pendingProductUpserts.values());
-  pendingProductUpserts.clear();
-  await dbUpsertProductsAsync(batch);
+  productFlushInFlight = (async () => {
+    while (pendingProductUpserts.size > 0) {
+      const batch = Array.from(pendingProductUpserts.values());
+      for (const row of batch) pendingProductUpserts.delete(row.id);
+      try {
+        await dbUpsertProductsAsync(batch);
+      } catch (error) {
+        // Nunca perde uma importação em falha transitória: recoloca somente a
+        // versão que ainda não foi substituída por uma edição mais recente.
+        for (const row of batch) {
+          if (!pendingProductUpserts.has(row.id)) pendingProductUpserts.set(row.id, row);
+        }
+        throw error;
+      }
+    }
+  })().finally(() => {
+    productFlushInFlight = null;
+  });
+  await productFlushInFlight;
 }
 
 export async function flushPendingClientUpserts(): Promise<void> {
+  if (clientFlushInFlight) {
+    await clientFlushInFlight;
+    if (pendingClientUpserts.size > 0) return flushPendingClientUpserts();
+    return;
+  }
   if (pendingClientUpserts.size === 0) return;
-  const batch = Array.from(pendingClientUpserts.values());
-  pendingClientUpserts.clear();
-  await dbUpsertClientsAsync(batch);
+  clientFlushInFlight = (async () => {
+    while (pendingClientUpserts.size > 0) {
+      const batch = Array.from(pendingClientUpserts.values());
+      for (const row of batch) pendingClientUpserts.delete(row.id);
+      try {
+        await dbUpsertClientsAsync(batch);
+      } catch (error) {
+        for (const row of batch) {
+          if (!pendingClientUpserts.has(row.id)) pendingClientUpserts.set(row.id, row);
+        }
+        throw error;
+      }
+    }
+  })().finally(() => {
+    clientFlushInFlight = null;
+  });
+  await clientFlushInFlight;
 }
 
 export async function flushAllPendingUpserts(): Promise<void> {
@@ -828,7 +889,8 @@ export async function flushAllPendingUpserts(): Promise<void> {
     clearTimeout(clientFlushTimer);
     clientFlushTimer = null;
   }
-  // Clients first (FK dependency), then products.
+  // Clientes primeiro (FK), produtos depois. Cada flush é serializado e só
+  // retorna quando também drenou itens enfileirados durante a escrita em voo.
   await flushPendingClientUpserts();
   await flushPendingProductUpserts();
 }

@@ -1,4 +1,6 @@
 import { useStore } from "./store";
+import { awaitPendingWrites, dbRowsExist, flushAllPendingUpserts } from "./db-sync";
+import { waitForRowConfirmation } from "./write-confirm";
 
 /**
  * Confirmação de exibição: depois que o banco confirma a gravação, ainda é
@@ -9,6 +11,54 @@ export interface VisibilityResult {
   ok: boolean;
   missingClients: string[];
   missingProducts: string[];
+}
+
+export interface ConfirmImportedRowsInput {
+  clientIds: string[];
+  productIds: string[];
+  touchedClientIds: string[];
+  onProgress?: (message: string) => void;
+}
+
+/**
+ * Barreira única usada por todos os importadores. Ela diferencia o estado
+ * otimista da confirmação real: grava, confirma no banco e só então relê os
+ * clientes afetados para publicar o resultado na interface.
+ */
+export async function confirmImportedRows({
+  clientIds,
+  productIds,
+  touchedClientIds,
+  onProgress,
+}: ConfirmImportedRowsInput): Promise<void> {
+  onProgress?.("Salvando clientes e produtos…");
+  await flushAllPendingUpserts();
+  await awaitPendingWrites();
+
+  onProgress?.("Confirmando gravação segura…");
+  const [clients, products] = await Promise.all([
+    waitForRowConfirmation("client", clientIds, "upsert", { verify: dbRowsExist }),
+    waitForRowConfirmation("product", productIds, "upsert", { verify: dbRowsExist }),
+  ]);
+  if (!clients.ok || !products.ok) {
+    throw new Error(
+      `A gravação não foi confirmada (${clients.missing.length} cliente(s), ${products.missing.length} produto(s)). A importação permanece aberta para tentar novamente.`,
+    );
+  }
+
+  onProgress?.("Atualizando os registros na interface…");
+  for (const clientId of Array.from(new Set(touchedClientIds))) {
+    await useStore.getState().refreshClientData(clientId);
+  }
+  const visible = await waitUntilVisibleInStore(clientIds, productIds, {
+    refreshClientIds: touchedClientIds,
+    onProgress,
+  });
+  if (!visible.ok) {
+    throw new Error(
+      `A gravação foi concluída, mas a interface ainda não confirmou ${visible.missingClients.length} cliente(s) e ${visible.missingProducts.length} produto(s).`,
+    );
+  }
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
