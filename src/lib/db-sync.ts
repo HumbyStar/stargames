@@ -294,9 +294,14 @@ function trackWrite<T>(p: Promise<T>): Promise<T> {
 /** Garante que tudo o que já foi disparado chegou ao banco antes de ler. */
 export async function awaitPendingWrites(): Promise<void> {
   for (let i = 0; i < 5; i += 1) {
-    await flushAllPendingUpserts().catch(() => undefined);
+    // Erros não podem ser engolidos: o fluxo de importação precisa permanecer
+    // aberto e informar falha, em vez de anunciar sucesso e exigir reimportação.
+    await flushAllPendingUpserts();
     if (inFlightWrites.size === 0) return;
-    await Promise.allSettled(Array.from(inFlightWrites));
+    await Promise.all(Array.from(inFlightWrites));
+  }
+  if (inFlightWrites.size > 0) {
+    throw new Error("Ainda existem gravações pendentes da importação.");
   }
 }
 
@@ -763,6 +768,8 @@ const pendingProductUpserts = new Map<string, Product>();
 const pendingClientUpserts = new Map<string, Client>();
 let productFlushTimer: ReturnType<typeof setTimeout> | null = null;
 let clientFlushTimer: ReturnType<typeof setTimeout> | null = null;
+let clientFlushInFlight: Promise<void> | null = null;
+let productFlushInFlight: Promise<void> | null = null;
 const FLUSH_DELAY_MS = 250;
 
 function scheduleProductFlush() {
@@ -806,17 +813,57 @@ export function queueClientUpsert(c: Client): void {
 }
 
 export async function flushPendingProductUpserts(): Promise<void> {
+  if (productFlushInFlight) {
+    await productFlushInFlight;
+    if (pendingProductUpserts.size > 0) return flushPendingProductUpserts();
+    return;
+  }
   if (pendingProductUpserts.size === 0) return;
-  const batch = Array.from(pendingProductUpserts.values());
-  pendingProductUpserts.clear();
-  await dbUpsertProductsAsync(batch);
+  productFlushInFlight = (async () => {
+    while (pendingProductUpserts.size > 0) {
+      const batch = Array.from(pendingProductUpserts.values());
+      for (const row of batch) pendingProductUpserts.delete(row.id);
+      try {
+        await dbUpsertProductsAsync(batch);
+      } catch (error) {
+        // Nunca perde uma importação em falha transitória: recoloca somente a
+        // versão que ainda não foi substituída por uma edição mais recente.
+        for (const row of batch) {
+          if (!pendingProductUpserts.has(row.id)) pendingProductUpserts.set(row.id, row);
+        }
+        throw error;
+      }
+    }
+  })().finally(() => {
+    productFlushInFlight = null;
+  });
+  await productFlushInFlight;
 }
 
 export async function flushPendingClientUpserts(): Promise<void> {
+  if (clientFlushInFlight) {
+    await clientFlushInFlight;
+    if (pendingClientUpserts.size > 0) return flushPendingClientUpserts();
+    return;
+  }
   if (pendingClientUpserts.size === 0) return;
-  const batch = Array.from(pendingClientUpserts.values());
-  pendingClientUpserts.clear();
-  await dbUpsertClientsAsync(batch);
+  clientFlushInFlight = (async () => {
+    while (pendingClientUpserts.size > 0) {
+      const batch = Array.from(pendingClientUpserts.values());
+      for (const row of batch) pendingClientUpserts.delete(row.id);
+      try {
+        await dbUpsertClientsAsync(batch);
+      } catch (error) {
+        for (const row of batch) {
+          if (!pendingClientUpserts.has(row.id)) pendingClientUpserts.set(row.id, row);
+        }
+        throw error;
+      }
+    }
+  })().finally(() => {
+    clientFlushInFlight = null;
+  });
+  await clientFlushInFlight;
 }
 
 export async function flushAllPendingUpserts(): Promise<void> {
@@ -828,7 +875,8 @@ export async function flushAllPendingUpserts(): Promise<void> {
     clearTimeout(clientFlushTimer);
     clientFlushTimer = null;
   }
-  // Clients first (FK dependency), then products.
+  // Clientes primeiro (FK), produtos depois. Cada flush é serializado e só
+  // retorna quando também drenou itens enfileirados durante a escrita em voo.
   await flushPendingClientUpserts();
   await flushPendingProductUpserts();
 }
