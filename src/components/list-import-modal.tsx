@@ -537,7 +537,6 @@ export function ListImportModal({
     try {
       let clientsCreated = 0;
       let productsCreated = 0;
-      const createdClientIds: string[] = [];
       const createdProductIds: string[] = [];
       const touchedClientIds = new Set<string>();
       let errorEntries = 0;
@@ -584,7 +583,6 @@ export function ListImportModal({
               clientType: "common",
             });
             clientId = created.id;
-            createdClientIds.push(created.id);
             clientsCreated++;
             wasNewClient = true;
           }

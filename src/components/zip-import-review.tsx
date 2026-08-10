@@ -269,7 +269,6 @@ export function ZipImportReview({ onDone }: { onDone: () => void }) {
     let productsCreated = 0;
     let htmlSaved = 0;
     let htmlFailed = 0;
-    const createdClientIds: string[] = [];
     const createdProductIds: string[] = [];
     const touchedClientIds = new Set<string>();
     try {
@@ -286,7 +285,6 @@ export function ZipImportReview({ onDone }: { onDone: () => void }) {
             folder: c.entry.folder,
           });
           clientId = created.id;
-          createdClientIds.push(created.id);
           clientsCreated++;
         }
         touchedClientIds.add(clientId);

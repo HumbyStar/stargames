@@ -1808,7 +1808,6 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     };
     const ignoredItems: NonNullable<ImportProgressState["ignoredItems"]> = [];
     // Ids criados nesta importação — usados na confirmação de exibição na tela.
-    const zipCreatedClientIds: string[] = [];
     const zipCreatedProductIds: string[] = [];
     const zipTouchedClientIds = new Set<string>();
 
@@ -1864,7 +1863,6 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           folder: entry.folderName,
         });
         stats.createdClients++;
-        zipCreatedClientIds.push(client.id);
       } else {
         if (!client.folder && entry.folderName && entry.folderName !== "(raiz)") {
           updateClient(client.id, { folder: entry.folderName });
@@ -2273,7 +2271,6 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       let promotedMgmv = 0;
       let addedToExisting = 0;
       const affectedClientIds = new Set<string>();
-      const createdClientIds: string[] = [];
       const createdProductIds: string[] = [];
       const productsBefore = useStore.getState().products.length;
       ready.forEach((r) => {
@@ -2286,7 +2283,6 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           phone: r.phone,
           ...(r.clientCategory === "mgmv" ? { clientType: "mgmv" as const } : {}),
         });
-        createdClientIds.push(client.id);
         createdClients++;
       } else {
         addedToExisting++;
@@ -2392,7 +2388,6 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
     let createdClients = 0;
     let createdAgreements = 0;
     let firstClientId: string | null = null;
-    const createdClientIds: string[] = [];
     const createdProductIds: string[] = [];
     const touchedClientIds = new Set<string>();
     usableClients.forEach((block) => {
@@ -2403,7 +2398,6 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
           name: block.client.name,
           phone: block.client.phoneDisplay || block.client.phone,
         });
-        createdClientIds.push(client.id);
         createdClients++;
       }
       touchedClientIds.add(client.id);
