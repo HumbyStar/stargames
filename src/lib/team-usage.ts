@@ -103,7 +103,9 @@ export function useTeamUsage(days = 30) {
       supabase.rpc("team_usage_stats", { _days: days }),
       supabase.from("profiles").select("id, display_name"),
       supabase.from("user_roles").select("user_id, role"),
-      supabase.from("active_sessions").select("user_id, last_seen"),
+      // Presença via função restrita a usuários internos (a tabela de sessões
+      // só é legível por completo para administradores).
+      supabase.rpc("list_online_users", { _window_seconds: 300 }),
       supabase
         .from("team_punch_entries")
         .select("user_id, day, kind, punched_at")
