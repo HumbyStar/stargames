@@ -70,11 +70,12 @@ export function OnePageBody() {
           <MGMVSection onScrollTo={onScrollTo} />
         </Suspense>
       </LazySection>
-      <LazySection id="collection" delayMs={80}>
+      <LazySection id="envio" delayMs={80}>
         <Suspense fallback={null}>
           <EnvioSection onScrollTo={onScrollTo} />
         </Suspense>
       </LazySection>
+      <LazySection id="collection" delayMs={120}>
         <Suspense fallback={null}>
           <CollectionSection onScrollTo={onScrollTo} />
         </Suspense>
