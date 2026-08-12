@@ -927,6 +927,77 @@ export type Database = {
         }
         Relationships: []
       }
+      shipments: {
+        Row: {
+          carrier: string
+          client_id: string
+          client_name: string
+          created_at: string
+          created_by: string | null
+          env: Database["public"]["Enums"]["app_env"]
+          eta_days: number | null
+          id: string
+          items: Json
+          notes: string | null
+          price_cents: number
+          product_ids: string[]
+          recipient: Json
+          sandbox_owner: string | null
+          service: string
+          status: string
+          total_weight_kg: number
+          updated_at: string
+        }
+        Insert: {
+          carrier: string
+          client_id: string
+          client_name: string
+          created_at?: string
+          created_by?: string | null
+          env?: Database["public"]["Enums"]["app_env"]
+          eta_days?: number | null
+          id?: string
+          items?: Json
+          notes?: string | null
+          price_cents?: number
+          product_ids?: string[]
+          recipient?: Json
+          sandbox_owner?: string | null
+          service?: string
+          status?: string
+          total_weight_kg?: number
+          updated_at?: string
+        }
+        Update: {
+          carrier?: string
+          client_id?: string
+          client_name?: string
+          created_at?: string
+          created_by?: string | null
+          env?: Database["public"]["Enums"]["app_env"]
+          eta_days?: number | null
+          id?: string
+          items?: Json
+          notes?: string | null
+          price_cents?: number
+          product_ids?: string[]
+          recipient?: Json
+          sandbox_owner?: string | null
+          service?: string
+          status?: string
+          total_weight_kg?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shipments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       system_backups: {
         Row: {
           ai_verification: Json | null
