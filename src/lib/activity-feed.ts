@@ -750,16 +750,16 @@ export function useActivityFeed() {
     };
   }, [nameFor, pushEvents]);
 
-  // Presença: quem está com sessão ativa
+  // Presença: quem está com sessão ativa.
+  // A leitura passa pela função `list_online_users` (já restrita a usuários
+  // internos) em vez da tabela: `active_sessions` não é mais lida em massa
+  // nem transmitida em tempo real para todo mundo.
   useEffect(() => {
     let alive = true;
     const load = async () => {
-      const cutoff = new Date(Date.now() - 5 * 60_000).toISOString();
-      const { data } = await supabase
-        .from("active_sessions")
-        .select("user_id, last_seen")
-        .gte("last_seen", cutoff)
-        .order("last_seen", { ascending: false });
+      const { data } = await supabase.rpc("list_online_users", {
+        _window_seconds: 300,
+      });
       if (!alive) return;
       const seen = new Set<string>();
       const list: OnlineUser[] = [];
@@ -768,26 +768,20 @@ export function useActivityFeed() {
         seen.add(s.user_id);
         list.push({
           userId: s.user_id,
-          label: namesRef.current.get(s.user_id) ?? "Usuário",
+          label:
+            s.display_name?.trim() ||
+            namesRef.current.get(s.user_id) ||
+            "Usuário",
           lastSeen: s.last_seen,
         });
       }
       setOnline(list);
     };
     void load();
-    const interval = setInterval(() => void load(), 30_000);
-    const channel = supabase
-      .channel("activity-presence")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "active_sessions" },
-        () => void load(),
-      )
-      .subscribe();
+    const interval = setInterval(() => void load(), 15_000);
     return () => {
       alive = false;
       clearInterval(interval);
-      supabase.removeChannel(channel);
     };
   }, []);
 
