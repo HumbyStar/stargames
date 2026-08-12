@@ -92,6 +92,7 @@ const navItems: ReadonlyArray<{
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "clientes", label: "Clientes", icon: Users },
   { id: "mgmv", label: "MGMV", icon: Sparkles },
+  { id: "envio", label: "Envio", icon: Truck },
   { id: "collection", label: "Collection", icon: Wallet },
 ];
 
