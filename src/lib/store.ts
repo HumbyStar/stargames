@@ -321,6 +321,8 @@ export interface Product {
   registerDate: string; // ISO
   dueDate: string; // ISO
   notes?: string;
+  /** Última atualização vinda do banco (usada para "tempo em estoque"). */
+  updatedAt?: string;
 }
 
 function parseDateOnlyTime(value: string): number | null {
