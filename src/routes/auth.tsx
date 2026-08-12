@@ -30,6 +30,27 @@ function newSessionId() {
   }
 }
 
+const NETWORK_HINT =
+  "Seu navegador não conseguiu alcançar o servidor de login. Isso costuma ser bloqueio de extensão (AdBlock/uBlock/Brave Shields), VPN, proxy ou firewall da rede. Desative a extensão para este site, troque de rede (ex.: 4G do celular) e tente novamente.";
+
+function isNetworkFailure(message: string) {
+  const m = message.toLowerCase();
+  return (
+    m.includes("failed to fetch") ||
+    m.includes("networkerror") ||
+    m.includes("network request failed") ||
+    m.includes("load failed") ||
+    m.includes("fetch failed")
+  );
+}
+
+function describeAuthError(message: string) {
+  if (isNetworkFailure(message)) return NETWORK_HINT;
+  if (message.toLowerCase().includes("invalid login credentials")) return "E-mail ou senha incorretos.";
+  if (message.toLowerCase().includes("email not confirmed")) return "E-mail ainda não confirmado.";
+  return message;
+}
+
 function AuthPage() {
   const navigate = useNavigate();
   const { next } = Route.useSearch();
@@ -76,14 +97,22 @@ function AuthPage() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        toast.error("Falha ao entrar", { description: error.message });
+        const network = isNetworkFailure(error.message);
+        toast.error(network ? "Sem conexão com o servidor de login" : "Falha ao entrar", {
+          description: describeAuthError(error.message),
+          duration: network ? 12000 : 6000,
+        });
         return;
       }
       await attemptClaim();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro inesperado";
-      toast.error("Não foi possível concluir o login", { description: msg });
-      await supabase.auth.signOut();
+      const network = isNetworkFailure(msg);
+      toast.error(network ? "Sem conexão com o servidor de login" : "Não foi possível concluir o login", {
+        description: describeAuthError(msg),
+        duration: network ? 12000 : 6000,
+      });
+      if (!network) await supabase.auth.signOut();
     } finally {
       setLoading(false);
     }
