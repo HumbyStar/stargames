@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { Fragment, lazy, Suspense, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, ExternalLink, Truck } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -185,8 +185,8 @@ export function EnvioSection({ onScrollTo }: { onScrollTo: (id: string) => void 
                 {groups.map((g) => {
                   const open = expanded.has(g.client.id);
                   return (
-                    <>
-                      <tr key={g.client.id} className="border-b border-border/60">
+                    <Fragment key={g.client.id}>
+                      <tr className="border-b border-border/60">
                         <td className="py-2">
                           <button
                             type="button"
@@ -253,7 +253,7 @@ export function EnvioSection({ onScrollTo }: { onScrollTo: (id: string) => void 
                         </td>
                       </tr>
                       {open && (
-                        <tr key={`${g.client.id}-details`} className="bg-muted/30">
+                        <tr className="bg-muted/30">
                           <td />
                           <td colSpan={5} className="py-2 pr-3">
                             <table className="w-full text-xs">
@@ -295,7 +295,7 @@ export function EnvioSection({ onScrollTo }: { onScrollTo: (id: string) => void 
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </tbody>
