@@ -46,6 +46,9 @@ function writeAggregatesCache(env: string, data: DashboardAggregates) {
 const CollectionSection = lazy(() =>
   import("@/sections/collection-section").then((m) => ({ default: m.CollectionSection })),
 );
+const EnvioSection = lazy(() =>
+  import("@/sections/envio-section").then((m) => ({ default: m.EnvioSection })),
+);
 const MGMVSection = lazy(() =>
   import("@/sections/mgmv-section").then((m) => ({ default: m.MGMVSection })),
 );
@@ -68,6 +71,10 @@ export function OnePageBody() {
         </Suspense>
       </LazySection>
       <LazySection id="collection" delayMs={80}>
+        <Suspense fallback={null}>
+          <EnvioSection onScrollTo={onScrollTo} />
+        </Suspense>
+      </LazySection>
         <Suspense fallback={null}>
           <CollectionSection onScrollTo={onScrollTo} />
         </Suspense>
