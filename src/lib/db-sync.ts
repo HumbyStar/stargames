@@ -67,7 +67,7 @@ export interface DbProductRow {
   register_date: string;
   due_date: string;
   notes: string | null;
-  updated_at?: string | null;
+  updated_at?: string;
 }
 
 export interface DbImportHistoryRow {
