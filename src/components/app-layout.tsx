@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   Users,
   Sparkles,
+  Truck,
   Wallet,
   CircleDollarSign,
   KanbanSquare,
