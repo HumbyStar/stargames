@@ -67,6 +67,7 @@ export interface DbProductRow {
   register_date: string;
   due_date: string;
   notes: string | null;
+  updated_at?: string | null;
 }
 
 export interface DbImportHistoryRow {
@@ -137,6 +138,7 @@ export function rowToProduct(r: DbProductRow): Product {
     registerDate: r.register_date,
     dueDate: r.due_date,
     notes: r.notes ?? undefined,
+    updatedAt: r.updated_at ?? undefined,
   };
 }
 
