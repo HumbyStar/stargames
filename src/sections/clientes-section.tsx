@@ -2529,6 +2529,12 @@ function ClientDrawer({
         clientId={client.id}
         clientName={client.name}
       />
+      <ShipmentHistoryModal
+        open={shipHistoryOpen}
+        onClose={() => setShipHistoryOpen(false)}
+        clientId={client.id}
+        clientName={client.name}
+      />
       <NcmEditDialog
         open={ncmDialogOpen}
         onOpenChange={setNcmDialogOpen}
