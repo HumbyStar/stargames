@@ -917,11 +917,12 @@ function _FloatingNavbarImpl() {
     let pendingId: string | null = null;
     let debounceTimer: number | null = null;
     const flushActive = () => {
-      if (pendingId) setActiveSection(pendingId);
+      if (pendingId && !isNavScrollLocked()) setActiveSection(pendingId);
       pendingId = null;
       debounceTimer = null;
     };
     const queueActive = (id: string) => {
+      if (isNavScrollLocked()) return;
       pendingId = id;
       if (debounceTimer != null) return;
       debounceTimer = window.setTimeout(flushActive, 90);
