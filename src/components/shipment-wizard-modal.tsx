@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Package, Truck, User, CheckCircle2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Package,
+  Truck,
+  User,
+  CheckCircle2,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -64,16 +72,19 @@ export function ShipmentWizardModal({
   products,
   open,
   onClose,
+  initialSelectedIds,
 }: {
   client: Client;
   products: Product[];
   open: boolean;
   onClose: () => void;
+  initialSelectedIds?: string[];
 }) {
   const setProductSituation = useStore((s) => s.setProductSituation);
   const [step, setStep] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(products.map((p) => p.id)));
   const [measures, setMeasures] = useState<Record<string, Measures>>({});
+  const [openCards, setOpenCards] = useState<Set<string>>(() => new Set());
   const [recipient, setRecipient] = useState<ShipmentRecipient>(emptyRecipient);
   const [quoteId, setQuoteId] = useState<string>("");
   const [notes, setNotes] = useState("");
@@ -86,7 +97,12 @@ export function ShipmentWizardModal({
     setSaving(false);
     setQuoteId("");
     setNotes("");
-    setSelected(new Set(products.map((p) => p.id)));
+    const preset = (initialSelectedIds ?? []).filter((id) =>
+      products.some((p) => p.id === id),
+    );
+    const ids = preset.length > 0 ? preset : products.map((p) => p.id);
+    setSelected(new Set(ids));
+    setOpenCards(new Set(ids.slice(0, 1)));
     setMeasures(Object.fromEntries(products.map((p) => [p.id, { ...DEFAULT_MEASURES }])));
     const f = fichaFromTextWithDefaults(client.customerData, { phone: client.phone });
     setRecipient({
@@ -146,6 +162,14 @@ export function ShipmentWizardModal({
 
   const setMeasure = (id: string, key: keyof Measures, value: string) =>
     setMeasures((m) => ({ ...m, [id]: { ...(m[id] ?? DEFAULT_MEASURES), [key]: value } }));
+
+  const toggleCard = (id: string) =>
+    setOpenCards((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const confirm = async () => {
     if (!quote || chosen.length === 0 || saving) return;
@@ -231,18 +255,19 @@ export function ShipmentWizardModal({
               {products.map((p) => {
                 const m = measures[p.id] ?? DEFAULT_MEASURES;
                 const checked = selected.has(p.id);
+                const expandedCard = openCards.has(p.id);
                 return (
                   <div
                     key={p.id}
                     className={cn(
-                      "rounded-lg border p-3",
+                      "rounded-lg border px-3 py-2 transition-colors",
                       checked ? "border-primary/40 bg-primary/5" : "border-border",
                     )}
                   >
-                    <label className="flex items-start gap-2">
+                    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
                       <input
                         type="checkbox"
-                        className="mt-1"
+                        className="shrink-0"
                         checked={checked}
                         onChange={() =>
                           setSelected((s) => {
@@ -253,15 +278,31 @@ export function ShipmentWizardModal({
                           })
                         }
                       />
-                      <span className="flex-1">
-                        <span className="block text-sm font-medium">{p.name}</span>
-                        <span className="block text-xs text-muted-foreground">
-                          {p.platform || "Sem plataforma"} · {formatBRL(p.totalValue)}
+                      <div className="min-w-0">
+                        <span className="block truncate text-sm font-medium">{p.name}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {p.platform || "Sem plataforma"} · {formatBRL(p.totalValue)} ·{" "}
+                          {m.weightKg}kg · {m.lengthCm}×{m.widthCm}×{m.heightCm}cm
                         </span>
-                      </span>
-                    </label>
-                    {checked && (
-                      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 shrink-0 gap-1 px-2 text-xs"
+                        onClick={() => toggleCard(p.id)}
+                        aria-expanded={expandedCard}
+                      >
+                        {expandedCard ? (
+                          <ChevronDown className="size-3.5" />
+                        ) : (
+                          <ChevronRight className="size-3.5" />
+                        )}
+                        Ver detalhes
+                      </Button>
+                    </div>
+                    {expandedCard && (
+                      <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border/60 pt-2 sm:grid-cols-4">
                         {(
                           [
                             ["weightKg", "Peso (kg)"],
