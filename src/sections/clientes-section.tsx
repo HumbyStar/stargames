@@ -2034,6 +2034,17 @@ function ClientDrawer({
           onDelete={() => void bulkDelete()}
           onGerarNf={handleGerarNf}
         />
+        {shipProducts && (
+          <ShipmentWizardModal
+            client={client}
+            products={shipProducts}
+            open
+            onClose={() => {
+              setShipProducts(null);
+              clearSelection();
+            }}
+          />
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
