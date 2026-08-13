@@ -2016,7 +2016,7 @@ function ClientDrawer({
             )
           }
           onShip={() => {
-            const sel = selectedProducts().filter(
+            const sel = selectedForActions.filter(
               (p) => p.financialStatus === "Pago" && p.situation === "Em Aberto",
             );
             if (sel.length === 0) {
@@ -2025,6 +2025,12 @@ function ClientDrawer({
             }
             setShipProducts(sel);
           }}
+          shipDisabled={!allSelectedShippable}
+          shipTitle={
+            allSelectedShippable
+              ? "Abrir assistente de envio para os produtos selecionados"
+              : "Só é possível enviar produtos com status Pago e situação Em Aberto. Desmarque os demais."
+          }
           onRetirar={() =>
             bulkChangeSituation(
               "Retirar",
