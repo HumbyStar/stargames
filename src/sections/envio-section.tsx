@@ -281,6 +281,14 @@ export function EnvioSection({ onScrollTo }: { onScrollTo: (id: string) => void 
                             <table className="w-full text-xs">
                               <thead>
                                 <tr className="text-left uppercase text-muted-foreground">
+                                  <th className="w-8 py-1">
+                                    <input
+                                      type="checkbox"
+                                      aria-label="Selecionar todos"
+                                      checked={pickedFor(g).size === g.products.length}
+                                      onChange={() => toggleAllPicked(g)}
+                                    />
+                                  </th>
                                   <th className="py-1 pr-3">Produto</th>
                                   <th className="py-1 pr-3">Plataforma</th>
                                   <th className="py-1 pr-3">Valor</th>
@@ -291,6 +299,14 @@ export function EnvioSection({ onScrollTo }: { onScrollTo: (id: string) => void 
                               <tbody>
                                 {g.products.map((p) => (
                                   <tr key={p.id} className="border-t border-border/40">
+                                    <td className="py-1">
+                                      <input
+                                        type="checkbox"
+                                        aria-label={`Selecionar ${p.name}`}
+                                        checked={pickedFor(g).has(p.id)}
+                                        onChange={() => togglePicked(g, p.id)}
+                                      />
+                                    </td>
                                     <td className="py-1 pr-3">{p.name}</td>
                                     <td className="py-1 pr-3">{p.platform || "—"}</td>
                                     <td className="py-1 pr-3 tabular-nums">
