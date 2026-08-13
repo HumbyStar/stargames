@@ -2008,6 +2008,16 @@ function ClientDrawer({
               `Marcar ${selectedCount} produto(s) selecionado(s) como Enviado?`,
             )
           }
+          onShip={() => {
+            const sel = selectedProducts().filter(
+              (p) => p.financialStatus === "Pago" && p.situation === "Em Aberto",
+            );
+            if (sel.length === 0) {
+              toast.info("Selecione produtos pagos aguardando envio (Em Aberto).");
+              return;
+            }
+            setShipProducts(sel);
+          }}
           onRetirar={() =>
             bulkChangeSituation(
               "Retirar",
