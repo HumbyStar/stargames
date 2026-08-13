@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useStore } from "@/lib/store";
+import {
+  isSectionMountRequested,
+  onSectionMountRequest,
+} from "@/lib/scroll-to-section";
 
 type Strategy = "post-hydration" | "viewport";
 
@@ -68,6 +72,17 @@ export function LazySection({
   const ref = useRef<HTMLDivElement | null>(null);
   const [mounted, setMounted] = useState(false);
   const hydrated = useStore((s) => s.hydrated);
+
+  // Navegação direta para a seção (navbar/atalho) monta na hora, sem
+  // esperar o agendamento ocioso nem o IntersectionObserver.
+  useEffect(() => {
+    if (mounted) return;
+    if (isSectionMountRequested(id)) {
+      setMounted(true);
+      return;
+    }
+    return onSectionMountRequest(id, () => setMounted(true));
+  }, [id, mounted]);
 
   useEffect(() => {
     if (strategy !== "post-hydration" || mounted || !hydrated) return;
