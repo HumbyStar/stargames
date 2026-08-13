@@ -57,6 +57,7 @@ import {
 } from "@/components/mgmv-complete-modal";
 import { isAgreementFullyPaid } from "@/lib/mgmv-schedule";
 import { ProductBulkActionsBar } from "@/components/product-bulk-actions";
+import { ShipmentWizardModal } from "@/components/shipment-wizard-modal";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { NcmDetailRow, NcmExpandToggle } from "@/components/product-ncm-row";
 import { NcmEditDialog, type NcmTarget } from "@/components/ncm-edit-dialog";
