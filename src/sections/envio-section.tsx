@@ -348,6 +348,7 @@ export function EnvioSection({ onScrollTo }: { onScrollTo: (id: string) => void 
             open
             client={wizardGroup.client}
             products={wizardGroup.products}
+            initialSelectedIds={[...pickedFor(wizardGroup)]}
             onClose={() => setWizardClientId(null)}
           />
         </Suspense>
