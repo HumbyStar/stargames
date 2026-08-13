@@ -1433,6 +1433,13 @@ function ClientDrawer({
   const clearSelection = () => setSelectedIds(new Set());
   const selectedProducts = () =>
     individualProducts.filter((p) => selectedIds.has(p.id));
+  const selectedForActions = useMemo(
+    () => selectedProducts(),
+    [individualProducts, selectedIds],
+  );
+  const allSelectedShippable = selectedForActions.every(
+    (p) => p.financialStatus === "Pago" && p.situation === "Em Aberto",
+  );
   // Produtos da seleção que já tiveram NF emitida (bloqueio de duplicidade).
   const selectedDuplicates = useMemo<DuplicateNfProduct[]>(() => {
     return individualProducts
@@ -2009,7 +2016,7 @@ function ClientDrawer({
             )
           }
           onShip={() => {
-            const sel = selectedProducts().filter(
+            const sel = selectedForActions.filter(
               (p) => p.financialStatus === "Pago" && p.situation === "Em Aberto",
             );
             if (sel.length === 0) {
@@ -2018,6 +2025,12 @@ function ClientDrawer({
             }
             setShipProducts(sel);
           }}
+          shipDisabled={!allSelectedShippable}
+          shipTitle={
+            allSelectedShippable
+              ? "Abrir assistente de envio para os produtos selecionados"
+              : "Só é possível enviar produtos com status Pago e situação Em Aberto. Desmarque os demais."
+          }
           onRetirar={() =>
             bulkChangeSituation(
               "Retirar",
