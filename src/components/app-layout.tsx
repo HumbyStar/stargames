@@ -64,7 +64,7 @@ import { FloatingConcierge } from "@/components/floating-concierge";
 import { FinanceDashboard } from "@/components/finance-dashboard";
 import mascotAsset from "@/assets/tutorial-mascot.svg.asset.json";
 import { useNavbarConfig, getIconMeta, type NavbarIconId } from "@/lib/navbar-config";
-import { scrollToSection } from "@/lib/scroll-to-section";
+import { isNavScrollLocked, scrollToSection } from "@/lib/scroll-to-section";
 import { MgmvCompletionWatcher } from "@/components/mgmv-completion-watcher";
 
 // Normaliza texto para busca: remove acentos, minúsculas e trim.
@@ -917,11 +917,12 @@ function _FloatingNavbarImpl() {
     let pendingId: string | null = null;
     let debounceTimer: number | null = null;
     const flushActive = () => {
-      if (pendingId) setActiveSection(pendingId);
+      if (pendingId && !isNavScrollLocked()) setActiveSection(pendingId);
       pendingId = null;
       debounceTimer = null;
     };
     const queueActive = (id: string) => {
+      if (isNavScrollLocked()) return;
       pendingId = id;
       if (debounceTimer != null) return;
       debounceTimer = window.setTimeout(flushActive, 90);
