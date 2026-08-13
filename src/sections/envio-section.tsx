@@ -55,6 +55,28 @@ export function EnvioSection({ onScrollTo }: { onScrollTo: (id: string) => void 
   const [minDays, setMinDays] = usePersistedState<string>("envio.minDays", "0");
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [wizardClientId, setWizardClientId] = useState<string | null>(null);
+  const [picked, setPicked] = useState<Record<string, Set<string>>>({});
+
+  const pickedFor = (g: Group): Set<string> =>
+    picked[g.client.id] ?? new Set(g.products.map((p) => p.id));
+
+  const togglePicked = (g: Group, productId: string) =>
+    setPicked((prev) => {
+      const cur = new Set(prev[g.client.id] ?? g.products.map((p) => p.id));
+      if (cur.has(productId)) cur.delete(productId);
+      else cur.add(productId);
+      return { ...prev, [g.client.id]: cur };
+    });
+
+  const toggleAllPicked = (g: Group) =>
+    setPicked((prev) => {
+      const cur = prev[g.client.id] ?? new Set(g.products.map((p) => p.id));
+      const all = cur.size === g.products.length;
+      return {
+        ...prev,
+        [g.client.id]: all ? new Set<string>() : new Set(g.products.map((p) => p.id)),
+      };
+    });
 
   const allGroups = useMemo<Group[]>(() => {
     const byClient = new Map<string, Product[]>();
@@ -169,10 +191,10 @@ export function EnvioSection({ onScrollTo }: { onScrollTo: (id: string) => void 
             Nenhum cliente com produtos pagos aguardando envio nos filtros atuais.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="table-scroll-y max-h-[28rem] overflow-x-auto overflow-y-auto rounded-md border border-border/60">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border text-left text-xs uppercase text-muted-foreground">
+                <tr className="sticky top-0 z-10 border-b border-border bg-card text-left text-xs uppercase text-muted-foreground">
                   <th className="w-8 py-2" />
                   <th className="py-2 pr-3">Cliente</th>
                   <th className="py-2 pr-3">Itens</th>
