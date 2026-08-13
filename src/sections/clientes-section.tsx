@@ -57,6 +57,7 @@ import {
 } from "@/components/mgmv-complete-modal";
 import { isAgreementFullyPaid } from "@/lib/mgmv-schedule";
 import { ProductBulkActionsBar } from "@/components/product-bulk-actions";
+import { ShipmentWizardModal } from "@/components/shipment-wizard-modal";
 import { RetiradoConfirmModal } from "@/components/retirado-confirm-modal";
 import { NcmDetailRow, NcmExpandToggle } from "@/components/product-ncm-row";
 import { NcmEditDialog, type NcmTarget } from "@/components/ncm-edit-dialog";
@@ -1239,6 +1240,8 @@ function ClientDrawer({
   // Enviado / Retirar / Removido). Só o clique nos botões da barra aplica;
   // marcar o checkbox nunca altera status sozinho.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Assistente de envio (mesmo modal da seção Envio/SuperFrete).
+  const [shipProducts, setShipProducts] = useState<Product[] | null>(null);
   // Filtro por status no Histórico de Produtos. Conjunto vazio = mostrar
   // todos. Persistido em localStorage para sobreviver à troca de tela.
   const [statusFilter, setStatusFilter] = useState<Set<FinancialStatus>>(
@@ -2005,6 +2008,16 @@ function ClientDrawer({
               `Marcar ${selectedCount} produto(s) selecionado(s) como Enviado?`,
             )
           }
+          onShip={() => {
+            const sel = selectedProducts().filter(
+              (p) => p.financialStatus === "Pago" && p.situation === "Em Aberto",
+            );
+            if (sel.length === 0) {
+              toast.info("Selecione produtos pagos aguardando envio (Em Aberto).");
+              return;
+            }
+            setShipProducts(sel);
+          }}
           onRetirar={() =>
             bulkChangeSituation(
               "Retirar",
@@ -2021,6 +2034,17 @@ function ClientDrawer({
           onDelete={() => void bulkDelete()}
           onGerarNf={handleGerarNf}
         />
+        {shipProducts && (
+          <ShipmentWizardModal
+            client={client}
+            products={shipProducts}
+            open
+            onClose={() => {
+              setShipProducts(null);
+              clearSelection();
+            }}
+          />
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
