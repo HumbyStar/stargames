@@ -1433,6 +1433,13 @@ function ClientDrawer({
   const clearSelection = () => setSelectedIds(new Set());
   const selectedProducts = () =>
     individualProducts.filter((p) => selectedIds.has(p.id));
+  const selectedForActions = useMemo(
+    () => selectedProducts(),
+    [individualProducts, selectedIds],
+  );
+  const allSelectedShippable = selectedForActions.every(
+    (p) => p.financialStatus === "Pago" && p.situation === "Em Aberto",
+  );
   // Produtos da seleção que já tiveram NF emitida (bloqueio de duplicidade).
   const selectedDuplicates = useMemo<DuplicateNfProduct[]>(() => {
     return individualProducts
