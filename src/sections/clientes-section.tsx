@@ -69,6 +69,7 @@ import {
   type DuplicateNfProduct,
 } from "@/components/nf-duplicate-warning-modal";
 import { NfHistoryModal } from "@/components/nf-history-modal";
+import { ShipmentHistoryModal } from "@/components/shipment-history-modal";
 import { NfEmittedBadge } from "@/components/nf-emitted-badge";
 import { listNfInvoices, type NfInvoiceRow } from "@/lib/nf-history.functions";
 import { useServerFn } from "@tanstack/react-start";
@@ -1288,6 +1289,7 @@ function ClientDrawer({
   const [nfWarnOpen, setNfWarnOpen] = useState(false);
   const [nfPendingSelection, setNfPendingSelection] = useState<Product[]>([]);
   const [nfHistoryOpen, setNfHistoryOpen] = useState(false);
+  const [shipHistoryOpen, setShipHistoryOpen] = useState(false);
   // Linha expansível com NCM / categoria fiscal por produto.
   const [ncmOpenIds, setNcmOpenIds] = useState<Set<string>>(new Set());
   const [ncmTarget, setNcmTarget] = useState<NcmTarget | null>(null);
@@ -1580,6 +1582,13 @@ function ClientDrawer({
           onClick={() => setNfHistoryOpen(true)}
         >
           Notas Fiscais
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setShipHistoryOpen(true)}
+        >
+          Envios
         </Button>
         {!activeAgreement && products.length > 0 && (
           <Button size="sm" variant="secondary" onClick={() => setMgmvCreateOpen(true)}>
