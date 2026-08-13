@@ -1,4 +1,4 @@
-import { Copy, Sparkles } from "lucide-react";
+import { Copy, Sparkles, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -20,6 +20,9 @@ export function ProductBulkActionsBar({
   addToMgmvDisabled,
   addToMgmvTitle,
   onEnviado,
+  onShip,
+  shipDisabled,
+  shipTitle,
   onRetirar,
   onRemovido,
   onClear,
@@ -37,6 +40,9 @@ export function ProductBulkActionsBar({
   addToMgmvDisabled?: boolean;
   addToMgmvTitle?: string;
   onEnviado: () => void;
+  onShip?: () => void;
+  shipDisabled?: boolean;
+  shipTitle?: string;
   onRetirar: () => void;
   onRemovido: () => void;
   onClear: () => void;
@@ -82,6 +88,17 @@ export function ProductBulkActionsBar({
             title={addToMgmvTitle}
           >
             Adicionar ao acordo
+          </Button>
+        )}
+        {onShip && (
+          <Button
+            size="sm"
+            onClick={onShip}
+            disabled={shipDisabled}
+            title={shipTitle ?? "Abrir assistente de envio para os produtos selecionados"}
+          >
+            <Truck className="mr-1 h-3.5 w-3.5" />
+            Enviar
           </Button>
         )}
         <Button size="sm" variant="outline" onClick={onEnviado}>
