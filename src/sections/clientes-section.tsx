@@ -1240,6 +1240,8 @@ function ClientDrawer({
   // Enviado / Retirar / Removido). Só o clique nos botões da barra aplica;
   // marcar o checkbox nunca altera status sozinho.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Assistente de envio (mesmo modal da seção Envio/SuperFrete).
+  const [shipProducts, setShipProducts] = useState<Product[] | null>(null);
   // Filtro por status no Histórico de Produtos. Conjunto vazio = mostrar
   // todos. Persistido em localStorage para sobreviver à troca de tela.
   const [statusFilter, setStatusFilter] = useState<Set<FinancialStatus>>(
