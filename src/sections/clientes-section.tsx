@@ -1583,6 +1583,9 @@ function ClientDrawer({
         >
           Notas Fiscais
         </Button>
+        <Button size="sm" variant="outline" onClick={() => setShipHistoryOpen(true)}>
+          Envios
+        </Button>
         <Button
           size="sm"
           variant="outline"
