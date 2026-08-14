@@ -200,7 +200,7 @@ export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
         payload,
         response: e instanceof SuperfreteError ? e.body : null,
       });
-      throw new Error(FRIENDLY);
+      throw friendlyError(e);
     }
   });
 
@@ -312,7 +312,7 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
         payload,
         response: e instanceof SuperfreteError ? e.body : null,
       });
-      throw new Error(FRIENDLY);
+      throw friendlyError(e);
     }
   });
 
@@ -369,7 +369,7 @@ export const checkoutSuperfreteOrder = createServerFn({ method: "POST" })
         payload,
         response: e instanceof SuperfreteError ? e.body : null,
       });
-      throw new Error(FRIENDLY);
+      throw friendlyError(e);
     }
   });
 
@@ -442,6 +442,6 @@ export const getSuperfreteOrderInfo = createServerFn({ method: "POST" })
         message,
         response: e instanceof SuperfreteError ? e.body : null,
       });
-      throw new Error(FRIENDLY);
+      throw friendlyError(e);
     }
   });
