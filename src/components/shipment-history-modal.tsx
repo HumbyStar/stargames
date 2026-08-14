@@ -56,6 +56,11 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
             {shipment.totalWeightKg.toFixed(2).replace(".", ",")} kg
             {shipment.etaDays != null ? ` · ${shipment.etaDays} dia(s)` : ""}
           </div>
+          <div className="text-xs text-muted-foreground">
+            Status: {shipment.status}
+            {shipment.superfreteOrderId ? ` · Pedido ${shipment.superfreteOrderId}` : ""}
+            {shipment.trackingCode ? ` · Rastreio ${shipment.trackingCode}` : ""}
+          </div>
         </div>
         <div className="text-sm font-semibold">{formatBRL(shipment.priceCents / 100)}</div>
         <Button size="sm" variant="outline" onClick={() => setExpanded((v) => !v)}>
