@@ -498,31 +498,48 @@ export function ShipmentWizardModal({
 
         {step === 3 && (
           <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              Preços simulados para {Math.max(0.3, parcel.weightKg).toFixed(2)} kg.
-            </p>
-            {quotes.map((q) => (
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">
+                Peso considerado: {Math.max(0.3, parcel.weightKg).toFixed(2)} kg.
+              </p>
+              <Button type="button" size="sm" onClick={calculate} disabled={quoting}>
+                {quoting ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
+                Calcular frete
+              </Button>
+            </div>
+            {quoteError && <p className="text-xs text-destructive">{quoteError}</p>}
+            {!quoting && options.length === 0 && !quoteError && (
+              <p className="text-xs text-muted-foreground">
+                Clique em "Calcular frete" para buscar as opções reais da SuperFrete.
+              </p>
+            )}
+            {options.map((q) => (
               <button
                 key={q.id}
                 type="button"
+                disabled={!!q.error}
                 onClick={() => setQuoteId(q.id)}
                 className={cn(
                   "flex w-full items-center justify-between rounded-lg border p-3 text-left transition-colors",
-                  quoteId === q.id
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/40",
+                  q.error
+                    ? "cursor-not-allowed border-border opacity-60"
+                    : quoteId === q.id
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/40",
                 )}
               >
                 <span>
                   <span className="block text-sm font-medium">
-                    {q.carrier} · {q.service}
+                    {q.company} · {q.name}
                   </span>
                   <span className="block text-xs text-muted-foreground">
-                    até {q.etaDays} dia(s) úteis {q.note ? `· ${q.note}` : ""}
+                    {q.error
+                      ? q.error
+                      : `até ${q.deliveryDays ?? "—"} dia(s) úteis`}
                   </span>
                 </span>
                 <span className="text-sm font-semibold tabular-nums">
-                  {formatCents(q.priceCents)}
+                  {q.error ? "—" : formatCents(q.priceCents)}
                 </span>
               </button>
             ))}
@@ -542,10 +559,12 @@ export function ShipmentWizardModal({
             <div className="rounded-lg border border-border p-3">
               <p className="text-xs uppercase text-muted-foreground">Transporte</p>
               <p className="font-medium">
-                {quote ? `${quote.carrier} · ${quote.service}` : "—"}
+                {quote ? `${quote.company} · ${quote.name}` : "—"}
               </p>
               <p className="text-muted-foreground">
-                {quote ? `${formatCents(quote.priceCents)} · até ${quote.etaDays} dia(s)` : ""}
+                {quote
+                  ? `${formatCents(quote.priceCents)} · até ${quote.deliveryDays ?? "—"} dia(s)`
+                  : ""}
               </p>
             </div>
             <div className="rounded-lg border border-border p-3">
@@ -561,9 +580,30 @@ export function ShipmentWizardModal({
                 ))}
               </ul>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Ao confirmar, estes produtos passam para a situação "Enviado".
-            </p>
+            {labelInfo ? (
+              <div className="space-y-2 rounded-lg border border-primary/40 bg-primary/5 p-3">
+                <p className="text-sm font-medium">
+                  Etiqueta {labelInfo.orderId} — {labelInfo.status}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={release} disabled={releasing}>
+                    {releasing ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
+                    Liberar etiqueta (Sandbox)
+                  </Button>
+                  <Button type="button" size="sm" onClick={markSent} disabled={markingSent}>
+                    Marcar produtos como enviados
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Os produtos só passam para "Enviado" quando você confirmar manualmente.
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Ao confirmar, o envio é registrado e a etiqueta é criada na SuperFrete (Sandbox). Os
+                produtos continuam em aberto até a confirmação manual do envio.
+              </p>
+            )}
           </div>
         )}
 
@@ -580,10 +620,14 @@ export function ShipmentWizardModal({
             <Button type="button" onClick={() => setStep((s) => s + 1)} disabled={!canNext}>
               Continuar
             </Button>
+          ) : labelInfo ? (
+            <Button type="button" variant="outline" onClick={onClose}>
+              Fechar
+            </Button>
           ) : (
             <Button type="button" onClick={confirm} disabled={saving || !quote}>
               {saving ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
-              Confirmar envio
+              Confirmar e gerar etiqueta
             </Button>
           )}
         </DialogFooter>
