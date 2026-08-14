@@ -82,6 +82,7 @@ import { RestoreBackupModal } from "@/components/restore-backup-modal";
 import { DbMigrationCard } from "@/components/db-migration-card";
 import { RealtimeUpdatesCard } from "@/components/realtime-updates-card";
 import { MaintenanceCard } from "@/components/maintenance-card";
+import { ShippingOriginCard } from "@/components/shipping-origin-card";
 import { ImportContentModal } from "@/components/import-content-modal";
 import type { ImportHistoryEntry } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -106,6 +107,7 @@ type View =
   | "activity"
   | "github"
   | "migration"
+  | "shipping"
   | "maintenance"
   | "danger";
 
@@ -831,6 +833,13 @@ export function ConfiguracoesSection() {
               onOpen={() => setView("migration")}
             />
             <SecondaryCard
+              icon={Truck}
+              title="Envio / SuperFrete"
+              summary="Remetente usado nas cotações e etiquetas da SuperFrete (ambiente Sandbox)."
+              status="Sandbox"
+              onOpen={() => setView("shipping")}
+            />
+            <SecondaryCard
               icon={Wrench}
               title="Modo Manutenção"
               summary="Bloqueia usuários comuns enquanto o banco é migrado para a nova conta Supabase. Admins continuam com acesso total."
@@ -1533,6 +1542,16 @@ export function ConfiguracoesSection() {
             description="Pacotes prontos para clonar o sistema em outra conta ou provedor de nuvem."
           />
           <DbMigrationCard />
+        </>
+      )}
+
+      {view === "shipping" && (
+        <>
+          <DetailHeader
+            title="Envio / SuperFrete"
+            description="Dados do remetente enviados à SuperFrete nas cotações e na criação das etiquetas."
+          />
+          <ShippingOriginCard />
         </>
       )}
 

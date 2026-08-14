@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { defaultShipOrigin, type ShipOrigin } from "@/lib/ship-origin";
 import {
   dbDeleteAllClientsAsync,
   dbDeleteAllProductsAsync,
@@ -423,6 +424,8 @@ export interface SystemPreferences {
   theme: "light" | "dark" | "system";
   /** Plataformas cadastradas manualmente pelo usuário. */
   customPlatforms: string[];
+  /** Remetente usado nas cotações/etiquetas da SuperFrete. */
+  shipOrigin?: ShipOrigin;
 }
 
 export interface OperationalRules {
@@ -694,6 +697,7 @@ const defaultPreferences: SystemPreferences = {
   showDashboardAlerts: true,
   theme: "system",
   customPlatforms: [],
+  shipOrigin: defaultShipOrigin,
 };
 
 
