@@ -40,6 +40,13 @@ export interface ShipmentRow {
   recipient: ShipmentRecipient | null;
   notes: string | null;
   createdAt: string;
+  status: string;
+  superfreteOrderId: string | null;
+  superfreteStatus: string | null;
+  selectedServiceId: string | null;
+  selectedServiceName: string | null;
+  trackingCode: string | null;
+  labelUrl: string | null;
 }
 
 const ItemSchema = z.object({
@@ -78,6 +85,10 @@ const CreateSchema = z.object({
   items: z.array(ItemSchema).min(1),
   recipient: RecipientSchema,
   notes: z.string().nullable().default(null),
+  selectedServiceId: z.string().nullable().default(null),
+  selectedServiceName: z.string().nullable().default(null),
+  payloadQuote: z.unknown().nullable().default(null),
+  responseQuote: z.unknown().nullable().default(null),
 });
 
 function mapRow(r: Record<string, unknown>): ShipmentRow {
@@ -94,6 +105,13 @@ function mapRow(r: Record<string, unknown>): ShipmentRow {
     recipient: (r["recipient"] as ShipmentRecipient | null) ?? null,
     notes: (r["notes"] as string | null) ?? null,
     createdAt: r["created_at"] as string,
+    status: (r["status"] as string) ?? "Rascunho",
+    superfreteOrderId: (r["superfrete_order_id"] as string | null) ?? null,
+    superfreteStatus: (r["superfrete_status"] as string | null) ?? null,
+    selectedServiceId: (r["selected_service_id"] as string | null) ?? null,
+    selectedServiceName: (r["selected_service_name"] as string | null) ?? null,
+    trackingCode: (r["tracking_code"] as string | null) ?? null,
+    labelUrl: (r["label_url"] as string | null) ?? null,
   };
 }
 
@@ -118,6 +136,12 @@ export const createShipment = createServerFn({ method: "POST" })
         product_ids: data.items.map((i) => i.productId),
         notes: data.notes,
         created_by: userId,
+        status: "Etiqueta pendente de pagamento",
+        selected_service_id: data.selectedServiceId,
+        selected_service_name: data.selectedServiceName,
+        estimated_delivery_days: data.etaDays,
+        payload_quote: (data.payloadQuote ?? null) as never,
+        response_quote: (data.responseQuote ?? null) as never,
       })
       .select("*")
       .single();

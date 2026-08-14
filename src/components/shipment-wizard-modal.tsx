@@ -28,10 +28,16 @@ import {
   combineParcels,
   cubicWeightKg,
   formatCents,
-  quoteShipping,
-  type ShippingQuote,
 } from "@/lib/shipping-quotes";
 import { createShipment, type ShipmentRecipient } from "@/lib/shipments.functions";
+import {
+  calculateSuperfreteQuote,
+  createSuperfreteCartOrder,
+  checkoutSuperfreteOrder,
+  type SuperfreteQuoteOption,
+} from "@/lib/superfrete.functions";
+import { defaultShipOrigin, isShipOriginComplete } from "@/lib/ship-origin";
+import { useServerFn } from "@tanstack/react-start";
 
 type Measures = { weightKg: string; lengthCm: string; widthCm: string; heightCm: string };
 
@@ -81,6 +87,10 @@ export function ShipmentWizardModal({
   initialSelectedIds?: string[];
 }) {
   const setProductSituation = useStore((s) => s.setProductSituation);
+  const origin = useStore((s) => s.preferences.shipOrigin) ?? defaultShipOrigin;
+  const runQuote = useServerFn(calculateSuperfreteQuote);
+  const runCart = useServerFn(createSuperfreteCartOrder);
+  const runCheckout = useServerFn(checkoutSuperfreteOrder);
   const [step, setStep] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(products.map((p) => p.id)));
   const [measures, setMeasures] = useState<Record<string, Measures>>({});
@@ -89,6 +99,16 @@ export function ShipmentWizardModal({
   const [quoteId, setQuoteId] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [options, setOptions] = useState<SuperfreteQuoteOption[]>([]);
+  const [quoting, setQuoting] = useState(false);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [labelInfo, setLabelInfo] = useState<{
+    shipmentId: string;
+    orderId: string;
+    status: string;
+  } | null>(null);
+  const [releasing, setReleasing] = useState(false);
+  const [markingSent, setMarkingSent] = useState(false);
 
   // Preenche a ficha do cliente ao abrir (edição manual continua liberada).
   useEffect(() => {
@@ -97,6 +117,9 @@ export function ShipmentWizardModal({
     setSaving(false);
     setQuoteId("");
     setNotes("");
+    setOptions([]);
+    setQuoteError(null);
+    setLabelInfo(null);
     const preset = (initialSelectedIds ?? []).filter((id) =>
       products.some((p) => p.id === id),
     );
@@ -143,8 +166,7 @@ export function ShipmentWizardModal({
     [chosen, measures],
   );
 
-  const quotes: ShippingQuote[] = useMemo(() => quoteShipping(parcel), [parcel]);
-  const quote = quotes.find((q) => q.id === quoteId) ?? null;
+  const quote = options.find((q) => q.id === quoteId) ?? null;
   const totalValue = chosen.reduce((acc, p) => acc + p.totalValue, 0);
 
   const addressReady =
@@ -171,17 +193,76 @@ export function ShipmentWizardModal({
       return next;
     });
 
+  const apiProducts = () =>
+    chosen.map((p) => {
+      const m = measures[p.id] ?? DEFAULT_MEASURES;
+      return {
+        name: p.name,
+        quantity: 1,
+        unitaryValue: p.totalValue,
+        weightKg: Number(m.weightKg.replace(",", ".")) || 0.3,
+        lengthCm: Number(m.lengthCm.replace(",", ".")) || 16,
+        widthCm: Number(m.widthCm.replace(",", ".")) || 11,
+        heightCm: Number(m.heightCm.replace(",", ".")) || 2,
+      };
+    });
+
+  const toAddress = () => ({
+    name: recipient.fullName,
+    document: recipient.cpfCnpj,
+    phone: recipient.phone,
+    email: recipient.email,
+    postalCode: recipient.cep,
+    street: recipient.street,
+    number: recipient.number,
+    complement: recipient.complement,
+    district: recipient.neighborhood,
+    city: recipient.city,
+    state: recipient.state,
+  });
+
+  const calculate = async () => {
+    if (quoting || chosen.length === 0) return;
+    if (!isShipOriginComplete(origin)) {
+      setQuoteError(
+        "Configure a origem do envio em Configurações → Envio / SuperFrete antes de calcular o frete.",
+      );
+      return;
+    }
+    setQuoting(true);
+    setQuoteError(null);
+    setQuoteId("");
+    try {
+      const res = await runQuote({
+        data: {
+          from: origin,
+          to: toAddress(),
+          products: apiProducts(),
+          insuranceValue: totalValue,
+        },
+      });
+      setOptions(res.options);
+      if (res.options.every((o) => o.error)) {
+        setQuoteError("Nenhum serviço disponível para este trecho no momento.");
+      }
+    } catch (e) {
+      setQuoteError(e instanceof Error ? e.message : "Não foi possível calcular o frete.");
+    } finally {
+      setQuoting(false);
+    }
+  };
+
   const confirm = async () => {
     if (!quote || chosen.length === 0 || saving) return;
     setSaving(true);
     try {
-      await createShipment({
+      const shipment = await createShipment({
         data: {
           clientId: client.id,
           clientName: client.name,
-          carrier: quote.carrier,
-          service: quote.service,
-          etaDays: quote.etaDays,
+          carrier: quote.company || "SuperFrete",
+          service: quote.name,
+          etaDays: quote.deliveryDays,
           priceCents: quote.priceCents,
           totalWeightKg: Number(parcel.weightKg.toFixed(3)),
           items: chosen.map((p) => {
@@ -199,20 +280,62 @@ export function ShipmentWizardModal({
           }),
           recipient,
           notes: notes.trim() || null,
+          selectedServiceId: quote.id,
+          selectedServiceName: quote.name,
         },
       });
-      chosen.forEach((p) => setProductSituation(p.id, "Enviado"));
-      toast.success(
-        `Envio registrado: ${chosen.length} item(ns) por ${quote.carrier} ${quote.service}.`,
-      );
-      onClose();
+
+      const order = await runCart({
+        data: {
+          shipmentId: shipment.id,
+          from: origin,
+          to: toAddress(),
+          service: quote.id,
+          products: apiProducts(),
+          volumes: {
+            weightKg: Math.max(0.01, parcel.weightKg),
+            lengthCm: Math.max(1, parcel.lengthCm),
+            widthCm: Math.max(1, parcel.widthCm),
+            heightCm: Math.max(1, parcel.heightCm),
+          },
+          insuranceValue: totalValue,
+        },
+      });
+
+      setLabelInfo({
+        shipmentId: shipment.id,
+        orderId: order.orderId,
+        status: order.internalStatus,
+      });
+      toast.success(`Etiqueta criada na SuperFrete (${order.internalStatus}).`);
     } catch (e) {
-      toast.error(
-        e instanceof Error ? e.message : "Não foi possível registrar o envio.",
-      );
+      toast.error(e instanceof Error ? e.message : "Não foi possível registrar o envio.");
     } finally {
       setSaving(false);
     }
+  };
+
+  const release = async () => {
+    if (!labelInfo || releasing) return;
+    setReleasing(true);
+    try {
+      const res = await runCheckout({ data: { shipmentId: labelInfo.shipmentId } });
+      setLabelInfo((l) => (l ? { ...l, status: res.internalStatus } : l));
+      toast.success(`Etiqueta liberada (${res.internalStatus}).`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível liberar a etiqueta.");
+    } finally {
+      setReleasing(false);
+    }
+  };
+
+  const markSent = () => {
+    if (markingSent) return;
+    setMarkingSent(true);
+    chosen.forEach((p) => setProductSituation(p.id, "Enviado"));
+    toast.success(`${chosen.length} produto(s) marcados como Enviado.`);
+    setMarkingSent(false);
+    onClose();
   };
 
   return (
@@ -221,7 +344,8 @@ export function ShipmentWizardModal({
         <DialogHeader>
           <DialogTitle>Enviar — {client.name}</DialogTitle>
           <DialogDescription>
-            Cotações simuladas para conferência interna (sem integração com a API do SuperFrete).
+            Cotações reais da SuperFrete (ambiente Sandbox). A etiqueta é gerada sem alterar a
+            situação dos produtos.
           </DialogDescription>
         </DialogHeader>
 
@@ -375,31 +499,48 @@ export function ShipmentWizardModal({
 
         {step === 3 && (
           <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              Preços simulados para {Math.max(0.3, parcel.weightKg).toFixed(2)} kg.
-            </p>
-            {quotes.map((q) => (
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">
+                Peso considerado: {Math.max(0.3, parcel.weightKg).toFixed(2)} kg.
+              </p>
+              <Button type="button" size="sm" onClick={calculate} disabled={quoting}>
+                {quoting ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
+                Calcular frete
+              </Button>
+            </div>
+            {quoteError && <p className="text-xs text-destructive">{quoteError}</p>}
+            {!quoting && options.length === 0 && !quoteError && (
+              <p className="text-xs text-muted-foreground">
+                Clique em "Calcular frete" para buscar as opções reais da SuperFrete.
+              </p>
+            )}
+            {options.map((q) => (
               <button
                 key={q.id}
                 type="button"
+                disabled={!!q.error}
                 onClick={() => setQuoteId(q.id)}
                 className={cn(
                   "flex w-full items-center justify-between rounded-lg border p-3 text-left transition-colors",
-                  quoteId === q.id
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/40",
+                  q.error
+                    ? "cursor-not-allowed border-border opacity-60"
+                    : quoteId === q.id
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/40",
                 )}
               >
                 <span>
                   <span className="block text-sm font-medium">
-                    {q.carrier} · {q.service}
+                    {q.company} · {q.name}
                   </span>
                   <span className="block text-xs text-muted-foreground">
-                    até {q.etaDays} dia(s) úteis {q.note ? `· ${q.note}` : ""}
+                    {q.error
+                      ? q.error
+                      : `até ${q.deliveryDays ?? "—"} dia(s) úteis`}
                   </span>
                 </span>
                 <span className="text-sm font-semibold tabular-nums">
-                  {formatCents(q.priceCents)}
+                  {q.error ? "—" : formatCents(q.priceCents)}
                 </span>
               </button>
             ))}
@@ -419,10 +560,12 @@ export function ShipmentWizardModal({
             <div className="rounded-lg border border-border p-3">
               <p className="text-xs uppercase text-muted-foreground">Transporte</p>
               <p className="font-medium">
-                {quote ? `${quote.carrier} · ${quote.service}` : "—"}
+                {quote ? `${quote.company} · ${quote.name}` : "—"}
               </p>
               <p className="text-muted-foreground">
-                {quote ? `${formatCents(quote.priceCents)} · até ${quote.etaDays} dia(s)` : ""}
+                {quote
+                  ? `${formatCents(quote.priceCents)} · até ${quote.deliveryDays ?? "—"} dia(s)`
+                  : ""}
               </p>
             </div>
             <div className="rounded-lg border border-border p-3">
@@ -438,9 +581,30 @@ export function ShipmentWizardModal({
                 ))}
               </ul>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Ao confirmar, estes produtos passam para a situação "Enviado".
-            </p>
+            {labelInfo ? (
+              <div className="space-y-2 rounded-lg border border-primary/40 bg-primary/5 p-3">
+                <p className="text-sm font-medium">
+                  Etiqueta {labelInfo.orderId} — {labelInfo.status}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={release} disabled={releasing}>
+                    {releasing ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
+                    Liberar etiqueta (Sandbox)
+                  </Button>
+                  <Button type="button" size="sm" onClick={markSent} disabled={markingSent}>
+                    Marcar produtos como enviados
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Os produtos só passam para "Enviado" quando você confirmar manualmente.
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Ao confirmar, o envio é registrado e a etiqueta é criada na SuperFrete (Sandbox). Os
+                produtos continuam em aberto até a confirmação manual do envio.
+              </p>
+            )}
           </div>
         )}
 
@@ -457,10 +621,14 @@ export function ShipmentWizardModal({
             <Button type="button" onClick={() => setStep((s) => s + 1)} disabled={!canNext}>
               Continuar
             </Button>
+          ) : labelInfo ? (
+            <Button type="button" variant="outline" onClick={onClose}>
+              Fechar
+            </Button>
           ) : (
             <Button type="button" onClick={confirm} disabled={saving || !quote}>
               {saving ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
-              Confirmar envio
+              Confirmar e gerar etiqueta
             </Button>
           )}
         </DialogFooter>

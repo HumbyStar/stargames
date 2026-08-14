@@ -927,65 +927,169 @@ export type Database = {
         }
         Relationships: []
       }
-      shipments: {
+      shipment_logs: {
         Row: {
-          carrier: string
-          client_id: string
-          client_name: string
+          action: string
           created_at: string
           created_by: string | null
           env: Database["public"]["Enums"]["app_env"]
-          eta_days: number | null
           id: string
-          items: Json
-          notes: string | null
-          price_cents: number
-          product_ids: string[]
-          recipient: Json
+          message: string | null
+          new_status: string | null
+          payload: Json | null
+          previous_status: string | null
+          response: Json | null
           sandbox_owner: string | null
-          service: string
-          status: string
-          total_weight_kg: number
-          updated_at: string
+          shipment_id: string | null
         }
         Insert: {
+          action: string
+          created_at?: string
+          created_by?: string | null
+          env?: Database["public"]["Enums"]["app_env"]
+          id?: string
+          message?: string | null
+          new_status?: string | null
+          payload?: Json | null
+          previous_status?: string | null
+          response?: Json | null
+          sandbox_owner?: string | null
+          shipment_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          created_by?: string | null
+          env?: Database["public"]["Enums"]["app_env"]
+          id?: string
+          message?: string | null
+          new_status?: string | null
+          payload?: Json | null
+          previous_status?: string | null
+          response?: Json | null
+          sandbox_owner?: string | null
+          shipment_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shipment_logs_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: false
+            referencedRelation: "shipments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shipments: {
+        Row: {
+          cancelled_at: string | null
           carrier: string
           client_id: string
           client_name: string
+          confirmed_at: string | null
+          created_at: string
+          created_by: string | null
+          delivered_at: string | null
+          env: Database["public"]["Enums"]["app_env"]
+          estimated_delivery_days: number | null
+          eta_days: number | null
+          id: string
+          items: Json
+          label_url: string | null
+          notes: string | null
+          payload_cart: Json | null
+          payload_quote: Json | null
+          posted_at: string | null
+          price_cents: number
+          product_ids: string[]
+          recipient: Json
+          released_at: string | null
+          response_cart: Json | null
+          response_order_info: Json | null
+          response_quote: Json | null
+          sandbox_owner: string | null
+          selected_service_id: string | null
+          selected_service_name: string | null
+          service: string
+          status: string
+          superfrete_order_id: string | null
+          superfrete_status: string | null
+          total_weight_kg: number
+          tracking_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          cancelled_at?: string | null
+          carrier: string
+          client_id: string
+          client_name: string
+          confirmed_at?: string | null
           created_at?: string
           created_by?: string | null
+          delivered_at?: string | null
           env?: Database["public"]["Enums"]["app_env"]
+          estimated_delivery_days?: number | null
           eta_days?: number | null
           id?: string
           items?: Json
+          label_url?: string | null
           notes?: string | null
+          payload_cart?: Json | null
+          payload_quote?: Json | null
+          posted_at?: string | null
           price_cents?: number
           product_ids?: string[]
           recipient?: Json
+          released_at?: string | null
+          response_cart?: Json | null
+          response_order_info?: Json | null
+          response_quote?: Json | null
           sandbox_owner?: string | null
+          selected_service_id?: string | null
+          selected_service_name?: string | null
           service?: string
           status?: string
+          superfrete_order_id?: string | null
+          superfrete_status?: string | null
           total_weight_kg?: number
+          tracking_code?: string | null
           updated_at?: string
         }
         Update: {
+          cancelled_at?: string | null
           carrier?: string
           client_id?: string
           client_name?: string
+          confirmed_at?: string | null
           created_at?: string
           created_by?: string | null
+          delivered_at?: string | null
           env?: Database["public"]["Enums"]["app_env"]
+          estimated_delivery_days?: number | null
           eta_days?: number | null
           id?: string
           items?: Json
+          label_url?: string | null
           notes?: string | null
+          payload_cart?: Json | null
+          payload_quote?: Json | null
+          posted_at?: string | null
           price_cents?: number
           product_ids?: string[]
           recipient?: Json
+          released_at?: string | null
+          response_cart?: Json | null
+          response_order_info?: Json | null
+          response_quote?: Json | null
           sandbox_owner?: string | null
+          selected_service_id?: string | null
+          selected_service_name?: string | null
           service?: string
           status?: string
+          superfrete_order_id?: string | null
+          superfrete_status?: string | null
           total_weight_kg?: number
+          tracking_code?: string | null
           updated_at?: string
         }
         Relationships: [
