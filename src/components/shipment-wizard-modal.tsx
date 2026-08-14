@@ -166,8 +166,7 @@ export function ShipmentWizardModal({
     [chosen, measures],
   );
 
-  const quotes: ShippingQuote[] = useMemo(() => quoteShipping(parcel), [parcel]);
-  const quote = quotes.find((q) => q.id === quoteId) ?? null;
+  const quote = options.find((q) => q.id === quoteId) ?? null;
   const totalValue = chosen.reduce((acc, p) => acc + p.totalValue, 0);
 
   const addressReady =
@@ -194,17 +193,76 @@ export function ShipmentWizardModal({
       return next;
     });
 
+  const apiProducts = () =>
+    chosen.map((p) => {
+      const m = measures[p.id] ?? DEFAULT_MEASURES;
+      return {
+        name: p.name,
+        quantity: 1,
+        unitaryValue: p.totalValue,
+        weightKg: Number(m.weightKg.replace(",", ".")) || 0.3,
+        lengthCm: Number(m.lengthCm.replace(",", ".")) || 16,
+        widthCm: Number(m.widthCm.replace(",", ".")) || 11,
+        heightCm: Number(m.heightCm.replace(",", ".")) || 2,
+      };
+    });
+
+  const toAddress = () => ({
+    name: recipient.fullName,
+    document: recipient.cpfCnpj,
+    phone: recipient.phone,
+    email: recipient.email,
+    postalCode: recipient.cep,
+    street: recipient.street,
+    number: recipient.number,
+    complement: recipient.complement,
+    district: recipient.neighborhood,
+    city: recipient.city,
+    state: recipient.state,
+  });
+
+  const calculate = async () => {
+    if (quoting || chosen.length === 0) return;
+    if (!isShipOriginComplete(origin)) {
+      setQuoteError(
+        "Configure a origem do envio em Configurações → Envio / SuperFrete antes de calcular o frete.",
+      );
+      return;
+    }
+    setQuoting(true);
+    setQuoteError(null);
+    setQuoteId("");
+    try {
+      const res = await runQuote({
+        data: {
+          from: origin,
+          to: toAddress(),
+          products: apiProducts(),
+          insuranceValue: totalValue,
+        },
+      });
+      setOptions(res.options);
+      if (res.options.every((o) => o.error)) {
+        setQuoteError("Nenhum serviço disponível para este trecho no momento.");
+      }
+    } catch (e) {
+      setQuoteError(e instanceof Error ? e.message : "Não foi possível calcular o frete.");
+    } finally {
+      setQuoting(false);
+    }
+  };
+
   const confirm = async () => {
     if (!quote || chosen.length === 0 || saving) return;
     setSaving(true);
     try {
-      await createShipment({
+      const shipment = await createShipment({
         data: {
           clientId: client.id,
           clientName: client.name,
-          carrier: quote.carrier,
-          service: quote.service,
-          etaDays: quote.etaDays,
+          carrier: quote.company || "SuperFrete",
+          service: quote.name,
+          etaDays: quote.deliveryDays,
           priceCents: quote.priceCents,
           totalWeightKg: Number(parcel.weightKg.toFixed(3)),
           items: chosen.map((p) => {
@@ -222,20 +280,62 @@ export function ShipmentWizardModal({
           }),
           recipient,
           notes: notes.trim() || null,
+          selectedServiceId: quote.id,
+          selectedServiceName: quote.name,
         },
       });
-      chosen.forEach((p) => setProductSituation(p.id, "Enviado"));
-      toast.success(
-        `Envio registrado: ${chosen.length} item(ns) por ${quote.carrier} ${quote.service}.`,
-      );
-      onClose();
+
+      const order = await runCart({
+        data: {
+          shipmentId: shipment.id,
+          from: origin,
+          to: toAddress(),
+          service: quote.id,
+          products: apiProducts(),
+          volumes: {
+            weightKg: Math.max(0.01, parcel.weightKg),
+            lengthCm: Math.max(1, parcel.lengthCm),
+            widthCm: Math.max(1, parcel.widthCm),
+            heightCm: Math.max(1, parcel.heightCm),
+          },
+          insuranceValue: totalValue,
+        },
+      });
+
+      setLabelInfo({
+        shipmentId: shipment.id,
+        orderId: order.orderId,
+        status: order.internalStatus,
+      });
+      toast.success(`Etiqueta criada na SuperFrete (${order.internalStatus}).`);
     } catch (e) {
-      toast.error(
-        e instanceof Error ? e.message : "Não foi possível registrar o envio.",
-      );
+      toast.error(e instanceof Error ? e.message : "Não foi possível registrar o envio.");
     } finally {
       setSaving(false);
     }
+  };
+
+  const release = async () => {
+    if (!labelInfo || releasing) return;
+    setReleasing(true);
+    try {
+      const res = await runCheckout({ data: { shipmentId: labelInfo.shipmentId } });
+      setLabelInfo((l) => (l ? { ...l, status: res.internalStatus } : l));
+      toast.success(`Etiqueta liberada (${res.internalStatus}).`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível liberar a etiqueta.");
+    } finally {
+      setReleasing(false);
+    }
+  };
+
+  const markSent = () => {
+    if (markingSent) return;
+    setMarkingSent(true);
+    chosen.forEach((p) => setProductSituation(p.id, "Enviado"));
+    toast.success(`${chosen.length} produto(s) marcados como Enviado.`);
+    setMarkingSent(false);
+    onClose();
   };
 
   return (
