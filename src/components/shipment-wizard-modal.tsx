@@ -28,10 +28,16 @@ import {
   combineParcels,
   cubicWeightKg,
   formatCents,
-  quoteShipping,
-  type ShippingQuote,
 } from "@/lib/shipping-quotes";
 import { createShipment, type ShipmentRecipient } from "@/lib/shipments.functions";
+import {
+  calculateSuperfreteQuote,
+  createSuperfreteCartOrder,
+  checkoutSuperfreteOrder,
+  type SuperfreteQuoteOption,
+} from "@/lib/superfrete.functions";
+import { defaultShipOrigin, isShipOriginComplete } from "@/lib/ship-origin";
+import { useServerFn } from "@tanstack/react-start";
 
 type Measures = { weightKg: string; lengthCm: string; widthCm: string; heightCm: string };
 
@@ -81,6 +87,10 @@ export function ShipmentWizardModal({
   initialSelectedIds?: string[];
 }) {
   const setProductSituation = useStore((s) => s.setProductSituation);
+  const origin = useStore((s) => s.preferences.shipOrigin) ?? defaultShipOrigin;
+  const runQuote = useServerFn(calculateSuperfreteQuote);
+  const runCart = useServerFn(createSuperfreteCartOrder);
+  const runCheckout = useServerFn(checkoutSuperfreteOrder);
   const [step, setStep] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(products.map((p) => p.id)));
   const [measures, setMeasures] = useState<Record<string, Measures>>({});
@@ -89,6 +99,16 @@ export function ShipmentWizardModal({
   const [quoteId, setQuoteId] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [options, setOptions] = useState<SuperfreteQuoteOption[]>([]);
+  const [quoting, setQuoting] = useState(false);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [labelInfo, setLabelInfo] = useState<{
+    shipmentId: string;
+    orderId: string;
+    status: string;
+  } | null>(null);
+  const [releasing, setReleasing] = useState(false);
+  const [markingSent, setMarkingSent] = useState(false);
 
   // Preenche a ficha do cliente ao abrir (edição manual continua liberada).
   useEffect(() => {
@@ -97,6 +117,9 @@ export function ShipmentWizardModal({
     setSaving(false);
     setQuoteId("");
     setNotes("");
+    setOptions([]);
+    setQuoteError(null);
+    setLabelInfo(null);
     const preset = (initialSelectedIds ?? []).filter((id) =>
       products.some((p) => p.id === id),
     );
