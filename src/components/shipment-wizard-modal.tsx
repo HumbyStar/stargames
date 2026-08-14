@@ -344,7 +344,8 @@ export function ShipmentWizardModal({
         <DialogHeader>
           <DialogTitle>Enviar — {client.name}</DialogTitle>
           <DialogDescription>
-            Cotações simuladas para conferência interna (sem integração com a API do SuperFrete).
+            Cotações reais da SuperFrete (ambiente Sandbox). A etiqueta é gerada sem alterar a
+            situação dos produtos.
           </DialogDescription>
         </DialogHeader>
 
