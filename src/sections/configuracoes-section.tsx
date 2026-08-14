@@ -33,6 +33,7 @@ import { MonitorDown } from "lucide-react";
 import { Activity } from "lucide-react";
 import { Github } from "lucide-react";
 import { DatabaseZap } from "lucide-react";
+import { Truck } from "lucide-react";
 import { Card, PageHeader, Tag } from "@/components/ui-bits";
 import { AiTrainingModal } from "@/components/ai-training-modal";
 import { Button } from "@/components/ui/button";
