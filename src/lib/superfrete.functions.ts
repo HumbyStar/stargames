@@ -67,6 +67,24 @@ function toCents(v: unknown): number {
 const FRIENDLY =
   "Não foi possível concluir a operação com a SuperFrete. Verifique CEP, peso, medidas e tente novamente.";
 
+/** Erro detalhado: mostra o motivo real devolvido pela SuperFrete. */
+function friendlyError(e: unknown, fallback = FRIENDLY): Error {
+  const err = e as { name?: string; message?: string; status?: number };
+  if (err?.name !== "SuperfreteError") return new Error(fallback);
+  const detail = (err.message || "").trim();
+  const status = err.status ?? 0;
+  if (status === 401 || status === 403) {
+    return new Error("Token da SuperFrete inválido ou sem permissão para esta operação.");
+  }
+  if (status === 402 || /saldo|balance|insufficient/i.test(detail)) {
+    return new Error(
+      "A SuperFrete recusou a liberação por saldo insuficiente na carteira do ambiente atual.",
+    );
+  }
+  if (status === 0) return new Error(detail || "Não foi possível contatar a SuperFrete.");
+  return new Error(detail ? `SuperFrete: ${detail}` : fallback);
+}
+
 async function logEvent(
   supabase: { from: (t: string) => { insert: (v: unknown) => Promise<unknown> } },
   userId: string,
