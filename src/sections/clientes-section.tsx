@@ -71,6 +71,10 @@ import {
 import { NfHistoryModal } from "@/components/nf-history-modal";
 import { ShipmentHistoryModal } from "@/components/shipment-history-modal";
 import { NfEmittedBadge } from "@/components/nf-emitted-badge";
+import {
+  ShipmentLabelBadge,
+  type ShipmentLabelInfo,
+} from "@/components/shipment-label-badge";
 import { listNfInvoices, type NfInvoiceRow } from "@/lib/nf-history.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { useRowEdit } from "@/lib/use-row-edit";
@@ -1321,6 +1325,38 @@ function ClientDrawer({
   useEffect(() => {
     void refreshNfInvoices();
   }, [refreshNfInvoices]);
+  // Etiquetas SuperFrete do cliente: marca produtos com etiqueta gerada e
+  // destaca as que ainda não foram pagas/liberadas.
+  const listShipmentsFn = useServerFn(listShipments);
+  const [shipmentRows, setShipmentRows] = useState<ShipmentRow[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const rows = await listShipmentsFn({ data: { clientId: client.id } });
+        if (alive) setShipmentRows(rows);
+      } catch {
+        /* silencioso: selo é informativo */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [listShipmentsFn, client.id]);
+  const labelProductMap = useMemo(() => {
+    const map = new Map<string, ShipmentLabelInfo>();
+    for (const s of [...shipmentRows].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    )) {
+      const status = mapSuperfreteStatus(s.superfreteStatus) ?? s.status;
+      const pending =
+        status === "Etiqueta pendente de pagamento" || status === "Rascunho";
+      for (const it of s.items ?? []) {
+        map.set(it.productId, { status, pending, createdAt: s.createdAt });
+      }
+    }
+    return map;
+  }, [shipmentRows]);
   const nfProductMap = useMemo(() => {
     const map = new Map<string, { count: number; lastAt: string }>();
     for (const inv of nfInvoices) {
