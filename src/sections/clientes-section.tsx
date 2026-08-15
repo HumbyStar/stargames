@@ -1934,9 +1934,15 @@ function ClientDrawer({
                             {p.name}
                             {(() => {
                               const info = nfProductMap.get(p.id);
-                              return info ? (
-                                <NfEmittedBadge count={info.count} lastAt={info.lastAt} />
-                              ) : null;
+                              const label = labelProductMap.get(p.id);
+                              return (
+                                <>
+                                  {info ? (
+                                    <NfEmittedBadge count={info.count} lastAt={info.lastAt} />
+                                  ) : null}
+                                  {label ? <ShipmentLabelBadge info={label} /> : null}
+                                </>
+                              );
                             })()}
                           </span>
                         </td>
@@ -2183,9 +2189,15 @@ function ClientDrawer({
                           {p.name}
                           {(() => {
                             const info = nfProductMap.get(p.id);
-                            return info ? (
-                              <NfEmittedBadge count={info.count} lastAt={info.lastAt} />
-                            ) : null;
+                            const label = labelProductMap.get(p.id);
+                            return (
+                              <>
+                                {info ? (
+                                  <NfEmittedBadge count={info.count} lastAt={info.lastAt} />
+                                ) : null}
+                                {label ? <ShipmentLabelBadge info={label} /> : null}
+                              </>
+                            );
                           })()}
                         </span>
                       )}
@@ -2418,9 +2430,15 @@ function ClientDrawer({
                       {p.name}
                       {(() => {
                         const info = nfProductMap.get(p.id);
-                        return info ? (
-                          <NfEmittedBadge count={info.count} lastAt={info.lastAt} />
-                        ) : null;
+                        const label = labelProductMap.get(p.id);
+                        return (
+                          <>
+                            {info ? (
+                              <NfEmittedBadge count={info.count} lastAt={info.lastAt} />
+                            ) : null}
+                            {label ? <ShipmentLabelBadge info={label} /> : null}
+                          </>
+                        );
                       })()}
                     </span>
                   </div>
