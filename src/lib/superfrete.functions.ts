@@ -526,16 +526,30 @@ export const checkoutSuperfreteOrder = createServerFn({ method: "POST" })
         })
         .eq("id", data.shipmentId);
 
+      let balanceAfter: number | null = null;
+      try {
+        balanceAfter = await fetchSuperfreteBalanceCents();
+      } catch {
+        balanceAfter = null;
+      }
       await logEvent(supabase as never, userId, {
         shipmentId: data.shipmentId,
-        action: "etiqueta_liberada",
+        action: "etiqueta_paga",
         previousStatus,
         newStatus: internal,
-        message: `Etiqueta ${orderId} liberada (${environment})`,
+        message: `Etiqueta ${orderId} paga com saldo da carteira (${environment}). Saldo antes: ${
+          balanceBefore ?? "—"
+        } centavos; depois: ${balanceAfter ?? "—"} centavos.`,
         payload,
         response: raw,
       });
-      return { internalStatus: internal, pending: false, remoteStatus };
+      return {
+        internalStatus: internal,
+        pending: false,
+        remoteStatus,
+        balanceCents: balanceAfter,
+        priceCents,
+      };
     } catch (e) {
       const message = e instanceof SuperfreteError ? e.message : String(e);
       const status = e instanceof SuperfreteError ? e.status : 0;
