@@ -168,3 +168,39 @@ export const listShipments = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return (rows ?? []).map((r) => mapRow(r as Record<string, unknown>));
   });
+
+export interface ShipmentLogRow {
+  id: string;
+  action: string;
+  previousStatus: string | null;
+  newStatus: string | null;
+  message: string | null;
+  createdAt: string;
+}
+
+/** Eventos registrados de um envio (criação, pendência, falha, liberação). */
+export const listShipmentLogs = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) =>
+    z.object({ shipmentId: z.string().uuid() }).parse(data),
+  )
+  .handler(async ({ data, context }): Promise<ShipmentLogRow[]> => {
+    const { data: rows, error } = await context.supabase
+      .from("shipment_logs")
+      .select("id, action, previous_status, new_status, message, created_at")
+      .eq("shipment_id", data.shipmentId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) throw new Error(error.message);
+    return (rows ?? []).map((r) => {
+      const row = r as Record<string, unknown>;
+      return {
+        id: String(row["id"]),
+        action: String(row["action"] ?? ""),
+        previousStatus: (row["previous_status"] as string | null) ?? null,
+        newStatus: (row["new_status"] as string | null) ?? null,
+        message: (row["message"] as string | null) ?? null,
+        createdAt: String(row["created_at"]),
+      };
+    });
+  });
