@@ -513,7 +513,13 @@ export const checkoutSuperfreteOrder = createServerFn({ method: "POST" })
           payload,
           response: raw,
         });
-        return { internalStatus: internalPending, pending: true, remoteStatus };
+        return {
+          internalStatus: internalPending,
+          pending: true,
+          remoteStatus,
+          balanceCents: balanceBefore,
+          priceCents,
+        };
       }
 
       const internal = "Etiqueta liberada / aguardando postagem";
