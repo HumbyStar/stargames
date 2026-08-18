@@ -38,6 +38,7 @@ import {
 } from "@/lib/superfrete.functions";
 import { defaultShipOrigin, isShipOriginComplete } from "@/lib/ship-origin";
 import { useServerFn } from "@tanstack/react-start";
+import { useSuperfreteBalance } from "@/lib/use-superfrete-balance";
 
 type Measures = { weightKg: string; lengthCm: string; widthCm: string; heightCm: string };
 
@@ -91,6 +92,7 @@ export function ShipmentWizardModal({
   const runQuote = useServerFn(calculateSuperfreteQuote);
   const runCart = useServerFn(createSuperfreteCartOrder);
   const runCheckout = useServerFn(checkoutSuperfreteOrder);
+  const { balance, loading: balanceLoading, refresh: refreshBalance } = useSuperfreteBalance(open);
   const [step, setStep] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(products.map((p) => p.id)));
   const [measures, setMeasures] = useState<Record<string, Measures>>({});
@@ -321,9 +323,14 @@ export function ShipmentWizardModal({
     try {
       const res = await runCheckout({ data: { shipmentId: labelInfo.shipmentId } });
       setLabelInfo((l) => (l ? { ...l, status: res.internalStatus } : l));
-      toast.success(`Etiqueta liberada (${res.internalStatus}).`);
+      void refreshBalance();
+      toast.success(
+        res.pending
+          ? "Pagamento enviado — etiqueta aguardando liberação da SuperFrete."
+          : "Etiqueta paga com o saldo da carteira SuperFrete.",
+      );
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Não foi possível liberar a etiqueta.");
+      toast.error(e instanceof Error ? e.message : "Não foi possível pagar a etiqueta.");
     } finally {
       setReleasing(false);
     }
