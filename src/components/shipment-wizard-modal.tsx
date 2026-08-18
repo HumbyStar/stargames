@@ -556,6 +556,34 @@ export function ShipmentWizardModal({
 
         {step === 4 && (
           <div className="space-y-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3">
+              <div>
+                <p className="text-xs uppercase text-muted-foreground">Saldo SuperFrete</p>
+                <p className="font-semibold tabular-nums">
+                  {balanceLoading && !balance
+                    ? "Carregando…"
+                    : balance?.balanceCents != null
+                      ? formatCents(balance.balanceCents)
+                      : "Indisponível"}
+                </p>
+                {balance?.error ? (
+                  <p className="text-xs text-muted-foreground">{balance.error}</p>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button type="button" size="sm" variant="ghost" onClick={() => void refreshBalance()}>
+                  Atualizar saldo
+                </Button>
+                <a
+                  className="text-xs text-primary underline"
+                  href="https://web.superfrete.com/#/recarga"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Recarregar
+                </a>
+              </div>
+            </div>
             <div className="rounded-lg border border-border p-3">
               <p className="text-xs uppercase text-muted-foreground">Destinatário</p>
               <p className="font-medium">{recipient.fullName}</p>
