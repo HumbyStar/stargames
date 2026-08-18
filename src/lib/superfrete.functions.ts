@@ -394,13 +394,21 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
     }
   });
 
-/** Liberação/pagamento da etiqueta no Sandbox — POST /checkout. */
+/** Liberação/pagamento da etiqueta — POST /checkout (produção ou sandbox). */
 export const checkoutSuperfreteOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => z.object({ shipmentId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
-    const { superfreteRequest, SuperfreteError } = await import("@/lib/superfrete.server");
+    const { superfreteRequest, SuperfreteError, getSuperfreteConfig } = await import(
+      "@/lib/superfrete.server"
+    );
     const { supabase, userId } = context;
+    let environment = "production";
+    try {
+      environment = getSuperfreteConfig().environment;
+    } catch {
+      /* token ausente é tratado abaixo pela chamada */
+    }
 
     const { data: row } = await supabase
       .from("shipments")
@@ -413,17 +421,47 @@ export const checkoutSuperfreteOrder = createServerFn({ method: "POST" })
     if (!orderId) throw new Error("Este envio ainda não tem etiqueta criada na SuperFrete.");
 
     const payload = { orders: [orderId] };
+    const previousStatus = (row as Record<string, unknown> | null)?.["status"] as string | null;
     try {
       const raw = await superfreteRequest<Record<string, unknown>>("/checkout", {
         method: "POST",
         body: payload,
       });
+
+      // A SuperFrete pode aceitar a chamada e ainda devolver a etiqueta pendente
+      // (pagamento não concluído). Nesse caso não marcamos como liberada.
+      const orders = Array.isArray((raw as Record<string, unknown>)?.["orders"])
+        ? ((raw as Record<string, unknown>)["orders"] as Array<Record<string, unknown>>)
+        : [];
+      const remoteStatus = String(
+        orders[0]?.["status"] ?? (raw as Record<string, unknown>)?.["status"] ?? "released",
+      ).toLowerCase();
+      const isPending = /pending|pendente|waiting|aguard|process/.test(remoteStatus);
+
+      if (isPending) {
+        const internalPending = "Etiqueta aguardando liberação (pagamento pendente)";
+        await supabase
+          .from("shipments")
+          .update({ status: internalPending, superfrete_status: remoteStatus })
+          .eq("id", data.shipmentId);
+        await logEvent(supabase as never, userId, {
+          shipmentId: data.shipmentId,
+          action: "etiqueta_pendente",
+          previousStatus,
+          newStatus: internalPending,
+          message: `Checkout aceito mas etiqueta ${orderId} segue pendente na SuperFrete (${environment}); status remoto: ${remoteStatus}`,
+          payload,
+          response: raw,
+        });
+        return { internalStatus: internalPending, pending: true, remoteStatus };
+      }
+
       const internal = "Etiqueta liberada / aguardando postagem";
       await supabase
         .from("shipments")
         .update({
           status: internal,
-          superfrete_status: "released",
+          superfrete_status: remoteStatus || "released",
           released_at: new Date().toISOString(),
         })
         .eq("id", data.shipmentId);
@@ -431,19 +469,30 @@ export const checkoutSuperfreteOrder = createServerFn({ method: "POST" })
       await logEvent(supabase as never, userId, {
         shipmentId: data.shipmentId,
         action: "etiqueta_liberada",
-        previousStatus: (row as Record<string, unknown> | null)?.["status"] as string | null,
+        previousStatus,
         newStatus: internal,
-        message: `Etiqueta ${orderId} liberada no ambiente Sandbox`,
+        message: `Etiqueta ${orderId} liberada (${environment})`,
         payload,
         response: raw,
       });
-      return { internalStatus: internal };
+      return { internalStatus: internal, pending: false, remoteStatus };
     } catch (e) {
       const message = e instanceof SuperfreteError ? e.message : String(e);
+      const status = e instanceof SuperfreteError ? e.status : 0;
+      try {
+        await supabase
+          .from("shipments")
+          .update({ superfrete_status: "checkout_failed" })
+          .eq("id", data.shipmentId);
+      } catch {
+        /* status remoto é informativo; a falha já é registrada no log */
+      }
       await logEvent(supabase as never, userId, {
         shipmentId: data.shipmentId,
         action: "erro_liberar_etiqueta",
-        message,
+        previousStatus,
+        newStatus: previousStatus,
+        message: `Falha ao liberar etiqueta ${orderId} (${environment}, HTTP ${status}): ${message}`,
         payload,
         response: e instanceof SuperfreteError ? e.body : null,
       });
