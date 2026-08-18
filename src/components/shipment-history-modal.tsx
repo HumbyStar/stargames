@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useServerFn } from "@tanstack/react-start";
 import { listShipments, type ShipmentRow } from "@/lib/shipments.functions";
+import { useSuperfreteSync } from "@/lib/use-superfrete-sync";
 import { downloadShipmentLabelPdf } from "@/lib/shipping-label-pdf";
 import { formatBRL } from "@/lib/store";
 import { ChevronDown, ChevronUp, Download, Loader2, Package, Truck } from "lucide-react";
@@ -168,6 +169,14 @@ export function ShipmentHistoryModal({ open, onClose, clientId, clientName }: Pr
     if (open) void load();
     else setRows(null);
   }, [open, load]);
+
+  // Enquanto o histórico está aberto, sincroniza o status das etiquetas.
+  useSuperfreteSync(
+    () => {
+      void load();
+    },
+    { enabled: open, intervalMs: 60_000 },
+  );
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
