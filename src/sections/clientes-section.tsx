@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Folder, Filter, Pencil, Eye, EyeOff, AlertTriangle, Trash2 } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { usePersistedState } from "@/lib/use-persisted-state";
@@ -72,6 +72,7 @@ import { NfHistoryModal } from "@/components/nf-history-modal";
 import { ShipmentHistoryModal } from "@/components/shipment-history-modal";
 import { NfEmittedBadge } from "@/components/nf-emitted-badge";
 import { listShipments, type ShipmentRow } from "@/lib/shipments.functions";
+import { useSuperfreteSync } from "@/lib/use-superfrete-sync";
 import { mapSuperfreteStatus } from "@/lib/superfrete-status";
 import {
   ShipmentLabelBadge,
