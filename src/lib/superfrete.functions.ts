@@ -394,6 +394,44 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
     }
   });
 
+export interface SuperfreteBalance {
+  balanceCents: number | null;
+  environment: string;
+  fetchedAt: string;
+  error: string | null;
+}
+
+/** Saldo da carteira SuperFrete (somente leitura). */
+export const getSuperfreteBalance = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async (): Promise<SuperfreteBalance> => {
+    const { fetchSuperfreteBalanceCents, getSuperfreteConfig } = await import(
+      "@/lib/superfrete.server"
+    );
+    let environment = "production";
+    try {
+      environment = getSuperfreteConfig().environment;
+    } catch {
+      return {
+        balanceCents: null,
+        environment,
+        fetchedAt: new Date().toISOString(),
+        error: "Integração da SuperFrete não configurada.",
+      };
+    }
+    try {
+      const balanceCents = await fetchSuperfreteBalanceCents();
+      return { balanceCents, environment, fetchedAt: new Date().toISOString(), error: null };
+    } catch (e) {
+      return {
+        balanceCents: null,
+        environment,
+        fetchedAt: new Date().toISOString(),
+        error: friendlyError(e).message,
+      };
+    }
+  });
+
 /** Liberação/pagamento da etiqueta — POST /checkout (produção ou sandbox). */
 export const checkoutSuperfreteOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
