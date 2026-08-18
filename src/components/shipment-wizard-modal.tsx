@@ -621,12 +621,36 @@ export function ShipmentWizardModal({
                 <p className="text-sm font-medium">
                   Etiqueta {labelInfo.orderId} — {labelInfo.status}
                 </p>
+                {insufficient ? (
+                  <p className="text-xs text-amber-600">
+                    Saldo insuficiente — faltam {formatCents(missingCents)} para pagar esta
+                    etiqueta.
+                  </p>
+                ) : quote && balance?.balanceCents != null ? (
+                  <p className="text-xs text-muted-foreground">
+                    Saldo após o pagamento:{" "}
+                    {formatCents(Math.max(0, balance.balanceCents - quote.priceCents))}
+                  </p>
+                ) : null}
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" size="sm" variant="outline" onClick={release} disabled={releasing}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={release}
+                    disabled={releasing || insufficient || labelPaid}
+                  >
                     {releasing ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
-                    Liberar etiqueta (Sandbox)
+                    {labelPaid
+                      ? "Etiqueta paga"
+                      : `Pagar etiqueta com saldo${quote ? ` (${formatCents(quote.priceCents)})` : ""}`}
                   </Button>
-                  <Button type="button" size="sm" onClick={markSent} disabled={markingSent}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={markSent}
+                    disabled={markingSent}
+                  >
                     Marcar produtos como enviados
                   </Button>
                 </div>
