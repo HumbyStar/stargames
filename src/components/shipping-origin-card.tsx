@@ -35,12 +35,22 @@ export function ShippingOriginCard() {
   }, [origin]);
 
   const complete = isShipOriginComplete(draft);
+  const isSandbox = (balance?.environment ?? "production") === "sandbox";
 
   return (
     <Card
       title="Origem do envio (SuperFrete)"
       action={
         <span className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span
+            className={
+              isSandbox
+                ? "rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-medium text-amber-600"
+                : "rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 font-medium text-emerald-600"
+            }
+          >
+            Ambiente: {isSandbox ? "Sandbox" : "Produção"}
+          </span>
           <span>
             Saldo SuperFrete:{" "}
             <strong className="tabular-nums">

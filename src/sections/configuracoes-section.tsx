@@ -84,6 +84,7 @@ import { DbMigrationCard } from "@/components/db-migration-card";
 import { RealtimeUpdatesCard } from "@/components/realtime-updates-card";
 import { MaintenanceCard } from "@/components/maintenance-card";
 import { ShippingOriginCard } from "@/components/shipping-origin-card";
+import { useSuperfreteBalance } from "@/lib/use-superfrete-balance";
 import { ImportContentModal } from "@/components/import-content-modal";
 import type { ImportHistoryEntry } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -370,6 +371,7 @@ function DiagChip({
 
 export function ConfiguracoesSection() {
   const preferences = useStore((s) => s.preferences);
+  const { balance: superfreteBalance } = useSuperfreteBalance(true);
   const rules = useStore((s) => s.rules);
   const security = useStore((s) => s.security);
   const importHistory = useStore((s) => s.importHistory);
@@ -836,8 +838,12 @@ export function ConfiguracoesSection() {
             <SecondaryCard
               icon={Truck}
               title="Envio / SuperFrete"
-              summary="Remetente usado nas cotações e etiquetas da SuperFrete (ambiente Sandbox)."
-              status="Sandbox"
+              summary="Remetente usado nas cotações e etiquetas da SuperFrete."
+              status={
+                (superfreteBalance?.environment ?? "production") === "sandbox"
+                  ? "Ambiente: Sandbox"
+                  : "Ambiente: Produção"
+              }
               onOpen={() => setView("shipping")}
             />
             <SecondaryCard
