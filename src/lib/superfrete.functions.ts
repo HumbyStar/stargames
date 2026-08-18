@@ -580,6 +580,151 @@ export const checkoutSuperfreteOrder = createServerFn({ method: "POST" })
     }
   });
 
+export interface SuperfreteBatchCheckoutResult {
+  paid: string[];
+  pending: string[];
+  failed: Array<{ shipmentId: string; reason: string }>;
+  balanceCents: number | null;
+  totalPaidCents: number;
+}
+
+/** Pagamento em lote das etiquetas com o saldo da carteira — POST /checkout. */
+export const checkoutSuperfreteOrders = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) =>
+    z.object({ shipmentIds: z.array(z.string().uuid()).min(1).max(30) }).parse(data),
+  )
+  .handler(async ({ data, context }): Promise<SuperfreteBatchCheckoutResult> => {
+    const { superfreteRequest, SuperfreteError, getSuperfreteConfig, fetchSuperfreteBalanceCents } =
+      await import("@/lib/superfrete.server");
+    const { supabase, userId } = context;
+    let environment = "production";
+    try {
+      environment = getSuperfreteConfig().environment;
+    } catch {
+      /* tratado pela chamada */
+    }
+
+    const { data: rows } = await supabase
+      .from("shipments")
+      .select("id, superfrete_order_id, status, price_cents")
+      .in("id", data.shipmentIds);
+
+    const list = ((rows ?? []) as Array<Record<string, unknown>>).map((r) => ({
+      shipmentId: String(r["id"]),
+      orderId: (r["superfrete_order_id"] as string | null) ?? null,
+      status: (r["status"] as string | null) ?? null,
+      priceCents: Number(r["price_cents"] ?? 0) || 0,
+    }));
+
+    const failed: Array<{ shipmentId: string; reason: string }> = [];
+    const payable = list.filter((r) => {
+      if (!r.orderId) {
+        failed.push({ shipmentId: r.shipmentId, reason: "Envio sem etiqueta criada." });
+        return false;
+      }
+      return true;
+    });
+    if (payable.length === 0) {
+      return { paid: [], pending: [], failed, balanceCents: null, totalPaidCents: 0 };
+    }
+
+    const total = payable.reduce((acc, r) => acc + r.priceCents, 0);
+    let balanceBefore: number | null = null;
+    try {
+      balanceBefore = await fetchSuperfreteBalanceCents();
+    } catch {
+      balanceBefore = null;
+    }
+    if (balanceBefore !== null && total > 0 && balanceBefore < total) {
+      const missing = ((total - balanceBefore) / 100).toFixed(2).replace(".", ",");
+      throw new Error(
+        `Saldo insuficiente na carteira SuperFrete — faltam R$ ${missing} para pagar as ${payable.length} etiqueta(s) selecionada(s).`,
+      );
+    }
+
+    const payload = { orders: payable.map((r) => r.orderId as string) };
+    let raw: Record<string, unknown>;
+    try {
+      raw = await superfreteRequest<Record<string, unknown>>("/checkout", {
+        method: "POST",
+        body: payload,
+      });
+    } catch (e) {
+      const message = e instanceof SuperfreteError ? e.message : String(e);
+      for (const r of payable) {
+        await logEvent(supabase as never, userId, {
+          shipmentId: r.shipmentId,
+          action: "erro_liberar_etiqueta",
+          previousStatus: r.status,
+          newStatus: r.status,
+          message: `Falha no pagamento em lote (${environment}): ${message}`,
+          payload,
+          response: e instanceof SuperfreteError ? e.body : null,
+        });
+      }
+      throw friendlyError(e);
+    }
+
+    const orders = Array.isArray(raw?.["orders"])
+      ? (raw["orders"] as Array<Record<string, unknown>>)
+      : [];
+    const statusByOrder = new Map<string, string>();
+    for (const o of orders) {
+      const id = String(o["id"] ?? o["order_id"] ?? "");
+      if (id) statusByOrder.set(id, String(o["status"] ?? "released").toLowerCase());
+    }
+
+    const paid: string[] = [];
+    const pending: string[] = [];
+    let totalPaidCents = 0;
+
+    for (const r of payable) {
+      const remoteStatus =
+        statusByOrder.get(r.orderId as string) ??
+        String(raw?.["status"] ?? "released").toLowerCase();
+      const isPending = /pending|pendente|waiting|aguard|process/.test(remoteStatus);
+      const internal = isPending
+        ? "Etiqueta aguardando liberação (pagamento pendente)"
+        : "Etiqueta liberada / aguardando postagem";
+      await supabase
+        .from("shipments")
+        .update({
+          status: internal,
+          superfrete_status: remoteStatus,
+          ...(isPending ? {} : { released_at: new Date().toISOString() }),
+        })
+        .eq("id", r.shipmentId);
+      await logEvent(supabase as never, userId, {
+        shipmentId: r.shipmentId,
+        action: isPending ? "etiqueta_pendente" : "etiqueta_paga",
+        previousStatus: r.status,
+        newStatus: internal,
+        message: isPending
+          ? `Etiqueta ${r.orderId} segue pendente após pagamento em lote (${environment}).`
+          : `Etiqueta ${r.orderId} paga com saldo em lote (${environment}). Saldo antes: ${
+              balanceBefore ?? "—"
+            } centavos.`,
+        payload,
+        response: raw,
+      });
+      if (isPending) pending.push(r.shipmentId);
+      else {
+        paid.push(r.shipmentId);
+        totalPaidCents += r.priceCents;
+      }
+    }
+
+    let balanceAfter: number | null = null;
+    try {
+      balanceAfter = await fetchSuperfreteBalanceCents();
+    } catch {
+      balanceAfter = null;
+    }
+
+    return { paid, pending, failed, balanceCents: balanceAfter, totalPaidCents };
+  });
+
 /** Consulta da etiqueta — GET /order/info/{id}. */
 export const getSuperfreteOrderInfo = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
