@@ -437,9 +437,8 @@ export const checkoutSuperfreteOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => z.object({ shipmentId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
-    const { superfreteRequest, SuperfreteError, getSuperfreteConfig } = await import(
-      "@/lib/superfrete.server"
-    );
+    const { superfreteRequest, SuperfreteError, getSuperfreteConfig, fetchSuperfreteBalanceCents } =
+      await import("@/lib/superfrete.server");
     const { supabase, userId } = context;
     let environment = "production";
     try {
@@ -450,7 +449,7 @@ export const checkoutSuperfreteOrder = createServerFn({ method: "POST" })
 
     const { data: row } = await supabase
       .from("shipments")
-      .select("id, superfrete_order_id, status")
+      .select("id, superfrete_order_id, status, price_cents")
       .eq("id", data.shipmentId)
       .maybeSingle();
     const orderId = (row as Record<string, unknown> | null)?.["superfrete_order_id"] as
@@ -460,6 +459,29 @@ export const checkoutSuperfreteOrder = createServerFn({ method: "POST" })
 
     const payload = { orders: [orderId] };
     const previousStatus = (row as Record<string, unknown> | null)?.["status"] as string | null;
+    const priceCents = Number((row as Record<string, unknown> | null)?.["price_cents"] ?? 0) || 0;
+
+    // Confere o saldo antes de chamar a API: evita erro genérico e informa o valor exato.
+    let balanceBefore: number | null = null;
+    try {
+      balanceBefore = await fetchSuperfreteBalanceCents();
+    } catch {
+      balanceBefore = null;
+    }
+    if (balanceBefore !== null && priceCents > 0 && balanceBefore < priceCents) {
+      const missing = ((priceCents - balanceBefore) / 100).toFixed(2).replace(".", ",");
+      await logEvent(supabase as never, userId, {
+        shipmentId: data.shipmentId,
+        action: "saldo_insuficiente",
+        previousStatus,
+        newStatus: previousStatus,
+        message: `Saldo insuficiente na carteira SuperFrete (${environment}): saldo ${balanceBefore} centavos, etiqueta ${priceCents} centavos`,
+        payload,
+      });
+      throw new Error(
+        `Saldo insuficiente na carteira SuperFrete — faltam R$ ${missing} para pagar esta etiqueta.`,
+      );
+    }
     try {
       const raw = await superfreteRequest<Record<string, unknown>>("/checkout", {
         method: "POST",
