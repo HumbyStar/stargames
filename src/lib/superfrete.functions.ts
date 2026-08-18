@@ -358,6 +358,9 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
       const status = (raw["status"] as string | undefined) ?? "pending";
       const internal = mapSuperfreteStatus(status);
       const { sanitizeForLog } = await import("@/lib/superfrete.server");
+      // Valor real cobrado pela SuperFrete (pode diferir da cotação).
+      const rawPrice = raw["price"] ?? raw["total"] ?? raw["value"];
+      const priceCents = rawPrice === undefined || rawPrice === null ? null : toCents(rawPrice);
 
       await supabase
         .from("shipments")
@@ -365,6 +368,7 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
           superfrete_order_id: orderId || null,
           superfrete_status: status,
           status: internal,
+          ...(priceCents && priceCents > 0 ? { price_cents: priceCents } : {}),
           payload_cart: sanitizeForLog(payload) as never,
           response_cart: sanitizeForLog(raw) as never,
           confirmed_at: new Date().toISOString(),
@@ -380,7 +384,7 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
         response: raw,
       });
 
-      return { orderId, status, internalStatus: internal };
+      return { orderId, status, internalStatus: internal, priceCents };
     } catch (e) {
       const message = e instanceof SuperfreteError ? e.message : String(e);
       await logEvent(supabase as never, userId, {

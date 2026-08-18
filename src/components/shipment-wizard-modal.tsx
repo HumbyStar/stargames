@@ -108,6 +108,7 @@ export function ShipmentWizardModal({
     shipmentId: string;
     orderId: string;
     status: string;
+    priceCents: number | null;
   } | null>(null);
   const [releasing, setReleasing] = useState(false);
   const [markingSent, setMarkingSent] = useState(false);
@@ -170,9 +171,11 @@ export function ShipmentWizardModal({
 
   const quote = options.find((q) => q.id === quoteId) ?? null;
   const labelPaid = /liberad|paga|postad|entregue/i.test(labelInfo?.status ?? "");
+  // Valor real da etiqueta (SuperFrete) quando disponível; senão, a cotação.
+  const chargeCents = labelInfo?.priceCents ?? quote?.priceCents ?? null;
   const missingCents =
-    quote && balance?.balanceCents != null
-      ? Math.max(0, quote.priceCents - balance.balanceCents)
+    chargeCents != null && balance?.balanceCents != null
+      ? Math.max(0, chargeCents - balance.balanceCents)
       : 0;
   const insufficient = missingCents > 0;
   const totalValue = chosen.reduce((acc, p) => acc + p.totalValue, 0);
@@ -314,6 +317,7 @@ export function ShipmentWizardModal({
         shipmentId: shipment.id,
         orderId: order.orderId,
         status: order.internalStatus,
+        priceCents: order.priceCents ?? quote.priceCents,
       });
       toast.success(`Etiqueta criada na SuperFrete (${order.internalStatus}).`);
     } catch (e) {
@@ -627,15 +631,24 @@ export function ShipmentWizardModal({
                 <p className="text-sm font-medium">
                   Etiqueta {labelInfo.orderId} — {labelInfo.status}
                 </p>
+                <p className="text-xs text-muted-foreground">
+                  Valor real do frete:{" "}
+                  <span className="font-semibold tabular-nums text-foreground">
+                    {chargeCents != null ? formatCents(chargeCents) : "—"}
+                  </span>
+                  {balance?.balanceCents != null
+                    ? ` · Saldo disponível: ${formatCents(balance.balanceCents)}`
+                    : ""}
+                </p>
                 {insufficient ? (
                   <p className="text-xs text-amber-600">
                     Saldo insuficiente — faltam {formatCents(missingCents)} para pagar esta
-                    etiqueta.
+                    etiqueta. Recarregue a carteira SuperFrete e tente novamente.
                   </p>
-                ) : quote && balance?.balanceCents != null ? (
+                ) : chargeCents != null && balance?.balanceCents != null ? (
                   <p className="text-xs text-muted-foreground">
                     Saldo após o pagamento:{" "}
-                    {formatCents(Math.max(0, balance.balanceCents - quote.priceCents))}
+                    {formatCents(Math.max(0, balance.balanceCents - chargeCents))}
                   </p>
                 ) : null}
                 <div className="flex flex-wrap gap-2">
@@ -648,7 +661,7 @@ export function ShipmentWizardModal({
                     {releasing ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
                     {labelPaid
                       ? "Etiqueta paga"
-                      : `Pagar etiqueta com saldo${quote ? ` (${formatCents(quote.priceCents)})` : ""}`}
+                      : `Pagar etiqueta com saldo${chargeCents != null ? ` (${formatCents(chargeCents)})` : ""}`}
                   </Button>
                   <Button
                     type="button"
