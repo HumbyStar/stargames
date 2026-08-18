@@ -204,6 +204,84 @@ export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
     }
   });
 
+export interface SuperfreteSyncResult {
+  checked: number;
+  updated: number;
+  failed: number;
+  changes: Array<{ shipmentId: string; status: string; trackingCode: string | null }>;
+}
+
+/**
+ * Rotina de sincronização periódica: consulta na SuperFrete todas as etiquetas
+ * ainda em andamento (não entregues/canceladas) e atualiza status, rastreio e
+ * URL da etiqueta no banco. Devolve apenas o que mudou.
+ */
+export const syncSuperfreteShipments = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) =>
+    z
+      .object({ limit: z.number().int().min(1).max(50).default(25) })
+      .parse(data ?? {}),
+  )
+  .handler(async ({ data, context }): Promise<SuperfreteSyncResult> => {
+    const { superfreteRequest, sanitizeForLog } = await import("@/lib/superfrete.server");
+    const { supabase } = context;
+
+    const { data: rows } = await supabase
+      .from("shipments")
+      .select("id, superfrete_order_id, status, superfrete_status, tracking_code")
+      .not("superfrete_order_id", "is", null)
+      .not("status", "in", '("Entregue","Cancelado")')
+      .order("created_at", { ascending: false })
+      .limit(data.limit);
+
+    const result: SuperfreteSyncResult = { checked: 0, updated: 0, failed: 0, changes: [] };
+
+    for (const r of (rows ?? []) as Array<Record<string, unknown>>) {
+      const shipmentId = r["id"] as string;
+      const orderId = r["superfrete_order_id"] as string | null;
+      if (!orderId) continue;
+      result.checked += 1;
+      try {
+        const raw = await superfreteRequest<Record<string, unknown>>(`/order/info/${orderId}`, {
+          method: "GET",
+        });
+        const status = (raw["status"] as string | null) ?? null;
+        const internal = mapSuperfreteStatus(status);
+        const tracking = (raw["tracking"] as string | null) ?? null;
+        const labelUrl =
+          ((raw["print"] as Record<string, unknown> | undefined)?.["url"] as string | undefined) ??
+          null;
+
+        const unchanged =
+          internal === (r["status"] as string | null) &&
+          status === (r["superfrete_status"] as string | null) &&
+          tracking === (r["tracking_code"] as string | null);
+        if (unchanged) continue;
+
+        const patch: Record<string, unknown> = {
+          superfrete_status: status,
+          status: internal,
+          tracking_code: tracking,
+          label_url: labelUrl,
+          response_order_info: sanitizeForLog(raw) as never,
+        };
+        const now = new Date().toISOString();
+        if (internal === "Postado / Enviado") patch["posted_at"] = now;
+        if (internal === "Entregue") patch["delivered_at"] = now;
+        if (internal === "Cancelado") patch["cancelled_at"] = now;
+
+        await supabase.from("shipments").update(patch as never).eq("id", shipmentId);
+        result.updated += 1;
+        result.changes.push({ shipmentId, status: internal, trackingCode: tracking });
+      } catch {
+        result.failed += 1;
+      }
+    }
+
+    return result;
+  });
+
 function addressToApi(a: SuperfreteAddress) {
   return {
     name: a.name,
