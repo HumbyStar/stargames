@@ -9,7 +9,12 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useServerFn } from "@tanstack/react-start";
-import { listShipments, type ShipmentRow } from "@/lib/shipments.functions";
+import {
+  listShipments,
+  listShipmentLogs,
+  type ShipmentRow,
+  type ShipmentLogRow,
+} from "@/lib/shipments.functions";
 import { useSuperfreteSync } from "@/lib/use-superfrete-sync";
 import { downloadShipmentLabelPdf } from "@/lib/shipping-label-pdf";
 import { formatBRL } from "@/lib/store";
@@ -30,7 +35,20 @@ function fmtDate(iso: string) {
 function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
   const [expanded, setExpanded] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [logs, setLogs] = useState<ShipmentLogRow[] | null>(null);
+  const fetchLogs = useServerFn(listShipmentLogs);
   const r = shipment.recipient;
+
+  useEffect(() => {
+    if (!expanded || logs) return;
+    let alive = true;
+    fetchLogs({ data: { shipmentId: shipment.id } })
+      .then((rows) => alive && setLogs(rows))
+      .catch(() => alive && setLogs([]));
+    return () => {
+      alive = false;
+    };
+  }, [expanded, logs, fetchLogs, shipment.id]);
 
   const download = async () => {
     setDownloading(true);
@@ -141,6 +159,41 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
               <div className="whitespace-pre-wrap text-muted-foreground">{shipment.notes}</div>
             </div>
           )}
+
+          <div>
+            <div className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">
+              Eventos da etiqueta
+            </div>
+            {logs === null ? (
+              <div className="text-xs text-muted-foreground">Carregando eventos…</div>
+            ) : logs.length === 0 ? (
+              <div className="text-xs text-muted-foreground">Nenhum evento registrado.</div>
+            ) : (
+              <div className="space-y-1">
+                {logs.map((l) => {
+                  const failed = l.action.startsWith("erro");
+                  const pending = l.action === "etiqueta_pendente";
+                  return (
+                    <div
+                      key={l.id}
+                      className={
+                        "rounded-md px-2.5 py-1.5 text-xs " +
+                        (failed
+                          ? "bg-destructive/10 text-destructive"
+                          : pending
+                            ? "bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                            : "bg-muted/40 text-muted-foreground")
+                      }
+                    >
+                      <span className="font-medium">{l.action.replace(/_/g, " ")}</span> ·{" "}
+                      {fmtDate(l.createdAt)}
+                      {l.message ? <div className="mt-0.5">{l.message}</div> : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
