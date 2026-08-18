@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { usePersistedState } from "@/lib/use-persisted-state";
+import { SuperfreteWalletPanel } from "@/components/superfrete-wallet-panel";
 import { cn } from "@/lib/utils";
 import {
   formatBRL,
