@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Folder, Filter, Pencil, Eye, EyeOff, AlertTriangle, Trash2 } from "lucide-react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { usePersistedState } from "@/lib/use-persisted-state";
@@ -72,6 +72,7 @@ import { NfHistoryModal } from "@/components/nf-history-modal";
 import { ShipmentHistoryModal } from "@/components/shipment-history-modal";
 import { NfEmittedBadge } from "@/components/nf-emitted-badge";
 import { listShipments, type ShipmentRow } from "@/lib/shipments.functions";
+import { useSuperfreteSync } from "@/lib/use-superfrete-sync";
 import { mapSuperfreteStatus } from "@/lib/superfrete-status";
 import {
   ShipmentLabelBadge,
@@ -1331,20 +1332,21 @@ function ClientDrawer({
   // destaca as que ainda não foram pagas/liberadas.
   const listShipmentsFn = useServerFn(listShipments);
   const [shipmentRows, setShipmentRows] = useState<ShipmentRow[]>([]);
-  useEffect(() => {
-    let alive = true;
-    void (async () => {
-      try {
-        const rows = await listShipmentsFn({ data: { clientId: client.id } });
-        if (alive) setShipmentRows(rows);
-      } catch {
-        /* silencioso: selo é informativo */
-      }
-    })();
-    return () => {
-      alive = false;
-    };
+  const refreshShipments = useCallback(async () => {
+    try {
+      const rows = await listShipmentsFn({ data: { clientId: client.id } });
+      setShipmentRows(rows);
+    } catch {
+      /* silencioso: selo é informativo */
+    }
   }, [listShipmentsFn, client.id]);
+  useEffect(() => {
+    void refreshShipments();
+  }, [refreshShipments]);
+  // Rotina periódica: atualiza os selos das etiquetas sem recarregar a tela.
+  useSuperfreteSync(() => {
+    void refreshShipments();
+  });
   const labelProductMap = useMemo(() => {
     const map = new Map<string, ShipmentLabelInfo>();
     for (const s of [...shipmentRows].sort(
