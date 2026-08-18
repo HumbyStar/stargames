@@ -1331,20 +1331,21 @@ function ClientDrawer({
   // destaca as que ainda não foram pagas/liberadas.
   const listShipmentsFn = useServerFn(listShipments);
   const [shipmentRows, setShipmentRows] = useState<ShipmentRow[]>([]);
-  useEffect(() => {
-    let alive = true;
-    void (async () => {
-      try {
-        const rows = await listShipmentsFn({ data: { clientId: client.id } });
-        if (alive) setShipmentRows(rows);
-      } catch {
-        /* silencioso: selo é informativo */
-      }
-    })();
-    return () => {
-      alive = false;
-    };
+  const refreshShipments = useCallback(async () => {
+    try {
+      const rows = await listShipmentsFn({ data: { clientId: client.id } });
+      setShipmentRows(rows);
+    } catch {
+      /* silencioso: selo é informativo */
+    }
   }, [listShipmentsFn, client.id]);
+  useEffect(() => {
+    void refreshShipments();
+  }, [refreshShipments]);
+  // Rotina periódica: atualiza os selos das etiquetas sem recarregar a tela.
+  useSuperfreteSync(() => {
+    void refreshShipments();
+  });
   const labelProductMap = useMemo(() => {
     const map = new Map<string, ShipmentLabelInfo>();
     for (const s of [...shipmentRows].sort(
