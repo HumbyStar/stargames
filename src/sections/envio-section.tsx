@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { usePersistedState } from "@/lib/use-persisted-state";
+import { SuperfreteWalletPanel } from "@/components/superfrete-wallet-panel";
 import { cn } from "@/lib/utils";
 import {
   formatBRL,
@@ -152,6 +153,8 @@ export function EnvioSection({ onScrollTo }: { onScrollTo: (id: string) => void 
           status={aging > 0 ? "warning" : "default"}
         />
       </div>
+
+      <SuperfreteWalletPanel />
 
       <Card title="Filtros" className="mb-4">
         <div className="grid gap-3 sm:grid-cols-3">

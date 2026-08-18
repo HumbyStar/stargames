@@ -38,6 +38,7 @@ import {
 } from "@/lib/superfrete.functions";
 import { defaultShipOrigin, isShipOriginComplete } from "@/lib/ship-origin";
 import { useServerFn } from "@tanstack/react-start";
+import { useSuperfreteBalance } from "@/lib/use-superfrete-balance";
 
 type Measures = { weightKg: string; lengthCm: string; widthCm: string; heightCm: string };
 
@@ -91,6 +92,7 @@ export function ShipmentWizardModal({
   const runQuote = useServerFn(calculateSuperfreteQuote);
   const runCart = useServerFn(createSuperfreteCartOrder);
   const runCheckout = useServerFn(checkoutSuperfreteOrder);
+  const { balance, loading: balanceLoading, refresh: refreshBalance } = useSuperfreteBalance(open);
   const [step, setStep] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(products.map((p) => p.id)));
   const [measures, setMeasures] = useState<Record<string, Measures>>({});
@@ -167,6 +169,12 @@ export function ShipmentWizardModal({
   );
 
   const quote = options.find((q) => q.id === quoteId) ?? null;
+  const labelPaid = /liberad|paga|postad|entregue/i.test(labelInfo?.status ?? "");
+  const missingCents =
+    quote && balance?.balanceCents != null
+      ? Math.max(0, quote.priceCents - balance.balanceCents)
+      : 0;
+  const insufficient = missingCents > 0;
   const totalValue = chosen.reduce((acc, p) => acc + p.totalValue, 0);
 
   const addressReady =
@@ -321,9 +329,14 @@ export function ShipmentWizardModal({
     try {
       const res = await runCheckout({ data: { shipmentId: labelInfo.shipmentId } });
       setLabelInfo((l) => (l ? { ...l, status: res.internalStatus } : l));
-      toast.success(`Etiqueta liberada (${res.internalStatus}).`);
+      void refreshBalance();
+      toast.success(
+        res.pending
+          ? "Pagamento enviado — etiqueta aguardando liberação da SuperFrete."
+          : "Etiqueta paga com o saldo da carteira SuperFrete.",
+      );
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Não foi possível liberar a etiqueta.");
+      toast.error(e instanceof Error ? e.message : "Não foi possível pagar a etiqueta.");
     } finally {
       setReleasing(false);
     }
@@ -549,6 +562,34 @@ export function ShipmentWizardModal({
 
         {step === 4 && (
           <div className="space-y-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3">
+              <div>
+                <p className="text-xs uppercase text-muted-foreground">Saldo SuperFrete</p>
+                <p className="font-semibold tabular-nums">
+                  {balanceLoading && !balance
+                    ? "Carregando…"
+                    : balance?.balanceCents != null
+                      ? formatCents(balance.balanceCents)
+                      : "Indisponível"}
+                </p>
+                {balance?.error ? (
+                  <p className="text-xs text-muted-foreground">{balance.error}</p>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button type="button" size="sm" variant="ghost" onClick={() => void refreshBalance()}>
+                  Atualizar saldo
+                </Button>
+                <a
+                  className="text-xs text-primary underline"
+                  href="https://web.superfrete.com/#/recarga"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Recarregar
+                </a>
+              </div>
+            </div>
             <div className="rounded-lg border border-border p-3">
               <p className="text-xs uppercase text-muted-foreground">Destinatário</p>
               <p className="font-medium">{recipient.fullName}</p>
@@ -586,12 +627,36 @@ export function ShipmentWizardModal({
                 <p className="text-sm font-medium">
                   Etiqueta {labelInfo.orderId} — {labelInfo.status}
                 </p>
+                {insufficient ? (
+                  <p className="text-xs text-amber-600">
+                    Saldo insuficiente — faltam {formatCents(missingCents)} para pagar esta
+                    etiqueta.
+                  </p>
+                ) : quote && balance?.balanceCents != null ? (
+                  <p className="text-xs text-muted-foreground">
+                    Saldo após o pagamento:{" "}
+                    {formatCents(Math.max(0, balance.balanceCents - quote.priceCents))}
+                  </p>
+                ) : null}
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" size="sm" variant="outline" onClick={release} disabled={releasing}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={release}
+                    disabled={releasing || insufficient || labelPaid}
+                  >
                     {releasing ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
-                    Liberar etiqueta (Sandbox)
+                    {labelPaid
+                      ? "Etiqueta paga"
+                      : `Pagar etiqueta com saldo${quote ? ` (${formatCents(quote.priceCents)})` : ""}`}
                   </Button>
-                  <Button type="button" size="sm" onClick={markSent} disabled={markingSent}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={markSent}
+                    disabled={markingSent}
+                  >
                     Marcar produtos como enviados
                   </Button>
                 </div>

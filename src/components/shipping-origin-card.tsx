@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useStore } from "@/lib/store";
 import { defaultShipOrigin, isShipOriginComplete, type ShipOrigin } from "@/lib/ship-origin";
+import { useSuperfreteBalance } from "@/lib/use-superfrete-balance";
+import { formatCents } from "@/lib/shipping-quotes";
 
 const FIELDS: Array<[keyof ShipOrigin, string]> = [
   ["name", "Nome do remetente"],
@@ -26,6 +28,7 @@ export function ShippingOriginCard() {
   const origin = useStore((s) => s.preferences.shipOrigin) ?? defaultShipOrigin;
   const setPreferences = useStore((s) => s.setPreferences);
   const [draft, setDraft] = useState<ShipOrigin>({ ...defaultShipOrigin, ...origin });
+  const { balance, loading, refresh } = useSuperfreteBalance(true);
 
   useEffect(() => {
     setDraft({ ...defaultShipOrigin, ...origin });
@@ -37,8 +40,20 @@ export function ShippingOriginCard() {
     <Card
       title="Origem do envio (SuperFrete)"
       action={
-        <span className="text-xs text-muted-foreground">
-          Ambiente: <strong>Sandbox</strong>
+        <span className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>
+            Saldo SuperFrete:{" "}
+            <strong className="tabular-nums">
+              {loading && !balance
+                ? "…"
+                : balance?.balanceCents != null
+                  ? formatCents(balance.balanceCents)
+                  : "indisponível"}
+            </strong>
+          </span>
+          <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => void refresh()}>
+            Atualizar
+          </Button>
         </span>
       }
     >
