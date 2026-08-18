@@ -169,6 +169,12 @@ export function ShipmentWizardModal({
   );
 
   const quote = options.find((q) => q.id === quoteId) ?? null;
+  const labelPaid = /liberad|paga|postad|entregue/i.test(labelInfo?.status ?? "");
+  const missingCents =
+    quote && balance?.balanceCents != null
+      ? Math.max(0, quote.priceCents - balance.balanceCents)
+      : 0;
+  const insufficient = missingCents > 0;
   const totalValue = chosen.reduce((acc, p) => acc + p.totalValue, 0);
 
   const addressReady =
