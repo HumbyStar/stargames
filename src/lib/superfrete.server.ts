@@ -23,12 +23,20 @@ export class SuperfreteError extends Error {
   }
 }
 
+/** URLs oficiais da SuperFrete. Produção é o padrão. */
+const PRODUCTION_BASE_URL = "https://api.superfrete.com/api/v0";
+const SANDBOX_BASE_URL = "https://sandbox.superfrete.com/api/v0";
+
 export function getSuperfreteConfig(): SuperfreteConfig {
   const token = process.env["SUPERFRETE_API_TOKEN"];
+  // Produção é o padrão; só usa sandbox quando explicitamente pedido.
+  const environment =
+    (process.env["SUPERFRETE_ENVIRONMENT"] || "production").toLowerCase() === "sandbox"
+      ? "sandbox"
+      : "production";
   const baseUrl =
-    process.env["SUPERFRETE_API_BASE_URL"] || "https://sandbox.superfrete.com/api/v0";
+    environment === "sandbox" ? SANDBOX_BASE_URL : PRODUCTION_BASE_URL;
   const userAgent = process.env["SUPERFRETE_USER_AGENT"] || "Star Games/1.0";
-  const environment = process.env["SUPERFRETE_ENVIRONMENT"] || "sandbox";
   if (!token) {
     throw new SuperfreteError(
       "Integração da SuperFrete não configurada (token ausente).",
