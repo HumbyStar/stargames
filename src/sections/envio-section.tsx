@@ -154,6 +154,8 @@ export function EnvioSection({ onScrollTo }: { onScrollTo: (id: string) => void 
         />
       </div>
 
+      <SuperfreteWalletPanel />
+
       <Card title="Filtros" className="mb-4">
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
