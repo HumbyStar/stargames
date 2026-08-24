@@ -573,7 +573,12 @@ export function ShipmentWizardModal({
                 type="checkbox"
                 className="mt-0.5 shrink-0"
                 checked={insured}
-                onChange={(e) => setInsured(e.target.checked)}
+                onChange={(e) => {
+                  setInsured(e.target.checked);
+                  setOptions([]);
+                  setQuoteId("");
+                }}
+
               />
               <span className="min-w-0">
                 <span className="flex items-center gap-1.5 text-sm font-medium">
