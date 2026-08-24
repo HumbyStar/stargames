@@ -289,21 +289,32 @@ export function ShipmentWizardModal({
           etaDays: quote.deliveryDays,
           priceCents: quote.priceCents,
           totalWeightKg: Number(parcel.weightKg.toFixed(3)),
-          items: chosen.map((p) => {
-            const m = measures[p.id] ?? DEFAULT_MEASURES;
-            return {
-              productId: p.id,
-              name: p.name,
-              platform: p.platform ?? "",
-              value: p.totalValue,
-              weightKg: Number(m.weightKg.replace(",", ".")) || 0,
-              lengthCm: Number(m.lengthCm.replace(",", ".")) || 0,
-              widthCm: Number(m.widthCm.replace(",", ".")) || 0,
-              heightCm: Number(m.heightCm.replace(",", ".")) || 0,
-            };
-          }),
+          items: chosen.map((p) => ({
+            productId: p.id,
+            name: p.name,
+            platform: p.platform ?? "",
+            value: p.totalValue,
+            weightKg: 0,
+            lengthCm: 0,
+            widthCm: 0,
+            heightCm: 0,
+          })),
           recipient,
-          notes: notes.trim() || null,
+          notes:
+            [
+              notes.trim(),
+              `Caixas: ${boxes
+                .map(
+                  (b, i) =>
+                    `#${i + 1} ${dec(b.weightKg)}kg ${dec(b.lengthCm)}×${dec(b.widthCm)}×${dec(
+                      b.heightCm,
+                    )}cm`,
+                )
+                .join("; ")}`,
+              `Seguro: ${insured ? `sim (${formatBRL(totalValue)})` : "não"}`,
+            ]
+              .filter(Boolean)
+              .join(" · ") || null,
           selectedServiceId: quote.id,
           selectedServiceName: quote.name,
         },
@@ -322,9 +333,10 @@ export function ShipmentWizardModal({
             widthCm: Math.max(1, parcel.widthCm),
             heightCm: Math.max(1, parcel.heightCm),
           },
-          insuranceValue: totalValue,
+          insuranceValue,
         },
       });
+
 
       setLabelInfo({
         shipmentId: shipment.id,
