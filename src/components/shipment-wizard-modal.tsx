@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  ChevronDown,
-  ChevronRight,
   Loader2,
   Package,
+  Plus,
+  ShieldCheck,
+  Trash2,
   Truck,
   User,
   CheckCircle2,
 } from "lucide-react";
+
 import {
   Dialog,
   DialogContent,
@@ -41,8 +43,13 @@ import { useServerFn } from "@tanstack/react-start";
 import { useSuperfreteBalance } from "@/lib/use-superfrete-balance";
 
 type Measures = { weightKg: string; lengthCm: string; widthCm: string; heightCm: string };
+type Box = Measures & { id: string };
 
 const DEFAULT_MEASURES: Measures = { weightKg: "0.5", lengthCm: "20", widthCm: "15", heightCm: "10" };
+
+const dec = (v: string) => Number((v ?? "").replace(",", "."));
+const newBox = (): Box => ({ id: crypto.randomUUID(), ...DEFAULT_MEASURES });
+
 
 const STEPS = [
   { id: 1, label: "Produtos", icon: Package },
@@ -95,8 +102,9 @@ export function ShipmentWizardModal({
   const { balance, loading: balanceLoading, refresh: refreshBalance } = useSuperfreteBalance(open);
   const [step, setStep] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(products.map((p) => p.id)));
-  const [measures, setMeasures] = useState<Record<string, Measures>>({});
-  const [openCards, setOpenCards] = useState<Set<string>>(() => new Set());
+  const [boxes, setBoxes] = useState<Box[]>(() => [newBox()]);
+  const [insured, setInsured] = useState(false);
+
   const [recipient, setRecipient] = useState<ShipmentRecipient>(emptyRecipient);
   const [quoteId, setQuoteId] = useState<string>("");
   const [notes, setNotes] = useState("");
@@ -128,8 +136,9 @@ export function ShipmentWizardModal({
     );
     const ids = preset.length > 0 ? preset : products.map((p) => p.id);
     setSelected(new Set(ids));
-    setOpenCards(new Set(ids.slice(0, 1)));
-    setMeasures(Object.fromEntries(products.map((p) => [p.id, { ...DEFAULT_MEASURES }])));
+    setBoxes([newBox()]);
+    setInsured(false);
+
     const f = fichaFromTextWithDefaults(client.customerData, { phone: client.phone });
     setRecipient({
       ...emptyRecipient(),
@@ -156,18 +165,25 @@ export function ShipmentWizardModal({
   const parcel = useMemo(
     () =>
       combineParcels(
-        chosen.map((p) => {
-          const m = measures[p.id] ?? DEFAULT_MEASURES;
-          return {
-            weightKg: Number(m.weightKg.replace(",", ".")),
-            lengthCm: Number(m.lengthCm.replace(",", ".")),
-            widthCm: Number(m.widthCm.replace(",", ".")),
-            heightCm: Number(m.heightCm.replace(",", ".")),
-          };
-        }),
+        boxes.map((b) => ({
+          weightKg: dec(b.weightKg),
+          lengthCm: dec(b.lengthCm),
+          widthCm: dec(b.widthCm),
+          heightCm: dec(b.heightCm),
+        })),
       ),
-    [chosen, measures],
+    [boxes],
   );
+
+  const boxesValid =
+    boxes.length > 0 &&
+    boxes.every(
+      (b) =>
+        dec(b.weightKg) > 0 &&
+        dec(b.lengthCm) > 0 &&
+        dec(b.widthCm) > 0 &&
+        dec(b.heightCm) > 0,
+    );
 
   const quote = options.find((q) => q.id === quoteId) ?? null;
   const labelPaid = /liberad|paga|postad|entregue/i.test(labelInfo?.status ?? "");
@@ -179,6 +195,7 @@ export function ShipmentWizardModal({
       : 0;
   const insufficient = missingCents > 0;
   const totalValue = chosen.reduce((acc, p) => acc + p.totalValue, 0);
+  const insuranceValue = insured ? totalValue : 0;
 
   const addressReady =
     recipient.fullName.trim() !== "" &&
@@ -188,35 +205,32 @@ export function ShipmentWizardModal({
     recipient.state.trim() !== "";
 
   const canNext =
-    (step === 1 && chosen.length > 0) ||
+    (step === 1 && chosen.length > 0 && boxesValid) ||
     (step === 2 && addressReady) ||
     (step === 3 && !!quote) ||
     step === 4;
 
-  const setMeasure = (id: string, key: keyof Measures, value: string) =>
-    setMeasures((m) => ({ ...m, [id]: { ...(m[id] ?? DEFAULT_MEASURES), [key]: value } }));
+  const setBoxField = (id: string, key: keyof Measures, value: string) =>
+    setBoxes((list) => list.map((b) => (b.id === id ? { ...b, [key]: value } : b)));
 
-  const toggleCard = (id: string) =>
-    setOpenCards((s) => {
-      const next = new Set(s);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const addBox = () => setBoxes((list) => [...list, newBox()]);
+  const removeBox = (id: string) =>
+    setBoxes((list) => (list.length > 1 ? list.filter((b) => b.id !== id) : list));
 
-  const apiProducts = () =>
-    chosen.map((p) => {
-      const m = measures[p.id] ?? DEFAULT_MEASURES;
-      return {
-        name: p.name,
-        quantity: 1,
-        unitaryValue: p.totalValue,
-        weightKg: Number(m.weightKg.replace(",", ".")) || 0.3,
-        lengthCm: Number(m.lengthCm.replace(",", ".")) || 16,
-        widthCm: Number(m.widthCm.replace(",", ".")) || 11,
-        heightCm: Number(m.heightCm.replace(",", ".")) || 2,
-      };
-    });
+  /** Volumes enviados à SuperFrete: uma entrada por caixa. */
+  const apiProducts = () => {
+    const share = boxes.length > 0 ? totalValue / boxes.length : totalValue;
+    return boxes.map((b, i) => ({
+      name: `Caixa ${i + 1}`,
+      quantity: 1,
+      unitaryValue: Number(share.toFixed(2)),
+      weightKg: dec(b.weightKg) || 0.3,
+      lengthCm: dec(b.lengthCm) || 16,
+      widthCm: dec(b.widthCm) || 11,
+      heightCm: dec(b.heightCm) || 2,
+    }));
+  };
+
 
   const toAddress = () => ({
     name: recipient.fullName,
@@ -249,9 +263,10 @@ export function ShipmentWizardModal({
           from: origin,
           to: toAddress(),
           products: apiProducts(),
-          insuranceValue: totalValue,
+          insuranceValue,
         },
       });
+
       setOptions(res.options);
       if (res.options.every((o) => o.error)) {
         setQuoteError("Nenhum serviço disponível para este trecho no momento.");
@@ -276,21 +291,32 @@ export function ShipmentWizardModal({
           etaDays: quote.deliveryDays,
           priceCents: quote.priceCents,
           totalWeightKg: Number(parcel.weightKg.toFixed(3)),
-          items: chosen.map((p) => {
-            const m = measures[p.id] ?? DEFAULT_MEASURES;
-            return {
-              productId: p.id,
-              name: p.name,
-              platform: p.platform ?? "",
-              value: p.totalValue,
-              weightKg: Number(m.weightKg.replace(",", ".")) || 0,
-              lengthCm: Number(m.lengthCm.replace(",", ".")) || 0,
-              widthCm: Number(m.widthCm.replace(",", ".")) || 0,
-              heightCm: Number(m.heightCm.replace(",", ".")) || 0,
-            };
-          }),
+          items: chosen.map((p) => ({
+            productId: p.id,
+            name: p.name,
+            platform: p.platform ?? "",
+            value: p.totalValue,
+            weightKg: 0,
+            lengthCm: 0,
+            widthCm: 0,
+            heightCm: 0,
+          })),
           recipient,
-          notes: notes.trim() || null,
+          notes:
+            [
+              notes.trim(),
+              `Caixas: ${boxes
+                .map(
+                  (b, i) =>
+                    `#${i + 1} ${dec(b.weightKg)}kg ${dec(b.lengthCm)}×${dec(b.widthCm)}×${dec(
+                      b.heightCm,
+                    )}cm`,
+                )
+                .join("; ")}`,
+              `Seguro: ${insured ? `sim (${formatBRL(totalValue)})` : "não"}`,
+            ]
+              .filter(Boolean)
+              .join(" · ") || null,
           selectedServiceId: quote.id,
           selectedServiceName: quote.name,
         },
@@ -309,9 +335,10 @@ export function ShipmentWizardModal({
             widthCm: Math.max(1, parcel.widthCm),
             heightCm: Math.max(1, parcel.heightCm),
           },
-          insuranceValue: totalValue,
+          insuranceValue,
         },
       });
+
 
       setLabelInfo({
         shipmentId: shipment.id,
@@ -388,24 +415,22 @@ export function ShipmentWizardModal({
         </ol>
 
         {step === 1 && (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Selecione os produtos e informe peso e medidas de cada um.
-            </p>
-            <div className="space-y-2">
-              {products.map((p) => {
-                const m = measures[p.id] ?? DEFAULT_MEASURES;
-                const checked = selected.has(p.id);
-                const expandedCard = openCards.has(p.id);
-                return (
-                  <div
-                    key={p.id}
-                    className={cn(
-                      "rounded-lg border px-3 py-2 transition-colors",
-                      checked ? "border-primary/40 bg-primary/5" : "border-border",
-                    )}
-                  >
-                    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
+          <div className="space-y-4">
+            <div>
+              <p className="mb-2 text-sm text-muted-foreground">
+                Selecione os produtos que vão neste envio.
+              </p>
+              <div className="space-y-2">
+                {products.map((p) => {
+                  const checked = selected.has(p.id);
+                  return (
+                    <label
+                      key={p.id}
+                      className={cn(
+                        "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 transition-colors",
+                        checked ? "border-primary/40 bg-primary/5" : "border-border",
+                      )}
+                    >
                       <input
                         type="checkbox"
                         className="shrink-0"
@@ -419,62 +444,89 @@ export function ShipmentWizardModal({
                           })
                         }
                       />
-                      <div className="min-w-0">
+                      <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">{p.name}</span>
                         <span className="block truncate text-xs text-muted-foreground">
-                          {p.platform || "Sem plataforma"} · {formatBRL(p.totalValue)} ·{" "}
-                          {m.weightKg}kg · {m.lengthCm}×{m.widthCm}×{m.heightCm}cm
+                          {p.platform || "Sem plataforma"} · {formatBRL(p.totalValue)}
                         </span>
-                      </div>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">Caixas do envio ({boxes.length})</p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1 px-2 text-xs"
+                  onClick={addBox}
+                >
+                  <Plus className="size-3.5" /> Adicionar caixa
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                As medidas são da caixa, não do produto. Havendo mais de uma, o envio sai em uma
+                etiqueta com o volume somado.
+              </p>
+              {boxes.map((b, i) => (
+                <div key={b.id} className="rounded-lg border border-border px-3 py-2">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium uppercase text-muted-foreground">
+                      Caixa {i + 1}
+                    </span>
+                    {boxes.length > 1 && (
                       <Button
                         type="button"
                         size="sm"
                         variant="ghost"
-                        className="h-7 shrink-0 gap-1 px-2 text-xs"
-                        onClick={() => toggleCard(p.id)}
-                        aria-expanded={expandedCard}
+                        className="h-7 gap-1 px-2 text-xs text-destructive"
+                        onClick={() => removeBox(b.id)}
                       >
-                        {expandedCard ? (
-                          <ChevronDown className="size-3.5" />
-                        ) : (
-                          <ChevronRight className="size-3.5" />
-                        )}
-                        Ver detalhes
+                        <Trash2 className="size-3.5" /> Remover
                       </Button>
-                    </div>
-                    {expandedCard && (
-                      <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border/60 pt-2 sm:grid-cols-4">
-                        {(
-                          [
-                            ["weightKg", "Peso (kg)"],
-                            ["lengthCm", "Compr. (cm)"],
-                            ["widthCm", "Larg. (cm)"],
-                            ["heightCm", "Alt. (cm)"],
-                          ] as Array<[keyof Measures, string]>
-                        ).map(([key, label]) => (
-                          <div key={key}>
-                            <Label className="text-xs">{label}</Label>
-                            <Input
-                              inputMode="decimal"
-                              value={m[key]}
-                              onChange={(e) => setMeasure(p.id, key, e.target.value)}
-                              className="h-8"
-                            />
-                          </div>
-                        ))}
-                      </div>
                     )}
                   </div>
-                );
-              })}
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {(
+                      [
+                        ["weightKg", "Peso (kg)"],
+                        ["lengthCm", "Compr. (cm)"],
+                        ["widthCm", "Larg. (cm)"],
+                        ["heightCm", "Alt. (cm)"],
+                      ] as Array<[keyof Measures, string]>
+                    ).map(([key, label]) => (
+                      <div key={key}>
+                        <Label className="text-xs">{label}</Label>
+                        <Input
+                          inputMode="decimal"
+                          value={b[key]}
+                          onChange={(e) => setBoxField(b.id, key, e.target.value)}
+                          className="h-8"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <p className="text-xs text-muted-foreground">
+                Volume enviado à SuperFrete: {parcel.weightKg.toFixed(2)} kg reais · cubado{" "}
+                {cubicWeightKg(parcel).toFixed(2)} kg · {parcel.lengthCm}×{parcel.widthCm}×
+                {parcel.heightCm} cm
+              </p>
+              {!boxesValid && (
+                <p className="text-xs text-destructive">
+                  Informe peso e medidas maiores que zero em todas as caixas.
+                </p>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Pacote combinado: {parcel.weightKg.toFixed(2)} kg reais · cubado{" "}
-              {cubicWeightKg(parcel).toFixed(2)} kg · {parcel.lengthCm}×{parcel.widthCm}×
-              {parcel.heightCm} cm
-            </p>
           </div>
         )}
+
 
         {step === 2 && (
           <div className="grid gap-3 sm:grid-cols-2">
@@ -516,15 +568,39 @@ export function ShipmentWizardModal({
 
         {step === 3 && (
           <div className="space-y-2">
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-border p-3">
+              <input
+                type="checkbox"
+                className="mt-0.5 shrink-0"
+                checked={insured}
+                onChange={(e) => {
+                  setInsured(e.target.checked);
+                  setOptions([]);
+                  setQuoteId("");
+                }}
+
+              />
+              <span className="min-w-0">
+                <span className="flex items-center gap-1.5 text-sm font-medium">
+                  <ShieldCheck className="size-4" /> Enviar com seguro (SuperFrete)
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  Protege o valor dos produtos deste envio ({formatBRL(totalValue)}). O preço do
+                  frete já vem com o seguro incluso quando marcado.
+                </span>
+              </span>
+            </label>
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm text-muted-foreground">
-                Peso considerado: {Math.max(0.3, parcel.weightKg).toFixed(2)} kg.
+                Peso considerado: {Math.max(0.3, parcel.weightKg).toFixed(2)} kg ·{" "}
+                {boxes.length} caixa(s) · seguro {insured ? "ativado" : "desativado"}.
               </p>
               <Button type="button" size="sm" onClick={calculate} disabled={quoting}>
                 {quoting ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
                 Calcular frete
               </Button>
             </div>
+
             {quoteError && <p className="text-xs text-destructive">{quoteError}</p>}
             {!quoting && options.length === 0 && !quoteError && (
               <p className="text-xs text-muted-foreground">
@@ -612,7 +688,16 @@ export function ShipmentWizardModal({
                   ? `${formatCents(quote.priceCents)} · até ${quote.deliveryDays ?? "—"} dia(s)`
                   : ""}
               </p>
+              <p className="text-muted-foreground">
+                {boxes.length} caixa(s) · {parcel.weightKg.toFixed(2)} kg · {parcel.lengthCm}×
+                {parcel.widthCm}×{parcel.heightCm} cm
+              </p>
+              <p className="text-muted-foreground">
+                Seguro:{" "}
+                {insured ? `sim — valor protegido ${formatBRL(totalValue)}` : "não"}
+              </p>
             </div>
+
             <div className="rounded-lg border border-border p-3">
               <p className="text-xs uppercase text-muted-foreground">
                 Produtos ({chosen.length}) · {formatBRL(totalValue)}
