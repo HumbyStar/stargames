@@ -100,8 +100,9 @@ export function ShipmentWizardModal({
   const { balance, loading: balanceLoading, refresh: refreshBalance } = useSuperfreteBalance(open);
   const [step, setStep] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(products.map((p) => p.id)));
-  const [measures, setMeasures] = useState<Record<string, Measures>>({});
-  const [openCards, setOpenCards] = useState<Set<string>>(() => new Set());
+  const [boxes, setBoxes] = useState<Box[]>(() => [newBox()]);
+  const [insured, setInsured] = useState(false);
+
   const [recipient, setRecipient] = useState<ShipmentRecipient>(emptyRecipient);
   const [quoteId, setQuoteId] = useState<string>("");
   const [notes, setNotes] = useState("");
