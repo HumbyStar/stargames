@@ -541,15 +541,34 @@ export function ShipmentWizardModal({
 
         {step === 3 && (
           <div className="space-y-2">
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-border p-3">
+              <input
+                type="checkbox"
+                className="mt-0.5 shrink-0"
+                checked={insured}
+                onChange={(e) => setInsured(e.target.checked)}
+              />
+              <span className="min-w-0">
+                <span className="flex items-center gap-1.5 text-sm font-medium">
+                  <ShieldCheck className="size-4" /> Enviar com seguro (SuperFrete)
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  Protege o valor dos produtos deste envio ({formatBRL(totalValue)}). O preço do
+                  frete já vem com o seguro incluso quando marcado.
+                </span>
+              </span>
+            </label>
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm text-muted-foreground">
-                Peso considerado: {Math.max(0.3, parcel.weightKg).toFixed(2)} kg.
+                Peso considerado: {Math.max(0.3, parcel.weightKg).toFixed(2)} kg ·{" "}
+                {boxes.length} caixa(s) · seguro {insured ? "ativado" : "desativado"}.
               </p>
               <Button type="button" size="sm" onClick={calculate} disabled={quoting}>
                 {quoting ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
                 Calcular frete
               </Button>
             </div>
+
             {quoteError && <p className="text-xs text-destructive">{quoteError}</p>}
             {!quoting && options.length === 0 && !quoteError && (
               <p className="text-xs text-muted-foreground">
