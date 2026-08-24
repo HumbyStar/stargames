@@ -163,18 +163,25 @@ export function ShipmentWizardModal({
   const parcel = useMemo(
     () =>
       combineParcels(
-        chosen.map((p) => {
-          const m = measures[p.id] ?? DEFAULT_MEASURES;
-          return {
-            weightKg: Number(m.weightKg.replace(",", ".")),
-            lengthCm: Number(m.lengthCm.replace(",", ".")),
-            widthCm: Number(m.widthCm.replace(",", ".")),
-            heightCm: Number(m.heightCm.replace(",", ".")),
-          };
-        }),
+        boxes.map((b) => ({
+          weightKg: dec(b.weightKg),
+          lengthCm: dec(b.lengthCm),
+          widthCm: dec(b.widthCm),
+          heightCm: dec(b.heightCm),
+        })),
       ),
-    [chosen, measures],
+    [boxes],
   );
+
+  const boxesValid =
+    boxes.length > 0 &&
+    boxes.every(
+      (b) =>
+        dec(b.weightKg) > 0 &&
+        dec(b.lengthCm) > 0 &&
+        dec(b.widthCm) > 0 &&
+        dec(b.heightCm) > 0,
+    );
 
   const quote = options.find((q) => q.id === quoteId) ?? null;
   const labelPaid = /liberad|paga|postad|entregue/i.test(labelInfo?.status ?? "");
@@ -186,6 +193,7 @@ export function ShipmentWizardModal({
       : 0;
   const insufficient = missingCents > 0;
   const totalValue = chosen.reduce((acc, p) => acc + p.totalValue, 0);
+  const insuranceValue = insured ? totalValue : 0;
 
   const addressReady =
     recipient.fullName.trim() !== "" &&
@@ -195,35 +203,32 @@ export function ShipmentWizardModal({
     recipient.state.trim() !== "";
 
   const canNext =
-    (step === 1 && chosen.length > 0) ||
+    (step === 1 && chosen.length > 0 && boxesValid) ||
     (step === 2 && addressReady) ||
     (step === 3 && !!quote) ||
     step === 4;
 
-  const setMeasure = (id: string, key: keyof Measures, value: string) =>
-    setMeasures((m) => ({ ...m, [id]: { ...(m[id] ?? DEFAULT_MEASURES), [key]: value } }));
+  const setBoxField = (id: string, key: keyof Measures, value: string) =>
+    setBoxes((list) => list.map((b) => (b.id === id ? { ...b, [key]: value } : b)));
 
-  const toggleCard = (id: string) =>
-    setOpenCards((s) => {
-      const next = new Set(s);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const addBox = () => setBoxes((list) => [...list, newBox()]);
+  const removeBox = (id: string) =>
+    setBoxes((list) => (list.length > 1 ? list.filter((b) => b.id !== id) : list));
 
-  const apiProducts = () =>
-    chosen.map((p) => {
-      const m = measures[p.id] ?? DEFAULT_MEASURES;
-      return {
-        name: p.name,
-        quantity: 1,
-        unitaryValue: p.totalValue,
-        weightKg: Number(m.weightKg.replace(",", ".")) || 0.3,
-        lengthCm: Number(m.lengthCm.replace(",", ".")) || 16,
-        widthCm: Number(m.widthCm.replace(",", ".")) || 11,
-        heightCm: Number(m.heightCm.replace(",", ".")) || 2,
-      };
-    });
+  /** Volumes enviados à SuperFrete: uma entrada por caixa. */
+  const apiProducts = () => {
+    const share = boxes.length > 0 ? totalValue / boxes.length : totalValue;
+    return boxes.map((b, i) => ({
+      name: `Caixa ${i + 1}`,
+      quantity: 1,
+      unitaryValue: Number(share.toFixed(2)),
+      weightKg: dec(b.weightKg) || 0.3,
+      lengthCm: dec(b.lengthCm) || 16,
+      widthCm: dec(b.widthCm) || 11,
+      heightCm: dec(b.heightCm) || 2,
+    }));
+  };
+
 
   const toAddress = () => ({
     name: recipient.fullName,
