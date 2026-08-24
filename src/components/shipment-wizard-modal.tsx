@@ -261,9 +261,10 @@ export function ShipmentWizardModal({
           from: origin,
           to: toAddress(),
           products: apiProducts(),
-          insuranceValue: totalValue,
+          insuranceValue,
         },
       });
+
       setOptions(res.options);
       if (res.options.every((o) => o.error)) {
         setQuoteError("Nenhum serviço disponível para este trecho no momento.");
