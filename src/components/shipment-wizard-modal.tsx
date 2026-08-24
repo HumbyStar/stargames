@@ -41,8 +41,13 @@ import { useServerFn } from "@tanstack/react-start";
 import { useSuperfreteBalance } from "@/lib/use-superfrete-balance";
 
 type Measures = { weightKg: string; lengthCm: string; widthCm: string; heightCm: string };
+type Box = Measures & { id: string };
 
 const DEFAULT_MEASURES: Measures = { weightKg: "0.5", lengthCm: "20", widthCm: "15", heightCm: "10" };
+
+const dec = (v: string) => Number((v ?? "").replace(",", "."));
+const newBox = (): Box => ({ id: crypto.randomUUID(), ...DEFAULT_MEASURES });
+
 
 const STEPS = [
   { id: 1, label: "Produtos", icon: Package },
