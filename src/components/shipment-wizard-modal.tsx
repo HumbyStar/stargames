@@ -388,24 +388,22 @@ export function ShipmentWizardModal({
         </ol>
 
         {step === 1 && (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Selecione os produtos e informe peso e medidas de cada um.
-            </p>
-            <div className="space-y-2">
-              {products.map((p) => {
-                const m = measures[p.id] ?? DEFAULT_MEASURES;
-                const checked = selected.has(p.id);
-                const expandedCard = openCards.has(p.id);
-                return (
-                  <div
-                    key={p.id}
-                    className={cn(
-                      "rounded-lg border px-3 py-2 transition-colors",
-                      checked ? "border-primary/40 bg-primary/5" : "border-border",
-                    )}
-                  >
-                    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
+          <div className="space-y-4">
+            <div>
+              <p className="mb-2 text-sm text-muted-foreground">
+                Selecione os produtos que vão neste envio.
+              </p>
+              <div className="space-y-2">
+                {products.map((p) => {
+                  const checked = selected.has(p.id);
+                  return (
+                    <label
+                      key={p.id}
+                      className={cn(
+                        "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 transition-colors",
+                        checked ? "border-primary/40 bg-primary/5" : "border-border",
+                      )}
+                    >
                       <input
                         type="checkbox"
                         className="shrink-0"
@@ -419,62 +417,89 @@ export function ShipmentWizardModal({
                           })
                         }
                       />
-                      <div className="min-w-0">
+                      <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">{p.name}</span>
                         <span className="block truncate text-xs text-muted-foreground">
-                          {p.platform || "Sem plataforma"} · {formatBRL(p.totalValue)} ·{" "}
-                          {m.weightKg}kg · {m.lengthCm}×{m.widthCm}×{m.heightCm}cm
+                          {p.platform || "Sem plataforma"} · {formatBRL(p.totalValue)}
                         </span>
-                      </div>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">Caixas do envio ({boxes.length})</p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1 px-2 text-xs"
+                  onClick={addBox}
+                >
+                  <Plus className="size-3.5" /> Adicionar caixa
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                As medidas são da caixa, não do produto. Havendo mais de uma, o envio sai em uma
+                etiqueta com o volume somado.
+              </p>
+              {boxes.map((b, i) => (
+                <div key={b.id} className="rounded-lg border border-border px-3 py-2">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium uppercase text-muted-foreground">
+                      Caixa {i + 1}
+                    </span>
+                    {boxes.length > 1 && (
                       <Button
                         type="button"
                         size="sm"
                         variant="ghost"
-                        className="h-7 shrink-0 gap-1 px-2 text-xs"
-                        onClick={() => toggleCard(p.id)}
-                        aria-expanded={expandedCard}
+                        className="h-7 gap-1 px-2 text-xs text-destructive"
+                        onClick={() => removeBox(b.id)}
                       >
-                        {expandedCard ? (
-                          <ChevronDown className="size-3.5" />
-                        ) : (
-                          <ChevronRight className="size-3.5" />
-                        )}
-                        Ver detalhes
+                        <Trash2 className="size-3.5" /> Remover
                       </Button>
-                    </div>
-                    {expandedCard && (
-                      <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border/60 pt-2 sm:grid-cols-4">
-                        {(
-                          [
-                            ["weightKg", "Peso (kg)"],
-                            ["lengthCm", "Compr. (cm)"],
-                            ["widthCm", "Larg. (cm)"],
-                            ["heightCm", "Alt. (cm)"],
-                          ] as Array<[keyof Measures, string]>
-                        ).map(([key, label]) => (
-                          <div key={key}>
-                            <Label className="text-xs">{label}</Label>
-                            <Input
-                              inputMode="decimal"
-                              value={m[key]}
-                              onChange={(e) => setMeasure(p.id, key, e.target.value)}
-                              className="h-8"
-                            />
-                          </div>
-                        ))}
-                      </div>
                     )}
                   </div>
-                );
-              })}
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {(
+                      [
+                        ["weightKg", "Peso (kg)"],
+                        ["lengthCm", "Compr. (cm)"],
+                        ["widthCm", "Larg. (cm)"],
+                        ["heightCm", "Alt. (cm)"],
+                      ] as Array<[keyof Measures, string]>
+                    ).map(([key, label]) => (
+                      <div key={key}>
+                        <Label className="text-xs">{label}</Label>
+                        <Input
+                          inputMode="decimal"
+                          value={b[key]}
+                          onChange={(e) => setBoxField(b.id, key, e.target.value)}
+                          className="h-8"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <p className="text-xs text-muted-foreground">
+                Volume enviado à SuperFrete: {parcel.weightKg.toFixed(2)} kg reais · cubado{" "}
+                {cubicWeightKg(parcel).toFixed(2)} kg · {parcel.lengthCm}×{parcel.widthCm}×
+                {parcel.heightCm} cm
+              </p>
+              {!boxesValid && (
+                <p className="text-xs text-destructive">
+                  Informe peso e medidas maiores que zero em todas as caixas.
+                </p>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Pacote combinado: {parcel.weightKg.toFixed(2)} kg reais · cubado{" "}
-              {cubicWeightKg(parcel).toFixed(2)} kg · {parcel.lengthCm}×{parcel.widthCm}×
-              {parcel.heightCm} cm
-            </p>
           </div>
         )}
+
 
         {step === 2 && (
           <div className="grid gap-3 sm:grid-cols-2">
