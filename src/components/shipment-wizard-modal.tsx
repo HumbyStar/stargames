@@ -134,8 +134,9 @@ export function ShipmentWizardModal({
     );
     const ids = preset.length > 0 ? preset : products.map((p) => p.id);
     setSelected(new Set(ids));
-    setOpenCards(new Set(ids.slice(0, 1)));
-    setMeasures(Object.fromEntries(products.map((p) => [p.id, { ...DEFAULT_MEASURES }])));
+    setBoxes([newBox()]);
+    setInsured(false);
+
     const f = fichaFromTextWithDefaults(client.customerData, { phone: client.phone });
     setRecipient({
       ...emptyRecipient(),
