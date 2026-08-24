@@ -656,7 +656,16 @@ export function ShipmentWizardModal({
                   ? `${formatCents(quote.priceCents)} · até ${quote.deliveryDays ?? "—"} dia(s)`
                   : ""}
               </p>
+              <p className="text-muted-foreground">
+                {boxes.length} caixa(s) · {parcel.weightKg.toFixed(2)} kg · {parcel.lengthCm}×
+                {parcel.widthCm}×{parcel.heightCm} cm
+              </p>
+              <p className="text-muted-foreground">
+                Seguro:{" "}
+                {insured ? `sim — valor protegido ${formatBRL(totalValue)}` : "não"}
+              </p>
             </div>
+
             <div className="rounded-lg border border-border p-3">
               <p className="text-xs uppercase text-muted-foreground">
                 Produtos ({chosen.length}) · {formatBRL(totalValue)}
