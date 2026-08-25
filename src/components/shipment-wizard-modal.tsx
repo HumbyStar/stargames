@@ -709,7 +709,13 @@ export function ShipmentWizardModal({
               <p className="text-muted-foreground">
                 Seguro:{" "}
                 {insured ? `sim — valor protegido ${formatBRL(totalValue)}` : "não"}
+                {insured && labelInfo
+                  ? labelInfo.insuredValue != null && labelInfo.insuredValue > 0
+                    ? ` · confirmado pela SuperFrete (${formatBRL(labelInfo.insuredValue)})`
+                    : " · aguardando confirmação da SuperFrete"
+                  : ""}
               </p>
+
             </div>
 
             <div className="rounded-lg border border-border p-3">
