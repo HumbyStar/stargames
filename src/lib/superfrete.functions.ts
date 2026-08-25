@@ -10,6 +10,8 @@ export interface SuperfreteQuoteOption {
   priceCents: number;
   deliveryDays: number | null;
   error: string | null;
+  /** Valor efetivamente coberto pelo seguro nesta transportadora (R$). */
+  insuredValue: number | null;
   packages: Array<{
     weightKg: number | null;
     lengthCm: number | null;
@@ -17,6 +19,7 @@ export interface SuperfreteQuoteOption {
     heightCm: number | null;
   }>;
 }
+
 
 export interface SuperfreteOrderInfo {
   orderId: string;
