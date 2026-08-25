@@ -375,6 +375,11 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
       // Valor real cobrado pela SuperFrete (pode diferir da cotação).
       const rawPrice = raw["price"] ?? raw["total"] ?? raw["value"];
       const priceCents = rawPrice === undefined || rawPrice === null ? null : toCents(rawPrice);
+      // Seguro confirmado pela SuperFrete na etiqueta criada.
+      const rawInsurance = raw["insurance_value"];
+      const insuredValue =
+        rawInsurance === undefined || rawInsurance === null ? null : num(rawInsurance);
+
 
       await supabase
         .from("shipments")
