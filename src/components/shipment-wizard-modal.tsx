@@ -347,7 +347,9 @@ export function ShipmentWizardModal({
         orderId: order.orderId,
         status: order.internalStatus,
         priceCents: order.priceCents ?? quote.priceCents,
+        insuredValue: order.insuredValue ?? null,
       });
+
       toast.success(`Etiqueta criada na SuperFrete (${order.internalStatus}).`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Não foi possível registrar o envio.");
