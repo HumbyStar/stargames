@@ -10,6 +10,8 @@ export interface SuperfreteQuoteOption {
   priceCents: number;
   deliveryDays: number | null;
   error: string | null;
+  /** Valor efetivamente coberto pelo seguro nesta transportadora (R$). */
+  insuredValue: number | null;
   packages: Array<{
     weightKg: number | null;
     lengthCm: number | null;
@@ -17,6 +19,7 @@ export interface SuperfreteQuoteOption {
     heightCm: number | null;
   }>;
 }
+
 
 export interface SuperfreteOrderInfo {
   orderId: string;
@@ -164,8 +167,13 @@ export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
         const r = item as Record<string, unknown>;
         const company = (r["company"] as Record<string, unknown> | undefined) ?? {};
         const packages = Array.isArray(r["packages"]) ? (r["packages"] as Record<string, unknown>[]) : [];
+        let insured: number | null = null;
         const dims = packages.map((pk) => {
           const d = (pk["dimensions"] as Record<string, unknown> | undefined) ?? {};
+          if (pk["insurance_value"] != null) {
+            const v = num(pk["insurance_value"]);
+            if (Number.isFinite(v)) insured = (insured ?? 0) + v;
+          }
           return {
             weightKg: pk["weight"] != null ? num(pk["weight"]) : null,
             lengthCm: d["length"] != null ? num(d["length"]) : null,
@@ -180,8 +188,10 @@ export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
           priceCents: toCents(r["price"]),
           deliveryDays: r["delivery_time"] != null ? num(r["delivery_time"]) : null,
           error: typeof r["error"] === "string" ? (r["error"] as string) : null,
+          insuredValue: insured,
           packages: dims,
         };
+
       });
 
       await logEvent(context.supabase as never, context.userId, {
@@ -341,10 +351,14 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
       },
       options: {
         insurance_value: Number(data.insuranceValue.toFixed(2)),
+        // Sem esta flag, transportadoras privadas (Jadlog/Loggi) emitem a
+        // etiqueta sem o seguro cotado. Mantém a etiqueta igual à cotação.
+        use_insurance_value: data.insuranceValue > 0,
         receipt: false,
         own_hand: false,
         reverse: false,
         non_commercial: true,
+
         platform: "Star Games",
       },
     };
@@ -361,6 +375,11 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
       // Valor real cobrado pela SuperFrete (pode diferir da cotação).
       const rawPrice = raw["price"] ?? raw["total"] ?? raw["value"];
       const priceCents = rawPrice === undefined || rawPrice === null ? null : toCents(rawPrice);
+      // Seguro confirmado pela SuperFrete na etiqueta criada.
+      const rawInsurance = raw["insurance_value"];
+      const insuredValue =
+        rawInsurance === undefined || rawInsurance === null ? null : num(rawInsurance);
+
 
       await supabase
         .from("shipments")
@@ -379,12 +398,19 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
         shipmentId: data.shipmentId,
         action: "etiqueta_criada",
         newStatus: internal,
-        message: `Pedido ${orderId} criado na SuperFrete`,
+        message: `Pedido ${orderId} criado na SuperFrete${
+          data.insuranceValue > 0
+            ? ` · seguro solicitado R$ ${data.insuranceValue.toFixed(2)}${
+                insuredValue != null ? ` · confirmado R$ ${insuredValue.toFixed(2)}` : ""
+              }`
+            : " · sem seguro"
+        }`,
         payload,
         response: raw,
       });
 
-      return { orderId, status, internalStatus: internal, priceCents };
+      return { orderId, status, internalStatus: internal, priceCents, insuredValue };
+
     } catch (e) {
       const message = e instanceof SuperfreteError ? e.message : String(e);
       await logEvent(supabase as never, userId, {

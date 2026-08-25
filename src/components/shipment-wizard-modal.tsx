@@ -117,7 +117,9 @@ export function ShipmentWizardModal({
     orderId: string;
     status: string;
     priceCents: number | null;
+    insuredValue: number | null;
   } | null>(null);
+
   const [releasing, setReleasing] = useState(false);
   const [markingSent, setMarkingSent] = useState(false);
 
@@ -345,7 +347,9 @@ export function ShipmentWizardModal({
         orderId: order.orderId,
         status: order.internalStatus,
         priceCents: order.priceCents ?? quote.priceCents,
+        insuredValue: order.insuredValue ?? null,
       });
+
       toast.success(`Etiqueta criada na SuperFrete (${order.internalStatus}).`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Não foi possível registrar o envio.");
@@ -631,7 +635,17 @@ export function ShipmentWizardModal({
                       ? q.error
                       : `até ${q.deliveryDays ?? "—"} dia(s) úteis`}
                   </span>
+                  {insured && !q.error ? (
+                    <span className="block text-xs text-muted-foreground">
+                      {q.insuredValue == null || q.insuredValue <= 0
+                        ? "Seguro não aplicado por esta transportadora"
+                        : Math.abs(q.insuredValue - totalValue) < 0.01
+                          ? `Seguro: cobertura ${formatBRL(q.insuredValue)}`
+                          : `Seguro: taxa ${formatBRL(q.insuredValue)} (cobertura ${formatBRL(totalValue)})`}
+                    </span>
+                  ) : null}
                 </span>
+
                 <span className="text-sm font-semibold tabular-nums">
                   {q.error ? "—" : formatCents(q.priceCents)}
                 </span>
@@ -695,7 +709,13 @@ export function ShipmentWizardModal({
               <p className="text-muted-foreground">
                 Seguro:{" "}
                 {insured ? `sim — valor protegido ${formatBRL(totalValue)}` : "não"}
+                {insured && labelInfo
+                  ? labelInfo.insuredValue != null && labelInfo.insuredValue > 0
+                    ? ` · confirmado pela SuperFrete (${formatBRL(labelInfo.insuredValue)})`
+                    : " · aguardando confirmação da SuperFrete"
+                  : ""}
               </p>
+
             </div>
 
             <div className="rounded-lg border border-border p-3">
