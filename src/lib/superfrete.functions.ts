@@ -167,8 +167,13 @@ export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
         const r = item as Record<string, unknown>;
         const company = (r["company"] as Record<string, unknown> | undefined) ?? {};
         const packages = Array.isArray(r["packages"]) ? (r["packages"] as Record<string, unknown>[]) : [];
+        let insured: number | null = null;
         const dims = packages.map((pk) => {
           const d = (pk["dimensions"] as Record<string, unknown> | undefined) ?? {};
+          if (pk["insurance_value"] != null) {
+            const v = num(pk["insurance_value"]);
+            if (Number.isFinite(v)) insured = (insured ?? 0) + v;
+          }
           return {
             weightKg: pk["weight"] != null ? num(pk["weight"]) : null,
             lengthCm: d["length"] != null ? num(d["length"]) : null,
@@ -183,8 +188,10 @@ export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
           priceCents: toCents(r["price"]),
           deliveryDays: r["delivery_time"] != null ? num(r["delivery_time"]) : null,
           error: typeof r["error"] === "string" ? (r["error"] as string) : null,
+          insuredValue: insured,
           packages: dims,
         };
+
       });
 
       await logEvent(context.supabase as never, context.userId, {
