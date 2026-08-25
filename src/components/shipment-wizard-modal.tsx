@@ -635,7 +635,17 @@ export function ShipmentWizardModal({
                       ? q.error
                       : `até ${q.deliveryDays ?? "—"} dia(s) úteis`}
                   </span>
+                  {insured && !q.error ? (
+                    <span className="block text-xs text-muted-foreground">
+                      {q.insuredValue == null || q.insuredValue <= 0
+                        ? "Seguro não aplicado por esta transportadora"
+                        : Math.abs(q.insuredValue - totalValue) < 0.01
+                          ? `Seguro: cobertura ${formatBRL(q.insuredValue)}`
+                          : `Seguro: taxa ${formatBRL(q.insuredValue)} (cobertura ${formatBRL(totalValue)})`}
+                    </span>
+                  ) : null}
                 </span>
+
                 <span className="text-sm font-semibold tabular-nums">
                   {q.error ? "—" : formatCents(q.priceCents)}
                 </span>
