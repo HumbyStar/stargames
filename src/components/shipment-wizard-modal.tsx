@@ -117,7 +117,9 @@ export function ShipmentWizardModal({
     orderId: string;
     status: string;
     priceCents: number | null;
+    insuredValue: number | null;
   } | null>(null);
+
   const [releasing, setReleasing] = useState(false);
   const [markingSent, setMarkingSent] = useState(false);
 
