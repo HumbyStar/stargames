@@ -398,12 +398,19 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
         shipmentId: data.shipmentId,
         action: "etiqueta_criada",
         newStatus: internal,
-        message: `Pedido ${orderId} criado na SuperFrete`,
+        message: `Pedido ${orderId} criado na SuperFrete${
+          data.insuranceValue > 0
+            ? ` · seguro solicitado R$ ${data.insuranceValue.toFixed(2)}${
+                insuredValue != null ? ` · confirmado R$ ${insuredValue.toFixed(2)}` : ""
+              }`
+            : " · sem seguro"
+        }`,
         payload,
         response: raw,
       });
 
-      return { orderId, status, internalStatus: internal, priceCents };
+      return { orderId, status, internalStatus: internal, priceCents, insuredValue };
+
     } catch (e) {
       const message = e instanceof SuperfreteError ? e.message : String(e);
       await logEvent(supabase as never, userId, {
