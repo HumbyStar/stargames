@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
+import { usePaginatedList } from "@/hooks/use-paginated-list";
+import { LoadMoreButton } from "@/components/load-more-button";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import {
   formatBRL,
@@ -513,7 +515,7 @@ export function MGMVSection({
     hasMore,
     nextChunk,
     loadMore,
-  } = usePaginatedList(filtered, { step: 20, sectionId: "mgmv" });
+  } = usePaginatedList(filtered, { step: 20 });
 
   const searchActive = search.trim().length > 0;
   const matchCols = useMemo(() => {
@@ -1210,6 +1212,7 @@ export function MGMVSection({
       {filtered.length > 0 && (
         <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
           <span>{pagedRows.length} de {filtered.length} acordo(s) exibido(s)</span>
+          {hasMore && <LoadMoreButton count={nextChunk} onClick={loadMore} />}
         </div>
       )}
       </>
