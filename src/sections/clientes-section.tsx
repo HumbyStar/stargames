@@ -71,9 +71,16 @@ import {
 import { NfHistoryModal } from "@/components/nf-history-modal";
 import { ShipmentHistoryModal } from "@/components/shipment-history-modal";
 import { NfEmittedBadge } from "@/components/nf-emitted-badge";
-import { listShipments, dismissShipmentLabel, type ShipmentRow } from "@/lib/shipments.functions";
+import {
+  listShipments,
+  dismissShipmentLabel,
+  dismissClientShipmentLabels,
+  type ShipmentRow,
+} from "@/lib/shipments.functions";
 import { useSuperfreteSync } from "@/lib/use-superfrete-sync";
 import { mapSuperfreteStatus } from "@/lib/superfrete-status";
+import { verifySuperfreteLabel } from "@/lib/superfrete.functions";
+
 import {
   ShipmentLabelBadge,
   type ShipmentLabelInfo,
@@ -1373,6 +1380,17 @@ function ClientDrawer({
     return map;
   }, [shipmentRows]);
   const dismissLabelFn = useServerFn(dismissShipmentLabel);
+  const dismissAllFn = useServerFn(dismissClientShipmentLabels);
+  const verifyLabelFn = useServerFn(verifySuperfreteLabel);
+  const pendingLabelCount = useMemo(
+    () =>
+      new Set(
+        [...labelProductMap.values()]
+          .filter((l) => l.pending && l.shipmentId)
+          .map((l) => l.shipmentId as string),
+      ).size,
+    [labelProductMap],
+  );
   const dismissLabel = useCallback(
     async (shipmentId: string) => {
       try {
@@ -1385,6 +1403,29 @@ function ClientDrawer({
     },
     [dismissLabelFn, refreshShipments],
   );
+  const dismissAllLabels = useCallback(async () => {
+    try {
+      const res = await dismissAllFn({ data: { clientId: client.id, reason: "" } });
+      toast.success(`${res.dismissed} etiqueta(s) descartada(s).`);
+      void refreshShipments();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível descartar as etiquetas.");
+    }
+  }, [dismissAllFn, client.id, refreshShipments]);
+  const verifyLabel = useCallback(
+    async (shipmentId: string) => {
+      try {
+        const res = await verifyLabelFn({ data: { shipmentId } });
+        if (res.exists) toast.success(res.message);
+        else toast.info(res.message);
+        void refreshShipments();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Não foi possível verificar a etiqueta.");
+      }
+    },
+    [verifyLabelFn, refreshShipments],
+  );
+
 
   const nfProductMap = useMemo(() => {
     const map = new Map<string, { count: number; lastAt: string }>();
@@ -1651,13 +1692,17 @@ function ClientDrawer({
         <Button size="sm" variant="outline" onClick={() => setShipHistoryOpen(true)}>
           Envios
         </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setShipHistoryOpen(true)}
-        >
-          Envios
-        </Button>
+        {pendingLabelCount > 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-amber-500/50 text-amber-700 dark:text-amber-300"
+            onClick={dismissAllLabels}
+          >
+            Descartar etiquetas não pagas ({pendingLabelCount})
+          </Button>
+        )}
+
         {!activeAgreement && products.length > 0 && (
           <Button size="sm" variant="secondary" onClick={() => setMgmvCreateOpen(true)}>
             Criar acordo MGMV
@@ -1967,7 +2012,7 @@ function ClientDrawer({
                                   {info ? (
                                     <NfEmittedBadge count={info.count} lastAt={info.lastAt} />
                                   ) : null}
-                                  {label ? <ShipmentLabelBadge info={label} onDismiss={dismissLabel} /> : null}
+                                  {label ? <ShipmentLabelBadge info={label} onDismiss={dismissLabel} onVerify={verifyLabel} /> : null}
                                 </>
                               );
                             })()}
@@ -2222,7 +2267,7 @@ function ClientDrawer({
                                 {info ? (
                                   <NfEmittedBadge count={info.count} lastAt={info.lastAt} />
                                 ) : null}
-                                {label ? <ShipmentLabelBadge info={label} onDismiss={dismissLabel} /> : null}
+                                {label ? <ShipmentLabelBadge info={label} onDismiss={dismissLabel} onVerify={verifyLabel} /> : null}
                               </>
                             );
                           })()}
@@ -2463,7 +2508,7 @@ function ClientDrawer({
                             {info ? (
                               <NfEmittedBadge count={info.count} lastAt={info.lastAt} />
                             ) : null}
-                            {label ? <ShipmentLabelBadge info={label} onDismiss={dismissLabel} /> : null}
+                            {label ? <ShipmentLabelBadge info={label} onDismiss={dismissLabel} onVerify={verifyLabel} /> : null}
                           </>
                         );
                       })()}

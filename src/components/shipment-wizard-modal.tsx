@@ -104,6 +104,9 @@ export function ShipmentWizardModal({
   const [selected, setSelected] = useState<Set<string>>(() => new Set(products.map((p) => p.id)));
   const [boxes, setBoxes] = useState<Box[]>(() => [newBox()]);
   const [insured, setInsured] = useState(false);
+  /** Cotar tudo como um pacote só (igual ao simulador do site) ou por caixa. */
+  const [combineBoxes, setCombineBoxes] = useState(true);
+
 
   const [recipient, setRecipient] = useState<ShipmentRecipient>(emptyRecipient);
   const [quoteId, setQuoteId] = useState<string>("");
@@ -140,6 +143,8 @@ export function ShipmentWizardModal({
     setSelected(new Set(ids));
     setBoxes([newBox()]);
     setInsured(false);
+    setCombineBoxes(true);
+
 
     const f = fichaFromTextWithDefaults(client.customerData, { phone: client.phone });
     setRecipient({
@@ -252,6 +257,21 @@ export function ShipmentWizardModal({
 
   /** Volumes enviados à SuperFrete: uma entrada por caixa. */
   const apiProducts = () => {
+    // Pacote único: mesma conta do simulador do site (peso somado, alturas
+    // empilhadas). Por caixa: cada volume é cobrado separadamente.
+    if (combineBoxes || boxes.length === 1) {
+      return [
+        {
+          name: boxes.length > 1 ? `Pacote (${boxes.length} caixas)` : "Pacote",
+          quantity: 1,
+          unitaryValue: Number(totalValue.toFixed(2)),
+          weightKg: parcel.weightKg || 0.3,
+          lengthCm: parcel.lengthCm || 16,
+          widthCm: parcel.widthCm || 11,
+          heightCm: parcel.heightCm || 2,
+        },
+      ];
+    }
     const share = boxes.length > 0 ? totalValue / boxes.length : totalValue;
     return boxes.map((b, i) => ({
       name: `Caixa ${i + 1}`,
@@ -263,6 +283,7 @@ export function ShipmentWizardModal({
       heightCm: dec(b.heightCm) || 2,
     }));
   };
+
 
 
   const toAddress = () => ({
@@ -638,16 +659,47 @@ export function ShipmentWizardModal({
                 </span>
               </span>
             </label>
+            {boxes.length > 1 ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2">
+                <span className="text-xs font-medium">Modo de cotação:</span>
+                {[
+                  { v: true, label: "Pacote único (igual ao site)" },
+                  { v: false, label: "Por caixa" },
+                ].map((opt) => (
+                  <Button
+                    key={String(opt.v)}
+                    type="button"
+                    size="sm"
+                    variant={combineBoxes === opt.v ? "default" : "outline"}
+                    className="h-7 px-2 text-xs"
+                    onClick={() => {
+                      setCombineBoxes(opt.v);
+                      setOptions([]);
+                      setQuoteId("");
+                    }}
+                  >
+                    {opt.label}
+                  </Button>
+                ))}
+                <span className="w-full text-[11px] text-muted-foreground">
+                  Por caixa cada volume tem cobrança mínima própria — costuma sair mais caro que a
+                  simulação feita direto no SuperFrete.
+                </span>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm text-muted-foreground">
                 Peso considerado: {Math.max(0.3, parcel.weightKg).toFixed(2)} kg ·{" "}
-                {boxes.length} caixa(s) · seguro {insured ? "ativado" : "desativado"}.
+                {boxes.length} caixa(s) ·{" "}
+                {boxes.length > 1 ? (combineBoxes ? "pacote único" : "por caixa") : "1 volume"} ·
+                seguro {insured ? "ativado" : "desativado"}.
               </p>
               <Button type="button" size="sm" onClick={calculate} disabled={quoting}>
                 {quoting ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
                 Calcular frete
               </Button>
             </div>
+
 
             {quoteError && <p className="text-xs text-destructive">{quoteError}</p>}
             {!quoting && options.length === 0 && !quoteError && (
@@ -690,9 +742,18 @@ export function ShipmentWizardModal({
                   ) : null}
                 </span>
 
-                <span className="text-sm font-semibold tabular-nums">
-                  {q.error ? "—" : formatCents(q.priceCents)}
+                <span className="shrink-0 text-right">
+                  <span className="block text-sm font-semibold tabular-nums">
+                    {q.error ? "—" : formatCents(q.priceCents)}
+                  </span>
+                  {!q.error && q.priceWithoutInsuranceCents != null ? (
+                    <span className="block text-[11px] text-muted-foreground tabular-nums">
+                      sem seguro {formatCents(q.priceWithoutInsuranceCents)} · seguro +
+                      {formatCents(Math.max(0, q.priceCents - q.priceWithoutInsuranceCents))}
+                    </span>
+                  ) : null}
                 </span>
+
               </button>
             ))}
           </div>
@@ -789,6 +850,16 @@ export function ShipmentWizardModal({
                     ? ` · Saldo disponível: ${formatCents(balance.balanceCents)}`
                     : ""}
                 </p>
+                {labelInfo?.priceCents != null &&
+                quote != null &&
+                labelInfo.priceCents !== quote.priceCents ? (
+                  <p className="text-xs text-amber-600">
+                    Cotado {formatCents(quote.priceCents)} · cobrado{" "}
+                    {formatCents(labelInfo.priceCents)} — diferença registrada no histórico do
+                    envio.
+                  </p>
+                ) : null}
+
                 {insufficient ? (
                   <p className="text-xs text-amber-600">
                     Saldo insuficiente — faltam {formatCents(missingCents)} para pagar esta

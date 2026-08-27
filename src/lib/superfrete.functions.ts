@@ -8,6 +8,8 @@ export interface SuperfreteQuoteOption {
   name: string;
   company: string;
   priceCents: number;
+  /** Preço do mesmo serviço sem valor declarado/seguro (quando o seguro é pedido). */
+  priceWithoutInsuranceCents: number | null;
   deliveryDays: number | null;
   error: string | null;
   /** Valor efetivamente coberto pelo seguro nesta transportadora (R$). */
@@ -19,6 +21,7 @@ export interface SuperfreteQuoteOption {
     heightCm: number | null;
   }>;
 }
+
 
 
 export interface SuperfreteOrderInfo {
@@ -129,6 +132,22 @@ async function logEvent(
   }
 }
 
+/**
+ * Bloco de opções usado TANTO na cotação quanto na criação da etiqueta.
+ * Manter idêntico evita a diferença entre o valor cotado e o valor cobrado.
+ */
+function shippingOptions(insuranceValue: number) {
+  return {
+    own_hand: false,
+    receipt: false,
+    reverse: false,
+    non_commercial: true,
+    insurance_value: Number(insuranceValue.toFixed(2)),
+    use_insurance_value: insuranceValue > 0,
+    platform: "Star Games",
+  };
+}
+
 /** Cotação de frete — POST /calculator. */
 export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -151,30 +170,28 @@ export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
     if (fromCep.length !== 8) throw new Error("Informe o CEP de origem nas configurações de envio.");
     if (toCep.length !== 8) throw new Error("Complete os dados do destinatário antes de calcular o frete.");
 
-    const payload = {
+    const apiProducts = data.products.map((p) => ({
+      name: p.name,
+      quantity: p.quantity,
+      unitary_value: Number(p.unitaryValue.toFixed(2)),
+      weight: Math.max(0.01, p.weightKg),
+      length: Math.max(1, p.lengthCm),
+      width: Math.max(1, p.widthCm),
+      height: Math.max(1, p.heightCm),
+    }));
+
+    const buildPayload = (insuranceValue: number) => ({
       from: { postal_code: fromCep },
       to: { postal_code: toCep },
       services: data.services,
-      options: {
-        own_hand: false,
-        receipt: false,
-        insurance_value: Number(data.insuranceValue.toFixed(2)),
-        use_insurance_value: data.insuranceValue > 0,
-      },
-      products: data.products.map((p) => ({
-        name: p.name,
-        quantity: p.quantity,
-        unitary_value: Number(p.unitaryValue.toFixed(2)),
-        weight: Math.max(0.01, p.weightKg),
-        length: Math.max(1, p.lengthCm),
-        width: Math.max(1, p.widthCm),
-        height: Math.max(1, p.heightCm),
-      })),
-    };
+      options: shippingOptions(insuranceValue),
+      products: apiProducts,
+    });
 
-    try {
-      const raw = await superfreteRequest<unknown[]>("/calculator", { method: "POST", body: payload });
-      const options: SuperfreteQuoteOption[] = (Array.isArray(raw) ? raw : []).map((item) => {
+    const payload = buildPayload(data.insuranceValue);
+
+    const parseOptions = (raw: unknown): SuperfreteQuoteOption[] =>
+      (Array.isArray(raw) ? raw : []).map((item) => {
         const r = item as Record<string, unknown>;
         const company = (r["company"] as Record<string, unknown> | undefined) ?? {};
         const packages = Array.isArray(r["packages"]) ? (r["packages"] as Record<string, unknown>[]) : [];
@@ -197,13 +214,35 @@ export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
           name: String(r["name"] ?? ""),
           company: String(company["name"] ?? ""),
           priceCents: toCents(r["price"]),
+          priceWithoutInsuranceCents: null,
           deliveryDays: r["delivery_time"] != null ? num(r["delivery_time"]) : null,
           error: typeof r["error"] === "string" ? (r["error"] as string) : null,
           insuredValue: insured,
           packages: dims,
         };
-
       });
+
+    try {
+      const raw = await superfreteRequest<unknown[]>("/calculator", { method: "POST", body: payload });
+      const options = parseOptions(raw);
+
+      // Cotação paralela sem valor declarado: deixa explícito quanto custa o
+      // seguro e permite comparar com a simulação feita direto no site.
+      if (data.insuranceValue > 0) {
+        try {
+          const rawPlain = await superfreteRequest<unknown[]>("/calculator", {
+            method: "POST",
+            body: buildPayload(0),
+          });
+          const plain = new Map(parseOptions(rawPlain).map((o) => [o.id, o.priceCents]));
+          options.forEach((o) => {
+            const p = plain.get(o.id);
+            if (p != null && p > 0) o.priceWithoutInsuranceCents = p;
+          });
+        } catch {
+          /* comparação é opcional — a cotação principal já foi obtida */
+        }
+      }
 
       await logEvent(context.supabase as never, context.userId, {
         action: "cotacao_calculada",
@@ -224,6 +263,7 @@ export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
       throw friendlyError(e);
     }
   });
+
 
 export interface SuperfreteSyncResult {
   checked: number;
@@ -409,18 +449,9 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
       })),
       volumes: volumes.length === 1 ? volumes[0] : volumes,
 
-      options: {
-        insurance_value: Number(data.insuranceValue.toFixed(2)),
-        // Sem esta flag, transportadoras privadas (Jadlog/Loggi) emitem a
-        // etiqueta sem o seguro cotado. Mantém a etiqueta igual à cotação.
-        use_insurance_value: data.insuranceValue > 0,
-        receipt: false,
-        own_hand: false,
-        reverse: false,
-        non_commercial: true,
+      // Mesmo bloco de opções da cotação — evita cobrar diferente do cotado.
+      options: shippingOptions(data.insuranceValue),
 
-        platform: "Star Games",
-      },
     };
 
     try {
@@ -898,3 +929,83 @@ export const getSuperfreteOrderInfo = createServerFn({ method: "POST" })
       throw friendlyError(e);
     }
   });
+
+/**
+ * Confere na SuperFrete se a etiqueta de um envio realmente existe.
+ * Quando o pedido não existe mais (ou está cancelado), o envio é marcado como
+ * "Falha na emissão" e o selo "Etiqueta não paga" some dos produtos.
+ */
+export const verifySuperfreteLabel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => z.object({ shipmentId: z.string().uuid() }).parse(data))
+  .handler(
+    async ({
+      data,
+      context,
+    }): Promise<{ exists: boolean; status: string; message: string }> => {
+      const { superfreteRequest } = await import("@/lib/superfrete.server");
+      const { supabase, userId } = context;
+
+      const { data: row } = await supabase
+        .from("shipments")
+        .select("id, superfrete_order_id, status")
+        .eq("id", data.shipmentId)
+        .maybeSingle();
+      const r = (row as Record<string, unknown> | null) ?? null;
+      const orderId = (r?.["superfrete_order_id"] as string | null) ?? null;
+      const previous = (r?.["status"] as string | null) ?? null;
+
+      const markFailed = async (message: string) => {
+        await supabase
+          .from("shipments")
+          .update({ status: "Falha na emissão", cancelled_at: new Date().toISOString() } as never)
+          .eq("id", data.shipmentId);
+        await logEvent(supabase as never, userId, {
+          shipmentId: data.shipmentId,
+          action: "etiqueta_verificada",
+          previousStatus: previous,
+          newStatus: "Falha na emissão",
+          message,
+        });
+        return { exists: false, status: "Falha na emissão", message };
+      };
+
+      if (!orderId) {
+        return markFailed("Envio sem pedido na SuperFrete — selo removido.");
+      }
+
+      try {
+        const raw = await superfreteRequest<Record<string, unknown>>(`/order/info/${orderId}`, {
+          method: "GET",
+        });
+        const remote = (raw["status"] as string | null) ?? null;
+        if (!remote || /cancel/i.test(remote)) {
+          return markFailed(`Pedido ${orderId} não está mais ativo na SuperFrete.`);
+        }
+        const internal = mapSuperfreteStatus(remote);
+        const tracking = (raw["tracking"] as string | null) ?? null;
+        await supabase
+          .from("shipments")
+          .update({
+            superfrete_status: remote,
+            status: internal,
+            tracking_code: tracking,
+          } as never)
+          .eq("id", data.shipmentId);
+        await logEvent(supabase as never, userId, {
+          shipmentId: data.shipmentId,
+          action: "etiqueta_verificada",
+          previousStatus: previous,
+          newStatus: internal,
+          message: `Etiqueta confirmada na SuperFrete (${remote}).`,
+        });
+        return {
+          exists: true,
+          status: internal,
+          message: `Etiqueta existe na SuperFrete — status ${internal}.`,
+        };
+      } catch {
+        return markFailed(`Pedido ${orderId} não foi encontrado na SuperFrete.`);
+      }
+    },
+  );

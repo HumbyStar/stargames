@@ -1,4 +1,4 @@
-import { Tag, X } from "lucide-react";
+import { Tag, X, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface ShipmentLabelInfo {
@@ -14,14 +14,16 @@ export interface ShipmentLabelInfo {
 /**
  * Selo de etiqueta SuperFrete no produto — âmbar quando a etiqueta existe mas
  * ainda não foi paga/liberada, e azul quando já está liberada/postada.
- * Etiquetas pendentes podem ser descartadas (quando não existem de fato lá).
+ * Etiquetas pendentes podem ser verificadas na SuperFrete ou descartadas.
  */
 export function ShipmentLabelBadge({
   info,
   onDismiss,
+  onVerify,
 }: {
   info: ShipmentLabelInfo;
   onDismiss?: (shipmentId: string) => void;
+  onVerify?: (shipmentId: string) => void;
 }) {
   const date = info.createdAt ? new Date(info.createdAt) : null;
   const dateLabel =
@@ -30,6 +32,7 @@ export function ShipmentLabelBadge({
     dateLabel ? ` · ${dateLabel}` : ""
   }`;
   const canDismiss = Boolean(info.pending && onDismiss && info.shipmentId);
+  const canVerify = Boolean(info.pending && onVerify && info.shipmentId);
   return (
     <span
       title={title}
@@ -42,6 +45,19 @@ export function ShipmentLabelBadge({
     >
       <Tag className="h-3 w-3" />
       {info.pending ? "Etiqueta não paga" : "Etiqueta"}
+      {canVerify ? (
+        <button
+          type="button"
+          title="Verificar esta etiqueta na SuperFrete"
+          className="ml-0.5 rounded-full p-0.5 hover:bg-amber-500/20"
+          onClick={(e) => {
+            e.stopPropagation();
+            onVerify?.(info.shipmentId as string);
+          }}
+        >
+          <RefreshCw className="h-2.5 w-2.5" />
+        </button>
+      ) : null}
       {canDismiss ? (
         <button
           type="button"
@@ -58,3 +74,4 @@ export function ShipmentLabelBadge({
     </span>
   );
 }
+
