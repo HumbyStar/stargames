@@ -659,16 +659,47 @@ export function ShipmentWizardModal({
                 </span>
               </span>
             </label>
+            {boxes.length > 1 ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2">
+                <span className="text-xs font-medium">Modo de cotação:</span>
+                {[
+                  { v: true, label: "Pacote único (igual ao site)" },
+                  { v: false, label: "Por caixa" },
+                ].map((opt) => (
+                  <Button
+                    key={String(opt.v)}
+                    type="button"
+                    size="sm"
+                    variant={combineBoxes === opt.v ? "default" : "outline"}
+                    className="h-7 px-2 text-xs"
+                    onClick={() => {
+                      setCombineBoxes(opt.v);
+                      setOptions([]);
+                      setQuoteId("");
+                    }}
+                  >
+                    {opt.label}
+                  </Button>
+                ))}
+                <span className="w-full text-[11px] text-muted-foreground">
+                  Por caixa cada volume tem cobrança mínima própria — costuma sair mais caro que a
+                  simulação feita direto no SuperFrete.
+                </span>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm text-muted-foreground">
                 Peso considerado: {Math.max(0.3, parcel.weightKg).toFixed(2)} kg ·{" "}
-                {boxes.length} caixa(s) · seguro {insured ? "ativado" : "desativado"}.
+                {boxes.length} caixa(s) ·{" "}
+                {boxes.length > 1 ? (combineBoxes ? "pacote único" : "por caixa") : "1 volume"} ·
+                seguro {insured ? "ativado" : "desativado"}.
               </p>
               <Button type="button" size="sm" onClick={calculate} disabled={quoting}>
                 {quoting ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
                 Calcular frete
               </Button>
             </div>
+
 
             {quoteError && <p className="text-xs text-destructive">{quoteError}</p>}
             {!quoting && options.length === 0 && !quoteError && (
