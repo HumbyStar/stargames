@@ -728,27 +728,15 @@ export function useActivityFeed() {
     setHasMore(rows.length === PAGE_SIZE);
   }, [events, nameFor]);
 
-  // Realtime do audit_log
+  // Realtime do audit_log desativado (MVP): a atividade é carregada sob
+  // demanda com o botão de atualizar, reduzindo consultas ao banco.
   useEffect(() => {
-    const channel = supabase
-      .channel("activity-feed")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "audit_log" },
-        (payload) => {
-          if (pausedRef.current) return;
-          const row = payload.new as unknown as AuditRow;
-          const ev = mapAuditRow(row, nameFor(row.user_id, row.user_email));
-          if (ev) pushEvents([ev]);
-        },
-      )
-      .subscribe((status) => setLive(status === "SUBSCRIBED"));
+    setLive(false);
     return () => {
-      supabase.removeChannel(channel);
       if (flushRef.current) clearTimeout(flushRef.current);
       flushRef.current = null;
     };
-  }, [nameFor, pushEvents]);
+  }, []);
 
   // Presença: quem está com sessão ativa.
   // A leitura passa pela função `list_online_users` (já restrita a usuários

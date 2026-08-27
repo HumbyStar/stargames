@@ -99,24 +99,7 @@ export function DashboardIntegrityCard() {
     };
   }, [check]);
 
-  // Reconferência em tempo real (agrupando rajadas de eventos).
-  useEffect(() => {
-    let timer: number | undefined;
-    const schedule = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => void check({ silent: true }), REALTIME_DEBOUNCE_MS);
-    };
-    const channel = supabase
-      .channel("dashboard-integrity")
-      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, schedule)
-      .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, schedule)
-      .on("postgres_changes", { event: "*", schema: "public", table: "mgmv_agreements" }, schedule)
-      .subscribe();
-    return () => {
-      window.clearTimeout(timer);
-      void supabase.removeChannel(channel);
-    };
-  }, [check]);
+  // Reconferência em tempo real desativada (MVP) para reduzir consultas.
 
   // Relógio do rótulo "verificado há X".
   useEffect(() => {
