@@ -850,6 +850,16 @@ export function ShipmentWizardModal({
                     ? ` · Saldo disponível: ${formatCents(balance.balanceCents)}`
                     : ""}
                 </p>
+                {labelInfo?.priceCents != null &&
+                quote != null &&
+                labelInfo.priceCents !== quote.priceCents ? (
+                  <p className="text-xs text-amber-600">
+                    Cotado {formatCents(quote.priceCents)} · cobrado{" "}
+                    {formatCents(labelInfo.priceCents)} — diferença registrada no histórico do
+                    envio.
+                  </p>
+                ) : null}
+
                 {insufficient ? (
                   <p className="text-xs text-amber-600">
                     Saldo insuficiente — faltam {formatCents(missingCents)} para pagar esta
