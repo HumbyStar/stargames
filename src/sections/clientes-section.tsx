@@ -1373,6 +1373,17 @@ function ClientDrawer({
     return map;
   }, [shipmentRows]);
   const dismissLabelFn = useServerFn(dismissShipmentLabel);
+  const dismissAllFn = useServerFn(dismissClientShipmentLabels);
+  const verifyLabelFn = useServerFn(verifySuperfreteLabel);
+  const pendingLabelCount = useMemo(
+    () =>
+      new Set(
+        [...labelProductMap.values()]
+          .filter((l) => l.pending && l.shipmentId)
+          .map((l) => l.shipmentId as string),
+      ).size,
+    [labelProductMap],
+  );
   const dismissLabel = useCallback(
     async (shipmentId: string) => {
       try {
@@ -1385,6 +1396,29 @@ function ClientDrawer({
     },
     [dismissLabelFn, refreshShipments],
   );
+  const dismissAllLabels = useCallback(async () => {
+    try {
+      const res = await dismissAllFn({ data: { clientId: client.id, reason: "" } });
+      toast.success(`${res.dismissed} etiqueta(s) descartada(s).`);
+      void refreshShipments();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível descartar as etiquetas.");
+    }
+  }, [dismissAllFn, client.id, refreshShipments]);
+  const verifyLabel = useCallback(
+    async (shipmentId: string) => {
+      try {
+        const res = await verifyLabelFn({ data: { shipmentId } });
+        if (res.exists) toast.success(res.message);
+        else toast.info(res.message);
+        void refreshShipments();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Não foi possível verificar a etiqueta.");
+      }
+    },
+    [verifyLabelFn, refreshShipments],
+  );
+
 
   const nfProductMap = useMemo(() => {
     const map = new Map<string, { count: number; lastAt: string }>();
