@@ -319,6 +319,20 @@ export function ShipmentWizardModal({
     if (!quote || chosen.length === 0 || saving) return;
     setSaving(true);
     try {
+      // 1) Cria a etiqueta na SuperFrete PRIMEIRO. Se falhar, nenhum envio é
+      // gravado — evita registros órfãos com selo "Etiqueta não paga".
+      const order = await runCart({
+        data: {
+          shipmentId: null,
+          from: origin,
+          to: toAddress(),
+          service: quote.id,
+          products: apiProducts(),
+          insuranceValue,
+        },
+      });
+
+      // 2) Só então grava o envio já com os dados reais da etiqueta.
       const shipment = await createShipment({
         data: {
           clientId: client.id,
@@ -326,7 +340,7 @@ export function ShipmentWizardModal({
           carrier: quote.company || "SuperFrete",
           service: quote.name,
           etaDays: quote.deliveryDays,
-          priceCents: quote.priceCents,
+          priceCents: order.priceCents ?? quote.priceCents,
           totalWeightKg: Number(parcel.weightKg.toFixed(3)),
           items: chosen.map((p) => ({
             productId: p.id,
@@ -356,26 +370,13 @@ export function ShipmentWizardModal({
               .join(" · ") || null,
           selectedServiceId: quote.id,
           selectedServiceName: quote.name,
+          superfreteOrderId: order.orderId || null,
+          superfreteStatus: order.status ?? null,
+          status: order.internalStatus,
+          payloadCart: order.payloadCartJson ? JSON.parse(order.payloadCartJson) : null,
+          responseCart: order.responseCartJson ? JSON.parse(order.responseCartJson) : null,
         },
       });
-
-      const order = await runCart({
-        data: {
-          shipmentId: shipment.id,
-          from: origin,
-          to: toAddress(),
-          service: quote.id,
-          products: apiProducts(),
-          volumes: {
-            weightKg: Math.max(0.01, parcel.weightKg),
-            lengthCm: Math.max(1, parcel.lengthCm),
-            widthCm: Math.max(1, parcel.widthCm),
-            heightCm: Math.max(1, parcel.heightCm),
-          },
-          insuranceValue,
-        },
-      });
-
 
       setLabelInfo({
         shipmentId: shipment.id,
@@ -392,6 +393,7 @@ export function ShipmentWizardModal({
       setSaving(false);
     }
   };
+
 
   const release = async () => {
     if (!labelInfo || releasing) return;

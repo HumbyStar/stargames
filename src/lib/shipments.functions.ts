@@ -89,7 +89,14 @@ const CreateSchema = z.object({
   selectedServiceName: z.string().nullable().default(null),
   payloadQuote: z.unknown().nullable().default(null),
   responseQuote: z.unknown().nullable().default(null),
+  /** Dados da etiqueta já criada na SuperFrete (fluxo correto: API primeiro). */
+  superfreteOrderId: z.string().nullable().default(null),
+  superfreteStatus: z.string().nullable().default(null),
+  status: z.string().nullable().default(null),
+  payloadCart: z.unknown().nullable().default(null),
+  responseCart: z.unknown().nullable().default(null),
 });
+
 
 function mapRow(r: Record<string, unknown>): ShipmentRow {
   return {
@@ -136,18 +143,58 @@ export const createShipment = createServerFn({ method: "POST" })
         product_ids: data.items.map((i) => i.productId),
         notes: data.notes,
         created_by: userId,
-        status: "Etiqueta pendente de pagamento",
+        status: data.status ?? "Etiqueta pendente de pagamento",
         selected_service_id: data.selectedServiceId,
         selected_service_name: data.selectedServiceName,
         estimated_delivery_days: data.etaDays,
         payload_quote: (data.payloadQuote ?? null) as never,
         response_quote: (data.responseQuote ?? null) as never,
+        superfrete_order_id: data.superfreteOrderId,
+        superfrete_status: data.superfreteStatus,
+        payload_cart: (data.payloadCart ?? null) as never,
+        response_cart: (data.responseCart ?? null) as never,
+        ...(data.superfreteOrderId ? { confirmed_at: new Date().toISOString() } : {}),
       })
       .select("*")
       .single();
     if (error) throw new Error(error.message);
     return mapRow(row as Record<string, unknown>);
   });
+
+/**
+ * Descarta um envio cuja etiqueta não existe de fato na SuperFrete
+ * (registro órfão). Marca como "Falha na emissão" para sumir com o selo
+ * "Etiqueta não paga" nos produtos do cliente.
+ */
+export const dismissShipmentLabel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) =>
+    z.object({ shipmentId: z.string().uuid(), reason: z.string().max(300).default("") }).parse(data),
+  )
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    const { supabase, userId } = context;
+    const { data: row } = await supabase
+      .from("shipments")
+      .select("status, superfrete_order_id")
+      .eq("id", data.shipmentId)
+      .maybeSingle();
+    const prev = (row as Record<string, unknown> | null)?.["status"] as string | undefined;
+    const { error } = await supabase
+      .from("shipments")
+      .update({ status: "Falha na emissão", cancelled_at: new Date().toISOString() })
+      .eq("id", data.shipmentId);
+    if (error) throw new Error(error.message);
+    await supabase.from("shipment_logs").insert({
+      shipment_id: data.shipmentId,
+      action: "etiqueta_descartada",
+      previous_status: prev ?? null,
+      new_status: "Falha na emissão",
+      message: data.reason || "Etiqueta inexistente na SuperFrete — descartada manualmente.",
+      created_by: userId,
+    } as never);
+    return { ok: true };
+  });
+
 
 /** Histórico de envios do ambiente atual (mais recentes primeiro). */
 export const listShipments = createServerFn({ method: "POST" })
