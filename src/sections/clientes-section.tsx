@@ -1651,13 +1651,17 @@ function ClientDrawer({
         <Button size="sm" variant="outline" onClick={() => setShipHistoryOpen(true)}>
           Envios
         </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setShipHistoryOpen(true)}
-        >
-          Envios
-        </Button>
+        {pendingLabelCount > 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-amber-500/50 text-amber-700 dark:text-amber-300"
+            onClick={dismissAllLabels}
+          >
+            Descartar etiquetas não pagas ({pendingLabelCount})
+          </Button>
+        )}
+
         {!activeAgreement && products.length > 0 && (
           <Button size="sm" variant="secondary" onClick={() => setMgmvCreateOpen(true)}>
             Criar acordo MGMV
