@@ -1324,9 +1324,18 @@ export function AppLayout({ children }: { children?: ReactNode }) {
     void queryClient
       .prefetchQuery({
         queryKey: ["dashboard-aggregates"],
-        queryFn: () => aggregatesFn(),
+        queryFn: async () => {
+          try {
+            return await aggregatesFn();
+          } catch (error) {
+            // Sessão expirada durante o splash: manda para /auth.
+            if (handleUnauthorized(error)) return null;
+            throw error;
+          }
+        },
         staleTime: 30_000,
       })
+
       .catch(() => undefined)
       .finally(() => {
         window.clearTimeout(timeout);
