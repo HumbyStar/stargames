@@ -427,8 +427,9 @@ export function ShipmentWizardModal({
         <DialogHeader>
           <DialogTitle>Enviar — {client.name}</DialogTitle>
           <DialogDescription>
-            Cotações reais da SuperFrete (ambiente Sandbox). A etiqueta é gerada sem alterar a
-            situação dos produtos.
+            Cotações reais da SuperFrete (ambiente{" "}
+            {balance?.environment === "sandbox" ? "Sandbox" : "Produção"}). A etiqueta é gerada sem
+            alterar a situação dos produtos.
           </DialogDescription>
         </DialogHeader>
 
