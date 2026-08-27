@@ -177,15 +177,46 @@ export function ShipmentWizardModal({
     [boxes],
   );
 
-  const boxesValid =
-    boxes.length > 0 &&
-    boxes.every(
-      (b) =>
-        dec(b.weightKg) > 0 &&
-        dec(b.lengthCm) > 0 &&
-        dec(b.widthCm) > 0 &&
-        dec(b.heightCm) > 0,
-    );
+  /**
+   * Limites da SuperFrete/Correios por volume. Validar aqui evita o erro
+   * genérico "Ocorreu um ou mais erros" devolvido pela API.
+   */
+  const boxIssues = useMemo(() => {
+    const out: string[] = [];
+    boxes.forEach((b, i) => {
+      const n = `Caixa ${i + 1}`;
+      const w = dec(b.weightKg);
+      const L = dec(b.lengthCm);
+      const W = dec(b.widthCm);
+      const H = dec(b.heightCm);
+      if (!(w > 0) || !(L > 0) || !(W > 0) || !(H > 0)) {
+        out.push(`${n}: informe peso e medidas maiores que zero.`);
+        return;
+      }
+      if (w > 30) {
+        out.push(
+          `${n}: peso ${w} kg acima do limite de 30 kg. Se digitou em gramas, use kg (ex.: ${(
+            w / 1000
+          )
+            .toFixed(2)
+            .replace(".", ",")} kg).`,
+        );
+      }
+      if (L < 16 || W < 11 || H < 2) {
+        out.push(`${n}: medidas mínimas 16 × 11 × 2 cm (compr. × larg. × alt.).`);
+      }
+      if (L > 100 || W > 100 || H > 100) {
+        out.push(`${n}: nenhuma medida pode passar de 100 cm.`);
+      }
+      if (L + W + H > 200) {
+        out.push(`${n}: a soma das medidas não pode passar de 200 cm.`);
+      }
+    });
+    return out;
+  }, [boxes]);
+
+  const boxesValid = boxes.length > 0 && boxIssues.length === 0;
+
 
   const quote = options.find((q) => q.id === quoteId) ?? null;
   const labelPaid = /liberad|paga|postad|entregue/i.test(labelInfo?.status ?? "");
