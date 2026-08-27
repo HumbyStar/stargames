@@ -356,7 +356,12 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     folderFilter,
   ]);
 
-  const pagedRows = rows;
+  const {
+    visible: pagedRows,
+    hasMore,
+    nextChunk,
+    loadMore,
+  } = usePaginatedList(rows, { step: 20, sectionId: "clientes" });
 
   // Contagem de correspondências por coluna sobre a lista já filtrada
   // (`rows`) — usado para pintar o indicador no cabeçalho e a legenda

@@ -271,7 +271,10 @@ export function CollectionSection({
     });
   }, [allRows, filter, period, customFrom, customTo, search, folderFilter, financialFilter, situationFilter, clients]);
 
-  const visible = filtered;
+  const { visible, hasMore, nextChunk, loadMore } = usePaginatedList(filtered, {
+    step: 20,
+    sectionId: "collection",
+  });
 
   const searchActive = search.trim().length > 0;
   const matchCols = useMemo(() => {

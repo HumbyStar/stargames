@@ -508,7 +508,12 @@ export function MGMVSection({
     });
   }, [rows, search, chip, stats.clientsWithProducts]);
 
-  const pagedRows = filtered;
+  const {
+    visible: pagedRows,
+    hasMore,
+    nextChunk,
+    loadMore,
+  } = usePaginatedList(filtered, { step: 20, sectionId: "mgmv" });
 
   const searchActive = search.trim().length > 0;
   const matchCols = useMemo(() => {
