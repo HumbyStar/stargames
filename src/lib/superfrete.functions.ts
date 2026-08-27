@@ -315,17 +315,12 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) =>
     z
       .object({
-        shipmentId: z.string().uuid(),
+        /** Opcional: quando ausente, o envio só é gravado após a etiqueta existir. */
+        shipmentId: z.string().uuid().nullable().default(null),
         from: AddressSchema,
         to: AddressSchema,
         service: z.string().min(1),
         products: z.array(ProductSchema).min(1),
-        volumes: z.object({
-          weightKg: z.number().positive(),
-          lengthCm: z.number().positive(),
-          widthCm: z.number().positive(),
-          heightCm: z.number().positive(),
-        }),
         insuranceValue: z.number().nonnegative().default(0),
       })
       .parse(data),
@@ -333,6 +328,18 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { superfreteRequest, SuperfreteError } = await import("@/lib/superfrete.server");
     const { supabase, userId } = context;
+
+    assertRecipient(data.to);
+    assertBoxes(data.products);
+
+    // A etiqueta usa exatamente as mesmas caixas da cotação (um volume por caixa),
+    // evitando diferença entre o valor cotado e o cobrado.
+    const volumes = data.products.map((p) => ({
+      height: Math.max(1, p.heightCm),
+      width: Math.max(1, p.widthCm),
+      length: Math.max(1, p.lengthCm),
+      weight: Math.max(0.01, p.weightKg),
+    }));
 
     const payload = {
       from: addressToApi(data.from),
@@ -343,12 +350,8 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
         quantity: p.quantity,
         unitary_value: Number(p.unitaryValue.toFixed(2)),
       })),
-      volumes: {
-        height: Math.max(1, data.volumes.heightCm),
-        width: Math.max(1, data.volumes.widthCm),
-        length: Math.max(1, data.volumes.lengthCm),
-        weight: Math.max(0.01, data.volumes.weightKg),
-      },
+      volumes: volumes.length === 1 ? volumes[0] : volumes,
+
       options: {
         insurance_value: Number(data.insuranceValue.toFixed(2)),
         // Sem esta flag, transportadoras privadas (Jadlog/Loggi) emitem a
