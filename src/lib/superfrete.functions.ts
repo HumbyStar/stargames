@@ -430,18 +430,20 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
         rawInsurance === undefined || rawInsurance === null ? null : num(rawInsurance);
 
 
-      await supabase
-        .from("shipments")
-        .update({
-          superfrete_order_id: orderId || null,
-          superfrete_status: status,
-          status: internal,
-          ...(priceCents && priceCents > 0 ? { price_cents: priceCents } : {}),
-          payload_cart: sanitizeForLog(payload) as never,
-          response_cart: sanitizeForLog(raw) as never,
-          confirmed_at: new Date().toISOString(),
-        })
-        .eq("id", data.shipmentId);
+      if (data.shipmentId) {
+        await supabase
+          .from("shipments")
+          .update({
+            superfrete_order_id: orderId || null,
+            superfrete_status: status,
+            status: internal,
+            ...(priceCents && priceCents > 0 ? { price_cents: priceCents } : {}),
+            payload_cart: sanitizeForLog(payload) as never,
+            response_cart: sanitizeForLog(raw) as never,
+            confirmed_at: new Date().toISOString(),
+          })
+          .eq("id", data.shipmentId);
+      }
 
       await logEvent(supabase as never, userId, {
         shipmentId: data.shipmentId,
@@ -458,7 +460,16 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
         response: raw,
       });
 
-      return { orderId, status, internalStatus: internal, priceCents, insuredValue };
+      return {
+        orderId,
+        status,
+        internalStatus: internal,
+        priceCents,
+        insuredValue,
+        payloadCart: sanitizeForLog(payload) as unknown,
+        responseCart: sanitizeForLog(raw) as unknown,
+      };
+
 
     } catch (e) {
       const message = e instanceof SuperfreteError ? e.message : String(e);
