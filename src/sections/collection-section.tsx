@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { StatusLegend } from "@/components/status-legend";
 import { Button } from "@/components/ui/button";
+import { usePaginatedList } from "@/hooks/use-paginated-list";
+import { LoadMoreButton } from "@/components/load-more-button";
 import {
   daysLate,
   displaySituation,
@@ -271,7 +273,7 @@ export function CollectionSection({
     });
   }, [allRows, filter, period, customFrom, customTo, search, folderFilter, financialFilter, situationFilter, clients]);
 
-  const visible = filtered;
+  const { visible, hasMore, nextChunk, loadMore } = usePaginatedList(filtered, { step: 20 });
 
   const searchActive = search.trim().length > 0;
   const matchCols = useMemo(() => {
@@ -1052,6 +1054,7 @@ export function CollectionSection({
                 </span>
               )}
             </span>
+            {hasMore && <LoadMoreButton count={nextChunk} onClick={loadMore} />}
           </div>
         )}
         </>

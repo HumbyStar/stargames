@@ -120,7 +120,7 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
     }
 
     ping();
-    const id = window.setInterval(ping, 30_000);
+    const id = window.setInterval(ping, 120_000);
     const onFocus = () => ping();
     window.addEventListener("focus", onFocus);
     const onBeforeUnload = () => handleSessionUnload("beforeunload");
@@ -177,7 +177,7 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
     }
 
     void checkMaintenance();
-    const id = window.setInterval(checkMaintenance, 30_000);
+    const id = window.setInterval(checkMaintenance, 120_000);
     const onFocus = () => void checkMaintenance();
     window.addEventListener("focus", onFocus);
     return () => {

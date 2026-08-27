@@ -71,7 +71,7 @@ export function OnlineUsersStrip({ active }: { active: boolean }) {
     }
 
     void load();
-    const id = window.setInterval(load, 30_000);
+    const id = window.setInterval(load, 120_000);
     return () => {
       cancelled = true;
       window.clearInterval(id);

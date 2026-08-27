@@ -3,7 +3,8 @@ import { Folder, Filter, Pencil, Eye, EyeOff, AlertTriangle, Trash2 } from "luci
 import { Card, MetricCard, PageHeader, Tag } from "@/components/ui-bits";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { Button } from "@/components/ui/button";
-// paginação client-side removida — mostrar todos os clientes de uma vez
+import { usePaginatedList } from "@/hooks/use-paginated-list";
+import { LoadMoreButton } from "@/components/load-more-button";
 import { useUiStore } from "@/lib/ui-store";
 import {
   Dialog,
@@ -356,7 +357,12 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     folderFilter,
   ]);
 
-  const pagedRows = rows;
+  const {
+    visible: pagedRows,
+    hasMore,
+    nextChunk,
+    loadMore,
+  } = usePaginatedList(rows, { step: 20 });
 
   // Contagem de correspondências por coluna sobre a lista já filtrada
   // (`rows`) — usado para pintar o indicador no cabeçalho e a legenda
@@ -1002,6 +1008,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                 <span>
                   {pagedRows.length} de {rows.length} cliente(s) exibido(s)
                 </span>
+                {hasMore && <LoadMoreButton count={nextChunk} onClick={loadMore} />}
               </div>
             )}
           </>
