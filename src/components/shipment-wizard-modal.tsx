@@ -742,9 +742,18 @@ export function ShipmentWizardModal({
                   ) : null}
                 </span>
 
-                <span className="text-sm font-semibold tabular-nums">
-                  {q.error ? "—" : formatCents(q.priceCents)}
+                <span className="shrink-0 text-right">
+                  <span className="block text-sm font-semibold tabular-nums">
+                    {q.error ? "—" : formatCents(q.priceCents)}
+                  </span>
+                  {!q.error && q.priceWithoutInsuranceCents != null ? (
+                    <span className="block text-[11px] text-muted-foreground tabular-nums">
+                      sem seguro {formatCents(q.priceWithoutInsuranceCents)} · seguro +
+                      {formatCents(Math.max(0, q.priceCents - q.priceWithoutInsuranceCents))}
+                    </span>
+                  ) : null}
                 </span>
+
               </button>
             ))}
           </div>
