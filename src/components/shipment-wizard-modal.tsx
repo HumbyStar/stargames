@@ -143,6 +143,8 @@ export function ShipmentWizardModal({
     setSelected(new Set(ids));
     setBoxes([newBox()]);
     setInsured(false);
+    setCombineBoxes(true);
+
 
     const f = fichaFromTextWithDefaults(client.customerData, { phone: client.phone });
     setRecipient({
