@@ -104,6 +104,9 @@ export function ShipmentWizardModal({
   const [selected, setSelected] = useState<Set<string>>(() => new Set(products.map((p) => p.id)));
   const [boxes, setBoxes] = useState<Box[]>(() => [newBox()]);
   const [insured, setInsured] = useState(false);
+  /** Cotar tudo como um pacote só (igual ao simulador do site) ou por caixa. */
+  const [combineBoxes, setCombineBoxes] = useState(true);
+
 
   const [recipient, setRecipient] = useState<ShipmentRecipient>(emptyRecipient);
   const [quoteId, setQuoteId] = useState<string>("");
