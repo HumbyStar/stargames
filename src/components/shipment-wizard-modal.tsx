@@ -281,6 +281,10 @@ export function ShipmentWizardModal({
 
   const calculate = async () => {
     if (quoting || chosen.length === 0) return;
+    if (boxIssues.length > 0) {
+      setQuoteError(`Corrija as caixas na etapa 1: ${boxIssues.join(" ")}`);
+      return;
+    }
     if (!isShipOriginComplete(origin)) {
       setQuoteError(
         "Configure a origem do envio em Configurações → Envio / SuperFrete antes de calcular o frete.",
