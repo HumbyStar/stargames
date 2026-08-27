@@ -101,9 +101,19 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
   if (cachedRef.current === null) cachedRef.current = readAggregatesCache(env);
   const aggregatesQuery = useQuery({
     queryKey: ["dashboard-aggregates"],
-    queryFn: () => aggregatesFn(),
+    queryFn: async () => {
+      try {
+        return await aggregatesFn();
+      } catch (error) {
+        // Sessão expirada: redireciona para /auth em vez de quebrar a tela.
+        if (handleUnauthorized(error)) return cachedRef.current;
+        throw error;
+      }
+    },
+    retry: (count, error) => !isUnauthorizedError(error) && count < 2,
     staleTime: 30_000,
   });
+
   const openImport = useUiStore((s) => s.openImport);
   const openHistory = useUiStore((s) => s.openHistory);
 
