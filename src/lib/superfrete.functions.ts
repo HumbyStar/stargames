@@ -57,6 +57,17 @@ const ProductSchema = z.object({
 });
 
 const digits = (v: string) => (v ?? "").replace(/\D/g, "");
+
+/**
+ * Telefone no formato exigido pela SuperFrete (11 dígitos).
+ * Números antigos com 10 dígitos ganham o 9 depois do DDD.
+ */
+const normalizePhone = (v: string) => {
+  let d = digits(v);
+  if (d.length > 11 && d.startsWith("55")) d = d.slice(2);
+  if (d.length === 10) d = `${d.slice(0, 2)}9${d.slice(2)}`;
+  return d;
+};
 const num = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -304,7 +315,7 @@ function addressToApi(a: SuperfreteAddress) {
     postal_code: digits(a.postalCode),
     state_abbr: a.state.toUpperCase().slice(0, 2),
     email: a.email || undefined,
-    phone: digits(a.phone) || undefined,
+    phone: normalizePhone(a.phone) || undefined,
     document: digits(a.document) || undefined,
   };
 }
@@ -320,7 +331,7 @@ function assertRecipient(a: SuperfreteAddress) {
   if (doc.length !== 11 && doc.length !== 14) {
     problems.push("CPF (11 dígitos) ou CNPJ (14 dígitos) do destinatário está incompleto");
   }
-  const phone = digits(a.phone);
+  const phone = normalizePhone(a.phone);
   if (phone.length !== 11) {
     problems.push("o telefone do destinatário deve ter 11 dígitos (DDD + 9 dígitos)");
   }
