@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { usePersistedState } from "@/lib/use-persisted-state";
+import { usePaginatedList } from "@/hooks/use-paginated-list";
+import { LoadMoreButton } from "@/components/load-more-button";
 import { SuperfreteWalletPanel } from "@/components/superfrete-wallet-panel";
 import { cn } from "@/lib/utils";
 import {
@@ -117,6 +119,13 @@ export function EnvioSection({ onScrollTo }: { onScrollTo: (id: string) => void 
     });
   }, [allGroups, search, minItems, minDays]);
 
+  const {
+    visible: visibleGroups,
+    hasMore: hasMoreGroups,
+    nextChunk: nextGroups,
+    loadMore: loadMoreGroups,
+  } = usePaginatedList(groups, { step: 20 });
+
   const totalItems = allGroups.reduce((acc, g) => acc + g.products.length, 0);
   const totalValue = allGroups.reduce((acc, g) => acc + g.total, 0);
   const aging = allGroups.filter((g) => g.oldestDays >= 15).length;
@@ -207,7 +216,7 @@ export function EnvioSection({ onScrollTo }: { onScrollTo: (id: string) => void 
                 </tr>
               </thead>
               <tbody>
-                {groups.map((g) => {
+                {visibleGroups.map((g) => {
                   const open = expanded.has(g.client.id);
                   return (
                     <Fragment key={g.client.id}>
@@ -341,6 +350,11 @@ export function EnvioSection({ onScrollTo }: { onScrollTo: (id: string) => void 
                 })}
               </tbody>
             </table>
+            {hasMoreGroups && (
+              <div className="border-t border-border pt-4">
+                <LoadMoreButton count={nextGroups} onClick={loadMoreGroups} />
+              </div>
+            )}
           </div>
         )}
       </Card>
