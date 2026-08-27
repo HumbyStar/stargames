@@ -558,10 +558,16 @@ export function ShipmentWizardModal({
                 {cubicWeightKg(parcel).toFixed(2)} kg · {parcel.lengthCm}×{parcel.widthCm}×
                 {parcel.heightCm} cm
               </p>
-              {!boxesValid && (
-                <p className="text-xs text-destructive">
-                  Informe peso e medidas maiores que zero em todas as caixas.
-                </p>
+              <p className="text-xs text-muted-foreground">
+                Limites por caixa: até 30 kg, mínimo 16 × 11 × 2 cm, máximo 100 cm por lado e soma
+                das medidas até 200 cm. O peso é em quilos (0,65 = 650 g).
+              </p>
+              {boxIssues.length > 0 && (
+                <ul className="space-y-0.5 text-xs text-destructive">
+                  {boxIssues.map((m) => (
+                    <li key={m}>{m}</li>
+                  ))}
+                </ul>
               )}
             </div>
           </div>
