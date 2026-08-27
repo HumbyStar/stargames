@@ -169,7 +169,7 @@ export function useNotifications() {
   // mesmo quando o estado do store não mudou.
   const [tick, setTick] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 60_000);
+    const id = setInterval(() => setTick((t) => t + 1), 300_000);
     return () => clearInterval(id);
   }, []);
 

@@ -778,7 +778,7 @@ export function useActivityFeed() {
       setOnline(list);
     };
     void load();
-    const interval = setInterval(() => void load(), 15_000);
+    const interval = setInterval(() => void load(), 120_000);
     return () => {
       alive = false;
       clearInterval(interval);

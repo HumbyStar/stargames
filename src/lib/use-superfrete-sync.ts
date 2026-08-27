@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { syncSuperfreteShipments, type SuperfreteSyncResult } from "@/lib/superfrete.functions";
 
 /** Intervalo padrão entre sincronizações automáticas (3 min). */
-const DEFAULT_INTERVAL_MS = 180_000;
+const DEFAULT_INTERVAL_MS = 900_000;
 
 /**
  * Mantém os status das etiquetas SuperFrete atualizados em segundo plano.

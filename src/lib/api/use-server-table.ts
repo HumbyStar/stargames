@@ -99,7 +99,8 @@ export function useServerTable<TRow, TFilters extends Record<string, unknown>>(
   const query = useQuery({
     queryKey,
     enabled: opts.enabled ?? true,
-    staleTime: opts.staleTime ?? 30_000,
+    staleTime: opts.staleTime ?? 300_000,
+    refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
     queryFn: () =>
       call({

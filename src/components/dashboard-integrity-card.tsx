@@ -89,12 +89,9 @@ export function DashboardIntegrityCard() {
 
   // Ciclo automático + foco da aba.
   useEffect(() => {
-    const id = window.setInterval(() => void check({ silent: true }), AUTO_CHECK_MS);
-    const onFocus = () => {
-      if (document.visibilityState === "visible") void check({ silent: true });
-    };
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onFocus);
+    // Verificação automática desativada (MVP): checagem apenas manual.
+    const id = 0;
+    const onFocus = () => {};
     return () => {
       window.clearInterval(id);
       window.removeEventListener("focus", onFocus);
