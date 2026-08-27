@@ -43,6 +43,8 @@ import { notifyRowConfirmed } from "@/lib/write-confirm";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardAggregates } from "@/lib/api/queries.functions";
+import { handleUnauthorized } from "@/lib/unauthorized";
+
 import { HydrationSplash, useHydrationUserName } from "@/components/hydration-splash";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -1324,9 +1326,18 @@ export function AppLayout({ children }: { children?: ReactNode }) {
     void queryClient
       .prefetchQuery({
         queryKey: ["dashboard-aggregates"],
-        queryFn: () => aggregatesFn(),
+        queryFn: async () => {
+          try {
+            return await aggregatesFn();
+          } catch (error) {
+            // Sessão expirada durante o splash: manda para /auth.
+            if (handleUnauthorized(error)) return null;
+            throw error;
+          }
+        },
         staleTime: 30_000,
       })
+
       .catch(() => undefined)
       .finally(() => {
         window.clearTimeout(timeout);

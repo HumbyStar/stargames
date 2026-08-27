@@ -18,6 +18,8 @@ import { setUiValue } from "@/lib/db-sync";
 import { useListExpansionStore, type ListSection } from "@/lib/list-expansion";
 import { useSandbox } from "@/lib/use-sandbox";
 import type { DashboardAggregates } from "@/lib/api/queries.functions";
+import { handleUnauthorized, isUnauthorizedError } from "@/lib/unauthorized";
+
 
 // Cache local dos últimos agregados por ambiente: ao recarregar, a tela abre
 // com os últimos números conhecidos (nunca com zeros falsos) e só atualiza
@@ -101,9 +103,19 @@ function DashboardSection({ onScrollTo }: { onScrollTo: (id: string) => void }) 
   if (cachedRef.current === null) cachedRef.current = readAggregatesCache(env);
   const aggregatesQuery = useQuery({
     queryKey: ["dashboard-aggregates"],
-    queryFn: () => aggregatesFn(),
+    queryFn: async () => {
+      try {
+        return await aggregatesFn();
+      } catch (error) {
+        // Sessão expirada: redireciona para /auth em vez de quebrar a tela.
+        if (handleUnauthorized(error)) return cachedRef.current;
+        throw error;
+      }
+    },
+    retry: (count, error) => !isUnauthorizedError(error) && count < 2,
     staleTime: 30_000,
   });
+
   const openImport = useUiStore((s) => s.openImport);
   const openHistory = useUiStore((s) => s.openHistory);
 
