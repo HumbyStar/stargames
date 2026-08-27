@@ -71,7 +71,12 @@ import {
 import { NfHistoryModal } from "@/components/nf-history-modal";
 import { ShipmentHistoryModal } from "@/components/shipment-history-modal";
 import { NfEmittedBadge } from "@/components/nf-emitted-badge";
-import { listShipments, dismissShipmentLabel, type ShipmentRow } from "@/lib/shipments.functions";
+import {
+  listShipments,
+  dismissShipmentLabel,
+  dismissClientShipmentLabels,
+  type ShipmentRow,
+} from "@/lib/shipments.functions";
 import { useSuperfreteSync } from "@/lib/use-superfrete-sync";
 import { mapSuperfreteStatus } from "@/lib/superfrete-status";
 import {
@@ -2005,7 +2010,7 @@ function ClientDrawer({
                                   {info ? (
                                     <NfEmittedBadge count={info.count} lastAt={info.lastAt} />
                                   ) : null}
-                                  {label ? <ShipmentLabelBadge info={label} onDismiss={dismissLabel} /> : null}
+                                  {label ? <ShipmentLabelBadge info={label} onDismiss={dismissLabel} onVerify={verifyLabel} /> : null}
                                 </>
                               );
                             })()}
@@ -2260,7 +2265,7 @@ function ClientDrawer({
                                 {info ? (
                                   <NfEmittedBadge count={info.count} lastAt={info.lastAt} />
                                 ) : null}
-                                {label ? <ShipmentLabelBadge info={label} onDismiss={dismissLabel} /> : null}
+                                {label ? <ShipmentLabelBadge info={label} onDismiss={dismissLabel} onVerify={verifyLabel} /> : null}
                               </>
                             );
                           })()}
@@ -2501,7 +2506,7 @@ function ClientDrawer({
                             {info ? (
                               <NfEmittedBadge count={info.count} lastAt={info.lastAt} />
                             ) : null}
-                            {label ? <ShipmentLabelBadge info={label} onDismiss={dismissLabel} /> : null}
+                            {label ? <ShipmentLabelBadge info={label} onDismiss={dismissLabel} onVerify={verifyLabel} /> : null}
                           </>
                         );
                       })()}
