@@ -18,6 +18,8 @@ import { setUiValue } from "@/lib/db-sync";
 import { useListExpansionStore, type ListSection } from "@/lib/list-expansion";
 import { useSandbox } from "@/lib/use-sandbox";
 import type { DashboardAggregates } from "@/lib/api/queries.functions";
+import { handleUnauthorized, isUnauthorizedError } from "@/lib/unauthorized";
+
 
 // Cache local dos últimos agregados por ambiente: ao recarregar, a tela abre
 // com os últimos números conhecidos (nunca com zeros falsos) e só atualiza
