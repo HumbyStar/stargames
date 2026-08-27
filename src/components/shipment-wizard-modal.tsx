@@ -373,8 +373,8 @@ export function ShipmentWizardModal({
           superfreteOrderId: order.orderId || null,
           superfreteStatus: order.status ?? null,
           status: order.internalStatus,
-          payloadCart: order.payloadCart ?? null,
-          responseCart: order.responseCart ?? null,
+          payloadCart: order.payloadCartJson ? JSON.parse(order.payloadCartJson) : null,
+          responseCart: order.responseCartJson ? JSON.parse(order.responseCartJson) : null,
         },
       });
 

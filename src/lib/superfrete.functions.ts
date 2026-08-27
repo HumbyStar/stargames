@@ -466,8 +466,8 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
         internalStatus: internal,
         priceCents,
         insuredValue,
-        payloadCart: sanitizeForLog(payload) as Record<string, unknown>,
-        responseCart: sanitizeForLog(raw) as Record<string, unknown>,
+        payloadCartJson: JSON.stringify(sanitizeForLog(payload) ?? null),
+        responseCartJson: JSON.stringify(sanitizeForLog(raw) ?? null),
       };
 
 
