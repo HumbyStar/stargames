@@ -79,6 +79,8 @@ import {
 } from "@/lib/shipments.functions";
 import { useSuperfreteSync } from "@/lib/use-superfrete-sync";
 import { mapSuperfreteStatus } from "@/lib/superfrete-status";
+import { verifySuperfreteLabel } from "@/lib/superfrete.functions";
+
 import {
   ShipmentLabelBadge,
   type ShipmentLabelInfo,
