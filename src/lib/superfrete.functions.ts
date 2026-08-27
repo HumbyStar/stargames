@@ -57,6 +57,17 @@ const ProductSchema = z.object({
 });
 
 const digits = (v: string) => (v ?? "").replace(/\D/g, "");
+
+/**
+ * Telefone no formato exigido pela SuperFrete (11 dígitos).
+ * Números antigos com 10 dígitos ganham o 9 depois do DDD.
+ */
+const normalizePhone = (v: string) => {
+  let d = digits(v);
+  if (d.length > 11 && d.startsWith("55")) d = d.slice(2);
+  if (d.length === 10) d = `${d.slice(0, 2)}9${d.slice(2)}`;
+  return d;
+};
 const num = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
