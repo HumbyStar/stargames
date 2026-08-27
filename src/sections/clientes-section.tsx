@@ -1352,15 +1352,40 @@ function ClientDrawer({
     for (const s of [...shipmentRows].sort(
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     )) {
+      // Envios sem pedido na SuperFrete (falha na emissão) não geram selo.
+      if (s.status === "Falha na emissão") {
+        for (const it of s.items ?? []) map.delete(it.productId);
+        continue;
+      }
+      if (!s.superfreteOrderId) continue;
       const status = mapSuperfreteStatus(s.superfreteStatus) ?? s.status;
       const pending =
         status === "Etiqueta pendente de pagamento" || status === "Rascunho";
       for (const it of s.items ?? []) {
-        map.set(it.productId, { status, pending, createdAt: s.createdAt });
+        map.set(it.productId, {
+          status,
+          pending,
+          createdAt: s.createdAt,
+          shipmentId: s.id,
+        });
       }
     }
     return map;
   }, [shipmentRows]);
+  const dismissLabelFn = useServerFn(dismissShipmentLabel);
+  const dismissLabel = useCallback(
+    async (shipmentId: string) => {
+      try {
+        await dismissLabelFn({ data: { shipmentId, reason: "" } });
+        toast.success("Etiqueta descartada — selo removido dos produtos.");
+        void refreshShipments();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Não foi possível descartar a etiqueta.");
+      }
+    },
+    [dismissLabelFn, refreshShipments],
+  );
+
   const nfProductMap = useMemo(() => {
     const map = new Map<string, { count: number; lastAt: string }>();
     for (const inv of nfInvoices) {
