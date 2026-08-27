@@ -132,6 +132,22 @@ async function logEvent(
   }
 }
 
+/**
+ * Bloco de opções usado TANTO na cotação quanto na criação da etiqueta.
+ * Manter idêntico evita a diferença entre o valor cotado e o valor cobrado.
+ */
+function shippingOptions(insuranceValue: number) {
+  return {
+    own_hand: false,
+    receipt: false,
+    reverse: false,
+    non_commercial: true,
+    insurance_value: Number(insuranceValue.toFixed(2)),
+    use_insurance_value: insuranceValue > 0,
+    platform: "Star Games",
+  };
+}
+
 /** Cotação de frete — POST /calculator. */
 export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -154,30 +170,28 @@ export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
     if (fromCep.length !== 8) throw new Error("Informe o CEP de origem nas configurações de envio.");
     if (toCep.length !== 8) throw new Error("Complete os dados do destinatário antes de calcular o frete.");
 
-    const payload = {
+    const apiProducts = data.products.map((p) => ({
+      name: p.name,
+      quantity: p.quantity,
+      unitary_value: Number(p.unitaryValue.toFixed(2)),
+      weight: Math.max(0.01, p.weightKg),
+      length: Math.max(1, p.lengthCm),
+      width: Math.max(1, p.widthCm),
+      height: Math.max(1, p.heightCm),
+    }));
+
+    const buildPayload = (insuranceValue: number) => ({
       from: { postal_code: fromCep },
       to: { postal_code: toCep },
       services: data.services,
-      options: {
-        own_hand: false,
-        receipt: false,
-        insurance_value: Number(data.insuranceValue.toFixed(2)),
-        use_insurance_value: data.insuranceValue > 0,
-      },
-      products: data.products.map((p) => ({
-        name: p.name,
-        quantity: p.quantity,
-        unitary_value: Number(p.unitaryValue.toFixed(2)),
-        weight: Math.max(0.01, p.weightKg),
-        length: Math.max(1, p.lengthCm),
-        width: Math.max(1, p.widthCm),
-        height: Math.max(1, p.heightCm),
-      })),
-    };
+      options: shippingOptions(insuranceValue),
+      products: apiProducts,
+    });
 
-    try {
-      const raw = await superfreteRequest<unknown[]>("/calculator", { method: "POST", body: payload });
-      const options: SuperfreteQuoteOption[] = (Array.isArray(raw) ? raw : []).map((item) => {
+    const payload = buildPayload(data.insuranceValue);
+
+    const parseOptions = (raw: unknown): SuperfreteQuoteOption[] =>
+      (Array.isArray(raw) ? raw : []).map((item) => {
         const r = item as Record<string, unknown>;
         const company = (r["company"] as Record<string, unknown> | undefined) ?? {};
         const packages = Array.isArray(r["packages"]) ? (r["packages"] as Record<string, unknown>[]) : [];
@@ -200,13 +214,35 @@ export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
           name: String(r["name"] ?? ""),
           company: String(company["name"] ?? ""),
           priceCents: toCents(r["price"]),
+          priceWithoutInsuranceCents: null,
           deliveryDays: r["delivery_time"] != null ? num(r["delivery_time"]) : null,
           error: typeof r["error"] === "string" ? (r["error"] as string) : null,
           insuredValue: insured,
           packages: dims,
         };
-
       });
+
+    try {
+      const raw = await superfreteRequest<unknown[]>("/calculator", { method: "POST", body: payload });
+      const options = parseOptions(raw);
+
+      // Cotação paralela sem valor declarado: deixa explícito quanto custa o
+      // seguro e permite comparar com a simulação feita direto no site.
+      if (data.insuranceValue > 0) {
+        try {
+          const rawPlain = await superfreteRequest<unknown[]>("/calculator", {
+            method: "POST",
+            body: buildPayload(0),
+          });
+          const plain = new Map(parseOptions(rawPlain).map((o) => [o.id, o.priceCents]));
+          options.forEach((o) => {
+            const p = plain.get(o.id);
+            if (p != null && p > 0) o.priceWithoutInsuranceCents = p;
+          });
+        } catch {
+          /* comparação é opcional — a cotação principal já foi obtida */
+        }
+      }
 
       await logEvent(context.supabase as never, context.userId, {
         action: "cotacao_calculada",
@@ -227,6 +263,7 @@ export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
       throw friendlyError(e);
     }
   });
+
 
 export interface SuperfreteSyncResult {
   checked: number;
