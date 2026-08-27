@@ -252,6 +252,21 @@ export function ShipmentWizardModal({
 
   /** Volumes enviados à SuperFrete: uma entrada por caixa. */
   const apiProducts = () => {
+    // Pacote único: mesma conta do simulador do site (peso somado, alturas
+    // empilhadas). Por caixa: cada volume é cobrado separadamente.
+    if (combineBoxes || boxes.length === 1) {
+      return [
+        {
+          name: boxes.length > 1 ? `Pacote (${boxes.length} caixas)` : "Pacote",
+          quantity: 1,
+          unitaryValue: Number(totalValue.toFixed(2)),
+          weightKg: parcel.weightKg || 0.3,
+          lengthCm: parcel.lengthCm || 16,
+          widthCm: parcel.widthCm || 11,
+          heightCm: parcel.heightCm || 2,
+        },
+      ];
+    }
     const share = boxes.length > 0 ? totalValue / boxes.length : totalValue;
     return boxes.map((b, i) => ({
       name: `Caixa ${i + 1}`,
@@ -263,6 +278,7 @@ export function ShipmentWizardModal({
       heightCm: dec(b.heightCm) || 2,
     }));
   };
+
 
 
   const toAddress = () => ({
