@@ -89,7 +89,14 @@ const CreateSchema = z.object({
   selectedServiceName: z.string().nullable().default(null),
   payloadQuote: z.unknown().nullable().default(null),
   responseQuote: z.unknown().nullable().default(null),
+  /** Dados da etiqueta já criada na SuperFrete (fluxo correto: API primeiro). */
+  superfreteOrderId: z.string().nullable().default(null),
+  superfreteStatus: z.string().nullable().default(null),
+  status: z.string().nullable().default(null),
+  payloadCart: z.unknown().nullable().default(null),
+  responseCart: z.unknown().nullable().default(null),
 });
+
 
 function mapRow(r: Record<string, unknown>): ShipmentRow {
   return {
