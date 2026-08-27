@@ -449,18 +449,9 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
       })),
       volumes: volumes.length === 1 ? volumes[0] : volumes,
 
-      options: {
-        insurance_value: Number(data.insuranceValue.toFixed(2)),
-        // Sem esta flag, transportadoras privadas (Jadlog/Loggi) emitem a
-        // etiqueta sem o seguro cotado. Mantém a etiqueta igual à cotação.
-        use_insurance_value: data.insuranceValue > 0,
-        receipt: false,
-        own_hand: false,
-        reverse: false,
-        non_commercial: true,
+      // Mesmo bloco de opções da cotação — evita cobrar diferente do cotado.
+      options: shippingOptions(data.insuranceValue),
 
-        platform: "Star Games",
-      },
     };
 
     try {
