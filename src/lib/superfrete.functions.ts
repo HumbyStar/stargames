@@ -8,6 +8,8 @@ export interface SuperfreteQuoteOption {
   name: string;
   company: string;
   priceCents: number;
+  /** Preço do mesmo serviço sem valor declarado/seguro (quando o seguro é pedido). */
+  priceWithoutInsuranceCents: number | null;
   deliveryDays: number | null;
   error: string | null;
   /** Valor efetivamente coberto pelo seguro nesta transportadora (R$). */
@@ -19,6 +21,7 @@ export interface SuperfreteQuoteOption {
     heightCm: number | null;
   }>;
 }
+
 
 
 export interface SuperfreteOrderInfo {
