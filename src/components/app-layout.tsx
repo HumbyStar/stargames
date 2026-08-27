@@ -43,6 +43,8 @@ import { notifyRowConfirmed } from "@/lib/write-confirm";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardAggregates } from "@/lib/api/queries.functions";
+import { handleUnauthorized } from "@/lib/unauthorized";
+
 import { HydrationSplash, useHydrationUserName } from "@/components/hydration-splash";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
