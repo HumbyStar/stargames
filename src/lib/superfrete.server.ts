@@ -98,12 +98,57 @@ export async function superfreteRequest<T = unknown>(
   return parsed as T;
 }
 
+/** Nomes técnicos da API traduzidos para o vocabulário do assistente. */
+const FIELD_LABELS: Record<string, string> = {
+  "to.phone": "Telefone do destinatário",
+  "to.document": "CPF/CNPJ do destinatário",
+  "to.postal_code": "CEP do destinatário",
+  "to.name": "Nome do destinatário",
+  "to.address": "Endereço do destinatário",
+  "to.number": "Número do destinatário",
+  "to.city": "Cidade do destinatário",
+  "to.state_abbr": "UF do destinatário",
+  "from.phone": "Telefone do remetente",
+  "from.document": "CPF/CNPJ do remetente",
+  "from.postal_code": "CEP de origem",
+  "correios.weight": "Peso (Correios)",
+  package_dimensions_sum_or_weight: "Peso ou medidas da caixa",
+  "volumes.weight": "Peso da caixa",
+  service: "Serviço escolhido",
+};
+
+function labelFor(field: string): string {
+  return FIELD_LABELS[field] ?? field;
+}
+
+/** Junta `message` + `errors` (campo → mensagens) num texto legível. */
 function extractMessage(body: unknown): string | null {
+  if (typeof body === "string" && body.trim()) return body.trim().slice(0, 400);
   if (!body || typeof body !== "object") return null;
   const r = body as Record<string, unknown>;
-  for (const key of ["message", "error", "errors", "detail"]) {
+
+  const details: string[] = [];
+  const errors = r["errors"];
+  if (errors && typeof errors === "object" && !Array.isArray(errors)) {
+    for (const [field, value] of Object.entries(errors as Record<string, unknown>)) {
+      const msgs = Array.isArray(value)
+        ? value.filter((v): v is string => typeof v === "string")
+        : typeof value === "string"
+          ? [value]
+          : [];
+      for (const m of msgs) details.push(`${labelFor(field)}: ${m}`);
+    }
+  } else if (Array.isArray(errors)) {
+    for (const v of errors) if (typeof v === "string") details.push(v);
+  } else if (typeof errors === "string" && errors.trim()) {
+    details.push(errors.trim());
+  }
+
+  if (details.length > 0) return details.join(" · ").slice(0, 600);
+
+  for (const key of ["message", "error", "detail"]) {
     const v = r[key];
-    if (typeof v === "string" && v.trim()) return v;
+    if (typeof v === "string" && v.trim()) return v.trim();
     if (v && typeof v === "object") {
       const first = Object.values(v as Record<string, unknown>)[0];
       if (typeof first === "string") return first;
@@ -112,6 +157,7 @@ function extractMessage(body: unknown): string | null {
   }
   return null;
 }
+
 
 /** Procura recursivamente um valor de saldo na resposta da API. */
 function findBalance(value: unknown, depth = 0): number | null {
