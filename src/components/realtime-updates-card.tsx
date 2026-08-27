@@ -52,7 +52,6 @@ import {
 } from "@/lib/activity-feed";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ActivityBatchCard } from "@/components/activity-batch-card";
-import { TeamUsagePanel } from "@/components/team-usage-panel";
 import { cn } from "@/lib/utils";
 
 const CATEGORY_ICON: Record<ActivityCategory, typeof Users> = {
@@ -297,12 +296,7 @@ export function RealtimeUpdatesCard() {
         <Tabs defaultValue="atividade" className="space-y-4">
           <TabsList>
             <TabsTrigger value="atividade">Atividade</TabsTrigger>
-            <TabsTrigger value="equipe">Equipe</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="equipe" className="mt-0">
-            <TeamUsagePanel meId={meId} onSelectUser={(id) => setActorFilter(id)} />
-          </TabsContent>
 
           <TabsContent value="atividade" className="mt-0 space-y-4">
         {/* Filtros */}
