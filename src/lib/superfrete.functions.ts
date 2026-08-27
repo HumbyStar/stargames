@@ -309,6 +309,52 @@ function addressToApi(a: SuperfreteAddress) {
   };
 }
 
+/**
+ * Valida os dados do destinatário nos mesmos critérios da SuperFrete,
+ * devolvendo mensagens em português antes de gastar a chamada de API.
+ */
+function assertRecipient(a: SuperfreteAddress) {
+  const problems: string[] = [];
+  if (!a.name.trim()) problems.push("informe o nome do destinatário");
+  const doc = digits(a.document);
+  if (doc.length !== 11 && doc.length !== 14) {
+    problems.push("CPF (11 dígitos) ou CNPJ (14 dígitos) do destinatário está incompleto");
+  }
+  const phone = digits(a.phone);
+  if (phone.length !== 11) {
+    problems.push("o telefone do destinatário deve ter 11 dígitos (DDD + 9 dígitos)");
+  }
+  if (digits(a.postalCode).length !== 8) problems.push("o CEP do destinatário deve ter 8 dígitos");
+  if (!a.street.trim()) problems.push("informe o endereço (rua)");
+  if (!a.number.trim()) problems.push("informe o número do endereço");
+  if (!a.city.trim()) problems.push("informe a cidade");
+  if (a.state.trim().length !== 2) problems.push("informe o estado (UF) com 2 letras");
+  if (problems.length > 0) {
+    throw new Error(`Dados do destinatário incompletos: ${problems.join("; ")}.`);
+  }
+}
+
+/** Limites das transportadoras aplicados também no servidor. */
+function assertBoxes(boxes: Array<z.infer<typeof ProductSchema>>) {
+  const problems: string[] = [];
+  boxes.forEach((b, i) => {
+    const tag = `Caixa #${i + 1}`;
+    if (b.weightKg > 30) problems.push(`${tag}: peso ${b.weightKg}kg acima de 30kg`);
+    if (b.weightKg <= 0) problems.push(`${tag}: informe o peso em kg`);
+    if (b.lengthCm < 16 || b.widthCm < 11 || b.heightCm < 2) {
+      problems.push(`${tag}: medidas mínimas 16×11×2cm`);
+    }
+    if (Math.max(b.lengthCm, b.widthCm, b.heightCm) > 100) {
+      problems.push(`${tag}: nenhum lado pode passar de 100cm`);
+    }
+    if (b.lengthCm + b.widthCm + b.heightCm > 200) {
+      problems.push(`${tag}: soma das medidas acima de 200cm`);
+    }
+  });
+  if (problems.length > 0) throw new Error(problems.join(" · "));
+}
+
+
 /** Criação da etiqueta/pedido — POST /cart. */
 export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
