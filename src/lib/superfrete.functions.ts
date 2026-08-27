@@ -929,3 +929,83 @@ export const getSuperfreteOrderInfo = createServerFn({ method: "POST" })
       throw friendlyError(e);
     }
   });
+
+/**
+ * Confere na SuperFrete se a etiqueta de um envio realmente existe.
+ * Quando o pedido não existe mais (ou está cancelado), o envio é marcado como
+ * "Falha na emissão" e o selo "Etiqueta não paga" some dos produtos.
+ */
+export const verifySuperfreteLabel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => z.object({ shipmentId: z.string().uuid() }).parse(data))
+  .handler(
+    async ({
+      data,
+      context,
+    }): Promise<{ exists: boolean; status: string; message: string }> => {
+      const { superfreteRequest } = await import("@/lib/superfrete.server");
+      const { supabase, userId } = context;
+
+      const { data: row } = await supabase
+        .from("shipments")
+        .select("id, superfrete_order_id, status")
+        .eq("id", data.shipmentId)
+        .maybeSingle();
+      const r = (row as Record<string, unknown> | null) ?? null;
+      const orderId = (r?.["superfrete_order_id"] as string | null) ?? null;
+      const previous = (r?.["status"] as string | null) ?? null;
+
+      const markFailed = async (message: string) => {
+        await supabase
+          .from("shipments")
+          .update({ status: "Falha na emissão", cancelled_at: new Date().toISOString() } as never)
+          .eq("id", data.shipmentId);
+        await logEvent(supabase as never, userId, {
+          shipmentId: data.shipmentId,
+          action: "etiqueta_verificada",
+          previousStatus: previous,
+          newStatus: "Falha na emissão",
+          message,
+        });
+        return { exists: false, status: "Falha na emissão", message };
+      };
+
+      if (!orderId) {
+        return markFailed("Envio sem pedido na SuperFrete — selo removido.");
+      }
+
+      try {
+        const raw = await superfreteRequest<Record<string, unknown>>(`/order/info/${orderId}`, {
+          method: "GET",
+        });
+        const remote = (raw["status"] as string | null) ?? null;
+        if (!remote || /cancel/i.test(remote)) {
+          return markFailed(`Pedido ${orderId} não está mais ativo na SuperFrete.`);
+        }
+        const internal = mapSuperfreteStatus(remote);
+        const tracking = (raw["tracking"] as string | null) ?? null;
+        await supabase
+          .from("shipments")
+          .update({
+            superfrete_status: remote,
+            status: internal,
+            tracking_code: tracking,
+          } as never)
+          .eq("id", data.shipmentId);
+        await logEvent(supabase as never, userId, {
+          shipmentId: data.shipmentId,
+          action: "etiqueta_verificada",
+          previousStatus: previous,
+          newStatus: internal,
+          message: `Etiqueta confirmada na SuperFrete (${remote}).`,
+        });
+        return {
+          exists: true,
+          status: internal,
+          message: `Etiqueta existe na SuperFrete — status ${internal}.`,
+        };
+      } catch {
+        return markFailed(`Pedido ${orderId} não foi encontrado na SuperFrete.`);
+      }
+    },
+  );

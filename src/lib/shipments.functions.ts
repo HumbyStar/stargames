@@ -251,3 +251,40 @@ export const listShipmentLogs = createServerFn({ method: "POST" })
       };
     });
   });
+/**
+ * Descarta de uma vez todos os envios com etiqueta pendente de um cliente
+ * (casos em que o selo aparece aqui mas a etiqueta não existe na SuperFrete).
+ */
+export const dismissClientShipmentLabels = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) =>
+    z.object({ clientId: z.string().uuid(), reason: z.string().max(300).default("") }).parse(data),
+  )
+  .handler(async ({ data, context }): Promise<{ dismissed: number }> => {
+    const { supabase, userId } = context;
+    const { data: rows } = await supabase
+      .from("shipments")
+      .select("id, status")
+      .eq("client_id", data.clientId)
+      .eq("status", "Etiqueta pendente de pagamento");
+    const ids = ((rows ?? []) as Array<Record<string, unknown>>).map((r) => String(r["id"]));
+    if (ids.length === 0) return { dismissed: 0 };
+
+    const { error } = await supabase
+      .from("shipments")
+      .update({ status: "Falha na emissão", cancelled_at: new Date().toISOString() } as never)
+      .in("id", ids);
+    if (error) throw new Error(error.message);
+
+    await supabase.from("shipment_logs").insert(
+      ids.map((id) => ({
+        shipment_id: id,
+        action: "etiqueta_descartada",
+        previous_status: "Etiqueta pendente de pagamento",
+        new_status: "Falha na emissão",
+        message: data.reason || "Descarte em lote — etiquetas inexistentes na SuperFrete.",
+        created_by: userId,
+      })) as never,
+    );
+    return { dismissed: ids.length };
+  });
