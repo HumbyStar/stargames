@@ -625,6 +625,7 @@ export function useActivityFeed() {
   const [hasMore, setHasMore] = useState(true);
   const [online, setOnline] = useState<OnlineUser[]>([]);
   const [meId, setMeId] = useState<string | null>(null);
+  const { idle } = useIdle();
 
   const namesRef = useRef<Map<string, string>>(new Map());
   const clientNamesRef = useRef<Map<string, string>>(new Map());
