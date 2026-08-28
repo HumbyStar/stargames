@@ -123,7 +123,8 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
     }
 
     ping();
-    const id = window.setInterval(ping, 120_000);
+    const heartbeatMs = idle ? 600_000 : 120_000;
+    const id = window.setInterval(ping, heartbeatMs);
     const onFocus = () => ping();
     window.addEventListener("focus", onFocus);
     const onBeforeUnload = () => handleSessionUnload("beforeunload");
@@ -148,9 +149,11 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
       document.removeEventListener("visibilitychange", onVisibility);
       document.removeEventListener("freeze", onFreeze);
     };
-  }, [navigate]);
+  }, [navigate, idle]);
 
   // ---- Modo Manutenção: bloqueia não-admins em tempo real ----
+  // Em ocioso checa a cada 10 minutos — o sistema não pode expulsar por atraso.
+  const maintenanceIntervalMs = idle ? 600_000 : 120_000;
   useEffect(() => {
     let cancelled = false;
 
@@ -180,7 +183,7 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
     }
 
     void checkMaintenance();
-    const id = window.setInterval(checkMaintenance, 120_000);
+    const id = window.setInterval(checkMaintenance, maintenanceIntervalMs);
     const onFocus = () => void checkMaintenance();
     window.addEventListener("focus", onFocus);
     return () => {
@@ -188,7 +191,7 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
       window.clearInterval(id);
       window.removeEventListener("focus", onFocus);
     };
-  }, [getMaintenance, navigate]);
+  }, [getMaintenance, navigate, idle, maintenanceIntervalMs]);
 
   return <>{children}</>;
 }
