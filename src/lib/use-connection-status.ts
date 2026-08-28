@@ -21,10 +21,12 @@ export function useConnectionStatus(): {
   checking: boolean;
   latencyMs: number | null;
 } {
+  const { idle } = useIdle();
   const [status, setStatus] = useState<ConnectionStatus>("online");
   const [checking, setChecking] = useState(true);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const lastFailedRef = useRef(false);
+  const resumedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
