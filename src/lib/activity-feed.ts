@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { onAppEvent, type AppLocalEvent } from "./app-events";
+import { useIdle } from "@/lib/use-idle";
 
 export type ActivityCategory =
   | "clientes"
