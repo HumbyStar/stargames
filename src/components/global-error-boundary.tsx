@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { reportLovableError } from "@/lib/lovable-error-reporting";
+import { isChunkLoadError, recoverFromChunkError } from "@/lib/chunk-reload";
 
 interface Props {
   children: ReactNode;
@@ -43,6 +44,12 @@ export class GlobalErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("[GlobalErrorBoundary]", error, info);
     this.setState({ info: info.componentStack ?? null });
+
+    // Versão desatualizada da aba: recarrega uma única vez por sessão.
+    if (isChunkLoadError(error) && recoverFromChunkError()) {
+      return;
+    }
+
     try {
       reportLovableError(error, { boundary: "global_error_boundary" });
     } catch {
@@ -62,6 +69,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
       }, 0);
     }
   }
+
 
   private handleReload = () => {
     // Em loop de render, limpa apenas o estado de interface persistido —
@@ -91,6 +99,39 @@ export class GlobalErrorBoundary extends Component<Props, State> {
     }
 
     const loop = isRenderLoop(error);
+    const stale = isChunkLoadError(error);
+
+    if (stale) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
+          <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-sm">
+            <h1 className="text-lg font-semibold text-foreground">
+              Nova versão disponível
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Não conseguimos carregar esta parte do sistema — provavelmente a
+              página está com uma versão antiga ou a conexão oscilou. Atualize
+              para continuar. Nenhum dado foi perdido.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button
+                onClick={() => window.location.reload()}
+                className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                Atualizar agora
+              </button>
+              <a
+                href="/"
+                className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+              >
+                Voltar ao início
+              </a>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
 
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">

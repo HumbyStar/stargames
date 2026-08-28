@@ -15,6 +15,11 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { GlobalErrorBoundary } from "@/components/global-error-boundary";
+import {
+  clearChunkReloadMark,
+  isChunkLoadError,
+  recoverFromChunkError,
+} from "@/lib/chunk-reload";
 import faviconIco from "@/assets/favicons/favicon.ico.asset.json";
 import favicon32 from "@/assets/favicons/mascot-32.png.asset.json";
 import favicon180 from "@/assets/favicons/mascot-180.png.asset.json";
@@ -46,9 +51,39 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
+  const stale = isChunkLoadError(error);
   useEffect(() => {
+    if (stale) {
+      recoverFromChunkError();
+      return;
+    }
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
+  }, [error, stale]);
+
+  if (stale) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="max-w-md text-center">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">
+            Nova versão disponível
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Atualize a página para carregar a versão mais recente do sistema.
+            Nenhum dado foi perdido.
+          </p>
+          <div className="mt-6 flex justify-center">
+            <button
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              Atualizar agora
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -150,6 +185,14 @@ function RootComponent() {
     });
     return () => data.subscription.unsubscribe();
   }, [router]);
+
+  // Carregou bem: libera uma nova tentativa de reload em falhas futuras.
+  useEffect(() => {
+    const t = window.setTimeout(clearChunkReloadMark, 10_000);
+    return () => window.clearTimeout(t);
+  }, []);
+
+
 
   return (
     <QueryClientProvider client={queryClient}>
