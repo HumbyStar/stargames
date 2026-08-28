@@ -45,8 +45,10 @@ function generateSessionId() {
   }
 }
 
-/** Mantém o heartbeat da sessão e expulsa caso outro login assuma a conta. */
+/** Mantém o heartbeat da sessão e expulsa caso outro login assuma a conta.
+ *  Durante ociosidade mantém o heartbeat a cada 10 minutos para não deslogar. */
 export function SessionGuard({ children }: { children: React.ReactNode }) {
+  const { idle } = useIdle();
   const navigate = useNavigate();
   const evictedRef = useRef(false);
   const getMaintenance = useServerFn(getMaintenanceState);
