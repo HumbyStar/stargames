@@ -1451,14 +1451,16 @@ export function AppLayout({ children }: { children?: ReactNode }) {
   }
 
   return (
-    <SandboxProvider>
-      <div className="min-h-screen bg-background bg-gradient-to-b from-background via-background to-accent/30">
-        <FloatingNavbar />
-        <main className="page-container">{children ?? <Outlet />}</main>
-        <GlobalModals />
-        <FloatingConcierge />
-      </div>
-    </SandboxProvider>
+    <IdleProvider>
+      <SandboxProvider>
+        <div className="min-h-screen bg-background bg-gradient-to-b from-background via-background to-accent/30">
+          <FloatingNavbar />
+          <main className="page-container">{children ?? <Outlet />}</main>
+          <GlobalModals />
+          <FloatingConcierge />
+        </div>
+      </SandboxProvider>
+    </IdleProvider>
   );
 }
 
