@@ -39,8 +39,7 @@ import {
 } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
 import { setUiValue, subscribeRealtimeSnapshot, suspendRealtimeRefresh } from "@/lib/db-sync";
-import { useIdle } from "@/lib/use-idle";
-import { notifyRowConfirmed } from "@/lib/write-confirm";
+import { IdleProvider, useIdle } from "@/lib/use-idle";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardAggregates } from "@/lib/api/queries.functions";
