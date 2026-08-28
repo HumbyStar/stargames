@@ -15,6 +15,11 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { GlobalErrorBoundary } from "@/components/global-error-boundary";
+import {
+  clearChunkReloadMark,
+  isChunkLoadError,
+  recoverFromChunkError,
+} from "@/lib/chunk-reload";
 import faviconIco from "@/assets/favicons/favicon.ico.asset.json";
 import favicon32 from "@/assets/favicons/mascot-32.png.asset.json";
 import favicon180 from "@/assets/favicons/mascot-180.png.asset.json";
