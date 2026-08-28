@@ -38,7 +38,7 @@ export function useSuperfreteSync(
   }, [sync]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || idle) return;
     void runSync();
     const id = window.setInterval(() => {
       if (document.visibilityState === "visible") void runSync();
@@ -51,7 +51,7 @@ export function useSuperfreteSync(
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [enabled, intervalMs, runSync]);
+  }, [enabled, idle, intervalMs, runSync]);
 
   return { runSync };
 }
