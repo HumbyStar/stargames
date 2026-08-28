@@ -35,6 +35,8 @@ export function useConnectionStatus(): {
     function schedule(next: ConnectionStatus) {
       if (cancelled) return;
       window.clearTimeout(timer);
+      // Ocioso: não agenda novo ping para economizar créditos.
+      if (idle) return;
       timer = window.setTimeout(
         () => void check(),
         next === "online" ? NORMAL_INTERVAL : UNSTABLE_INTERVAL,
