@@ -44,6 +44,12 @@ export class GlobalErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("[GlobalErrorBoundary]", error, info);
     this.setState({ info: info.componentStack ?? null });
+
+    // Versão desatualizada da aba: recarrega uma única vez por sessão.
+    if (isChunkLoadError(error) && recoverFromChunkError()) {
+      return;
+    }
+
     try {
       reportLovableError(error, { boundary: "global_error_boundary" });
     } catch {
@@ -63,6 +69,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
       }, 0);
     }
   }
+
 
   private handleReload = () => {
     // Em loop de render, limpa apenas o estado de interface persistido —
