@@ -1467,6 +1467,7 @@ export function AppLayout({ children }: { children?: ReactNode }) {
     <IdleProvider>
       <SandboxProvider>
         <div className="min-h-screen bg-background bg-gradient-to-b from-background via-background to-accent/30">
+          <IdleRealtimeGate />
           <FloatingNavbar />
           <main className="page-container">{children ?? <Outlet />}</main>
           <GlobalModals />
