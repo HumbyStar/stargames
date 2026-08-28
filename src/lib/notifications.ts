@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStore, isOverdue, daysLate, formatDateBR, getMGMVDisplay, type Client, type Product, type ImportHistoryEntry } from "./store";
 import { usePersistedState } from "./use-persisted-state";
+import { useIdle } from "./use-idle";
 
 export type NotificationType =
   | "overdue_product"
