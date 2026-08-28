@@ -1379,14 +1379,6 @@ export function AppLayout({ children }: { children?: ReactNode }) {
     );
     return unsubscribe;
   }, [hydrated]);
-  // Pausa os refreshes do Realtime durante ociosidade. Ao voltar, o próprio
-  // mecanismo de suspensão do db-sync dispara uma única reconciliação.
-  const { idle } = useIdle();
-  useEffect(() => {
-    if (!hydrated) return;
-    if (idle) return suspendRealtimeRefresh();
-    return () => {};
-  }, [hydrated, idle]);
   // Reconciliação após reconectar: se a aba ficou offline/em segundo plano,
   // eventos do realtime podem ter se perdido. Ao voltar, o banco manda.
   useEffect(() => {
