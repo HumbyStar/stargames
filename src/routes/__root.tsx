@@ -186,6 +186,14 @@ function RootComponent() {
     return () => data.subscription.unsubscribe();
   }, [router]);
 
+  // Carregou bem: libera uma nova tentativa de reload em falhas futuras.
+  useEffect(() => {
+    const t = window.setTimeout(clearChunkReloadMark, 10_000);
+    return () => window.clearTimeout(t);
+  }, []);
+
+
+
   return (
     <QueryClientProvider client={queryClient}>
       <GlobalErrorBoundary>
