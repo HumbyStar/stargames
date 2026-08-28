@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { syncSuperfreteShipments, type SuperfreteSyncResult } from "@/lib/superfrete.functions";
+import { useIdle } from "@/lib/use-idle";
 
 /** Intervalo padrão entre sincronizações automáticas (3 min). */
 const DEFAULT_INTERVAL_MS = 900_000;
