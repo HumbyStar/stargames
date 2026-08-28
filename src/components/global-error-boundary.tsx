@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { reportLovableError } from "@/lib/lovable-error-reporting";
+import { isChunkLoadError, recoverFromChunkError } from "@/lib/chunk-reload";
 
 interface Props {
   children: ReactNode;
