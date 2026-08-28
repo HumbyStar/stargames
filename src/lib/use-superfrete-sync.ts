@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { syncSuperfreteShipments, type SuperfreteSyncResult } from "@/lib/superfrete.functions";
+import { useIdle } from "@/lib/use-idle";
 
 /** Intervalo padrão entre sincronizações automáticas (3 min). */
 const DEFAULT_INTERVAL_MS = 900_000;
@@ -16,6 +17,7 @@ export function useSuperfreteSync(
 ) {
   const enabled = options?.enabled ?? true;
   const intervalMs = options?.intervalMs ?? DEFAULT_INTERVAL_MS;
+  const { idle } = useIdle();
   const sync = useServerFn(syncSuperfreteShipments);
   const running = useRef(false);
   const cb = useRef(onUpdated);
@@ -36,7 +38,7 @@ export function useSuperfreteSync(
   }, [sync]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || idle) return;
     void runSync();
     const id = window.setInterval(() => {
       if (document.visibilityState === "visible") void runSync();
@@ -49,7 +51,7 @@ export function useSuperfreteSync(
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [enabled, intervalMs, runSync]);
+  }, [enabled, idle, intervalMs, runSync]);
 
   return { runSync };
 }

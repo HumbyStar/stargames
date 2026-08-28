@@ -3,29 +3,40 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { listOnlineUsers, type OnlineUser } from "@/lib/presence.functions";
 import type { ConnectionStatus } from "@/lib/use-connection-status";
+import { useIdle } from "@/lib/use-idle";
 import { cn } from "@/lib/utils";
 
-/** Bolinha de status (verde = conectado, laranja = instável, vermelho = offline). Apenas visual. */
+/** Bolinha de status (verde = conectado, laranja = instável, vermelho = offline, cinza = ocioso). Apenas visual. */
 export function PresenceDot({
   online,
   status,
+  idle,
   className,
 }: {
   online?: boolean;
   status?: ConnectionStatus;
+  idle?: boolean;
   className?: string;
 }) {
+  const isIdle = idle ?? useIdle().idle;
   const state: ConnectionStatus = status ?? (online === false ? "offline" : "online");
-  const label =
-    state === "online" ? "Conectado" : state === "unstable" ? "Rede instável" : "Offline";
-  const color =
-    state === "online"
+  const label = isIdle
+    ? "Ocioso"
+    : state === "online"
+      ? "Conectado"
+      : state === "unstable"
+        ? "Rede instável"
+        : "Offline";
+  const color = isIdle
+    ? "bg-slate-400"
+    : state === "online"
       ? "bg-emerald-500"
       : state === "unstable"
         ? "bg-orange-500"
         : "bg-red-500";
-  const ping =
-    state === "online"
+  const ping = isIdle
+    ? null
+    : state === "online"
       ? "bg-emerald-500/60"
       : state === "unstable"
         ? "bg-orange-500/60"
@@ -47,14 +58,15 @@ export function PresenceDot({
   );
 }
 
-/** Faixa minimalista com quem está conectado agora. */
+/** Faixa minimalista com quem está conectado agora. Pausa enquanto ocioso. */
 export function OnlineUsersStrip({ active }: { active: boolean }) {
   const fetchOnline = useServerFn(listOnlineUsers);
   const [users, setUsers] = useState<OnlineUser[]>([]);
   const [me, setMe] = useState<string | null>(null);
+  const { idle } = useIdle();
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || idle) return;
     let cancelled = false;
 
     async function load() {
@@ -76,7 +88,7 @@ export function OnlineUsersStrip({ active }: { active: boolean }) {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [active, fetchOnline]);
+  }, [active, idle, fetchOnline]);
 
   if (users.length === 0) return null;
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStore, isOverdue, daysLate, formatDateBR, getMGMVDisplay, type Client, type Product, type ImportHistoryEntry } from "./store";
 import { usePersistedState } from "./use-persisted-state";
+import { useIdle } from "./use-idle";
 
 export type NotificationType =
   | "overdue_product"
@@ -164,14 +165,16 @@ export function useNotifications() {
   const importHistory = useStore((s) => s.importHistory);
   const [prefs, setPrefs] = useNotificationPrefs();
   const [readIds, setReadIds] = usePersistedState<string[]>("notifications.readIds", []);
+  const { idle } = useIdle();
 
   // Polling: força recálculo a cada 60s para refletir vencimentos baseados em data
-  // mesmo quando o estado do store não mudou.
+  // mesmo quando o estado do store não mudou. Pausa enquanto ocioso.
   const [tick, setTick] = useState(0);
   useEffect(() => {
+    if (idle) return;
     const id = setInterval(() => setTick((t) => t + 1), 300_000);
     return () => clearInterval(id);
-  }, []);
+  }, [idle]);
 
   const all = useMemo(
     () => deriveNotifications(clients, products, importHistory, prefs),

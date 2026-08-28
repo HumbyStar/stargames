@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { isOnline as isBrowserOnline } from "@/lib/local-mode";
 import { supabase } from "@/integrations/supabase/client";
+import { useIdle } from "@/lib/use-idle";
 
 export type ConnectionStatus = "online" | "unstable" | "offline";
 
@@ -20,10 +21,12 @@ export function useConnectionStatus(): {
   checking: boolean;
   latencyMs: number | null;
 } {
+  const { idle } = useIdle();
   const [status, setStatus] = useState<ConnectionStatus>("online");
   const [checking, setChecking] = useState(true);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const lastFailedRef = useRef(false);
+  const resumedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,6 +35,8 @@ export function useConnectionStatus(): {
     function schedule(next: ConnectionStatus) {
       if (cancelled) return;
       window.clearTimeout(timer);
+      // Ocioso: não agenda novo ping para economizar créditos.
+      if (idle) return;
       timer = window.setTimeout(
         () => void check(),
         next === "online" ? NORMAL_INTERVAL : UNSTABLE_INTERVAL,
@@ -104,7 +109,27 @@ export function useConnectionStatus(): {
       window.removeEventListener("offline", onOffline);
       window.removeEventListener("focus", onOnline);
     };
-  }, []);
+  }, [idle]);
+
+  // Dispara um único ping ao sair do modo ocioso para verificar conexão real.
+  useEffect(() => {
+    if (!idle) {
+      setChecking(true);
+      void (async () => {
+        try {
+          const started = Date.now();
+          const { error } = await supabase.from("app_settings").select("id").limit(1);
+          const elapsed = Date.now() - started;
+          setLatencyMs(elapsed);
+          setStatus(error ? "offline" : elapsed > SLOW_PING_MS ? "unstable" : "online");
+        } catch {
+          setStatus("offline");
+        } finally {
+          setChecking(false);
+        }
+      })();
+    }
+  }, [idle]);
 
   return { status, online: status !== "offline", checking, latencyMs };
 }

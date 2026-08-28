@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { onAppEvent, type AppLocalEvent } from "./app-events";
+import { useIdle } from "@/lib/use-idle";
 
 export type ActivityCategory =
   | "clientes"
@@ -624,6 +625,7 @@ export function useActivityFeed() {
   const [hasMore, setHasMore] = useState(true);
   const [online, setOnline] = useState<OnlineUser[]>([]);
   const [meId, setMeId] = useState<string | null>(null);
+  const { idle } = useIdle();
 
   const namesRef = useRef<Map<string, string>>(new Map());
   const clientNamesRef = useRef<Map<string, string>>(new Map());
@@ -741,8 +743,9 @@ export function useActivityFeed() {
   // Presença: quem está com sessão ativa.
   // A leitura passa pela função `list_online_users` (já restrita a usuários
   // internos) em vez da tabela: `active_sessions` não é mais lida em massa
-  // nem transmitida em tempo real para todo mundo.
+  // nem transmitida em tempo real para todo mundo. Pausa enquanto ocioso.
   useEffect(() => {
+    if (idle) return;
     let alive = true;
     const load = async () => {
       const { data } = await supabase.rpc("list_online_users", {
@@ -771,7 +774,7 @@ export function useActivityFeed() {
       alive = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [idle]);
 
   // Eventos locais do app
   useEffect(() => {

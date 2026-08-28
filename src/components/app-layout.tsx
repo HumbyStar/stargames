@@ -38,8 +38,9 @@ import {
   type Product,
 } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
-import { setUiValue, subscribeRealtimeSnapshot } from "@/lib/db-sync";
+import { setUiValue, subscribeRealtimeSnapshot, suspendRealtimeRefresh } from "@/lib/db-sync";
 import { notifyRowConfirmed } from "@/lib/write-confirm";
+import { IdleProvider, useIdle } from "@/lib/use-idle";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardAggregates } from "@/lib/api/queries.functions";
@@ -1307,6 +1308,17 @@ function _FloatingNavbarImpl() {
   );
 }
 
+/** Pausa os refreshes do Realtime durante ociosidade. Ao voltar, o próprio
+ * mecanismo de suspensão do db-sync dispara uma única reconciliação. */
+function IdleRealtimeGate() {
+  const { idle } = useIdle();
+  useEffect(() => {
+    if (idle) return suspendRealtimeRefresh();
+    return () => {};
+  }, [idle]);
+  return null;
+}
+
 export function AppLayout({ children }: { children?: ReactNode }) {
   const hydrated = useStore((s) => s.hydrated);
   const hydrate = useStore((s) => s.hydrate);
@@ -1451,14 +1463,17 @@ export function AppLayout({ children }: { children?: ReactNode }) {
   }
 
   return (
-    <SandboxProvider>
-      <div className="min-h-screen bg-background bg-gradient-to-b from-background via-background to-accent/30">
-        <FloatingNavbar />
-        <main className="page-container">{children ?? <Outlet />}</main>
-        <GlobalModals />
-        <FloatingConcierge />
-      </div>
-    </SandboxProvider>
+    <IdleProvider>
+      <SandboxProvider>
+        <div className="min-h-screen bg-background bg-gradient-to-b from-background via-background to-accent/30">
+          <IdleRealtimeGate />
+          <FloatingNavbar />
+          <main className="page-container">{children ?? <Outlet />}</main>
+          <GlobalModals />
+          <FloatingConcierge />
+        </div>
+      </SandboxProvider>
+    </IdleProvider>
   );
 }
 
