@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { isOnline as isBrowserOnline } from "@/lib/local-mode";
 import { supabase } from "@/integrations/supabase/client";
+import { useIdle } from "@/lib/use-idle";
 
 export type ConnectionStatus = "online" | "unstable" | "offline";
 
