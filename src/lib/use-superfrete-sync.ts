@@ -17,6 +17,7 @@ export function useSuperfreteSync(
 ) {
   const enabled = options?.enabled ?? true;
   const intervalMs = options?.intervalMs ?? DEFAULT_INTERVAL_MS;
+  const { idle } = useIdle();
   const sync = useServerFn(syncSuperfreteShipments);
   const running = useRef(false);
   const cb = useRef(onUpdated);
