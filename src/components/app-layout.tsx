@@ -1309,6 +1309,17 @@ function _FloatingNavbarImpl() {
   );
 }
 
+/** Pausa os refreshes do Realtime durante ociosidade. Ao voltar, o próprio
+ * mecanismo de suspensão do db-sync dispara uma única reconciliação. */
+function IdleRealtimeGate() {
+  const { idle } = useIdle();
+  useEffect(() => {
+    if (idle) return suspendRealtimeRefresh();
+    return () => {};
+  }, [idle]);
+  return null;
+}
+
 export function AppLayout({ children }: { children?: ReactNode }) {
   const hydrated = useStore((s) => s.hydrated);
   const hydrate = useStore((s) => s.hydrate);
