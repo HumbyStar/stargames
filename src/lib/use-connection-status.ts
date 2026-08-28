@@ -109,7 +109,27 @@ export function useConnectionStatus(): {
       window.removeEventListener("offline", onOffline);
       window.removeEventListener("focus", onOnline);
     };
-  }, []);
+  }, [idle]);
+
+  // Dispara um único ping ao sair do modo ocioso para verificar conexão real.
+  useEffect(() => {
+    if (!idle) {
+      setChecking(true);
+      void (async () => {
+        try {
+          const started = Date.now();
+          const { error } = await supabase.from("app_settings").select("id").limit(1);
+          const elapsed = Date.now() - started;
+          setLatencyMs(elapsed);
+          setStatus(error ? "offline" : elapsed > SLOW_PING_MS ? "unstable" : "online");
+        } catch {
+          setStatus("offline");
+        } finally {
+          setChecking(false);
+        }
+      })();
+    }
+  }, [idle]);
 
   return { status, online: status !== "offline", checking, latencyMs };
 }
