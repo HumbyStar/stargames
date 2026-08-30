@@ -1675,11 +1675,33 @@ export const formatDateBR = (iso: string) => {
   return d.toLocaleDateString("pt-BR");
 };
 
+/**
+ * Dia-calendário (America/Sao_Paulo) de uma data, em UTC-noon, para permitir
+ * subtração exata sem influência de horário/fuso.
+ */
+const spDayValue = (d: Date) => {
+  const [day, month, year] = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  })
+    .format(d)
+    .split("/")
+    .map(Number);
+  return Date.UTC(year!, month! - 1, day!, 12);
+};
+
+/**
+ * Atraso em dias corridos comparando DIAS (não horas): um item com limite em
+ * 29/08 já conta como 1 dia de atraso a partir de 30/08 00:00 no horário de
+ * Brasília, independente da hora gravada no vencimento.
+ */
 export const daysLate = (dueIso: string) => {
-  const due = new Date(dueIso).getTime();
-  const now = Date.now();
-  if (now <= due) return 0;
-  return Math.floor((now - due) / 86400000);
+  const due = new Date(dueIso);
+  if (Number.isNaN(due.getTime())) return 0;
+  const diff = spDayValue(new Date()) - spDayValue(due);
+  return diff > 0 ? Math.round(diff / 86400000) : 0;
 };
 
 export const isOverdue = (dueIso: string) => daysLate(dueIso) > 0;
