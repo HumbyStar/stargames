@@ -1429,6 +1429,31 @@ export function AppLayout({ children }: { children?: ReactNode }) {
       window.removeEventListener("app:reset", onReset);
     };
   }, [queryClient]);
+  // Virada de dia: status como "Reserva vencida" dependem da data atual.
+  // Na virada da meia-noite (horário de Brasília) recalculamos tudo, para
+  // que o item vença na hora certa sem precisar recarregar a página.
+  useEffect(() => {
+    let timer: number | null = null;
+    const spDay = () =>
+      new Intl.DateTimeFormat("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+        dateStyle: "short",
+      }).format(new Date());
+    let current = spDay();
+    const tick = () => {
+      const next = spDay();
+      if (next !== current) {
+        current = next;
+        queryClient.invalidateQueries();
+        void useStore.getState().refreshFromDb();
+      }
+      timer = window.setTimeout(tick, 30_000);
+    };
+    timer = window.setTimeout(tick, 30_000);
+    return () => {
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [queryClient]);
   // Pré-aquece os chunks lazy das seções e modais em paralelo à
   // hidratação. O splash só desmonta quando `hydrated && warm`, então ao
   // chegar na one-page as seções montam instantaneamente (sem placeholder
