@@ -6,7 +6,6 @@ import {
   Bell,
   Search,
   Sun,
-  KanbanSquare,
 } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
 import { usePersistedState } from "./use-persisted-state";
@@ -21,7 +20,6 @@ import type { AppPermission } from "./permissions.functions";
 export type NavbarIconId =
   | "search"
   | "finance"
-  | "equipe"
   | "import"
   | "settings"
   | "notifications"
@@ -41,7 +39,6 @@ export interface NavbarIconMeta {
 export const NAVBAR_ICON_CATALOG: NavbarIconMeta[] = [
   { id: "search", label: "Buscar", description: "Busca global por cliente, telefone ou produto.", icon: Search },
   { id: "finance", label: "Finanças", description: "Abre o dashboard financeiro.", icon: CircleDollarSign, permission: "finance.view" },
-  { id: "equipe", label: "Equipe", description: "Abre o quadro de tarefas da equipe.", icon: KanbanSquare },
   { id: "import", label: "Importar", description: "Abre o painel de importação.", icon: Upload, permission: "import.use" },
   { id: "settings", label: "Configurações", description: "Preferências, regras e zona de perigo.", icon: Settings, permission: "settings.view" },
   { id: "notifications", label: "Notificações", description: "Alertas e avisos da operação.", icon: Bell },
