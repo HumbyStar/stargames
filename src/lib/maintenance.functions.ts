@@ -76,10 +76,10 @@ export const getMaintenanceState = createServerFn({ method: "GET" })
     if (admin) {
       const { data: prof } = await context.supabase
         .from("profiles")
-        .select("full_name")
+        .select("display_name")
         .eq("id", context.userId)
         .maybeSingle();
-      adminName = (prof as { full_name?: string | null } | null)?.full_name ?? null;
+      adminName = (prof as { display_name?: string | null } | null)?.display_name ?? null;
     }
     return { ...flags, isAdmin: admin, adminName };
   });
@@ -128,10 +128,10 @@ export const setMaintenanceMode = createServerFn({ method: "POST" })
     let adminName: string | null = null;
     const { data: prof } = await context.supabase
       .from("profiles")
-      .select("full_name")
+      .select("display_name")
       .eq("id", context.userId)
       .maybeSingle();
-    adminName = (prof as { full_name?: string | null } | null)?.full_name ?? null;
+    adminName = (prof as { display_name?: string | null } | null)?.display_name ?? null;
 
     return { ...next, isAdmin: true, adminName };
   });
