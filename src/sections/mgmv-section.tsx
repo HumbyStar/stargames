@@ -513,7 +513,7 @@ export function MGMVSection({
           return true;
       }
     });
-  }, [rows, search, chip, stats.clientsWithProducts]);
+  }, [noFilterApplied, rows, search, chip, stats.clientsWithProducts]);
 
   const {
     visible: pagedRows,
