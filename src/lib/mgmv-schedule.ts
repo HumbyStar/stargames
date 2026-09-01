@@ -185,7 +185,9 @@ export function rebalanceAgreement(
 /** Soma efetivamente paga do acordo (parcelas pagas + parciais pendentes). */
 export function agreementPaidAmount(agreement: MGMVAgreement): number {
   return (agreement.installments ?? []).reduce((s, i) => {
-    if (i.paid) return s + (i.paidAmount ?? i.value ?? 0);
+    // Registros antigos gravaram `paidAmount = 0` mesmo com a parcela quitada:
+    // nesses casos vale o valor da parcela.
+    if (i.paid) return s + ((i.paidAmount ?? 0) > 0 ? i.paidAmount! : (i.value ?? 0));
     return s + Math.max(0, Math.min(i.value ?? 0, i.paidAmount ?? 0));
   }, 0);
 }
