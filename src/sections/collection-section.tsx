@@ -44,9 +44,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
 import { productStatusTone, productStatusTextTone } from "@/lib/status-tone";
+import { FilterEmptyState } from "@/components/filter-empty-state";
 import { cn } from "@/lib/utils";
 
-type Filter = "todos" | "reserva_vencida" | "pendente_vencido" | "mgmv" | "mgmv_vencido" | "em_aberto";
+type Filter = "nenhum" | "reserva_vencida" | "pendente_vencido" | "mgmv" | "mgmv_vencido" | "em_aberto";
 
 type Period =
   | "todos"
@@ -71,7 +72,7 @@ type SavedFilter = {
 
 export function CollectionSection({
   onScrollTo,
-  initialFilter = "em_aberto",
+  initialFilter = "nenhum",
 }: {
   onScrollTo: (id: string) => void;
   initialFilter?: Filter;
@@ -118,7 +119,7 @@ export function CollectionSection({
   const [situationFilter, setSituationFilter] = usePersistedState<string>("collection.situation", "Todas");
 
   const activeFilterCount =
-    (filter !== "em_aberto" ? 1 : 0) +
+    (filter !== "nenhum" ? 1 : 0) +
     (period !== "todos" ? 1 : 0) +
     (period === "personalizado" && (customFrom || customTo) ? 1 : 0) +
     (folderFilter !== "Todas" ? 1 : 0) +
@@ -160,7 +161,17 @@ export function CollectionSection({
     [mgmvRows, overdueProducts],
   );
 
+  // Sem filtro/busca a lista não é montada — menos leitura desnecessária.
+  const noFilterApplied =
+    filter === "nenhum" &&
+    search.trim().length === 0 &&
+    period === "todos" &&
+    folderFilter === "Todas" &&
+    financialFilter === "Todos" &&
+    situationFilter === "Todas";
+
   const filtered = useMemo(() => {
+    if (noFilterApplied) return [];
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const endOfToday = startOfToday + 86400000;
@@ -344,7 +355,6 @@ export function CollectionSection({
   );
 
   const chips: { id: Filter; label: string }[] = [
-    { id: "todos", label: "Todos" },
     { id: "reserva_vencida", label: "Reserva vencida" },
     { id: "pendente_vencido", label: "Pendente vencido" },
     { id: "mgmv", label: "MGMV" },
@@ -423,7 +433,7 @@ export function CollectionSection({
   };
 
   const clearFilters = () => {
-    setFilter("em_aberto");
+    setFilter("nenhum");
     setPeriod("todos");
     setCustomFrom("");
     setCustomTo("");
@@ -774,7 +784,8 @@ export function CollectionSection({
         </div>
 
         <>
-        <div className="table-scroll-y mt-4 max-h-[28rem] overflow-x-auto rounded-md border border-border/60">
+        <div className="relative table-scroll-y mt-4 max-h-[28rem] overflow-x-auto rounded-md border border-border/60">
+          {noFilterApplied && <FilterEmptyState />}
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -1031,7 +1042,7 @@ export function CollectionSection({
                   </tr>
                 );
               })}
-              {filtered.length === 0 && (
+              {filtered.length === 0 && !noFilterApplied && (
                 <tr>
                   <td colSpan={12} className="py-10 text-center text-sm text-muted-foreground">
                     {activeFilterCount > 0 || search
