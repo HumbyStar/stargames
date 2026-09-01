@@ -28,7 +28,7 @@ export const Route = createFileRoute("/_authenticated/dados-meta")({
 function DadosMetaPage() {
   return (
     <AppLayout>
-      <div className="mx-auto w-full max-w-[1400px] px-4 py-6">
+      <div className="mx-auto w-full max-w-[1400px] px-4 pb-10 pt-[96px]">
         <DadosMetaSection />
       </div>
     </AppLayout>
