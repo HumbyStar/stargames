@@ -1323,6 +1323,37 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
   if (nonMgmvProducts.error) logErr("syncAgreement.nonMgmvProducts", nonMgmvProducts.error);
 }
 
+/**
+ * Vincula produtos recém-criados ao acordo MGMV ativo do cliente.
+ * Usado quando um item é adicionado direto na ficha com status MGMV,
+ * garantindo que ele apareça na tabela de itens do acordo (e não suma).
+ */
+export async function linkProductsToAgreement(
+  clientId: string,
+  productIds: string[],
+): Promise<void> {
+  if (productIds.length === 0) return;
+  const ag = await sb()
+    .from("mgmv_agreements")
+    .select("id, completed_at")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (ag.error) throw ag.error;
+  if (!ag.data || ag.data.completed_at) {
+    throw new Error("Cliente sem acordo MGMV ativo");
+  }
+  const upd = await sb()
+    .from("products")
+    .update({
+      financial_status: "MGMV",
+      included_in_mgmv: true,
+      mgmv_agreement_id: clientId,
+      collection_eligible: false,
+    })
+    .in("id", productIds);
+  if (upd.error) throw upd.error;
+}
+
 /** Fire-and-forget wrapper para chamadas de UI. */
 export function dbSyncAgreementForClient(client: Client): void {
   void dbSyncAgreementForClientAsync(client);
