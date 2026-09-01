@@ -36,6 +36,7 @@ import {
   type Client,
   type Product,
 } from "@/lib/store";
+import { useEnsureData } from "@/lib/use-ensure-data";
 import { useUiStore } from "@/lib/ui-store";
 import { setUiValue, subscribeRealtimeSnapshot, suspendRealtimeRefresh } from "@/lib/db-sync";
 import { notifyRowConfirmed } from "@/lib/write-confirm";
