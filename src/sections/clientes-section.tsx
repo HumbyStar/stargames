@@ -1119,7 +1119,16 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
             updateProduct(productModal.product.id, { ...data, clientId });
             toast.success("Produto atualizado");
           } else {
-            addProduct({ clientId, ...data });
+            const created = addProduct({ clientId, ...data });
+            if (data.financialStatus === "MGMV") {
+              void linkProductsToAgreement(clientId, [created.id])
+                .then(() => refreshClientData(clientId))
+                .catch(() => {
+                  toast.error(
+                    "Produto criado, mas o vínculo com o acordo MGMV falhou. Abra a ficha e tente novamente.",
+                  );
+                });
+            }
             toast.success("Produto adicionado");
           }
           setProductModal({ open: false });
@@ -2994,7 +3003,9 @@ function ProductModal({
               <option>Pago</option>
               <option>Reserva</option>
               <option>Pendente</option>
-              <option>MGMV</option>
+              {(mgmvActive || initial?.financialStatus === "MGMV") && (
+                <option>MGMV</option>
+              )}
             </select>
           </div>
           <div className="grid gap-1.5">
@@ -3019,6 +3030,18 @@ function ProductModal({
               A Data Limite será calculada automaticamente em 30 dias após a Data de Cadastro.
             </p>
           )}
+          {financialStatus === "MGMV" && mgmvActive && (
+            <p className="md:col-span-2 rounded-md border border-primary/30 bg-primary/5 p-2 text-xs">
+              Este item entra no acordo MGMV ativo do cliente: ele será vinculado
+              ao acordo e aparecerá na tabela "Itens incluídos no MGMV".
+            </p>
+          )}
+          {financialStatus === "MGMV" && !mgmvActive && (
+            <p className="md:col-span-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+              Este cliente não tem acordo MGMV ativo. Escolha outro status
+              (Pago, Reserva ou Pendente) — senão o produto ficaria sem lista.
+            </p>
+          )}
           {blockReserva && (
             <p className="md:col-span-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
               Cliente com MGMV ativo não pode realizar nova compra em Reserva.
@@ -3030,7 +3053,7 @@ function ProductModal({
             Cancelar
           </Button>
           <Button
-            disabled={blockReserva}
+            disabled={blockReserva || (financialStatus === "MGMV" && !mgmvActive)}
             onClick={() => {
               if (!clientId || !name.trim() || !Number.isFinite(totalValue))
                 return toast.error("Preencha os campos obrigatórios");
