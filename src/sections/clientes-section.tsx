@@ -39,6 +39,7 @@ import {
   type PartialPaymentResult,
 } from "@/lib/store";
 import { toast } from "sonner";
+import { linkProductsToAgreement } from "@/lib/db-sync";
 import { ProductNameCombobox } from "@/components/product-name-combobox";
 import { usePlatformOptions, useAddPlatform, normalizePlatform } from "@/lib/platforms";
 import { cn } from "@/lib/utils";
@@ -139,6 +140,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const addProduct = useStore((s) => s.addProduct);
   const updateProduct = useStore((s) => s.updateProduct);
   const registerPayment = useStore((s) => s.registerPayment);
+  const refreshClientData = useStore((s) => s.refreshClientData);
   const setProductSituation = useStore((s) => s.setProductSituation);
   const payMGMVInstallment = useStore((s) => s.payMGMVInstallment);
   const registerMGMVPartialPayment = useStore(
