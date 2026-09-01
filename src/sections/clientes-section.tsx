@@ -1486,7 +1486,15 @@ function ClientDrawer({
   const byRegisterDateDesc = (a: Product, b: Product) =>
     (b.registerDate ?? "").localeCompare(a.registerDate ?? "");
   const sortedProducts = [...products].sort(byRegisterDateDesc);
-  const mgmvProducts = sortedProducts.filter((p) => p.financialStatus === "MGMV");
+  // Só é item DO ACORDO quando existe acordo ativo. Sem acordo ativo, um
+  // produto marcado como MGMV é "órfão": ele continua visível na lista
+  // individual (com aviso) em vez de sumir das duas tabelas.
+  const mgmvProducts = activeAgreement
+    ? sortedProducts.filter((p) => p.financialStatus === "MGMV")
+    : [];
+  const orphanMgmvProducts = activeAgreement
+    ? []
+    : sortedProducts.filter((p) => p.financialStatus === "MGMV");
   useEffect(() => {
     if (!client.mgmv || client.mgmv.completedAt || mgmvProducts.length > 0) return;
     let active = true;
@@ -1502,7 +1510,9 @@ function ClientDrawer({
       active = false;
     };
   }, [client.id, client.mgmv, mgmvProducts.length, ensureMGMVProductsLoaded]);
-  const individualAll = sortedProducts.filter((p) => p.financialStatus !== "MGMV");
+  const individualAll = sortedProducts.filter(
+    (p) => p.financialStatus !== "MGMV" || !activeAgreement,
+  );
   // Retirado = arquivado: sai da lista ativa e migra para o histórico do
   // cliente. Mantido nas somas totais para não perder o histórico financeiro.
   const individualProducts = individualAll.filter(
