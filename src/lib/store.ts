@@ -495,6 +495,11 @@ interface State {
   /** Reconciliação após reconexão: relê o estado real do banco. */
   reconcileAfterReconnect: () => Promise<void>;
   hydrate: () => Promise<void>;
+  /** `true` quando clientes/produtos já foram lidos do banco nesta sessão. */
+  dataLoaded: boolean;
+  dataLoading: boolean;
+  /** Carrega a base (clientes/produtos/MGMV) sob demanda, uma única vez. */
+  ensureDataLoaded: () => Promise<void>;
   refreshFromDb: () => Promise<void>;
   /** Aplica um evento pontual do Realtime (sem releitura completa). */
   applyRealtimeRow: (e: RealtimeRowEvent) => void;
@@ -764,13 +769,17 @@ export const useStore = create<State>()((set, get) => ({
       security: defaultSecurity,
       importHistory: [],
       hydrated: false,
+      dataLoaded: false,
+      dataLoading: false,
       currentEnv: "producao",
       envSyncing: false,
       hydrate: async () => {
         if (get().hydrated) return;
         if (hydratePromise) return hydratePromise;
         hydratePromise = (async () => {
-          let snap = await loadSnapshot();
+          // Abertura leve: sem clientes/produtos. As listas só são lidas
+          // quando o usuário aplica um filtro/busca (ver `ensureDataLoaded`).
+          let snap = await loadSnapshot({ withData: false });
           snap = await migrateLocalStorageOnce(snap);
           primeUiState(snap.uiState);
           if (!getResetVersion()) {
@@ -792,9 +801,12 @@ export const useStore = create<State>()((set, get) => ({
             rules: { ...defaultRules, ...snap.rules },
             security: { ...defaultSecurity, ...snap.security },
             hydrated: true,
+            dataLoaded: snap.dataLoaded !== false,
             currentEnv: snap.env ?? "producao",
           });
-          if (!snap.partial) envSnapshots.set(snap.env ?? "producao", snap);
+          if (!snap.partial && snap.dataLoaded !== false) {
+            envSnapshots.set(snap.env ?? "producao", snap);
+          }
         })();
         await hydratePromise;
       },
@@ -818,6 +830,38 @@ export const useStore = create<State>()((set, get) => ({
         await awaitPendingWrites();
         await get().refreshFromDb();
       },
+      ensureDataLoaded: async () => {
+        const st = get();
+        if (st.dataLoaded) return;
+        if (ensureDataPromise) return ensureDataPromise;
+        set({ dataLoading: true });
+        ensureDataPromise = (async () => {
+          try {
+            const token = envToken;
+            const snap = await loadSnapshot();
+            if (token !== envToken) return;
+            const env = snap.env ?? "producao";
+            if (!snap.partial) envSnapshots.set(env, snap);
+            set({
+              clients: snap.clients,
+              products: snap.products.map((p) =>
+                p.financialStatus === "MGMV" && p.situation === "Em Aberto"
+                  ? { ...p, situation: "Resolvido" as Situation }
+                  : p,
+              ),
+              importHistory: snap.importHistory,
+              currentEnv: env,
+              dataLoaded: true,
+            });
+          } catch (err) {
+            console.warn("ensureDataLoaded failed", err);
+          } finally {
+            set({ dataLoading: false });
+            ensureDataPromise = null;
+          }
+        })();
+        await ensureDataPromise;
+      },
       refreshFromDb: async () => {
         // Coalesce: chamadas concorrentes (Realtime + app:reset + modais)
         // compartilham o mesmo `loadSnapshot()` em voo; se algo chegar
@@ -831,12 +875,17 @@ export const useStore = create<State>()((set, get) => ({
           try {
             // Barreira: nenhuma leitura corre na frente das escritas locais.
             await awaitPendingWrites();
-            const snap = await loadSnapshot();
+            const snap = await loadSnapshot({ withData: get().dataLoaded });
             // Resposta de um ambiente que já não é o atual: descarta.
             if (token !== envToken) return;
             const env = snap.env ?? "producao";
             if (!snap.partial) envSnapshots.set(env, snap);
             const prev = get();
+            if (!prev.dataLoaded) {
+              // Base ainda não carregada: atualiza só o que é leve.
+              set({ importHistory: snap.importHistory, currentEnv: env, envSyncing: false });
+              return;
+            }
             const nextClients = reconcileWithLocalMutations(
               "client",
               keepOnPartial(snap.clients, prev.clients, snap.partial),
@@ -1537,10 +1586,10 @@ export const useStore = create<State>()((set, get) => ({
       refreshSnapshot: async () => {
         envToken += 1;
         const token = envToken;
-        const snap = await loadSnapshot();
+        const snap = await loadSnapshot({ withData: get().dataLoaded });
         if (token !== envToken) return;
         const env = snap.env ?? "producao";
-        if (!snap.partial) envSnapshots.set(env, snap);
+        if (!snap.partial && snap.dataLoaded !== false) envSnapshots.set(env, snap);
         set({
           clients: keepOnPartial(snap.clients, get().clients, snap.partial),
           products: keepOnPartial(snap.products, get().products, snap.partial),
@@ -1575,7 +1624,7 @@ export const useStore = create<State>()((set, get) => ({
           set({ clients: [], products: [], importHistory: [], currentEnv: env, envSyncing: true });
         }
         try {
-          const snap = await loadSnapshot();
+          const snap = await loadSnapshot({ withData: get().dataLoaded });
           if (token !== envToken) return;
           const loadedEnv = snap.env ?? "producao";
           if (!snap.partial) envSnapshots.set(loadedEnv, snap);
