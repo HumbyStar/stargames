@@ -17,6 +17,7 @@ import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated.
 import { Route as AuthenticatedSandboxRouteImport } from './routes/_authenticated.sandbox'
 import { Route as AuthenticatedQaRouteImport } from './routes/_authenticated.qa'
 import { Route as AuthenticatedNikostartRouteImport } from './routes/_authenticated.nikostart'
+import { Route as AuthenticatedDadosMetaRouteImport } from './routes/_authenticated.dados-meta'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
@@ -62,6 +63,11 @@ const AuthenticatedNikostartRoute = AuthenticatedNikostartRouteImport.update({
   path: '/nikostart',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedDadosMetaRoute = AuthenticatedDadosMetaRouteImport.update({
+  id: '/dados-meta',
+  path: '/dados-meta',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const Char91DotwellKnownChar93OauthProtectedResourceRoute =
   Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
     id: '/.well-known/oauth-protected-resource',
@@ -98,6 +104,7 @@ export interface FileRoutesByFullPath {
   '/mcp': typeof McpRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/dados-meta': typeof AuthenticatedDadosMetaRoute
   '/nikostart': typeof AuthenticatedNikostartRoute
   '/qa': typeof AuthenticatedQaRoute
   '/sandbox': typeof AuthenticatedSandboxRoute
@@ -111,6 +118,7 @@ export interface FileRoutesByTo {
   '/mcp': typeof McpRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/dados-meta': typeof AuthenticatedDadosMetaRoute
   '/nikostart': typeof AuthenticatedNikostartRoute
   '/qa': typeof AuthenticatedQaRoute
   '/sandbox': typeof AuthenticatedSandboxRoute
@@ -127,6 +135,7 @@ export interface FileRoutesById {
   '/mcp': typeof McpRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/_authenticated/dados-meta': typeof AuthenticatedDadosMetaRoute
   '/_authenticated/nikostart': typeof AuthenticatedNikostartRoute
   '/_authenticated/qa': typeof AuthenticatedQaRoute
   '/_authenticated/sandbox': typeof AuthenticatedSandboxRoute
@@ -144,6 +153,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
+    | '/dados-meta'
     | '/nikostart'
     | '/qa'
     | '/sandbox'
@@ -157,6 +167,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
+    | '/dados-meta'
     | '/nikostart'
     | '/qa'
     | '/sandbox'
@@ -172,6 +183,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
+    | '/_authenticated/dados-meta'
     | '/_authenticated/nikostart'
     | '/_authenticated/qa'
     | '/_authenticated/sandbox'
@@ -251,6 +263,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedNikostartRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/dados-meta': {
+      id: '/_authenticated/dados-meta'
+      path: '/dados-meta'
+      fullPath: '/dados-meta'
+      preLoaderRoute: typeof AuthenticatedDadosMetaRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/.well-known/oauth-protected-resource': {
       id: '/.well-known/oauth-protected-resource'
       path: '/.well-known/oauth-protected-resource'
@@ -290,6 +309,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedDadosMetaRoute: typeof AuthenticatedDadosMetaRoute
   AuthenticatedNikostartRoute: typeof AuthenticatedNikostartRoute
   AuthenticatedQaRoute: typeof AuthenticatedQaRoute
   AuthenticatedSandboxRoute: typeof AuthenticatedSandboxRoute
@@ -297,6 +317,7 @@ interface AuthenticatedRouteChildren {
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedDadosMetaRoute: AuthenticatedDadosMetaRoute,
   AuthenticatedNikostartRoute: AuthenticatedNikostartRoute,
   AuthenticatedQaRoute: AuthenticatedQaRoute,
   AuthenticatedSandboxRoute: AuthenticatedSandboxRoute,
