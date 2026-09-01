@@ -156,6 +156,8 @@ function SearchBox({
   const clients = useStore((s) => s.clients);
   const products = useStore((s) => s.products);
   const openClient = useStore((s) => s.openClient);
+  // A busca global precisa da base carregada — só então lê do banco.
+  useEnsureData(query.trim().length >= 2);
   const listboxId = "global-search-listbox";
   const optionId = (idx: number) => `${listboxId}-opt-${idx}`;
 
