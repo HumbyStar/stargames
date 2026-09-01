@@ -1159,7 +1159,9 @@ export function buildAgreementRow(client: Client): Record<string, unknown> {
   const sorted = [...mgmv.installments].sort((a, b) => a.number - b.number);
   const paidCount = sorted.filter((i) => i.paid).length;
   const installmentValue = sorted[0]?.value ?? 0;
-  const paidValue = sorted.filter((i) => i.paid).reduce((s, i) => s + (i.value || 0), 0);
+  const paidValue = sorted
+    .filter((i) => i.paid)
+    .reduce((s, i) => s + ((i.paidAmount ?? 0) > 0 ? i.paidAmount! : i.value || 0), 0);
   const remainingValue = Math.max(0, (mgmv.totalDebt || 0) - paidValue);
   const nextUnpaid = sorted.find((i) => !i.paid);
   const firstDue = sorted[0]?.dueDate ?? null;
@@ -1167,7 +1169,13 @@ export function buildAgreementRow(client: Client): Record<string, unknown> {
   // Validação matemática para o flag needs_review.
   const sumByInstallments = sorted.reduce((s, i) => s + (i.value || 0), 0);
   const needsReview = mgmv.totalDebt > 0 && Math.abs(sumByInstallments - mgmv.totalDebt) > 0.01;
-  const status = paidCount >= sorted.length ? "Quitado" : needsReview ? "Revisão necessária" : "Ativo";
+  // "Quitado" exige TODAS as parcelas pagas E o valor pago cobrindo o total
+  // do acordo. Assim uma marcação indevida não fecha o acordo sozinha.
+  const fullyPaid =
+    sorted.length > 0 &&
+    paidCount >= sorted.length &&
+    (mgmv.totalDebt || 0) <= 0 + Math.max(0, paidValue) + 0.01;
+  const status = fullyPaid ? "Quitado" : needsReview ? "Revisão necessária" : "Ativo";
 
   // Status de revisão (SEPARADO do status financeiro acima).
   // Preserva ai_reviewed/manually_reviewed quando já marcados; senão deriva
@@ -1268,18 +1276,27 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
   // Substitui parcelas (estratégia simples: delete + insert em lotes).
   // Acordos podem ter dezenas/centenas de parcelas — envia em lotes para
   // não estourar o payload do PostgREST e manter o sync resiliente.
-  const delIns = await sb().from("mgmv_installments").delete().eq("agreement_id", agreementId);
-  if (delIns.error) logErr("syncAgreement.delInstallments", delIns.error);
+  // Upsert idempotente por (agreement_id, installment_number): nunca existe
+  // uma janela em que as parcelas do acordo estejam apagadas do banco.
   if (sorted.length > 0) {
     const rows = buildInstallmentRows(client);
     const CHUNK = 200;
     for (let i = 0; i < rows.length; i += CHUNK) {
-      const insIns = await sb()
+      const upIns = await sb()
         .from("mgmv_installments")
-        .insert(rows.slice(i, i + CHUNK) as never);
-      if (insIns.error) logErr("syncAgreement.insertInstallments", insIns.error);
+        .upsert(rows.slice(i, i + CHUNK) as never, {
+          onConflict: "agreement_id,installment_number",
+        });
+      if (upIns.error) logErr("syncAgreement.upsertInstallments", upIns.error);
     }
   }
+  // Remove apenas as parcelas que sobraram de um plano maior anterior.
+  const delExtra = await sb()
+    .from("mgmv_installments")
+    .delete()
+    .eq("agreement_id", agreementId)
+    .gt("installment_number", sorted.length);
+  if (delExtra.error) logErr("syncAgreement.delExtraInstallments", delExtra.error);
 
   // Atualiza flags dos produtos do cliente: produtos com financialStatus
   // = 'MGMV' viram parte do acordo; demais saem do acordo.
@@ -1304,6 +1321,37 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
     .eq("client_id", client.id)
     .neq("financial_status", "MGMV");
   if (nonMgmvProducts.error) logErr("syncAgreement.nonMgmvProducts", nonMgmvProducts.error);
+}
+
+/**
+ * Vincula produtos recém-criados ao acordo MGMV ativo do cliente.
+ * Usado quando um item é adicionado direto na ficha com status MGMV,
+ * garantindo que ele apareça na tabela de itens do acordo (e não suma).
+ */
+export async function linkProductsToAgreement(
+  clientId: string,
+  productIds: string[],
+): Promise<void> {
+  if (productIds.length === 0) return;
+  const ag = await sb()
+    .from("mgmv_agreements")
+    .select("id, completed_at")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (ag.error) throw ag.error;
+  if (!ag.data || ag.data.completed_at) {
+    throw new Error("Cliente sem acordo MGMV ativo");
+  }
+  const upd = await sb()
+    .from("products")
+    .update({
+      financial_status: "MGMV",
+      included_in_mgmv: true,
+      mgmv_agreement_id: clientId,
+      collection_eligible: false,
+    })
+    .in("id", productIds);
+  if (upd.error) throw upd.error;
 }
 
 /** Fire-and-forget wrapper para chamadas de UI. */
@@ -1814,7 +1862,20 @@ export function subscribeRealtimeSnapshot(
     .channel("realtime-store")
     .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, schedule)
     .on("postgres_changes", { event: "*", schema: "public", table: "products" }, schedule)
+    // Acordos e parcelas também precisam refletir em tempo real: sem isso,
+    // pagar/alterar um MGMV em outra aba não atualizava a ficha aberta.
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "mgmv_agreements" },
+      schedule,
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "mgmv_installments" },
+      schedule,
+    )
     .subscribe();
+
   return () => {
     if (timer) window.clearTimeout(timer);
     realtimeListeners.delete(run);

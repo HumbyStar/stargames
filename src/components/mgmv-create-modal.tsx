@@ -173,10 +173,13 @@ export function MgmvCreateModal({
       installments: schedule,
       reviewStatus: "manually_reviewed",
       };
-      setMGMVAgreement(client.id, agreement);
+      // Ordem importa: primeiro os produtos entram como MGMV, depois o acordo
+      // é gravado. A sincronização do acordo vincula os produtos pelo status,
+      // então inverter a ordem deixava itens fora da tabela do acordo.
       for (const id of selected) {
         updateProduct(id, { financialStatus: "MGMV" });
       }
+      setMGMVAgreement(client.id, agreement);
       // Limpa o rascunho salvo — o acordo agora existe de fato.
       setDraft(null);
       toast.success(
