@@ -1021,9 +1021,28 @@ export const useStore = create<State>()((set, get) => ({
             const res = await waitForRowConfirmation("product", [prod.id], "upsert", {
               verify: dbRowsExist,
             });
-            if (res.ok) {
-              clearLocalMutation("product", [prod.id]);
-              await get().refreshClientData(prod.clientId);
+            if (!res.ok) return;
+            // A marca local só é liberada quando uma releitura JÁ enxerga a
+            // linha. Liberar antes disso deixa uma leitura atrasada apagar o
+            // produto recém-criado da tela.
+            for (let attempt = 0; attempt < 5; attempt++) {
+              const rows = await loadProductsForClient(prod.clientId);
+              if (rows.some((r) => r.id === prod.id)) {
+                clearLocalMutation("product", [prod.id]);
+                set((s) => {
+                  const ids = new Set(rows.map((r) => r.id));
+                  return {
+                    products: [
+                      ...s.products.filter(
+                        (x) => x.clientId !== prod.clientId && !ids.has(x.id),
+                      ),
+                      ...rows,
+                    ],
+                  };
+                });
+                return;
+              }
+              await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
             }
           } catch {
             /* a linha continua visível; a reconciliação de fundo resolve */
@@ -1031,6 +1050,7 @@ export const useStore = create<State>()((set, get) => ({
         })();
         return prod;
       },
+
       updateProduct: (id, patch) =>
         set((s) => {
           const products = s.products.map((p) => (p.id === id ? { ...p, ...patch } : p));
