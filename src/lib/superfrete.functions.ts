@@ -979,8 +979,17 @@ export const verifySuperfreteLabel = createServerFn({ method: "POST" })
           method: "GET",
         });
         const remote = (raw["status"] as string | null) ?? null;
-        if (!remote || /cancel/i.test(remote)) {
+        if (remote && /cancel/i.test(remote)) {
           return markFailed(`Pedido ${orderId} não está mais ativo na SuperFrete.`);
+        }
+        if (!remote) {
+          // Resposta sem status: o pedido existe, mas não sabemos o estado.
+          // Não altera nada para não remover um selo válido.
+          return {
+            exists: true,
+            status: previous ?? "Desconhecido",
+            message: "A SuperFrete não retornou o status deste pedido. Tente novamente.",
+          };
         }
         const internal = mapSuperfreteStatus(remote);
         const tracking = (raw["tracking"] as string | null) ?? null;
