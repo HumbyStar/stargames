@@ -1862,7 +1862,20 @@ export function subscribeRealtimeSnapshot(
     .channel("realtime-store")
     .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, schedule)
     .on("postgres_changes", { event: "*", schema: "public", table: "products" }, schedule)
+    // Acordos e parcelas também precisam refletir em tempo real: sem isso,
+    // pagar/alterar um MGMV em outra aba não atualizava a ficha aberta.
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "mgmv_agreements" },
+      schedule,
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "mgmv_installments" },
+      schedule,
+    )
     .subscribe();
+
   return () => {
     if (timer) window.clearTimeout(timer);
     realtimeListeners.delete(run);
