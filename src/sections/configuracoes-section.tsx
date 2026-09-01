@@ -73,6 +73,7 @@ import {
   type ImportStatus,
   type ImportDiagnostics,
 } from "@/lib/store";
+import { useEnsureData } from "@/lib/use-ensure-data";
 import { useUiStore } from "@/lib/ui-store";
 import { NotificationsPrefsCard } from "@/components/notifications-prefs-card";
 import { NavbarSettingsCard } from "@/components/navbar-settings-card";
@@ -379,6 +380,7 @@ export function ConfiguracoesSection() {
   const importHistory = useStore((s) => s.importHistory);
   const [contentEntry, setContentEntry] = useState<ImportHistoryEntry | null>(null);
   const clients = useStore((s) => s.clients);
+  useEnsureData();
   const products = useStore((s) => s.products);
   const setPreferences = useStore((s) => s.setPreferences);
   const setRules = useStore((s) => s.setRules);

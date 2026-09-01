@@ -39,6 +39,7 @@ import {
   type Product,
   type Situation,
 } from "@/lib/store";
+import { useEnsureData } from "@/lib/use-ensure-data";
 import { toast } from "sonner";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
@@ -1241,6 +1242,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
   const persistConfirmedImport = useStore((s) => s.persistConfirmedImport);
   const products = useStore((s) => s.products);
   const clients = useStore((s) => s.clients);
+  useEnsureData();
   const importHistory = useStore((s) => s.importHistory);
   const hydrated = useStore((s) => s.hydrated);
   const [tab, setTab] = useState("text");

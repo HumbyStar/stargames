@@ -55,6 +55,7 @@ import {
   subscribeInstallPrompt,
 } from "@/lib/pwa";
 import { useStore } from "@/lib/store";
+import { useEnsureData } from "@/lib/use-ensure-data";
 
 /** Backup considerado "fresco" o suficiente para virar pacote local. */
 const FRESH_MS = 6 * 60 * 60 * 1000;
@@ -147,6 +148,8 @@ export function LocalInstallCard() {
   const [lastFiles, setLastFiles] = useState<string[]>([]);
 
   const clients = useStore((s) => s.clients);
+
+  useEnsureData();
   const products = useStore((s) => s.products);
   const importHistory = useStore((s) => s.importHistory);
   const preferences = useStore((s) => s.preferences);

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Tag } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { useStore, type Client } from "@/lib/store";
+import { useEnsureData } from "@/lib/use-ensure-data";
 import { useUiStore } from "@/lib/ui-store";
 import { usePermissions } from "@/lib/use-permissions";
 import { usePriorityAlert, conciergePrefs } from "@/lib/concierge-priority";
@@ -249,6 +250,8 @@ export function ConciergeModal() {
   const openCx = useUiStore((s) => s.openConcierge);
 
   const clients = useStore((s) => s.clients);
+
+  useEnsureData();
   const products = useStore((s) => s.products);
   const openClient = useStore((s) => s.openClient);
 
