@@ -282,7 +282,7 @@ export function CollectionSection({
       }
       return true;
     });
-  }, [allRows, filter, period, customFrom, customTo, search, folderFilter, financialFilter, situationFilter, clients]);
+  }, [noFilterApplied, allRows, filter, period, customFrom, customTo, search, folderFilter, financialFilter, situationFilter, clients]);
 
   const { visible, hasMore, nextChunk, loadMore } = usePaginatedList(filtered, { step: 20 });
 
