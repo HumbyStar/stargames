@@ -39,6 +39,7 @@ import {
   type Situation,
   type PartialPaymentResult,
 } from "@/lib/store";
+import { useEnsureData } from "@/lib/use-ensure-data";
 import { toast } from "sonner";
 import { linkProductsToAgreement } from "@/lib/db-sync";
 import { ProductNameCombobox } from "@/components/product-name-combobox";
@@ -279,6 +280,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     platformFilter === "Todas" &&
     periodFilter === "Todos" &&
     folderFilter === "Todas";
+  useEnsureData(!noFilterApplied);
 
   const rows = useMemo(() => {
     if (noFilterApplied) return [];

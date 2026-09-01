@@ -12,6 +12,7 @@ import {
   type Client,
   type MGMVAgreement,
 } from "@/lib/store";
+import { useEnsureData } from "@/lib/use-ensure-data";
 import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
 import { MgmvAiReviewModal } from "@/components/mgmv-ai-review-modal";
 import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
@@ -450,6 +451,7 @@ export function MGMVSection({
 
   // Sem chip nem busca a tabela não é montada (menos leitura).
   const noFilterApplied = chip === "nenhum" && search.trim().length === 0;
+  useEnsureData(!noFilterApplied);
 
   const filtered = useMemo(() => {
     if (noFilterApplied) return [];

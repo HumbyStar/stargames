@@ -19,6 +19,7 @@ import {
   type Product,
   type MGMVDisplay,
 } from "@/lib/store";
+import { useEnsureData } from "@/lib/use-ensure-data";
 import { toast } from "sonner";
 import {
   MessageCircle,
@@ -169,6 +170,7 @@ export function CollectionSection({
     folderFilter === "Todas" &&
     financialFilter === "Todos" &&
     situationFilter === "Todas";
+  useEnsureData(!noFilterApplied);
 
   const filtered = useMemo(() => {
     if (noFilterApplied) return [];

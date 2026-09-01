@@ -17,6 +17,7 @@ import {
   type Client,
   type Product,
 } from "@/lib/store";
+import { useEnsureData } from "@/lib/use-ensure-data";
 
 const ShipmentWizardModal = lazy(() =>
   import("@/components/shipment-wizard-modal").then((m) => ({
@@ -107,6 +108,7 @@ export function EnvioSection({ onScrollTo }: { onScrollTo: (id: string) => void 
   // Enquanto nenhum filtro estiver aplicado, a lista não é montada.
   const noFilterApplied =
     search.trim().length === 0 && minItems.trim() === "1" && minDays.trim() === "0";
+  useEnsureData(!noFilterApplied);
 
   const groups = useMemo(() => {
     if (noFilterApplied) return [];
