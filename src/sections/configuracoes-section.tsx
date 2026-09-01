@@ -836,6 +836,17 @@ export function ConfiguracoesSection() {
               onOpen={() => setView("migration")}
             />
             <SecondaryCard
+              icon={Megaphone}
+              title="Dados Meta"
+              summary="Filtre a base por região, valor comprado, tempo de casa e perfil e exporte listas prontas para campanhas no Meta Business."
+              status="Somente admin"
+              onOpen={() => {
+                closeSettings();
+                setTimeout(() => navigate({ to: "/dados-meta" }), 0);
+              }}
+            />
+
+            <SecondaryCard
               icon={Truck}
               title="Envio / SuperFrete"
               summary="Remetente usado nas cotações e etiquetas da SuperFrete."
