@@ -16,7 +16,6 @@ import {
   Truck,
   Wallet,
   CircleDollarSign,
-  KanbanSquare,
 } from "lucide-react";
 import { SandboxProvider, useSandbox } from "@/lib/use-sandbox";
 import { WifiOff } from "lucide-react";
