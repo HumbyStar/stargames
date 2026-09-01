@@ -979,8 +979,17 @@ export const verifySuperfreteLabel = createServerFn({ method: "POST" })
           method: "GET",
         });
         const remote = (raw["status"] as string | null) ?? null;
-        if (!remote || /cancel/i.test(remote)) {
+        if (remote && /cancel/i.test(remote)) {
           return markFailed(`Pedido ${orderId} não está mais ativo na SuperFrete.`);
+        }
+        if (!remote) {
+          // Resposta sem status: o pedido existe, mas não sabemos o estado.
+          // Não altera nada para não remover um selo válido.
+          return {
+            exists: true,
+            status: previous ?? "Desconhecido",
+            message: "A SuperFrete não retornou o status deste pedido. Tente novamente.",
+          };
         }
         const internal = mapSuperfreteStatus(remote);
         const tracking = (raw["tracking"] as string | null) ?? null;
@@ -1004,8 +1013,18 @@ export const verifySuperfreteLabel = createServerFn({ method: "POST" })
           status: internal,
           message: `Etiqueta existe na SuperFrete — status ${internal}.`,
         };
-      } catch {
-        return markFailed(`Pedido ${orderId} não foi encontrado na SuperFrete.`);
+      } catch (e) {
+        const { SuperfreteError } = await import("@/lib/superfrete.server");
+        const status = e instanceof SuperfreteError ? e.status : 0;
+        // Só marca como falha quando a SuperFrete confirma que o pedido não
+        // existe (404). Erros de rede/timeout/5xx são transitórios e não
+        // podem apagar uma etiqueta válida.
+        if (status === 404) {
+          return markFailed(`Pedido ${orderId} não foi encontrado na SuperFrete.`);
+        }
+        const message =
+          e instanceof Error ? e.message : "Falha temporária ao consultar a SuperFrete.";
+        throw new Error(`Não foi possível verificar a etiqueta agora: ${message}`);
       }
     },
   );
