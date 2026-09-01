@@ -12,12 +12,6 @@ import type { MetaLead, MetaLeadFicha } from "@/lib/meta-export-format";
  * dezenas de consultas ao banco a cada ajuste de filtro.
  */
 
-type Sb = Parameters<
-  Parameters<ReturnType<typeof createServerFn>["handler"]>[0]
->[0] extends never
-  ? never
-  : never;
-
 const PAGE = 1000;
 
 async function pageAll<T>(
@@ -206,7 +200,7 @@ export const logMetaExport = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => LogInput.parse(d))
   .handler(async ({ data, context }): Promise<{ ok: boolean }> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: claimsEmail } = { data: (context.claims as { email?: string } | null)?.email ?? null };
+    const claimsEmail = (context.claims as { email?: string } | null)?.email ?? null;
     await supabaseAdmin.from("audit_log").insert({
       table_name: "meta_export",
       action: "INSERT",
@@ -223,5 +217,3 @@ export const logMetaExport = createServerFn({ method: "POST" })
     });
     return { ok: true };
   });
-
-export type { Sb };
