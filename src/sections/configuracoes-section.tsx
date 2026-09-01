@@ -13,6 +13,8 @@ import {
   HardDrive,
   History,
   KeyRound,
+  Megaphone,
+
   LayoutGrid,
   Navigation,
   Save,
