@@ -36,14 +36,7 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import {
-  useStore,
-  calculateClientFinancialSummary,
-  isOpenSituation,
-  isOverdue,
-  type Client,
-  type Product,
-} from "@/lib/store";
+import { useStore } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
 import { Button } from "@/components/ui/button";
 import {
