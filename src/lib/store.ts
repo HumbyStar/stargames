@@ -722,6 +722,7 @@ const defaultSecurity: SecuritySettings = {
 };
 
 let hydratePromise: Promise<void> | null = null;
+let ensureDataPromise: Promise<void> | null = null;
 // Coalescência de refreshes do snapshot (Realtime, app:reset, modais).
 let refreshInFlight: Promise<void> | null = null;
 let refreshQueued = false;
