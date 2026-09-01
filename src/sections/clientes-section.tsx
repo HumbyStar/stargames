@@ -2212,6 +2212,39 @@ function ClientDrawer({
             }}
           />
         )}
+        {orphanMgmvProducts.length > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+            <span className="flex-1 min-w-[220px]">
+              {orphanMgmvProducts.length} produto(s) estão marcados como
+              <strong> MGMV</strong> mas o cliente não tem acordo ativo. Eles
+              seguem listados abaixo com o aviso "sem acordo vinculado".
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                if (
+                  !confirm(
+                    `Corrigir ${orphanMgmvProducts.length} produto(s) sem acordo MGMV?\n\nEles voltam a ser produtos individuais (Pago/Pendente conforme o valor pago).`,
+                  )
+                )
+                  return;
+                orphanMgmvProducts.forEach((p) =>
+                  updateProduct(p.id, {
+                    financialStatus: calculateFinancialStatus(
+                      p.totalValue,
+                      p.paidValue,
+                    ),
+                  }),
+                );
+                toast.success("Produtos corrigidos para individuais");
+              }}
+            >
+              Corrigir status
+            </Button>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
