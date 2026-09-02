@@ -58,7 +58,7 @@ export function MgmvCreateModal({
   products,
   preselectedProductId,
 }: Props) {
-  const setMGMVAgreement = useStore((s) => s.setMGMVAgreement);
+  const setMGMVAgreementConfirmed = useStore((s) => s.setMGMVAgreementConfirmed);
   const updateProduct = useStore((s) => s.updateProduct);
 
   // Draft vs. Confirmed state — once confirmed the form is locked to prevent
