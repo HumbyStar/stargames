@@ -57,6 +57,8 @@ export function MgmvAgreementEditor({ clientId, agreement, products, availablePr
   const [confirmRemoveProduct, setConfirmRemoveProduct] = useState<string | null>(null);
   const [showAddPicker, setShowAddPicker] = useState(false);
   const [addSearch, setAddSearch] = useState("");
+  const [saving, setSaving] = useState(false);
+
 
   const paidCount = draft.installments.filter((i) => i.paid).length;
   const paidValue = draft.installments
