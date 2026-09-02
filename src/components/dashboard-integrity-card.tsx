@@ -3,7 +3,7 @@ import { RefreshCw, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { useStore, type ImportDiagnostics } from "@/lib/store";
-import { supabase } from "@/integrations/supabase/client";
+
 
 /** Intervalo da reconferência automática. */
 const AUTO_CHECK_MS = 60_000;
