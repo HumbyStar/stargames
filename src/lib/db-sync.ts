@@ -1242,7 +1242,30 @@ export function buildInstallmentRows(client: Client): Record<string, unknown>[] 
   }));
 }
 
+/**
+ * Traduz erros de gravação do banco para uma mensagem em português.
+ * O caso mais comum é recusa por RLS (usuário sem permissão), que antes
+ * ficava apenas no console e produzia um falso "salvo com sucesso".
+ */
+export function describeDbError(error: unknown): string {
+  const e = error as { code?: string; message?: string } | null;
+  const msg = e?.message ?? "";
+  if (e?.code === "42501" || /row-level security|permission denied/i.test(msg)) {
+    return "Sem permissão para gravar esta alteração no banco.";
+  }
+  if (/Failed to fetch|NetworkError/i.test(msg)) {
+    return "Sem conexão com o banco. A alteração não foi salva.";
+  }
+  return msg || "Falha ao gravar no banco.";
+}
+
+function throwDb(step: string, error: unknown): never {
+  logErr(step, error);
+  throw new Error(describeDbError(error));
+}
+
 export async function dbSyncAgreementForClientAsync(client: Client): Promise<void> {
+
   const agreementId = client.id;
 
   if (!client.mgmv || client.mgmv.installments.length === 0) {
