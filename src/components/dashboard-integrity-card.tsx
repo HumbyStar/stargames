@@ -137,7 +137,11 @@ export function DashboardIntegrityCard() {
   const unavailable = rows.filter((r) => r.db === null);
   const divergences = rows.filter((r) => r.db !== null && r.local !== r.db);
   const allMatch =
-    diag !== null && !syncing && divergences.length === 0 && unavailable.length === 0;
+    diag !== null &&
+    !syncing &&
+    dataLoaded &&
+    divergences.length === 0 &&
+    unavailable.length === 0;
 
   const agoLabel = (() => {
     if (!lastCheckedAt) return null;
