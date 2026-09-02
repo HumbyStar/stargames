@@ -43,7 +43,6 @@ function dateInputToIso(v: string): string {
  */
 export function MgmvAgreementEditor({ clientId, agreement, products, availableProducts = [], onClose }: Props) {
   const setMGMVAgreementConfirmed = useStore((s) => s.setMGMVAgreementConfirmed);
-  const updateProduct = useStore((s) => s.updateProduct);
   const setProductMGMVMembership = useStore((s) => s.setProductMGMVMembership);
 
   const [draft, setDraft] = useState<MGMVAgreement>(agreement);

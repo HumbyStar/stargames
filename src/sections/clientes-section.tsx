@@ -1272,7 +1272,7 @@ function ClientDrawer({
   onChangeSituation: (productId: string, s: Situation) => void;
   onRequestRetirado: (productId: string) => void;
   onMarkPaid: (p: Product) => void;
-  onPayMGMVInstallment: (installmentNumber: number) => void;
+  onPayMGMVInstallment: (installmentNumber: number) => Promise<void> | void;
   onRegisterMGMVPartialPayment: (
     installmentNumber: number,
     amount: number,

@@ -1295,7 +1295,9 @@ function throwDb(step: string, error: unknown): never {
   throw new Error(describeDbError(error));
 }
 
-export async function dbSyncAgreementForClientAsync(client: Client): Promise<void> {
+const mgmvWriteQueues = new Map<string, Promise<void>>();
+
+async function performAgreementSync(client: Client): Promise<void> {
   const agreementId = client.id;
 
   if (!isLocalMode()) {
@@ -1397,6 +1399,20 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
     .eq("client_id", client.id)
     .neq("financial_status", "MGMV");
   if (nonMgmvProducts.error) throwDb("syncAgreement.nonMgmvProducts", nonMgmvProducts.error);
+}
+
+/**
+ * Serializa todas as versões de um acordo por cliente. Uma requisição mais
+ * antiga nunca pode terminar depois e substituir parcelas recém-pagas.
+ */
+export function dbSyncAgreementForClientAsync(client: Client): Promise<void> {
+  const previous = mgmvWriteQueues.get(client.id) ?? Promise.resolve();
+  const current = previous.catch(() => undefined).then(() => performAgreementSync(client));
+  mgmvWriteQueues.set(client.id, current);
+  void current.finally(() => {
+    if (mgmvWriteQueues.get(client.id) === current) mgmvWriteQueues.delete(client.id);
+  }).catch(() => undefined);
+  return current;
 }
 
 
