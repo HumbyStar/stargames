@@ -795,6 +795,28 @@ let clientFlushInFlight: Promise<void> | null = null;
 let productFlushInFlight: Promise<void> | null = null;
 const FLUSH_DELAY_MS = 250;
 
+// Falha de gravação nunca pode ficar só no console: a UI registra um
+// observador e mostra o aviso ao usuário.
+type WriteFailureListener = (message: string) => void;
+const writeFailureListeners = new Set<WriteFailureListener>();
+
+export function onWriteFailure(listener: WriteFailureListener): () => void {
+  writeFailureListeners.add(listener);
+  return () => writeFailureListeners.delete(listener);
+}
+
+export function notifyWriteFailure(message: string): void {
+  for (const l of writeFailureListeners) {
+    try {
+      l(message);
+    } catch {
+      /* observador não pode quebrar a gravação */
+    }
+  }
+}
+
+
+
 function scheduleProductFlush() {
   if (productFlushTimer) return;
   productFlushTimer = setTimeout(() => {
