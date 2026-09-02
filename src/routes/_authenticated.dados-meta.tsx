@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AppLayout } from "@/components/app-layout";
 import { DadosMetaSection } from "@/sections/dados-meta-section";
+import { SegmentacaoSection } from "@/sections/segmentacao-section";
 
 export const Route = createFileRoute("/_authenticated/dados-meta")({
   head: () => ({
