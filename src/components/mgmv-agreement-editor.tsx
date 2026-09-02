@@ -42,7 +42,7 @@ function dateInputToIso(v: string): string {
  * mínimo, vencimentos, remover parcelas e remover produtos do acordo.
  */
 export function MgmvAgreementEditor({ clientId, agreement, products, availableProducts = [], onClose }: Props) {
-  const setMGMVAgreement = useStore((s) => s.setMGMVAgreement);
+  const setMGMVAgreementConfirmed = useStore((s) => s.setMGMVAgreementConfirmed);
   const updateProduct = useStore((s) => s.updateProduct);
 
   const [draft, setDraft] = useState<MGMVAgreement>(agreement);
