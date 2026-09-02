@@ -1271,7 +1271,7 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
   if (!client.mgmv || client.mgmv.installments.length === 0) {
     // Sem acordo → remove agreement (cascata apaga parcelas) e zera flags.
     const del = await sb().from("mgmv_agreements").delete().eq("id", agreementId);
-    if (del.error) logErr("syncAgreement.delete", del.error);
+    if (del.error) throwDb("syncAgreement.delete", del.error);
     const resetFlags = await sb()
       .from("products")
       .update({
@@ -1280,7 +1280,7 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
         collection_eligible: true,
       })
       .eq("client_id", client.id);
-    if (resetFlags.error) logErr("syncAgreement.resetFlags", resetFlags.error);
+    if (resetFlags.error) throwDb("syncAgreement.resetFlags", resetFlags.error);
     return;
   }
 
@@ -1293,10 +1293,7 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
       .select("completed_at")
       .eq("id", agreementId)
       .maybeSingle();
-    if (existing.error) {
-      logErr("syncAgreement.readCompletion", existing.error);
-      return;
-    }
+    if (existing.error) throwDb("syncAgreement.readCompletion", existing.error);
     if (existing.data?.completed_at) return;
   }
 
@@ -1304,10 +1301,7 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
   const upAgreement = await sb()
     .from("mgmv_agreements")
     .upsert(buildAgreementRow(client) as never);
-  if (upAgreement.error) {
-    logErr("syncAgreement.upsert", upAgreement.error);
-    return;
-  }
+  if (upAgreement.error) throwDb("syncAgreement.upsert", upAgreement.error);
 
   // Substitui parcelas (estratégia simples: delete + insert em lotes).
   // Acordos podem ter dezenas/centenas de parcelas — envia em lotes para
@@ -1323,7 +1317,7 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
         .upsert(rows.slice(i, i + CHUNK) as never, {
           onConflict: "agreement_id,installment_number",
         });
-      if (upIns.error) logErr("syncAgreement.upsertInstallments", upIns.error);
+      if (upIns.error) throwDb("syncAgreement.upsertInstallments", upIns.error);
     }
   }
   // Remove apenas as parcelas que sobraram de um plano maior anterior.
@@ -1345,7 +1339,7 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
     })
     .eq("client_id", client.id)
     .eq("financial_status", "MGMV");
-  if (mgmvProducts.error) logErr("syncAgreement.mgmvProducts", mgmvProducts.error);
+  if (mgmvProducts.error) throwDb("syncAgreement.mgmvProducts", mgmvProducts.error);
 
   const nonMgmvProducts = await sb()
     .from("products")
@@ -1356,8 +1350,9 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
     })
     .eq("client_id", client.id)
     .neq("financial_status", "MGMV");
-  if (nonMgmvProducts.error) logErr("syncAgreement.nonMgmvProducts", nonMgmvProducts.error);
+  if (nonMgmvProducts.error) throwDb("syncAgreement.nonMgmvProducts", nonMgmvProducts.error);
 }
+
 
 /**
  * Vincula produtos recém-criados ao acordo MGMV ativo do cliente.
