@@ -227,7 +227,8 @@ export function MgmvAgreementEditor({ clientId, agreement, products, availablePr
     toast.success("Total do acordo ajustado aos produtos restantes.");
   };
 
-  const save = () => {
+  const save = async () => {
+    if (saving) return;
     if (draft.totalDebt <= 0) {
       toast.error("Valor do acordo inválido.");
       return;
@@ -244,14 +245,25 @@ export function MgmvAgreementEditor({ clientId, agreement, products, availablePr
           ? "manually_reviewed"
           : draft.reviewStatus,
     };
-    setMGMVAgreement(clientId, next);
-    if (inconsistent) {
-      toast.warning("Acordo salvo com divergência — marcado como Revisão necessária.");
-    } else {
-      toast.success("Acordo MGMV atualizado.");
+    setSaving(true);
+    try {
+      // Só confirmamos sucesso depois que o banco gravou de fato.
+      await setMGMVAgreementConfirmed(clientId, next);
+      if (inconsistent) {
+        toast.warning("Acordo salvo com divergência — marcado como Revisão necessária.");
+      } else {
+        toast.success("Acordo MGMV atualizado.");
+      }
+      onClose();
+    } catch (err) {
+      toast.error(
+        `Não foi possível salvar o acordo: ${err instanceof Error ? err.message : "erro desconhecido"}`,
+      );
+    } finally {
+      setSaving(false);
     }
-    onClose();
   };
+
 
   return (
     <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs">
