@@ -848,6 +848,8 @@ function scheduleClientFlush() {
     clientFlushTimer = null;
     void flushPendingClientUpserts().catch((error) => {
       logErr("scheduledClientFlush", error);
+      notifyWriteFailure(describeDbError(error));
+
       if (pendingClientUpserts.size > 0) scheduleClientFlush();
     });
   }, FLUSH_DELAY_MS);
