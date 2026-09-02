@@ -3,8 +3,7 @@ import { RefreshCw, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { useStore, type ImportDiagnostics } from "@/lib/store";
-import { useEnsureData } from "@/lib/use-ensure-data";
-import { supabase } from "@/integrations/supabase/client";
+
 
 /** Intervalo da reconferência automática. */
 const AUTO_CHECK_MS = 60_000;
@@ -20,12 +19,16 @@ const REALTIME_DEBOUNCE_MS = 1_500;
  */
 export function DashboardIntegrityCard() {
   const clients = useStore((s) => s.clients);
-  useEnsureData();
   const products = useStore((s) => s.products);
   const currentEnv = useStore((s) => s.currentEnv);
   const envSyncing = useStore((s) => s.envSyncing);
   const fetchDiagnostics = useStore((s) => s.fetchDiagnostics);
   const refreshSnapshot = useStore((s) => s.refreshSnapshot);
+  // A base carrega sob demanda: sem ela em memória, comparar com o banco
+  // geraria "0 x N" (falsa divergência) e um recarregamento pesado inútil.
+  const dataLoaded = useStore((s) => s.dataLoaded);
+  const dataLoading = useStore((s) => s.dataLoading);
+  const ensureDataLoaded = useStore((s) => s.ensureDataLoaded);
 
   const [diag, setDiag] = useState<ImportDiagnostics | null>(null);
   const [loading, setLoading] = useState(false);
@@ -40,11 +43,17 @@ export function DashboardIntegrityCard() {
   const localMgmv = clients.filter((c) => c.mgmv).length;
 
   const check = useCallback(
-    async (opts?: { silent?: boolean }) => {
+    async (opts?: { silent?: boolean; ensure?: boolean }) => {
       if (runningRef.current) return;
       runningRef.current = true;
       if (!opts?.silent) setLoading(true);
       try {
+        // Conferência só faz sentido com a base em memória.
+        if (opts?.ensure && !useStore.getState().dataLoaded) {
+          await ensureDataLoaded();
+        }
+        if (!useStore.getState().dataLoaded) return;
+
         const d = await fetchDiagnostics();
         setDiag(d);
         setLastCheckedAt(Date.now());
@@ -80,14 +89,15 @@ export function DashboardIntegrityCard() {
         runningRef.current = false;
       }
     },
-    [fetchDiagnostics, refreshSnapshot],
+    [ensureDataLoaded, fetchDiagnostics, refreshSnapshot],
   );
 
-  // Ao montar e a cada troca de ambiente.
+  // Ao montar (se a base já estiver carregada) e a cada troca de ambiente.
   useEffect(() => {
     autoFixedRef.current = null;
-    void check();
-  }, [currentEnv, check]);
+    if (dataLoaded) void check();
+    else setDiag(null);
+  }, [currentEnv, dataLoaded, check]);
 
   // Ciclo automático + foco da aba.
   useEffect(() => {
@@ -113,20 +123,25 @@ export function DashboardIntegrityCard() {
   const envMismatch = diag !== null && diag.env !== currentEnv;
   const syncing = envSyncing || envMismatch;
 
-  const rows = diag && !syncing
-    ? [
-        { label: "Clientes", local: clients.length, db: diag.clientsCount },
-        { label: "Produtos", local: products.length, db: diag.productsCount },
-        { label: "Acordos MGMV", local: localMgmv, db: diag.agreementsCount },
-      ]
-    : [];
+  const rows =
+    diag && !syncing && dataLoaded
+      ? [
+          { label: "Clientes", local: clients.length, db: diag.clientsCount },
+          { label: "Produtos", local: products.length, db: diag.productsCount },
+          { label: "Acordos MGMV", local: localMgmv, db: diag.agreementsCount },
+        ]
+      : [];
 
   // `db === null` = contagem indisponível (erro/tempo limite). Nunca tratar
   // como zero: isso gerava alarme falso de divergência com o banco cheio.
   const unavailable = rows.filter((r) => r.db === null);
   const divergences = rows.filter((r) => r.db !== null && r.local !== r.db);
   const allMatch =
-    diag !== null && !syncing && divergences.length === 0 && unavailable.length === 0;
+    diag !== null &&
+    !syncing &&
+    dataLoaded &&
+    divergences.length === 0 &&
+    unavailable.length === 0;
 
   const agoLabel = (() => {
     if (!lastCheckedAt) return null;
@@ -141,7 +156,7 @@ export function DashboardIntegrityCard() {
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm">
-            {loading || refreshing || syncing ? (
+            {loading || refreshing || syncing || (dataLoading && !dataLoaded) ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 <span className="text-muted-foreground">
@@ -149,9 +164,16 @@ export function DashboardIntegrityCard() {
                     ? "Sincronizando ambiente…"
                     : refreshing
                       ? "Atualizando snapshot automaticamente…"
-                      : "Consultando banco…"}
+                      : dataLoading && !dataLoaded
+                        ? "Carregando base para conferência…"
+                        : "Consultando banco…"}
                 </span>
               </>
+            ) : !dataLoaded ? (
+              <span className="text-muted-foreground">
+                Base ainda não carregada nesta sessão — clique em reconferir para comparar com o
+                banco.
+              </span>
             ) : allMatch ? (
               <>
                 <CheckCircle2 className="h-4 w-4 text-[color:var(--success)]" />
@@ -186,11 +208,11 @@ export function DashboardIntegrityCard() {
             aria-label="Reconferir agora"
             onClick={() => {
               autoFixedRef.current = null;
-              void check();
+              void check({ ensure: true });
             }}
-            disabled={refreshing || loading || envSyncing}
+            disabled={refreshing || loading || envSyncing || dataLoading}
           >
-            {refreshing || loading ? (
+            {refreshing || loading || dataLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <RefreshCw className="h-4 w-4" />
@@ -198,7 +220,20 @@ export function DashboardIntegrityCard() {
           </Button>
         </div>
 
-        {diag && !syncing && (
+        {!dataLoaded ? (
+          <div className="overflow-hidden rounded-lg border border-border">
+            <div className="divide-y divide-border">
+              {["Clientes", "Produtos", "Acordos MGMV"].map((label) => (
+                <div key={label} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                  <span className="text-sm">{label}</span>
+                  <span className="h-3 w-16 animate-pulse rounded bg-muted" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {diag && !syncing && dataLoaded && (
           <div className="overflow-hidden rounded-lg border border-border">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
