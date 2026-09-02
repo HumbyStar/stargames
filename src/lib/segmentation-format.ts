@@ -61,12 +61,17 @@ export const FULL_HEADERS = [
 
 export const MARKETING_HEADERS = ["nome", "telefone", "email"] as const;
 
+/** Telefone no padrão de mídia paga: país+DDD+número, só dígitos. */
+export function marketingPhone(raw: string): string {
+  return toE164(raw).replace(/^\+/, "");
+}
+
 export function fullRow(r: SegmentRow, categoryLabel: string): (string | number)[] {
-  return [r.name, toE164(r.phone) || r.phone, r.email, r.productsCount, r.spent, categoryLabel];
+  return [r.name, marketingPhone(r.phone) || r.phone, r.email, r.productsCount, r.spent, categoryLabel];
 }
 
 export function marketingRow(r: SegmentRow): string[] {
-  return [r.name, toE164(r.phone), r.email];
+  return [r.name, marketingPhone(r.phone), r.email];
 }
 
 export function buildFullCsv(rows: SegmentRow[], categoryLabel: string): string {
@@ -79,7 +84,7 @@ export function buildMarketingCsv(rows: SegmentRow[]): string {
 
 export function buildMarketingTxt(rows: SegmentRow[]): string {
   return rows
-    .map((r) => toE164(r.phone))
+    .map((r) => marketingPhone(r.phone))
     .filter(Boolean)
     .join("\n");
 }
