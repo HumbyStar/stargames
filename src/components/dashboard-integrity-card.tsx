@@ -123,13 +123,14 @@ export function DashboardIntegrityCard() {
   const envMismatch = diag !== null && diag.env !== currentEnv;
   const syncing = envSyncing || envMismatch;
 
-  const rows = diag && !syncing
-    ? [
-        { label: "Clientes", local: clients.length, db: diag.clientsCount },
-        { label: "Produtos", local: products.length, db: diag.productsCount },
-        { label: "Acordos MGMV", local: localMgmv, db: diag.agreementsCount },
-      ]
-    : [];
+  const rows =
+    diag && !syncing && dataLoaded
+      ? [
+          { label: "Clientes", local: clients.length, db: diag.clientsCount },
+          { label: "Produtos", local: products.length, db: diag.productsCount },
+          { label: "Acordos MGMV", local: localMgmv, db: diag.agreementsCount },
+        ]
+      : [];
 
   // `db === null` = contagem indisponível (erro/tempo limite). Nunca tratar
   // como zero: isso gerava alarme falso de divergência com o banco cheio.
