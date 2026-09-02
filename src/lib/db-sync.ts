@@ -835,6 +835,8 @@ function scheduleProductFlush() {
       await flushPendingProductUpserts();
     })().catch((error) => {
       logErr("scheduledProductFlush", error);
+      notifyWriteFailure(describeDbError(error));
+
       if (pendingProductUpserts.size > 0) scheduleProductFlush();
     });
   }, FLUSH_DELAY_MS);
