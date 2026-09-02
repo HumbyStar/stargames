@@ -533,6 +533,11 @@ interface State {
     amount: number,
   ) => PartialPaymentResult;
   setMGMVAgreement: (clientId: string, agreement: MGMVAgreement | undefined) => void;
+  setMGMVAgreementConfirmed: (
+    clientId: string,
+    agreement: MGMVAgreement | undefined,
+  ) => Promise<void>;
+
   /**
    * Confirma a quitação do acordo MGMV: marca o acordo como concluído
    * (arquivado), devolve o cliente ao tipo comum e converte os produtos do
@@ -1387,6 +1392,26 @@ export const useStore = create<State>()((set, get) => ({
           }
           return { clients };
         }),
+      /**
+       * Grava o acordo MGMV e só resolve quando o banco confirmar.
+       * Em caso de falha (ex.: recusa por permissão), desfaz o estado local
+       * para a tela nunca mostrar um "sucesso" que não existe no banco.
+       */
+      setMGMVAgreementConfirmed: async (clientId, agreement) => {
+        const prevClients = get().clients;
+        get().setMGMVAgreement(clientId, agreement);
+        try {
+          await awaitPendingWrites();
+          const updated = get().clients.find((c) => c.id === clientId);
+          if (updated) await dbSyncAgreementForClientAsync(updated);
+          await get().refreshClientData(clientId);
+        } catch (err) {
+          set({ clients: prevClients });
+          console.error("setMGMVAgreementConfirmed failed", err);
+          throw err;
+        }
+      },
+
       applyAiReviewToAgreement: async (clientId, nextAgreement, meta) => {
         const prevClient = get().clients.find((c) => c.id === clientId);
         const prevAgreement = prevClient?.mgmv;

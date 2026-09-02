@@ -795,6 +795,28 @@ let clientFlushInFlight: Promise<void> | null = null;
 let productFlushInFlight: Promise<void> | null = null;
 const FLUSH_DELAY_MS = 250;
 
+// Falha de gravação nunca pode ficar só no console: a UI registra um
+// observador e mostra o aviso ao usuário.
+type WriteFailureListener = (message: string) => void;
+const writeFailureListeners = new Set<WriteFailureListener>();
+
+export function onWriteFailure(listener: WriteFailureListener): () => void {
+  writeFailureListeners.add(listener);
+  return () => writeFailureListeners.delete(listener);
+}
+
+export function notifyWriteFailure(message: string): void {
+  for (const l of writeFailureListeners) {
+    try {
+      l(message);
+    } catch {
+      /* observador não pode quebrar a gravação */
+    }
+  }
+}
+
+
+
 function scheduleProductFlush() {
   if (productFlushTimer) return;
   productFlushTimer = setTimeout(() => {
@@ -813,6 +835,8 @@ function scheduleProductFlush() {
       await flushPendingProductUpserts();
     })().catch((error) => {
       logErr("scheduledProductFlush", error);
+      notifyWriteFailure(describeDbError(error));
+
       if (pendingProductUpserts.size > 0) scheduleProductFlush();
     });
   }, FLUSH_DELAY_MS);
@@ -824,6 +848,8 @@ function scheduleClientFlush() {
     clientFlushTimer = null;
     void flushPendingClientUpserts().catch((error) => {
       logErr("scheduledClientFlush", error);
+      notifyWriteFailure(describeDbError(error));
+
       if (pendingClientUpserts.size > 0) scheduleClientFlush();
     });
   }, FLUSH_DELAY_MS);
@@ -1242,13 +1268,36 @@ export function buildInstallmentRows(client: Client): Record<string, unknown>[] 
   }));
 }
 
+/**
+ * Traduz erros de gravação do banco para uma mensagem em português.
+ * O caso mais comum é recusa por RLS (usuário sem permissão), que antes
+ * ficava apenas no console e produzia um falso "salvo com sucesso".
+ */
+export function describeDbError(error: unknown): string {
+  const e = error as { code?: string; message?: string } | null;
+  const msg = e?.message ?? "";
+  if (e?.code === "42501" || /row-level security|permission denied/i.test(msg)) {
+    return "Sem permissão para gravar esta alteração no banco.";
+  }
+  if (/Failed to fetch|NetworkError/i.test(msg)) {
+    return "Sem conexão com o banco. A alteração não foi salva.";
+  }
+  return msg || "Falha ao gravar no banco.";
+}
+
+function throwDb(step: string, error: unknown): never {
+  logErr(step, error);
+  throw new Error(describeDbError(error));
+}
+
 export async function dbSyncAgreementForClientAsync(client: Client): Promise<void> {
+
   const agreementId = client.id;
 
   if (!client.mgmv || client.mgmv.installments.length === 0) {
     // Sem acordo → remove agreement (cascata apaga parcelas) e zera flags.
     const del = await sb().from("mgmv_agreements").delete().eq("id", agreementId);
-    if (del.error) logErr("syncAgreement.delete", del.error);
+    if (del.error) throwDb("syncAgreement.delete", del.error);
     const resetFlags = await sb()
       .from("products")
       .update({
@@ -1257,7 +1306,7 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
         collection_eligible: true,
       })
       .eq("client_id", client.id);
-    if (resetFlags.error) logErr("syncAgreement.resetFlags", resetFlags.error);
+    if (resetFlags.error) throwDb("syncAgreement.resetFlags", resetFlags.error);
     return;
   }
 
@@ -1270,10 +1319,7 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
       .select("completed_at")
       .eq("id", agreementId)
       .maybeSingle();
-    if (existing.error) {
-      logErr("syncAgreement.readCompletion", existing.error);
-      return;
-    }
+    if (existing.error) throwDb("syncAgreement.readCompletion", existing.error);
     if (existing.data?.completed_at) return;
   }
 
@@ -1281,10 +1327,7 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
   const upAgreement = await sb()
     .from("mgmv_agreements")
     .upsert(buildAgreementRow(client) as never);
-  if (upAgreement.error) {
-    logErr("syncAgreement.upsert", upAgreement.error);
-    return;
-  }
+  if (upAgreement.error) throwDb("syncAgreement.upsert", upAgreement.error);
 
   // Substitui parcelas (estratégia simples: delete + insert em lotes).
   // Acordos podem ter dezenas/centenas de parcelas — envia em lotes para
@@ -1300,7 +1343,7 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
         .upsert(rows.slice(i, i + CHUNK) as never, {
           onConflict: "agreement_id,installment_number",
         });
-      if (upIns.error) logErr("syncAgreement.upsertInstallments", upIns.error);
+      if (upIns.error) throwDb("syncAgreement.upsertInstallments", upIns.error);
     }
   }
   // Remove apenas as parcelas que sobraram de um plano maior anterior.
@@ -1322,7 +1365,7 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
     })
     .eq("client_id", client.id)
     .eq("financial_status", "MGMV");
-  if (mgmvProducts.error) logErr("syncAgreement.mgmvProducts", mgmvProducts.error);
+  if (mgmvProducts.error) throwDb("syncAgreement.mgmvProducts", mgmvProducts.error);
 
   const nonMgmvProducts = await sb()
     .from("products")
@@ -1333,8 +1376,9 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
     })
     .eq("client_id", client.id)
     .neq("financial_status", "MGMV");
-  if (nonMgmvProducts.error) logErr("syncAgreement.nonMgmvProducts", nonMgmvProducts.error);
+  if (nonMgmvProducts.error) throwDb("syncAgreement.nonMgmvProducts", nonMgmvProducts.error);
 }
+
 
 /**
  * Vincula produtos recém-criados ao acordo MGMV ativo do cliente.
@@ -1369,8 +1413,12 @@ export async function linkProductsToAgreement(
 
 /** Fire-and-forget wrapper para chamadas de UI. */
 export function dbSyncAgreementForClient(client: Client): void {
-  void dbSyncAgreementForClientAsync(client);
+  void dbSyncAgreementForClientAsync(client).catch((error) => {
+    logErr("syncAgreement.fireAndForget", error);
+    notifyWriteFailure(describeDbError(error));
+  });
 }
+
 
 /** Sincroniza acordos de vários clientes (usado pós-importação). */
 export async function dbSyncAgreementsBulkAsync(clients: Client[]): Promise<void> {

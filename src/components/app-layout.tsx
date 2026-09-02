@@ -38,7 +38,13 @@ import {
 } from "@/lib/store";
 import { useEnsureData } from "@/lib/use-ensure-data";
 import { useUiStore } from "@/lib/ui-store";
-import { setUiValue, subscribeRealtimeSnapshot, suspendRealtimeRefresh } from "@/lib/db-sync";
+import {
+  onWriteFailure,
+  setUiValue,
+  subscribeRealtimeSnapshot,
+  suspendRealtimeRefresh,
+} from "@/lib/db-sync";
+
 import { notifyRowConfirmed } from "@/lib/write-confirm";
 import { IdleProvider, useIdle } from "@/lib/use-idle";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1324,6 +1330,16 @@ export function AppLayout({ children }: { children?: ReactNode }) {
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+  // Nenhuma falha de gravação fica invisível: qualquer erro de escrita
+  // (permissão, rede) vira um aviso na tela em vez de um falso sucesso.
+  useEffect(
+    () =>
+      onWriteFailure((message) => {
+        toast.error(message);
+      }),
+    [],
+  );
+
   // Sincronização Realtime: após a primeira hidratação, assina os canais
   // do Supabase para refletir mudanças de clients/products/MGMV vindas de
   // outras abas, dispositivos ou reconciliações do backend.
