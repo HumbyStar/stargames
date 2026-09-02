@@ -156,7 +156,7 @@ export function DashboardIntegrityCard() {
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm">
-            {loading || refreshing || syncing ? (
+            {loading || refreshing || syncing || (dataLoading && !dataLoaded) ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 <span className="text-muted-foreground">
@@ -164,9 +164,16 @@ export function DashboardIntegrityCard() {
                     ? "Sincronizando ambiente…"
                     : refreshing
                       ? "Atualizando snapshot automaticamente…"
-                      : "Consultando banco…"}
+                      : dataLoading && !dataLoaded
+                        ? "Carregando base para conferência…"
+                        : "Consultando banco…"}
                 </span>
               </>
+            ) : !dataLoaded ? (
+              <span className="text-muted-foreground">
+                Base ainda não carregada nesta sessão — clique em reconferir para comparar com o
+                banco.
+              </span>
             ) : allMatch ? (
               <>
                 <CheckCircle2 className="h-4 w-4 text-[color:var(--success)]" />
@@ -201,11 +208,11 @@ export function DashboardIntegrityCard() {
             aria-label="Reconferir agora"
             onClick={() => {
               autoFixedRef.current = null;
-              void check();
+              void check({ ensure: true });
             }}
-            disabled={refreshing || loading || envSyncing}
+            disabled={refreshing || loading || envSyncing || dataLoading}
           >
-            {refreshing || loading ? (
+            {refreshing || loading || dataLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <RefreshCw className="h-4 w-4" />
@@ -213,7 +220,20 @@ export function DashboardIntegrityCard() {
           </Button>
         </div>
 
-        {diag && !syncing && (
+        {!dataLoaded ? (
+          <div className="overflow-hidden rounded-lg border border-border">
+            <div className="divide-y divide-border">
+              {["Clientes", "Produtos", "Acordos MGMV"].map((label) => (
+                <div key={label} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                  <span className="text-sm">{label}</span>
+                  <span className="h-3 w-16 animate-pulse rounded bg-muted" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {diag && !syncing && dataLoaded && (
           <div className="overflow-hidden rounded-lg border border-border">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
