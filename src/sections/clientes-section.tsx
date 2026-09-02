@@ -1262,6 +1262,7 @@ function ClientDrawer({
   onMarkPaid,
   onPayMGMVInstallment,
   onRegisterMGMVPartialPayment,
+  mgmvSaving,
 }: {
   client: Client;
   products: Product[];
