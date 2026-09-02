@@ -108,6 +108,7 @@ export function ImportContentModal({
         setError(
           "Não foi possível reconstruir os registros desta importação (acesso ao histórico de auditoria restrito a administradores).",
         );
+        if (entry.rawContent) setTab("texto");
         return;
       }
       const audited = data ?? [];
