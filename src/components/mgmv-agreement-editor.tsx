@@ -574,9 +574,10 @@ export function MgmvAgreementEditor({ clientId, agreement, products, availablePr
         <Button size="sm" variant="outline" onClick={onClose}>
           Cancelar
         </Button>
-        <Button size="sm" onClick={save}>
-          Salvar alterações
+        <Button size="sm" onClick={() => void save()} disabled={saving}>
+          {saving ? "Salvando…" : "Salvar alterações"}
         </Button>
+
       </div>
     </div>
   );
