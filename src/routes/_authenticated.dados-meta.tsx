@@ -26,10 +26,34 @@ export const Route = createFileRoute("/_authenticated/dados-meta")({
 });
 
 function DadosMetaPage() {
+  const [mode, setMode] = useState<"meta" | "segmentacao">("meta");
+
   return (
     <AppLayout>
       <div className="mx-auto w-full max-w-[1400px] px-4 pb-10 pt-[96px]">
-        <DadosMetaSection />
+        <div className="mb-4 inline-flex rounded-xl border bg-muted/40 p-1">
+          {(
+            [
+              { key: "meta", label: "Dados Meta" },
+              { key: "segmentacao", label: "Segmentação de clientes" },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setMode(t.key)}
+              className={
+                "rounded-lg px-3 py-1.5 text-sm font-medium transition " +
+                (mode === t.key
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground")
+              }
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {mode === "meta" ? <DadosMetaSection /> : <SegmentacaoSection />}
       </div>
     </AppLayout>
   );

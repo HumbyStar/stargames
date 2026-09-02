@@ -631,6 +631,88 @@ export type Database = {
           },
         ]
       }
+      platform_categories: {
+        Row: {
+          category_id: string
+          created_at: string
+          env: Database["public"]["Enums"]["app_env"]
+          id: string
+          platform: string
+          platform_key: string
+          sandbox_owner: string | null
+          updated_at: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          env?: Database["public"]["Enums"]["app_env"]
+          id?: string
+          platform: string
+          platform_key: string
+          sandbox_owner?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          env?: Database["public"]["Enums"]["app_env"]
+          id?: string
+          platform?: string
+          platform_key?: string
+          sandbox_owner?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "product_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_categories: {
+        Row: {
+          created_at: string
+          env: Database["public"]["Enums"]["app_env"]
+          id: string
+          name: string
+          parent_id: string | null
+          sandbox_owner: string | null
+          sort: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          env?: Database["public"]["Enums"]["app_env"]
+          id?: string
+          name: string
+          parent_id?: string | null
+          sandbox_owner?: string | null
+          sort?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          env?: Database["public"]["Enums"]["app_env"]
+          id?: string
+          name?: string
+          parent_id?: string | null
+          sandbox_owner?: string | null
+          sort?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "product_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_ncm: {
         Row: {
           category: string
@@ -1486,6 +1568,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      platform_norm_key: { Args: { _v: string }; Returns: string }
       product_catalog: {
         Args: {
           _only_missing_ncm?: boolean
@@ -1521,6 +1604,57 @@ export type Database = {
           _installments: Json
         }
         Returns: Json
+      }
+      segment_client_products: {
+        Args: {
+          _basis?: string
+          _category_id?: string
+          _client_id: string
+          _exclude_situations?: string[]
+          _platform?: string
+        }
+        Returns: {
+          category: string
+          financial_status: string
+          id: string
+          name: string
+          platform: string
+          register_date: string
+          situation: string
+          value: number
+        }[]
+      }
+      segment_clients: {
+        Args: {
+          _basis?: string
+          _category_id?: string
+          _exclude_situations?: string[]
+          _max?: number
+          _min?: number
+          _page?: number
+          _page_size?: number
+          _platform?: string
+          _sort?: string
+        }
+        Returns: {
+          client_id: string
+          client_name: string
+          customer_data: string
+          group_total: number
+          phone: string
+          products_count: number
+          spent: number
+          total_count: number
+        }[]
+      }
+      segment_platform_stats: {
+        Args: never
+        Returns: {
+          category_id: string
+          platform: string
+          platform_key: string
+          products_count: number
+        }[]
       }
       set_system_backup_schedule: {
         Args: {
