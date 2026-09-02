@@ -1309,6 +1309,7 @@ async function performAgreementSync(client: Client): Promise<void> {
           _client_id: client.id,
           _agreement: agreement as Json,
           _installments: installments as Json,
+          _client_mgmv: (client.mgmv ?? null) as Json,
         });
         if (error) throwDb("syncAgreement.atomic", error);
       })(),

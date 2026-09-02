@@ -1231,7 +1231,6 @@ export const useStore = create<State>()((set, get) => ({
         try {
           const updated = get().clients.find((c) => c.id === clientId);
           if (!updated) throw new Error("Cliente MGMV não encontrado.");
-          await dbUpsertClientsAsync([updated]);
           await dbSyncAgreementForClientAsync(updated);
           clearLocalMutation("client", [clientId]);
         } catch (error) {
@@ -1304,7 +1303,6 @@ export const useStore = create<State>()((set, get) => ({
         try {
           const updated = get().clients.find((c) => c.id === clientId);
           if (!updated) throw new Error("Cliente MGMV não encontrado.");
-          await dbUpsertClientsAsync([updated]);
           await dbSyncAgreementForClientAsync(updated);
           clearLocalMutation("client", [clientId]);
           return { ok: true, becameQuitado };
@@ -1464,7 +1462,6 @@ export const useStore = create<State>()((set, get) => ({
         try {
           const updated = get().clients.find((c) => c.id === clientId);
           if (!updated) throw new Error("Cliente não encontrado.");
-          await dbUpsertClientsAsync([updated]);
           await dbSyncAgreementForClientAsync(updated);
           clearLocalMutation("client", [clientId]);
         } catch (err) {
