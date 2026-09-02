@@ -1137,9 +1137,11 @@ export function MGMVSection({
                                           <Button
                                             size="sm"
                                             variant="ghost"
-                                            onClick={() =>
-                                              payMGMVInstallment(r.client.id, i.number)
-                                            }
+                                            onClick={() => {
+                                              void payMGMVInstallment(r.client.id, i.number).catch((error) =>
+                                                toast.error(error instanceof Error ? error.message : "Falha ao salvar parcela."),
+                                              );
+                                            }}
                                           >
                                             Marcar paga
                                           </Button>

@@ -148,6 +148,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const registerMGMVPartialPayment = useStore(
     (s) => s.registerMGMVPartialPayment,
   );
+  const busyClientIds = useStore((s) => s.busyClientIds);
 
   const [search, setSearch] = usePersistedState<string>("clientes.search", "");
   const [chip, setChip] = usePersistedState<ChipFilter>(
@@ -1076,9 +1077,13 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                 updateProduct(p.id, { paidValue: p.totalValue, financialStatus: "Pago" });
                 toast.success("Marcado como pago");
               }}
-              onPayMGMVInstallment={(installmentNumber) => {
-                payMGMVInstallment(drawerClient.id, installmentNumber);
-                toast.success(`Parcela ${installmentNumber} marcada como paga`);
+              onPayMGMVInstallment={async (installmentNumber) => {
+                try {
+                  await payMGMVInstallment(drawerClient.id, installmentNumber);
+                  toast.success(`Parcela ${installmentNumber} marcada como paga`);
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Falha ao salvar parcela.");
+                }
               }}
               onRegisterMGMVPartialPayment={(
                 installmentNumber,
@@ -1090,6 +1095,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                   amount,
                 )
               }
+              mgmvSaving={!!busyClientIds[drawerClient.id]}
             />
           )}
         </DialogContent>
@@ -1256,6 +1262,7 @@ function ClientDrawer({
   onMarkPaid,
   onPayMGMVInstallment,
   onRegisterMGMVPartialPayment,
+  mgmvSaving,
 }: {
   client: Client;
   products: Product[];
@@ -1268,11 +1275,12 @@ function ClientDrawer({
   onChangeSituation: (productId: string, s: Situation) => void;
   onRequestRetirado: (productId: string) => void;
   onMarkPaid: (p: Product) => void;
-  onPayMGMVInstallment: (installmentNumber: number) => void;
+  onPayMGMVInstallment: (installmentNumber: number) => Promise<void> | void;
   onRegisterMGMVPartialPayment: (
     installmentNumber: number,
     amount: number,
-  ) => PartialPaymentResult | void;
+  ) => PartialPaymentResult | Promise<PartialPaymentResult> | void;
+  mgmvSaving: boolean;
 }) {
   const [notes, setNotes] = useState(client.notes ?? "");
   const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
@@ -1636,7 +1644,7 @@ function ClientDrawer({
     toast.success(`${targets.length} produto(s) atualizados`);
     clearSelection();
   };
-  const bulkAddToMgmv = () => {
+  const bulkAddToMgmv = async () => {
     if (!client.mgmv) {
       toast.error("Este cliente não possui acordo MGMV ativo.");
       return;
@@ -1652,9 +1660,17 @@ function ClientDrawer({
       )
     )
       return;
-    targets.forEach((p) => updateProduct(p.id, { financialStatus: "MGMV" }));
-    toast.success(`${targets.length} produto(s) adicionado(s) ao acordo MGMV`);
-    clearSelection();
+    try {
+      await useStore.getState().setProductMGMVMembership(
+        client.id,
+        targets.map((p) => p.id),
+        true,
+      );
+      toast.success(`${targets.length} produto(s) adicionado(s) ao acordo MGMV`);
+      clearSelection();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao adicionar produtos.");
+    }
   };
   const bulkCopy = async () => {
     const targets = selectedProducts();
@@ -1974,11 +1990,12 @@ function ClientDrawer({
                       <td className="py-2 pr-3">
                         {!i.paid && !isPartial && (
                           <div className="flex items-center gap-1">
-                            <Button
+                             <Button
                               size="sm"
+                               disabled={mgmvSaving}
                               onClick={() => onPayMGMVInstallment(i.number)}
                             >
-                              Marcar como paga
+                               {mgmvSaving ? "Salvando…" : "Marcar como paga"}
                             </Button>
                             <MgmvPartialPaymentPopover
                               clientId={client.id}

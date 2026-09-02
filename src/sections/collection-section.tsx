@@ -892,10 +892,14 @@ export function CollectionSection({
                           <Button
                             size="sm"
                             disabled={!next}
-                            onClick={() => {
+                            onClick={async () => {
                               if (next) {
-                                payMGMVInstallment(client.id, next.number);
-                                toast.success(`Parcela ${next.number} marcada como paga`);
+                                try {
+                                  await payMGMVInstallment(client.id, next.number);
+                                  toast.success(`Parcela ${next.number} marcada como paga`);
+                                } catch (error) {
+                                  toast.error(error instanceof Error ? error.message : "Falha ao salvar parcela.");
+                                }
                               }
                             }}
                           >

@@ -416,11 +416,15 @@ export function DashboardDrilldownModal({
     toast.success("Marcado como entregue");
   };
 
-  const doPayInstallment = (row: Row) => {
+  const doPayInstallment = async (row: Row) => {
     const next = row.client.mgmv?.installments.find((i) => !i.paid);
     if (!next) return;
-    payMGMVInstallment(row.client.id, next.number);
-    toast.success(`Parcela ${next.number}/${next.total} paga`);
+    try {
+      await payMGMVInstallment(row.client.id, next.number);
+      toast.success(`Parcela ${next.number}/${next.total} paga`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao salvar parcela.");
+    }
   };
 
   return (

@@ -520,7 +520,7 @@ interface State {
   setProductSituation: (productId: string, situation: Situation) => void;
   updateProductNotes: (productId: string, notes: string) => void;
   updateClientNotes: (clientId: string, notes: string) => void;
-  payMGMVInstallment: (clientId: string, installmentNumber: number) => void;
+  payMGMVInstallment: (clientId: string, installmentNumber: number) => Promise<void>;
   /**
    * Registra um pagamento parcial em uma parcela MGMV.
    * - amount >= installment.value → marca paga integralmente; excedente reduz
@@ -531,7 +531,12 @@ interface State {
     clientId: string,
     installmentNumber: number,
     amount: number,
-  ) => PartialPaymentResult;
+  ) => Promise<PartialPaymentResult>;
+  setProductMGMVMembership: (
+    clientId: string,
+    productIds: string[],
+    included: boolean,
+  ) => Promise<void>;
   setMGMVAgreement: (clientId: string, agreement: MGMVAgreement | undefined) => void;
   setMGMVAgreementConfirmed: (
     clientId: string,
@@ -1199,7 +1204,10 @@ export const useStore = create<State>()((set, get) => ({
           if (updated) queueClientUpsert(updated);
           return { clients };
         }),
-      payMGMVInstallment: (clientId, installmentNumber) =>
+      payMGMVInstallment: async (clientId, installmentNumber) => {
+        const previous = get().clients;
+        get().setRowsBusy("client", [clientId], true);
+        markLocalMutation("client", [clientId], "upsert");
         set((s) => {
           const clients = s.clients.map((c) => {
             if (c.id !== clientId || !c.mgmv) return c;
@@ -1219,14 +1227,22 @@ export const useStore = create<State>()((set, get) => ({
             // última parcela paga (data de pagamento + 1 mês por parcela).
             return { ...c, mgmv: recalcPendingDueDates(updatedAgreement) };
           });
-          const updated = clients.find((c) => c.id === clientId);
-          if (updated) {
-            queueClientUpsert(updated);
-            dbSyncAgreementForClient(updated);
-          }
           return { clients };
-        }),
-      registerMGMVPartialPayment: (clientId, installmentNumber, amount) => {
+        });
+        try {
+          const updated = get().clients.find((c) => c.id === clientId);
+          if (!updated) throw new Error("Cliente MGMV não encontrado.");
+          await dbSyncAgreementForClientAsync(updated);
+          clearLocalMutation("client", [clientId]);
+        } catch (error) {
+          clearLocalMutation("client", [clientId]);
+          set({ clients: previous });
+          throw error;
+        } finally {
+          get().setRowsBusy("client", [clientId], false);
+        }
+      },
+      registerMGMVPartialPayment: async (clientId, installmentNumber, amount) => {
         const state = get();
         const client = state.clients.find((c) => c.id === clientId);
         if (!client || !client.mgmv) {
@@ -1245,6 +1261,10 @@ export const useStore = create<State>()((set, get) => ({
           return { ok: false, error: dry.error };
         }
         let becameQuitado = false;
+        const previousClients = get().clients;
+        const previousProducts = get().products;
+        get().setRowsBusy("client", [clientId], true);
+        markLocalMutation("client", [clientId], "upsert");
         set((s) => {
           const clients = s.clients.map((c) => {
             if (c.id !== clientId || !c.mgmv) return c;
@@ -1282,14 +1302,48 @@ export const useStore = create<State>()((set, get) => ({
               return next;
             });
           }
-          const updated = clients.find((c) => c.id === clientId);
-          if (updated) {
-            queueClientUpsert(updated);
-            dbSyncAgreementForClient(updated);
-          }
           return { clients, products };
         });
-        return { ok: true, becameQuitado };
+        try {
+          const updated = get().clients.find((c) => c.id === clientId);
+          if (!updated) throw new Error("Cliente MGMV não encontrado.");
+          await dbSyncAgreementForClientAsync(updated);
+          clearLocalMutation("client", [clientId]);
+          return { ok: true, becameQuitado };
+        } catch (error) {
+          clearLocalMutation("client", [clientId]);
+          set({ clients: previousClients, products: previousProducts });
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : "Falha ao salvar o pagamento.",
+          };
+        } finally {
+          get().setRowsBusy("client", [clientId], false);
+        }
+      },
+      setProductMGMVMembership: async (clientId, productIds, included) => {
+        if (productIds.length === 0) return;
+        const previousProducts = get().products;
+        markLocalMutation("product", productIds, "upsert");
+        set((s) => ({
+          products: s.products.map((p) =>
+            productIds.includes(p.id)
+              ? { ...p, financialStatus: included ? "MGMV" : "Pendente" }
+              : p,
+          ),
+        }));
+        try {
+          const changed = get().products.filter((p) => productIds.includes(p.id));
+          await dbUpsertProductsAsync(changed);
+          const client = get().clients.find((c) => c.id === clientId);
+          if (!client?.mgmv) throw new Error("Cliente sem acordo MGMV ativo.");
+          await dbSyncAgreementForClientAsync(client);
+          clearLocalMutation("product", productIds);
+        } catch (error) {
+          clearLocalMutation("product", productIds);
+          set({ products: previousProducts });
+          throw error;
+        }
       },
       completeMGMVAgreement: async (clientId) => {
         const state = get();
@@ -1387,7 +1441,6 @@ export const useStore = create<State>()((set, get) => ({
           );
           const updated = clients.find((c) => c.id === clientId);
           if (updated) {
-            queueClientUpsert(updated);
             dbSyncAgreementForClient(updated);
           }
           return { clients };
@@ -1399,13 +1452,25 @@ export const useStore = create<State>()((set, get) => ({
        */
       setMGMVAgreementConfirmed: async (clientId, agreement) => {
         const prevClients = get().clients;
-        get().setMGMVAgreement(clientId, agreement);
+        markLocalMutation("client", [clientId], "upsert");
+        set((s) => ({
+          clients: s.clients.map((c) =>
+            c.id === clientId
+              ? {
+                  ...c,
+                  mgmv: agreement ? recalcPendingDueDates(agreement) : undefined,
+                  clientType: agreement ? "mgmv" : "common",
+                }
+              : c,
+          ),
+        }));
         try {
-          await awaitPendingWrites();
           const updated = get().clients.find((c) => c.id === clientId);
-          if (updated) await dbSyncAgreementForClientAsync(updated);
-          await get().refreshClientData(clientId);
+          if (!updated) throw new Error("Cliente não encontrado.");
+          await dbSyncAgreementForClientAsync(updated);
+          clearLocalMutation("client", [clientId]);
         } catch (err) {
+          clearLocalMutation("client", [clientId]);
           set({ clients: prevClients });
           console.error("setMGMVAgreementConfirmed failed", err);
           throw err;

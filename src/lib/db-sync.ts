@@ -273,7 +273,12 @@ export function reconcileWithLocalMutations<T extends { id: string }>(
   pruneMutations();
   if (recentMutations.size === 0) return incoming;
   const incomingIds = new Set(incoming.map((r) => r.id));
-  const out = incoming.filter((r) => mutationFor(kind, r.id)?.op !== "delete");
+  const previousById = new Map(previous.map((row) => [row.id, row]));
+  const out = incoming
+    .filter((r) => mutationFor(kind, r.id)?.op !== "delete")
+    .map((row) =>
+      mutationFor(kind, row.id)?.op === "upsert" ? (previousById.get(row.id) ?? row) : row,
+    );
   for (const row of previous) {
     if (incomingIds.has(row.id)) continue;
     if (mutationFor(kind, row.id)?.op === "upsert") out.push(row);
@@ -1290,9 +1295,27 @@ function throwDb(step: string, error: unknown): never {
   throw new Error(describeDbError(error));
 }
 
-export async function dbSyncAgreementForClientAsync(client: Client): Promise<void> {
+const mgmvWriteQueues = new Map<string, Promise<void>>();
 
+async function performAgreementSync(client: Client): Promise<void> {
   const agreementId = client.id;
+
+  if (!isLocalMode()) {
+    const agreement = client.mgmv ? buildAgreementRow(client) : null;
+    const installments = client.mgmv ? buildInstallmentRows(client) : null;
+    await trackWrite(
+      (async () => {
+        const { error } = await sb().rpc("save_mgmv_agreement_atomic", {
+          _client_id: client.id,
+          _agreement: agreement as Json,
+          _installments: installments as Json,
+          _client_mgmv: (client.mgmv ?? null) as Json,
+        });
+        if (error) throwDb("syncAgreement.atomic", error);
+      })(),
+    );
+    return;
+  }
 
   if (!client.mgmv || client.mgmv.installments.length === 0) {
     // Sem acordo → remove agreement (cascata apaga parcelas) e zera flags.
@@ -1377,6 +1400,20 @@ export async function dbSyncAgreementForClientAsync(client: Client): Promise<voi
     .eq("client_id", client.id)
     .neq("financial_status", "MGMV");
   if (nonMgmvProducts.error) throwDb("syncAgreement.nonMgmvProducts", nonMgmvProducts.error);
+}
+
+/**
+ * Serializa todas as versões de um acordo por cliente. Uma requisição mais
+ * antiga nunca pode terminar depois e substituir parcelas recém-pagas.
+ */
+export function dbSyncAgreementForClientAsync(client: Client): Promise<void> {
+  const previous = mgmvWriteQueues.get(client.id) ?? Promise.resolve();
+  const current = previous.catch(() => undefined).then(() => performAgreementSync(client));
+  mgmvWriteQueues.set(client.id, current);
+  void current.finally(() => {
+    if (mgmvWriteQueues.get(client.id) === current) mgmvWriteQueues.delete(client.id);
+  }).catch(() => undefined);
+  return current;
 }
 
 
