@@ -533,6 +533,11 @@ interface State {
     amount: number,
   ) => PartialPaymentResult;
   setMGMVAgreement: (clientId: string, agreement: MGMVAgreement | undefined) => void;
+  setMGMVAgreementConfirmed: (
+    clientId: string,
+    agreement: MGMVAgreement | undefined,
+  ) => Promise<void>;
+
   /**
    * Confirma a quitação do acordo MGMV: marca o acordo como concluído
    * (arquivado), devolve o cliente ao tipo comum e converte os produtos do
