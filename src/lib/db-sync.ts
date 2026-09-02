@@ -1387,8 +1387,12 @@ export async function linkProductsToAgreement(
 
 /** Fire-and-forget wrapper para chamadas de UI. */
 export function dbSyncAgreementForClient(client: Client): void {
-  void dbSyncAgreementForClientAsync(client);
+  void dbSyncAgreementForClientAsync(client).catch((error) => {
+    logErr("syncAgreement.fireAndForget", error);
+    notifyWriteFailure(describeDbError(error));
+  });
 }
+
 
 /** Sincroniza acordos de vários clientes (usado pós-importação). */
 export async function dbSyncAgreementsBulkAsync(clients: Client[]): Promise<void> {
