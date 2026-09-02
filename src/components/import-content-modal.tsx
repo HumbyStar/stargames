@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -6,7 +6,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useStore, type ImportHistoryEntry } from "@/lib/store";
@@ -33,10 +35,38 @@ function money(v: unknown): string {
     : "—";
 }
 
+function plainNumber(v: unknown): string {
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toFixed(2).replace(".", ",") : "";
+}
+
+interface RecordRow {
+  clientId: string;
+  clientName: string;
+  clientPhone: string;
+  clientCreated: boolean;
+  productName: string;
+  platform: string;
+  total: unknown;
+  paid: unknown;
+  status: string;
+  situation: string;
+}
+
+interface ClientGroup {
+  clientId: string;
+  name: string;
+  phone: string;
+  created: boolean;
+  rows: RecordRow[];
+  total: number;
+  paid: number;
+}
+
 /**
- * Mostra o texto de uma importação. Quando o conteúdo original não foi
- * guardado (importações antigas), reconstrói a listagem a partir do registro
- * de auditoria dos clientes e produtos criados naquela importação.
+ * Mostra o conteúdo de uma importação em três formatos: os registros que o
+ * sistema realmente criou (clientes + produtos), o mesmo conteúdo no formato
+ * aceito pela importação por lista, e o texto original colado (quando houver).
  */
 export function ImportContentModal({
   entry,
@@ -46,24 +76,18 @@ export function ImportContentModal({
   onClose: () => void;
 }) {
   const [loading, setLoading] = useState(false);
-  const [content, setContent] = useState<string>("");
+  const [rows, setRows] = useState<RecordRow[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [reconstructed, setReconstructed] = useState(false);
+  const [tab, setTab] = useState("registros");
   const history = useStore((s) => s.importHistory);
 
   useEffect(() => {
     if (!entry) return;
-    if (entry.rawContent) {
-      setContent(entry.rawContent);
-      setReconstructed(false);
-      setError(null);
-      return;
-    }
     let alive = true;
     setLoading(true);
     setError(null);
-    setContent("");
-    setReconstructed(true);
+    setRows([]);
+    setTab("registros");
     const previous = history
       .filter((h) => new Date(h.date).getTime() < new Date(entry.date).getTime())
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
@@ -82,71 +106,140 @@ export function ImportContentModal({
       setLoading(false);
       if (err) {
         setError(
-          "Não foi possível reconstruir o conteúdo desta importação (acesso ao histórico de auditoria restrito a administradores).",
+          "Não foi possível reconstruir os registros desta importação (acesso ao histórico de auditoria restrito a administradores).",
         );
         return;
       }
-      const rows = (data ?? []).filter(
+      const audited = data ?? [];
+      const filtered = audited.filter(
         (r) => !entry.userId || !r.user_id || r.user_id === entry.userId,
       );
-      const names = new Map<string, string>();
-      for (const r of rows) {
+      const created = new Map<string, { name: string; phone: string }>();
+      for (const r of filtered) {
         if (r.table_name !== "clients") continue;
         const d = (r.new_data ?? {}) as Record<string, unknown>;
-        if (d.id) names.set(String(d.id), String(d.name ?? "—"));
+        if (d.id)
+          created.set(String(d.id), {
+            name: String(d.name ?? "—"),
+            phone: String(d.phone ?? ""),
+          });
       }
-      // Clientes que já existiam antes desta importação: busca o nome atual
-      // direto na tabela de clientes.
+      // Clientes que já existiam antes desta importação: busca nome/telefone
+      // atuais direto na tabela de clientes.
       const missing = new Set<string>();
-      for (const r of rows) {
+      for (const r of filtered) {
         if (r.table_name !== "products") continue;
         const d = (r.new_data ?? {}) as Record<string, unknown>;
         const cid = d.client_id ? String(d.client_id) : "";
-        if (cid && !names.has(cid)) missing.add(cid);
+        if (cid && !created.has(cid)) missing.add(cid);
       }
+      const existing = new Map<string, { name: string; phone: string }>();
       if (missing.size > 0) {
         const { data: clientRows } = await supabase
           .from("clients")
-          .select("id, name")
+          .select("id, name, phone")
           .in("id", Array.from(missing));
         if (!alive) return;
         for (const c of clientRows ?? []) {
-          names.set(String(c.id), String(c.name ?? "—"));
+          existing.set(String(c.id), {
+            name: String(c.name ?? "—"),
+            phone: String(c.phone ?? ""),
+          });
         }
       }
-      const lines: string[] = [];
-      for (const r of rows) {
+      const out: RecordRow[] = [];
+      for (const r of filtered) {
         if (r.table_name !== "products") continue;
         const d = (r.new_data ?? {}) as Record<string, unknown>;
-        const cliente = names.get(String(d.client_id)) ?? "(cliente removido)";
-        lines.push(
-          [
-            cliente,
-            String(d.name ?? "—"),
-            String(d.platform ?? "—"),
-            money(d.total_value),
-            money(d.paid_value),
-            String(d.financial_status ?? "—"),
-            String(d.situation ?? "—"),
-          ].join(" | "),
-        );
+        const cid = String(d.client_id ?? "");
+        const info = created.get(cid) ?? existing.get(cid);
+        out.push({
+          clientId: cid,
+          clientName: info?.name ?? "(cliente removido)",
+          clientPhone: info?.phone ?? "",
+          clientCreated: created.has(cid),
+          productName: String(d.name ?? "—"),
+          platform: String(d.platform ?? "—"),
+          total: d.total_value,
+          paid: d.paid_value,
+          status: String(d.financial_status ?? "—"),
+          situation: String(d.situation ?? "—"),
+        });
       }
-      if (lines.length === 0) {
+      // Clientes criados sem nenhum produto atrelado também aparecem.
+      const withProducts = new Set(out.map((r) => r.clientId));
+      for (const [cid, info] of created) {
+        if (withProducts.has(cid)) continue;
+        out.push({
+          clientId: cid,
+          clientName: info.name,
+          clientPhone: info.phone,
+          clientCreated: true,
+          productName: "—",
+          platform: "—",
+          total: null,
+          paid: null,
+          status: "—",
+          situation: "—",
+        });
+      }
+      if (out.length === 0) {
         setError("Nenhum registro encontrado no período desta importação.");
         return;
       }
-      setContent(
-        ["Cliente | Produto | Plataforma | Total | Pago | Status | Situação", ...lines].join("\n"),
-      );
+      setRows(out);
     })();
     return () => {
       alive = false;
     };
   }, [entry, history]);
 
+  const groups = useMemo<ClientGroup[]>(() => {
+    const map = new Map<string, ClientGroup>();
+    for (const r of rows) {
+      let g = map.get(r.clientId);
+      if (!g) {
+        g = {
+          clientId: r.clientId,
+          name: r.clientName,
+          phone: r.clientPhone,
+          created: r.clientCreated,
+          rows: [],
+          total: 0,
+          paid: 0,
+        };
+        map.set(r.clientId, g);
+      }
+      g.rows.push(r);
+      g.total += Number(r.total) || 0;
+      g.paid += Number(r.paid) || 0;
+    }
+    return Array.from(map.values());
+  }, [rows]);
+
+  /** Mesmo conteúdo no formato aceito pela importação por lista. */
+  const importFormat = useMemo(() => {
+    return rows
+      .filter((r) => r.productName !== "—")
+      .map((r) =>
+        [
+          r.clientName,
+          r.clientPhone || "—",
+          r.productName,
+          r.platform,
+          plainNumber(r.total),
+          r.status,
+        ].join(" - "),
+      )
+      .join("\n");
+  }, [rows]);
+
+  const copyTarget =
+    tab === "texto" ? (entry?.rawContent ?? "") : tab === "formato" ? importFormat : importFormat;
+
   return (
     <Dialog open={entry !== null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Conteúdo da importação</DialogTitle>
           <DialogDescription>
@@ -157,29 +250,117 @@ export function ImportContentModal({
               : ""}
           </DialogDescription>
         </DialogHeader>
-        {entry && !loading && content && (
-          <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            {reconstructed
-              ? "Conteúdo reconstruído a partir da auditoria — esta importação foi feita antes de o sistema guardar o texto original, por isso mostramos os clientes e produtos gravados naquele momento."
-              : "Texto original exatamente como foi colado na importação."}
-          </p>
-        )}
+
         {loading ? (
           <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" /> Carregando conteúdo…
           </div>
-        ) : error ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">{error}</p>
         ) : (
-          <pre className="max-h-[55vh] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 text-xs">
-            {content}
-          </pre>
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList>
+              <TabsTrigger value="registros">Registros do sistema</TabsTrigger>
+              <TabsTrigger value="formato">Formato de importação</TabsTrigger>
+              <TabsTrigger value="texto" disabled={!entry?.rawContent}>
+                Texto original
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="registros" className="mt-3">
+              {error ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">{error}</p>
+              ) : (
+                <div className="max-h-[55vh] space-y-3 overflow-auto pr-1">
+                  <p className="text-xs text-muted-foreground">
+                    {groups.length} cliente(s) ·{" "}
+                    {rows.filter((r) => r.productName !== "—").length} produto(s) gravados nesta
+                    importação.
+                  </p>
+                  {groups.map((g) => (
+                    <div
+                      key={g.clientId}
+                      className="overflow-hidden rounded-lg border border-border"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2 bg-muted/40 px-3 py-2">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">{g.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {g.phone || "sem telefone"}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={g.created ? "default" : "secondary"}>
+                            {g.created ? "Cliente novo" : "Já existia"}
+                          </Badge>
+                          <Badge variant="outline">
+                            {g.rows.filter((r) => r.productName !== "—").length} produto(s)
+                          </Badge>
+                          <span className="text-xs tabular-nums text-muted-foreground">
+                            {money(g.total)} · pago {money(g.paid)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead className="text-muted-foreground">
+                            <tr className="border-b border-border/60">
+                              <th className="px-3 py-1.5 text-left font-medium">Produto</th>
+                              <th className="px-3 py-1.5 text-left font-medium">Plataforma</th>
+                              <th className="px-3 py-1.5 text-right font-medium">Total</th>
+                              <th className="px-3 py-1.5 text-right font-medium">Pago</th>
+                              <th className="px-3 py-1.5 text-left font-medium">Status</th>
+                              <th className="px-3 py-1.5 text-left font-medium">Situação</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {g.rows.map((r, i) => (
+                              <tr key={i} className="border-b border-border/40 last:border-0">
+                                <td className="px-3 py-1.5">{r.productName}</td>
+                                <td className="px-3 py-1.5">{r.platform}</td>
+                                <td className="px-3 py-1.5 text-right tabular-nums">
+                                  {money(r.total)}
+                                </td>
+                                <td className="px-3 py-1.5 text-right tabular-nums">
+                                  {money(r.paid)}
+                                </td>
+                                <td className="px-3 py-1.5">{r.status}</td>
+                                <td className="px-3 py-1.5">{r.situation}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="formato" className="mt-3">
+              <p className="mb-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                Linhas no formato aceito pela importação por lista: Nome - Telefone - Produto -
+                Plataforma - Valor - Status.
+              </p>
+              <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 text-xs">
+                {importFormat || error || "Sem registros para exibir."}
+              </pre>
+            </TabsContent>
+
+            <TabsContent value="texto" className="mt-3">
+              <p className="mb-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                Texto original exatamente como foi colado na importação.
+              </p>
+              <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 text-xs">
+                {entry?.rawContent ?? "Esta importação não guardou o texto original."}
+              </pre>
+            </TabsContent>
+          </Tabs>
         )}
+
         <div className="flex justify-end gap-2">
-          {content && (
+          {copyTarget && (
             <Button
               variant="outline"
-              onClick={() => void navigator.clipboard.writeText(content)}
+              onClick={() => void navigator.clipboard.writeText(copyTarget)}
             >
               Copiar
             </Button>
