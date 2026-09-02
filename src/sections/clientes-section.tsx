@@ -148,6 +148,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const registerMGMVPartialPayment = useStore(
     (s) => s.registerMGMVPartialPayment,
   );
+  const busyClientIds = useStore((s) => s.busyClientIds);
 
   const [search, setSearch] = usePersistedState<string>("clientes.search", "");
   const [chip, setChip] = usePersistedState<ChipFilter>(
@@ -1094,6 +1095,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                   amount,
                 )
               }
+              mgmvSaving={!!busyClientIds[drawerClient.id]}
             />
           )}
         </DialogContent>
@@ -1277,6 +1279,7 @@ function ClientDrawer({
     installmentNumber: number,
     amount: number,
   ) => PartialPaymentResult | Promise<PartialPaymentResult> | void;
+  mgmvSaving: boolean;
 }) {
   const [notes, setNotes] = useState(client.notes ?? "");
   const [mgmvCreateOpen, setMgmvCreateOpen] = useState(false);
@@ -1986,11 +1989,12 @@ function ClientDrawer({
                       <td className="py-2 pr-3">
                         {!i.paid && !isPartial && (
                           <div className="flex items-center gap-1">
-                            <Button
+                             <Button
                               size="sm"
+                               disabled={mgmvSaving}
                               onClick={() => onPayMGMVInstallment(i.number)}
                             >
-                              Marcar como paga
+                               {mgmvSaving ? "Salvando…" : "Marcar como paga"}
                             </Button>
                             <MgmvPartialPaymentPopover
                               clientId={client.id}

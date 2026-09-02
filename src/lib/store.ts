@@ -1206,6 +1206,7 @@ export const useStore = create<State>()((set, get) => ({
         }),
       payMGMVInstallment: async (clientId, installmentNumber) => {
         const previous = get().clients;
+        get().setRowsBusy("client", [clientId], true);
         markLocalMutation("client", [clientId], "upsert");
         set((s) => {
           const clients = s.clients.map((c) => {
@@ -1237,6 +1238,8 @@ export const useStore = create<State>()((set, get) => ({
           clearLocalMutation("client", [clientId]);
           set({ clients: previous });
           throw error;
+        } finally {
+          get().setRowsBusy("client", [clientId], false);
         }
       },
       registerMGMVPartialPayment: async (clientId, installmentNumber, amount) => {
@@ -1260,6 +1263,7 @@ export const useStore = create<State>()((set, get) => ({
         let becameQuitado = false;
         const previousClients = get().clients;
         const previousProducts = get().products;
+        get().setRowsBusy("client", [clientId], true);
         markLocalMutation("client", [clientId], "upsert");
         set((s) => {
           const clients = s.clients.map((c) => {
@@ -1313,6 +1317,8 @@ export const useStore = create<State>()((set, get) => ({
             ok: false,
             error: error instanceof Error ? error.message : "Falha ao salvar o pagamento.",
           };
+        } finally {
+          get().setRowsBusy("client", [clientId], false);
         }
       },
       setProductMGMVMembership: async (clientId, productIds, included) => {
@@ -1435,7 +1441,6 @@ export const useStore = create<State>()((set, get) => ({
           );
           const updated = clients.find((c) => c.id === clientId);
           if (updated) {
-            queueClientUpsert(updated);
             dbSyncAgreementForClient(updated);
           }
           return { clients };
