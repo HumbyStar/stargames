@@ -168,10 +168,10 @@ export function MgmvCreateModal({
     setSubmitting(true);
     try {
       const agreement: MGMVAgreement = {
-      startDate: new Date().toISOString(),
-      totalDebt: total,
-      installments: schedule,
-      reviewStatus: "manually_reviewed",
+        startDate: new Date().toISOString(),
+        totalDebt: total,
+        installments: schedule,
+        reviewStatus: "manually_reviewed",
       };
       // Ordem importa: primeiro os produtos entram como MGMV, depois o acordo
       // é gravado. A sincronização do acordo vincula os produtos pelo status,
@@ -179,17 +179,28 @@ export function MgmvCreateModal({
       for (const id of selected) {
         updateProduct(id, { financialStatus: "MGMV" });
       }
-      setMGMVAgreement(client.id, agreement);
+      // Só confirmamos sucesso após o banco gravar o acordo e devolver os
+      // produtos vinculados — nada de "sucesso" que depois se desfaz.
+      await setMGMVAgreementConfirmed(client.id, agreement);
       // Limpa o rascunho salvo — o acordo agora existe de fato.
       setDraft(null);
       toast.success(
         `Acordo MGMV criado — ${installmentsCount}x de ${formatBRL(installmentValue)}.`,
       );
       setConfirmed(true);
+    } catch (err) {
+      for (const id of selected) {
+        const prev = products.find((p) => p.id === id);
+        if (prev) updateProduct(id, { financialStatus: prev.financialStatus });
+      }
+      toast.error(
+        `Não foi possível criar o acordo: ${err instanceof Error ? err.message : "erro desconhecido"}`,
+      );
     } finally {
       setSubmitting(false);
     }
   };
+
 
   const discardDraft = () => {
     setDraft(null);
