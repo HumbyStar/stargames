@@ -38,7 +38,13 @@ import {
 } from "@/lib/store";
 import { useEnsureData } from "@/lib/use-ensure-data";
 import { useUiStore } from "@/lib/ui-store";
-import { setUiValue, subscribeRealtimeSnapshot, suspendRealtimeRefresh } from "@/lib/db-sync";
+import {
+  onWriteFailure,
+  setUiValue,
+  subscribeRealtimeSnapshot,
+  suspendRealtimeRefresh,
+} from "@/lib/db-sync";
+
 import { notifyRowConfirmed } from "@/lib/write-confirm";
 import { IdleProvider, useIdle } from "@/lib/use-idle";
 import { useQueryClient } from "@tanstack/react-query";
