@@ -19,12 +19,16 @@ const REALTIME_DEBOUNCE_MS = 1_500;
  */
 export function DashboardIntegrityCard() {
   const clients = useStore((s) => s.clients);
-  useEnsureData();
   const products = useStore((s) => s.products);
   const currentEnv = useStore((s) => s.currentEnv);
   const envSyncing = useStore((s) => s.envSyncing);
   const fetchDiagnostics = useStore((s) => s.fetchDiagnostics);
   const refreshSnapshot = useStore((s) => s.refreshSnapshot);
+  // A base carrega sob demanda: sem ela em memória, comparar com o banco
+  // geraria "0 x N" (falsa divergência) e um recarregamento pesado inútil.
+  const dataLoaded = useStore((s) => s.dataLoaded);
+  const dataLoading = useStore((s) => s.dataLoading);
+  const ensureDataLoaded = useStore((s) => s.ensureDataLoaded);
 
   const [diag, setDiag] = useState<ImportDiagnostics | null>(null);
   const [loading, setLoading] = useState(false);
