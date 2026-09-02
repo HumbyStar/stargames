@@ -1324,6 +1324,16 @@ export function AppLayout({ children }: { children?: ReactNode }) {
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+  // Nenhuma falha de gravação fica invisível: qualquer erro de escrita
+  // (permissão, rede) vira um aviso na tela em vez de um falso sucesso.
+  useEffect(
+    () =>
+      onWriteFailure((message) => {
+        toast.error(message);
+      }),
+    [],
+  );
+
   // Sincronização Realtime: após a primeira hidratação, assina os canais
   // do Supabase para refletir mudanças de clients/products/MGMV vindas de
   // outras abas, dispositivos ou reconciliações do backend.
