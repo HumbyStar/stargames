@@ -1086,10 +1086,18 @@ export const useStore = create<State>()((set, get) => ({
                       ...s.products.filter(
                         (x) => x.clientId !== prod.clientId && !ids.has(x.id),
                       ),
-                      ...rows,
+                      // Outras mutações locais pendentes do mesmo cliente
+                      // (2º produto recém-criado, edição ainda não visível)
+                      // não podem ser sobrescritas por esta leitura.
+                      ...reconcileWithLocalMutations(
+                        "product",
+                        rows,
+                        s.products.filter((x) => x.clientId === prod.clientId),
+                      ),
                     ],
                   };
                 });
+
                 return;
               }
               await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
