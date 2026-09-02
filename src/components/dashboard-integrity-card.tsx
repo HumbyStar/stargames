@@ -43,11 +43,17 @@ export function DashboardIntegrityCard() {
   const localMgmv = clients.filter((c) => c.mgmv).length;
 
   const check = useCallback(
-    async (opts?: { silent?: boolean }) => {
+    async (opts?: { silent?: boolean; ensure?: boolean }) => {
       if (runningRef.current) return;
       runningRef.current = true;
       if (!opts?.silent) setLoading(true);
       try {
+        // Conferência só faz sentido com a base em memória.
+        if (opts?.ensure && !useStore.getState().dataLoaded) {
+          await ensureDataLoaded();
+        }
+        if (!useStore.getState().dataLoaded) return;
+
         const d = await fetchDiagnostics();
         setDiag(d);
         setLastCheckedAt(Date.now());
@@ -83,14 +89,15 @@ export function DashboardIntegrityCard() {
         runningRef.current = false;
       }
     },
-    [fetchDiagnostics, refreshSnapshot],
+    [ensureDataLoaded, fetchDiagnostics, refreshSnapshot],
   );
 
-  // Ao montar e a cada troca de ambiente.
+  // Ao montar (se a base já estiver carregada) e a cada troca de ambiente.
   useEffect(() => {
     autoFixedRef.current = null;
-    void check();
-  }, [currentEnv, check]);
+    if (dataLoaded) void check();
+    else setDiag(null);
+  }, [currentEnv, dataLoaded, check]);
 
   // Ciclo automático + foco da aba.
   useEffect(() => {
