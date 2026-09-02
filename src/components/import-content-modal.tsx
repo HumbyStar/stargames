@@ -108,6 +108,7 @@ export function ImportContentModal({
         setError(
           "Não foi possível reconstruir os registros desta importação (acesso ao histórico de auditoria restrito a administradores).",
         );
+        if (entry.rawContent) setTab("texto");
         return;
       }
       const audited = data ?? [];
@@ -184,7 +185,10 @@ export function ImportContentModal({
         });
       }
       if (out.length === 0) {
-        setError("Nenhum registro encontrado no período desta importação.");
+        setError(
+          "Nenhum registro de criação foi encontrado no período desta importação — provavelmente os clientes/produtos já existiam e foram apenas atualizados.",
+        );
+        if (entry.rawContent) setTab("texto");
         return;
       }
       setRows(out);

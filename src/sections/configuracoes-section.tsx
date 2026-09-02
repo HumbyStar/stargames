@@ -1100,7 +1100,7 @@ export function ConfiguracoesSection() {
                         className="mt-2 w-full"
                         onClick={() => setContentEntry(h)}
                       >
-                        Ver texto
+                        Ver conteúdo
                       </Button>
                     </li>
                   ))}
@@ -1144,7 +1144,7 @@ export function ConfiguracoesSection() {
                           </TableCell>
                           <TableCell className="text-right">
                             <Button variant="outline" size="sm" onClick={() => setContentEntry(h)}>
-                              Ver texto
+                              Ver conteúdo
                             </Button>
                           </TableCell>
                         </TableRow>
