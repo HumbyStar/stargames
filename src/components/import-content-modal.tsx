@@ -185,7 +185,10 @@ export function ImportContentModal({
         });
       }
       if (out.length === 0) {
-        setError("Nenhum registro encontrado no período desta importação.");
+        setError(
+          "Nenhum registro de criação foi encontrado no período desta importação — provavelmente os clientes/produtos já existiam e foram apenas atualizados.",
+        );
+        if (entry.rawContent) setTab("texto");
         return;
       }
       setRows(out);
