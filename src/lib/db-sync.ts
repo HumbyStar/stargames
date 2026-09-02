@@ -18,6 +18,7 @@ import type {
 // ============= Row <-> State mappers =============
 
 import type { Json } from "@/integrations/supabase/types";
+import { hasActiveSession, isAuthError, notifySessionExpired } from "./auth-session";
 
 // ============= Usuário atual (cache leve) =============
 
@@ -465,6 +466,20 @@ export async function loadSnapshot(options: LoadSnapshotOptions = {}): Promise<D
     const local = await loadLocalSnapshot();
     if (local) return { ...local, env: "producao" };
   }
+  if (!(await hasActiveSession())) {
+    // Sem sessão válida o banco recusa toda leitura (GRANT). Em vez de gerar
+    // dezenas de "permission denied" e um falso "offline", devolve o usuário ao login.
+    notifySessionExpired();
+    const emptySnapshot = buildSnapshotFromRows({
+      clients: [],
+      products: [],
+      importHistory: [],
+      agreements: [],
+      installments: [],
+      settings: null,
+    });
+    return { ...emptySnapshot, env: "producao", partial: true, dataLoaded: false };
+  }
   const envBefore = await resolveCurrentEnv();
   let owner: string | null = null;
   if (envBefore === "sandbox") {
@@ -496,6 +511,13 @@ export async function loadSnapshot(options: LoadSnapshotOptions = {}): Promise<D
   if (settingsRes.error) logErr("loadSettings", settingsRes.error);
   if (agreementsRes.error) logErr("loadAgreements", agreementsRes.error);
   if (installmentsRes.error) logErr("loadInstallments", installmentsRes.error);
+  if (
+    [clientsRes, productsRes, historyRes, settingsRes, agreementsRes, installmentsRes].some((r) =>
+      isAuthError(r.error),
+    )
+  ) {
+    notifySessionExpired();
+  }
 
   const envAfter = await resolveCurrentEnv();
   const partial = !!(

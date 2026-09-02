@@ -251,7 +251,8 @@ export function ConciergeModal() {
 
   const clients = useStore((s) => s.clients);
 
-  useEnsureData();
+  // Só carrega a base quando o assistente é realmente aberto.
+  useEnsureData(open);
   const products = useStore((s) => s.products);
   const openClient = useStore((s) => s.openClient);
 

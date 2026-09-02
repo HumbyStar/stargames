@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { isOnline as isBrowserOnline } from "@/lib/local-mode";
 import { supabase } from "@/integrations/supabase/client";
 import { useIdle } from "@/lib/use-idle";
+import { hasActiveSession } from "@/lib/auth-session";
 
 export type ConnectionStatus = "online" | "unstable" | "offline";
 
@@ -57,6 +58,12 @@ export function useConnectionStatus(): {
         setStatus("offline");
         setChecking(false);
         schedule("offline");
+        return;
+      }
+      // Sem sessão o banco recusa a leitura por GRANT — isso não é "offline".
+      if (!(await hasActiveSession())) {
+        setChecking(false);
+        schedule("online");
         return;
       }
       const started = Date.now();
@@ -117,6 +124,10 @@ export function useConnectionStatus(): {
       setChecking(true);
       void (async () => {
         try {
+          if (!(await hasActiveSession())) {
+            setChecking(false);
+            return;
+          }
           const started = Date.now();
           const { error } = await supabase.from("app_settings").select("id").limit(1);
           const elapsed = Date.now() - started;
