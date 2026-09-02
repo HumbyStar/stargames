@@ -373,6 +373,8 @@ export interface DbSnapshot {
   env?: AppEnv;
   /** Alguma tabela falhou na leitura: o snapshot está incompleto. */
   partial?: boolean;
+  /** `false` quando clientes/produtos não foram lidos (carga sob demanda). */
+  dataLoaded?: boolean;
 }
 
 export type AppEnv = "producao" | "sandbox";
@@ -442,7 +444,17 @@ export interface RawSnapshotRows {
   settings: Record<string, unknown> | null;
 }
 
-export async function loadSnapshot(): Promise<DbSnapshot> {
+export interface LoadSnapshotOptions {
+  /**
+   * Quando `false`, a leitura pesada (clientes, produtos e MGMV) é pulada:
+   * o app abre apenas com preferências/regras/UI e histórico de importação.
+   * As listas são carregadas sob demanda (ver `ensureDataLoaded` na store).
+   */
+  withData?: boolean;
+}
+
+export async function loadSnapshot(options: LoadSnapshotOptions = {}): Promise<DbSnapshot> {
+  const withData = options.withData !== false;
   if (isLocalMode()) {
     const { loadLocalSnapshot } = await import("./local-package");
     const local = await loadLocalSnapshot();
@@ -459,9 +471,10 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
     }
   }
   const scope = { env: envBefore, owner };
+  const empty = { data: [] as Record<string, unknown>[], error: null as unknown as null };
   const [clientsRes, productsRes, historyRes, settingsRes, agreementsRes, installmentsRes] = await Promise.all([
-    fetchAllRows<Record<string, unknown>>("clients", "*", 1000, scope),
-    fetchAllRows<Record<string, unknown>>("products", "*", 1000, scope),
+    withData ? fetchAllRows<Record<string, unknown>>("clients", "*", 1000, scope) : empty,
+    withData ? fetchAllRows<Record<string, unknown>>("products", "*", 1000, scope) : empty,
     sb()
       .from("import_history")
       .select("*")
@@ -469,8 +482,8 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
       .order("date", { ascending: false })
       .limit(200),
     sb().from("app_settings").select("*").eq("id", "default").maybeSingle(),
-    fetchAllRows<Record<string, unknown>>("mgmv_agreements", "*", 1000, scope),
-    fetchAllRows<Record<string, unknown>>("mgmv_installments", "*", 1000, scope),
+    withData ? fetchAllRows<Record<string, unknown>>("mgmv_agreements", "*", 1000, scope) : empty,
+    withData ? fetchAllRows<Record<string, unknown>>("mgmv_installments", "*", 1000, scope) : empty,
   ]);
   if (clientsRes.error) logErr("loadClients", clientsRes.error);
   if (productsRes.error) logErr("loadProducts", productsRes.error);
@@ -498,8 +511,8 @@ export async function loadSnapshot(): Promise<DbSnapshot> {
 
   // Se o ambiente mudou no meio da leitura, os dados são de um ambiente
   // que já não é o atual: relê uma única vez para não misturar snapshots.
-  if (envBefore !== envAfter) return loadSnapshot();
-  return { ...snapshot, env: envAfter, partial };
+  if (envBefore !== envAfter) return loadSnapshot(options);
+  return { ...snapshot, env: envAfter, partial, dataLoaded: withData };
 }
 
 /**

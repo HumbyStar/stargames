@@ -3,6 +3,7 @@ import { RefreshCw, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { useStore, type ImportDiagnostics } from "@/lib/store";
+import { useEnsureData } from "@/lib/use-ensure-data";
 import { supabase } from "@/integrations/supabase/client";
 
 /** Intervalo da reconferência automática. */
@@ -19,6 +20,7 @@ const REALTIME_DEBOUNCE_MS = 1_500;
  */
 export function DashboardIntegrityCard() {
   const clients = useStore((s) => s.clients);
+  useEnsureData();
   const products = useStore((s) => s.products);
   const currentEnv = useStore((s) => s.currentEnv);
   const envSyncing = useStore((s) => s.envSyncing);

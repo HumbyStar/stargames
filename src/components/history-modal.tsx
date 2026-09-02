@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { useUiStore, type HistoryContext } from "@/lib/ui-store";
 import { useStore, isResolvedSituation, type Client, type Product } from "@/lib/store";
+import { useEnsureData } from "@/lib/use-ensure-data";
 import { usePaginatedList } from "@/hooks/use-paginated-list";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { highlight, matchText } from "@/lib/search-highlight";
@@ -45,6 +46,7 @@ export function HistoryModal() {
   const context = useUiStore((s) => s.historyContext);
   const closeHistory = useUiStore((s) => s.closeHistory);
   const clients = useStore((s) => s.clients);
+  useEnsureData();
   const products = useStore((s) => s.products);
   const [search, setSearch] = useState("");
 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { usePersistedState } from "@/lib/use-persisted-state";
+import { FilterEmptyState } from "@/components/filter-empty-state";
 import { usePaginatedList } from "@/hooks/use-paginated-list";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { SuperfreteWalletPanel } from "@/components/superfrete-wallet-panel";
@@ -16,6 +17,7 @@ import {
   type Client,
   type Product,
 } from "@/lib/store";
+import { useEnsureData } from "@/lib/use-ensure-data";
 
 const ShipmentWizardModal = lazy(() =>
   import("@/components/shipment-wizard-modal").then((m) => ({
@@ -103,7 +105,13 @@ export function EnvioSection({ onScrollTo }: { onScrollTo: (id: string) => void 
     return out.sort((a, b) => b.oldestDays - a.oldestDays);
   }, [clients, products]);
 
+  // Enquanto nenhum filtro estiver aplicado, a lista não é montada.
+  const noFilterApplied =
+    search.trim().length === 0 && minItems.trim() === "1" && minDays.trim() === "0";
+  useEnsureData(!noFilterApplied);
+
   const groups = useMemo(() => {
+    if (noFilterApplied) return [];
     const q = search.trim().toLowerCase();
     const min = Math.max(1, Number(minItems) || 1);
     const days = Math.max(0, Number(minDays) || 0);
@@ -117,7 +125,7 @@ export function EnvioSection({ onScrollTo }: { onScrollTo: (id: string) => void 
         g.products.some((p) => p.name.toLowerCase().includes(q))
       );
     });
-  }, [allGroups, search, minItems, minDays]);
+  }, [noFilterApplied, allGroups, search, minItems, minDays]);
 
   const {
     visible: visibleGroups,
@@ -198,7 +206,11 @@ export function EnvioSection({ onScrollTo }: { onScrollTo: (id: string) => void 
       </Card>
 
       <Card title={`Clientes para envio (${groups.length})`}>
-        {groups.length === 0 ? (
+        {noFilterApplied ? (
+          <div className="relative min-h-[16rem] rounded-md border border-border/60">
+            <FilterEmptyState hint="Busque por cliente/produto ou ajuste o mínimo de itens/dias em estoque." />
+          </div>
+        ) : groups.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Nenhum cliente com produtos pagos aguardando envio nos filtros atuais.
           </p>

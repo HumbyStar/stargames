@@ -1,4 +1,12 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { RefreshCw } from "lucide-react";
+import {
+  getFinanceAggregates,
+  type FinanceAggregates,
+  type TimelineMode,
+} from "@/lib/api/finance.functions";
 import {
   TrendingUp,
   TrendingDown,
@@ -28,14 +36,7 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import {
-  useStore,
-  calculateClientFinancialSummary,
-  isOpenSituation,
-  isOverdue,
-  type Client,
-  type Product,
-} from "@/lib/store";
+import { useStore } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,184 +57,6 @@ const STATUS_COLORS: Record<string, string> = {
   Reserva: "oklch(0.65 0.2 260)",
   MGMV: "oklch(0.6 0.22 25)",
 };
-
-type TimelineMode = "7d" | "30d" | "6m" | "12m" | "all";
-
-interface TimelineBucket {
-  key: string;
-  label: string;
-  registrado: number;
-  recebido: number;
-  aReceber: number;
-  inadimplencia: number;
-}
-
-function bucketKeyFor(
-  date: Date,
-  granularity: "day" | "month" | "year",
-): { key: string; label: string } {
-  if (granularity === "day") {
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-    const label = date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-    return { key, label };
-  }
-  if (granularity === "month") {
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    const label = date.toLocaleString("pt-BR", { month: "short" }).replace(".", "");
-    return { key, label };
-  }
-  const key = String(date.getFullYear());
-  return { key, label: key };
-}
-
-function buildTimeline(
-  products: readonly Product[],
-  clients: readonly Client[],
-  mode: TimelineMode,
-): TimelineBucket[] {
-  const now = new Date();
-  const clientById = new Map(clients.map((c) => [c.id, c]));
-  let granularity: "day" | "month" | "year";
-  const buckets: TimelineBucket[] = [];
-  const idx = new Map<string, number>();
-
-  const push = (d: Date) => {
-    const { key, label } = bucketKeyFor(d, granularity);
-    if (idx.has(key)) return;
-    idx.set(key, buckets.length);
-    buckets.push({ key, label, registrado: 0, recebido: 0, aReceber: 0, inadimplencia: 0 });
-  };
-
-  if (mode === "7d" || mode === "30d") {
-    granularity = "day";
-    const days = mode === "7d" ? 7 : 30;
-    for (let i = days - 1; i >= 0; i--) {
-      push(new Date(now.getFullYear(), now.getMonth(), now.getDate() - i));
-    }
-  } else if (mode === "6m" || mode === "12m") {
-    granularity = "month";
-    const months = mode === "6m" ? 6 : 12;
-    for (let i = months - 1; i >= 0; i--) {
-      push(new Date(now.getFullYear(), now.getMonth() - i, 1));
-    }
-  } else {
-    granularity = "year";
-    let earliest = now.getFullYear();
-    for (const p of products) {
-      const d = new Date(p.registerDate || p.dueDate || now);
-      if (!Number.isNaN(d.getTime())) earliest = Math.min(earliest, d.getFullYear());
-    }
-    for (const c of clients) {
-      if (!c.mgmv) continue;
-      const d = new Date(c.mgmv.startDate || now);
-      if (!Number.isNaN(d.getTime())) earliest = Math.min(earliest, d.getFullYear());
-    }
-    for (let y = earliest; y <= now.getFullYear(); y++) {
-      push(new Date(y, 0, 1));
-    }
-  }
-
-  const bucketOf = (d: Date) => idx.get(bucketKeyFor(d, granularity).key);
-
-  for (const p of products) {
-    const owner = clientById.get(p.clientId);
-    if (owner?.mgmv && p.financialStatus === "MGMV") continue;
-
-    const reg = new Date(p.registerDate || p.dueDate || 0);
-    if (!Number.isNaN(reg.getTime())) {
-      const i = bucketOf(reg);
-      if (i !== undefined) {
-        buckets[i].registrado += p.totalValue || 0;
-        buckets[i].recebido += p.paidValue || 0;
-      }
-    }
-    const saldo = Math.max(0, (p.totalValue || 0) - (p.paidValue || 0));
-    if (
-      saldo > 0 &&
-      p.financialStatus !== "Pago" &&
-      p.financialStatus !== "MGMV" &&
-      isOpenSituation(p)
-    ) {
-      const due = new Date(p.dueDate || 0);
-      if (!Number.isNaN(due.getTime())) {
-        const i = bucketOf(due);
-        if (i !== undefined) {
-          buckets[i].aReceber += saldo;
-          if (isOverdue(p.dueDate)) buckets[i].inadimplencia += saldo;
-        }
-      }
-    }
-  }
-
-  for (const c of clients) {
-    if (!c.mgmv) continue;
-    const start = new Date(c.mgmv.startDate || 0);
-    if (!Number.isNaN(start.getTime())) {
-      const i = bucketOf(start);
-      if (i !== undefined) buckets[i].registrado += c.mgmv.totalDebt || 0;
-    }
-
-    for (const inst of c.mgmv.installments) {
-      const paidAmt = inst.paidAmount ?? (inst.paid ? inst.value : 0);
-      if (paidAmt > 0) {
-        const pd = new Date(inst.paidAt || inst.dueDate || 0);
-        if (!Number.isNaN(pd.getTime())) {
-          const i = bucketOf(pd);
-          if (i !== undefined) buckets[i].recebido += paidAmt;
-        }
-      }
-      const rem = Math.max(0, inst.value - paidAmt);
-      if (!inst.paid && rem > 0) {
-        const due = new Date(inst.dueDate || 0);
-        if (!Number.isNaN(due.getTime())) {
-          const i = bucketOf(due);
-          if (i !== undefined) {
-            buckets[i].aReceber += rem;
-            if (isOverdue(inst.dueDate)) buckets[i].inadimplencia += rem;
-          }
-        }
-      }
-    }
-  }
-
-  return buckets;
-}
-
-function computeClientBuyerScore(
-  client: Client,
-  products: readonly Product[],
-): { eligible: boolean; totalPurchased: number } {
-  const clientProducts = products.filter((p) => p.clientId === client.id);
-  const summary = calculateClientFinancialSummary(client, products);
-  if (clientProducts.length === 0 && !client.mgmv) return { eligible: false, totalPurchased: 0 };
-  if (summary.totalRemaining > 0 || summary.overdueValue > 0) {
-    return { eligible: false, totalPurchased: 0 };
-  }
-
-  for (const p of clientProducts) {
-    if (p.situation === "Desistiu" || p.situation === "Abandonou" || p.situation === "Removido") {
-      return { eligible: false, totalPurchased: 0 };
-    }
-    if (p.financialStatus === "Pendente") return { eligible: false, totalPurchased: 0 };
-    if (
-      p.financialStatus === "Reserva" &&
-      isOpenSituation(p) &&
-      isOverdue(p.dueDate)
-    ) {
-      return { eligible: false, totalPurchased: 0 };
-    }
-  }
-
-  if (client.mgmv) {
-    for (const inst of client.mgmv.installments) {
-      if (!inst.paid && isOverdue(inst.dueDate)) {
-        return { eligible: false, totalPurchased: 0 };
-      }
-    }
-  }
-
-  return { eligible: summary.totalPurchased > 0, totalPurchased: summary.totalPurchased };
-}
 
 function Kpi({
   label,
@@ -286,117 +109,49 @@ function Kpi({
 }
 
 export function FinanceDashboard() {
-  const clients = useStore((s) => s.clients);
-  const products = useStore((s) => s.products);
   const openClient = useStore((s) => s.openClient);
   const closeFinance = useUiStore((s) => s.closeFinance);
   const setActiveSection = useUiStore((s) => s.setActiveSection);
   const [timelineMode, setTimelineMode] = useState<TimelineMode>("6m");
 
-  const handleOpenClient = (client: Client) => {
+  // Finanças agora vem pronto do servidor: uma única consulta agregada,
+  // com cache de 5 minutos e botão de atualizar (em vez de recalcular a base
+  // inteira no navegador a cada abertura).
+  const aggregatesFn = useServerFn(getFinanceAggregates);
+  const query = useQuery({
+    queryKey: ["finance-aggregates"],
+    queryFn: () => aggregatesFn(),
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const handleOpenClient = (clientId: string, isMgmv: boolean) => {
     closeFinance();
-    setActiveSection(client.mgmv ? "mgmv" : "clientes");
-    openClient(client.id);
+    setActiveSection(isMgmv ? "mgmv" : "clientes");
+    openClient(clientId);
   };
 
-  const data = useMemo(() => {
-    const summaries = clients.map((c) => ({
-      client: c,
-      summary: calculateClientFinancialSummary(c, products),
-    }));
-    const clientById = new Map(clients.map((c) => [c.id, c]));
-    const financeProducts = products.filter((p) => {
-      const owner = clientById.get(p.clientId);
-      return !(owner?.mgmv && p.financialStatus === "MGMV");
-    });
-    const total = summaries.reduce((s, r) => s + r.summary.totalPurchased, 0);
-    const received = summaries.reduce((s, r) => s + r.summary.totalPaid, 0);
-
-    const byStatus = financeProducts.reduce<Record<string, { count: number; value: number }>>((acc, p) => {
-      const k = p.financialStatus || "Pendente";
-      if (!acc[k]) acc[k] = { count: 0, value: 0 };
-      acc[k].count += 1;
-      acc[k].value += p.totalValue || 0;
-      return acc;
-    }, {});
-    for (const c of clients) {
-      if (!c.mgmv) continue;
-      if (!byStatus.MGMV) byStatus.MGMV = { count: 0, value: 0 };
-      byStatus.MGMV.count += 1;
-      byStatus.MGMV.value += c.mgmv.totalDebt || 0;
-    }
-    const statusData = Object.entries(byStatus).map(([name, v]) => ({
-      name,
-      value: v.value,
-      count: v.count,
-    }));
-
-    // Top 5 platforms
-    const byPlatform = financeProducts.reduce<Record<string, number>>((acc, p) => {
-      const k = p.platform || "Outros";
-      acc[k] = (acc[k] || 0) + (p.totalValue || 0);
-      return acc;
-    }, {});
-    const agreementPlatformTotal = summaries.reduce((s, r) => s + r.summary.mgmvTotal, 0);
-    if (agreementPlatformTotal > 0) byPlatform.MGMV = (byPlatform.MGMV || 0) + agreementPlatformTotal;
-    const platforms = Object.entries(byPlatform)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
-
-    // Top devedores — inclui parcelas MGMV em aberto + produtos fora do acordo
-    const topDebtors = summaries
-      .map((r) => ({ client: r.client, debt: r.summary.totalRemaining }))
-      .filter((r) => r.debt > 0)
-      .sort((a, b) => b.debt - a.debt)
-      .slice(0, 6);
-
-    // Top compradores — apenas clientes sem pendência
-    const topBuyers = clients
-      .map((c) => {
-        const s = computeClientBuyerScore(c, products);
-        return { client: c, totalPurchased: s.totalPurchased, eligible: s.eligible };
-      })
-      .filter((r) => r.eligible)
-      .sort((a, b) => b.totalPurchased - a.totalPurchased)
-      .slice(0, 6);
-
-    // MGMV totals
-    const mgmvClients = clients.filter((c) => c.mgmv);
-    const mgmvTotal = mgmvClients.reduce((s, c) => s + (c.mgmv?.totalDebt || 0), 0);
-    const mgmvPaid = summaries.reduce((s, r) => s + r.summary.mgmvPaid, 0);
-    // "A Receber" e "Inadimplência" precisam usar as mesmas regras do saldo
-    // por cliente (computeClientDebt), senão produtos MGMV (que têm dueDate
-    // histórico do produto original) inflam o valor mesmo quando o acordo
-    // está em dia. Um cliente sem parcelas vencidas nem produtos em aberto
-    // vencidos passa a mostrar R$ 0 de inadimplência.
-    const openTotal = summaries.reduce((s, r) => s + r.summary.totalRemaining, 0);
-    const overdueValue = summaries.reduce((s, r) => s + r.summary.overdueValue, 0);
-    const overdueCount = summaries.reduce((s, r) => s + r.summary.overdueCount, 0);
-    const receivedPct = total > 0 ? (received / total) * 100 : 0;
-    const ticket = products.length > 0 ? total / products.length : 0;
-    return {
-      total,
-      received,
-      open: openTotal,
-      receivedPct,
-      statusData,
-      platforms,
-      topDebtors,
-      topBuyers,
-      mgmvTotal,
-      mgmvPaid,
-      overdueValue,
-      overdueCount,
-      ticket,
-      activeClients: clients.length,
-    };
-  }, [clients, products]);
-
-  const timeline = useMemo(
-    () => buildTimeline(products, clients, timelineMode),
-    [products, clients, timelineMode],
-  );
+  const empty: FinanceAggregates = {
+    total: 0,
+    received: 0,
+    open: 0,
+    receivedPct: 0,
+    statusData: [],
+    platforms: [],
+    topDebtors: [],
+    topBuyers: [],
+    mgmvTotal: 0,
+    mgmvPaid: 0,
+    overdueValue: 0,
+    overdueCount: 0,
+    ticket: 0,
+    activeClients: 0,
+    productsCount: 0,
+    timelines: { "7d": [], "30d": [], "6m": [], "12m": [], all: [] },
+    generatedAt: "",
+  };
+  const data = query.data ?? empty;
+  const timeline = data.timelines[timelineMode] ?? [];
 
   return (
     <div className="space-y-6">
@@ -405,6 +160,24 @@ export function FinanceDashboard() {
         <p className="text-sm text-muted-foreground">
           Visão consolidada do desempenho financeiro da operação.
         </p>
+        <div className="mt-2 flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void query.refetch()}
+            disabled={query.isFetching}
+          >
+            <RefreshCw className={cn("mr-2 size-3.5", query.isFetching && "animate-spin")} />
+            Atualizar
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            {query.isFetching
+              ? "Calculando..."
+              : data.generatedAt
+                ? `Atualizado às ${new Date(data.generatedAt).toLocaleTimeString("pt-BR")}`
+                : ""}
+          </span>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -413,7 +186,7 @@ export function FinanceDashboard() {
           value={fmt(data.total)}
           icon={CircleDollarSign}
           tone="primary"
-          hint={`${products.length} produtos`}
+          hint={`${data.productsCount} produtos`}
         />
         <Kpi
           label="Recebido"
@@ -586,21 +359,21 @@ export function FinanceDashboard() {
               </li>
             )}
             {data.topDebtors.map((d, i) => (
-              <li key={d.client.id} className="flex items-center justify-between gap-3 py-2.5">
+              <li key={d.clientId} className="flex items-center justify-between gap-3 py-2.5">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="grid size-8 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                     {i + 1}
                   </span>
-                  <p className="truncate text-sm font-medium">{d.client.name}</p>
+                  <p className="truncate text-sm font-medium">{d.name}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold text-destructive">{fmt(d.debt)}</p>
+                  <p className="text-sm font-semibold text-destructive">{fmt(d.value)}</p>
                   <Button
                     size="icon"
                     variant="ghost"
                     className="size-7"
-                    onClick={() => handleOpenClient(d.client)}
-                    aria-label={`Abrir ${d.client.name}`}
+                    onClick={() => handleOpenClient(d.clientId, d.isMgmv)}
+                    aria-label={`Abrir ${d.name}`}
                   >
                     <ExternalLink className="size-4" />
                   </Button>
@@ -625,21 +398,21 @@ export function FinanceDashboard() {
               </li>
             )}
             {data.topBuyers.map((d, i) => (
-              <li key={d.client.id} className="flex items-center justify-between gap-3 py-2.5">
+              <li key={d.clientId} className="flex items-center justify-between gap-3 py-2.5">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="grid size-8 place-items-center rounded-full bg-success/10 text-xs font-semibold text-success">
                     {i + 1}
                   </span>
-                  <p className="truncate text-sm font-medium">{d.client.name}</p>
+                  <p className="truncate text-sm font-medium">{d.name}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold text-success">{fmt(d.totalPurchased)}</p>
+                  <p className="text-sm font-semibold text-success">{fmt(d.value)}</p>
                   <Button
                     size="icon"
                     variant="ghost"
                     className="size-7"
-                    onClick={() => handleOpenClient(d.client)}
-                    aria-label={`Abrir ${d.client.name}`}
+                    onClick={() => handleOpenClient(d.clientId, d.isMgmv)}
+                    aria-label={`Abrir ${d.name}`}
                   >
                     <ExternalLink className="size-4" />
                   </Button>

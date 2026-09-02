@@ -12,7 +12,6 @@ export type HistoryContext =
  */
 interface UiState {
   importOpen: boolean;
-  equipeOpen: boolean;
   settingsOpen: boolean;
   settingsLocked: boolean;
   helpOpen: boolean;
@@ -25,8 +24,6 @@ interface UiState {
   setActiveSection: (id: string) => void;
   openImport: () => void;
   closeImport: () => void;
-  openEquipe: () => void;
-  closeEquipe: () => void;
   openSettings: () => void;
   closeSettings: () => void;
   setSettingsLocked: (v: boolean) => void;
@@ -46,7 +43,6 @@ interface UiState {
 
 export const useUiStore = create<UiState>((set) => ({
   importOpen: false,
-  equipeOpen: false,
   settingsOpen: false,
   settingsLocked: false,
   helpOpen: false,
@@ -59,8 +55,6 @@ export const useUiStore = create<UiState>((set) => ({
   setActiveSection: (id) => set({ activeSection: id }),
   openImport: () => set({ importOpen: true }),
   closeImport: () => set({ importOpen: false }),
-  openEquipe: () => set({ equipeOpen: true }),
-  closeEquipe: () => set({ equipeOpen: false }),
   openSettings: () => set({ settingsOpen: true }),
   closeSettings: () =>
     set((s) => (s.settingsLocked ? s : { settingsOpen: false })),

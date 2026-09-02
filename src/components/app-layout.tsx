@@ -16,7 +16,6 @@ import {
   Truck,
   Wallet,
   CircleDollarSign,
-  KanbanSquare,
 } from "lucide-react";
 import { SandboxProvider, useSandbox } from "@/lib/use-sandbox";
 import { WifiOff } from "lucide-react";
@@ -37,6 +36,7 @@ import {
   type Client,
   type Product,
 } from "@/lib/store";
+import { useEnsureData } from "@/lib/use-ensure-data";
 import { useUiStore } from "@/lib/ui-store";
 import { setUiValue, subscribeRealtimeSnapshot, suspendRealtimeRefresh } from "@/lib/db-sync";
 import { notifyRowConfirmed } from "@/lib/write-confirm";
@@ -83,9 +83,6 @@ function normalizeSearchText(value: string): string {
 
 const ImportSection = lazy(() =>
   import("@/sections/import-section").then((m) => ({ default: m.ImportSection })),
-);
-const EquipeSection = lazy(() =>
-  import("@/sections/equipe-section").then((m) => ({ default: m.EquipeSection })),
 );
 
 const navItems: ReadonlyArray<{
@@ -160,6 +157,8 @@ function SearchBox({
   const clients = useStore((s) => s.clients);
   const products = useStore((s) => s.products);
   const openClient = useStore((s) => s.openClient);
+  // A busca global precisa da base carregada — só então lê do banco.
+  useEnsureData(query.trim().length >= 2);
   const listboxId = "global-search-listbox";
   const optionId = (idx: number) => `${listboxId}-opt-${idx}`;
 
@@ -606,7 +605,6 @@ interface RightNavIconProps {
   searchOpen: boolean;
   onSearch: () => void;
   onFinance: () => void;
-  onEquipe: () => void;
   onImport: () => void;
   onSettings: () => void;
   onToggleTheme: () => void;
@@ -619,7 +617,6 @@ function RightNavIconImpl({
   searchOpen,
   onSearch,
   onFinance,
-  onEquipe,
   onImport,
   onSettings,
   onToggleTheme,
@@ -646,22 +643,6 @@ function RightNavIconImpl({
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom">Finanças</TooltipContent>
-        </Tooltip>
-      );
-    case "equipe":
-      return (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={onEquipe}
-              aria-label="Equipe"
-              className={baseBtn}
-            >
-              <KanbanSquare className="size-5 transition-transform duration-300 group-hover:scale-110" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Equipe</TooltipContent>
         </Tooltip>
       );
     case "import":
@@ -860,7 +841,6 @@ function _FloatingNavbarImpl() {
   };
 
   const openImport = useUiStore((s) => s.openImport);
-  const openEquipe = useUiStore((s) => s.openEquipe);
   const openSettings = useUiStore((s) => s.openSettings);
   const openNotifications = useUiStore((s) => s.openNotifications);
   const closeNotifications = useUiStore((s) => s.closeNotifications);
@@ -1161,7 +1141,6 @@ function _FloatingNavbarImpl() {
                   setSearchOpen((v) => !v);
                 }}
                 onFinance={openFinance}
-                onEquipe={openEquipe}
                 onImport={openImport}
                 onSettings={openSettings}
                 onToggleTheme={toggleTheme}
@@ -1189,14 +1168,6 @@ function _FloatingNavbarImpl() {
               )}
             </button>
           </NotificationsDropdown>
-          <button
-            type="button"
-            onClick={openEquipe}
-            aria-label="Equipe"
-            className="md:hidden grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 hover:text-foreground active:scale-90"
-          >
-            <Users className="size-5" />
-          </button>
           <button
             className="group md:hidden grid size-10 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 active:scale-90"
             onClick={() => setOpenMobile((v) => !v)}
@@ -1249,16 +1220,6 @@ function _FloatingNavbarImpl() {
             className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent"
           >
             <Upload className="size-4 opacity-70 shrink-0" /> Importar
-          </button>
-          <button
-            role="menuitem"
-            onClick={() => {
-              setOpenMobile(false);
-              openEquipe();
-            }}
-            className="flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm text-left text-foreground/90 hover:bg-accent"
-          >
-            <Users className="size-4 opacity-70 shrink-0" /> Equipe
           </button>
           <button
             role="menuitem"
@@ -1465,7 +1426,6 @@ export function AppLayout({ children }: { children?: ReactNode }) {
       import("@/sections/collection-section"),
       import("@/components/dashboard-drilldown-modal"),
       import("@/sections/import-section"),
-      import("@/sections/equipe-section"),
     ];
     // Fallback: se algum chunk demorar demais (rede ruim), não trava o
     // splash — libera após 4s mesmo assim.
@@ -1579,8 +1539,6 @@ function GlobalModals() {
   const closeFinance = useUiStore((s) => s.closeFinance);
   const importOpen = useUiStore((s) => s.importOpen);
   const closeImport = useUiStore((s) => s.closeImport);
-  const equipeOpen = useUiStore((s) => s.equipeOpen);
-  const closeEquipe = useUiStore((s) => s.closeEquipe);
 
   return (
     <>
@@ -1615,20 +1573,6 @@ function GlobalModals() {
           {importOpen && (
             <Suspense fallback={null}>
               <ImportSection onScrollTo={(id) => scrollToSection(id)} />
-            </Suspense>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={equipeOpen} onOpenChange={(o) => (o ? null : closeEquipe())}>
-        <DialogContent className="max-w-[min(1200px,95vw)] max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="sr-only">
-            <DialogTitle>Equipe</DialogTitle>
-            <DialogDescription>Gestão de tarefas e membros da equipe.</DialogDescription>
-          </DialogHeader>
-          {equipeOpen && (
-            <Suspense fallback={null}>
-              <EquipeSection />
             </Suspense>
           )}
         </DialogContent>

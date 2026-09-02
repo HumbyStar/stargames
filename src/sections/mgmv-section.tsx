@@ -12,6 +12,7 @@ import {
   type Client,
   type MGMVAgreement,
 } from "@/lib/store";
+import { useEnsureData } from "@/lib/use-ensure-data";
 import { MgmvPartialPaymentPopover } from "@/components/mgmv-partial-payment-popover";
 import { MgmvAiReviewModal } from "@/components/mgmv-ai-review-modal";
 import { applySuggestionToAgreement } from "@/lib/mgmv-ai-apply";
@@ -36,9 +37,10 @@ import {
   MgmvFullyPaidBanner,
 } from "@/components/mgmv-complete-modal";
 import { MgmvProductsPanel } from "@/components/mgmv-products-panel";
+import { FilterEmptyState } from "@/components/filter-empty-state";
 
 type MgmvChip =
-  | "todos"
+  | "nenhum"
   | "ativos"
   | "em_atraso"
   | "quitados"
@@ -247,7 +249,7 @@ export function MGMVSection({
   const ensureMGMVProductsLoaded = useStore((s) => s.ensureMGMVProductsLoaded);
   const [completionProductsLoading, setCompletionProductsLoading] = useState(false);
   const applyAiReviewToAgreement = useStore((s) => s.applyAiReviewToAgreement);
-  const [chip, setChip] = usePersistedState<MgmvChip>("mgmv.chip", "todos");
+  const [chip, setChip] = usePersistedState<MgmvChip>("mgmv.chip", "nenhum");
   const [search, setSearch] = usePersistedState<string>("mgmv.search", "");
   const [expanded, setExpanded] = useState<string | null>(null);
   // Notas fiscais já emitidas para o cliente aberto (badge "NF" nos produtos).
@@ -447,7 +449,12 @@ export function MGMVSection({
     };
   }, [rows, products]);
 
+  // Sem chip nem busca a tabela não é montada (menos leitura).
+  const noFilterApplied = chip === "nenhum" && search.trim().length === 0;
+  useEnsureData(!noFilterApplied);
+
   const filtered = useMemo(() => {
+    if (noFilterApplied) return [];
     const q = search.trim().toLowerCase();
     const qDigits = q.replace(/\D/g, "");
     return rows.filter((r) => {
@@ -508,7 +515,7 @@ export function MGMVSection({
           return true;
       }
     });
-  }, [rows, search, chip, stats.clientsWithProducts]);
+  }, [noFilterApplied, rows, search, chip, stats.clientsWithProducts]);
 
   const {
     visible: pagedRows,
@@ -535,7 +542,6 @@ export function MGMVSection({
   }, [filtered, search, searchActive]);
 
   const chips: { id: MgmvChip; label: string; count?: number }[] = [
-    { id: "todos", label: "Todos" },
     { id: "ativos", label: "Ativos", count: stats.ativos },
     { id: "em_atraso", label: "Em atraso", count: stats.atraso },
     { id: "quitados", label: "Quitados", count: stats.quitados },
@@ -705,7 +711,8 @@ export function MGMVSection({
         </div>
 
       <>
-      <div className="table-scroll-y mt-4 max-h-[28rem] overflow-x-auto rounded-xl border border-border bg-card shadow-xs">
+      <div className="relative table-scroll-y mt-4 max-h-[28rem] overflow-x-auto rounded-xl border border-border bg-card shadow-xs">
+          {noFilterApplied && <FilterEmptyState />}
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-card/95 backdrop-blur">
               <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -721,7 +728,7 @@ export function MGMVSection({
               </tr>
             </thead>
             <tbody>
-              {pagedRows.length === 0 && (
+              {pagedRows.length === 0 && !noFilterApplied && (
                 <tr>
                   <td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">
                     Nenhum acordo MGMV encontrado.

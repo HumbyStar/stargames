@@ -23,6 +23,7 @@ import {
   type Client,
   type Product,
 } from "@/lib/store";
+import { useEnsureData } from "@/lib/use-ensure-data";
 import { toast } from "sonner";
 import {
   ArrowRight,
@@ -325,6 +326,7 @@ export function DashboardDrilldownModal({
   onBackToConcierge?: () => void;
 }) {
   const clients = useStore((s) => s.clients);
+  useEnsureData();
   const products = useStore((s) => s.products);
   const openClient = useStore((s) => s.openClient);
   const registerPayment = useStore((s) => s.registerPayment);

@@ -5,6 +5,7 @@ import { usePersistedState } from "@/lib/use-persisted-state";
 import { Button } from "@/components/ui/button";
 import { usePaginatedList } from "@/hooks/use-paginated-list";
 import { LoadMoreButton } from "@/components/load-more-button";
+import { FilterEmptyState } from "@/components/filter-empty-state";
 import { useUiStore } from "@/lib/ui-store";
 import {
   Dialog,
@@ -38,6 +39,7 @@ import {
   type Situation,
   type PartialPaymentResult,
 } from "@/lib/store";
+import { useEnsureData } from "@/lib/use-ensure-data";
 import { toast } from "sonner";
 import { linkProductsToAgreement } from "@/lib/db-sync";
 import { ProductNameCombobox } from "@/components/product-name-combobox";
@@ -94,7 +96,7 @@ import { RowEditPencil, RowEditActions } from "@/components/row-edit-controls";
 import { highlight, matchText, ColumnMatchDot } from "@/lib/search-highlight";
 
 type ChipFilter =
-  | "todos"
+  | "nenhum"
   | "reserva_vencida"
   | "pendente"
   | "pago_aguardando"
@@ -150,7 +152,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   const [search, setSearch] = usePersistedState<string>("clientes.search", "");
   const [chip, setChip] = usePersistedState<ChipFilter>(
     "clientes.chip",
-    "todos",
+    "nenhum",
   );
   const [financialFilter, setFinancialFilter] = usePersistedState<string>(
     "clientes.financial",
@@ -269,7 +271,19 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     return () => window.clearTimeout(id);
   }, [search]);
 
+  // Sem filtro nem busca não lemos/renderizamos a base inteira.
+  const noFilterApplied =
+    chip === "nenhum" &&
+    debouncedSearch.trim().length === 0 &&
+    financialFilter === "Todos" &&
+    situationFilter === "Todas" &&
+    platformFilter === "Todas" &&
+    periodFilter === "Todos" &&
+    folderFilter === "Todas";
+  useEnsureData(!noFilterApplied);
+
   const rows = useMemo(() => {
+    if (noFilterApplied) return [];
     const q = debouncedSearch.trim().toLowerCase();
     return baseRows.filter((r) => {
           if (q) {
@@ -301,9 +315,9 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
               (qDigits.length > 0 && phoneDigits.includes(qDigits));
             if (!hit) return false;
           }
-          if (chip !== "todos") {
+          if (chip !== "nenhum") {
             const map: Record<ChipFilter, boolean> = {
-              todos: true,
+              nenhum: true,
               reserva_vencida: r.status.label === "Reserva vencida",
               pendente: r.products.some(
                 (p) => p.financialStatus === "Pendente" && p.situation === "Em Aberto",
@@ -349,6 +363,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
           return true;
     });
   }, [
+    noFilterApplied,
     baseRows,
     debouncedSearch,
     chip,
@@ -402,7 +417,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   }, [rows, debouncedSearch, searchActive]);
 
   const activeFilterCount =
-    (chip !== "pago_aguardando" ? 1 : 0) +
+    (chip !== "nenhum" ? 1 : 0) +
     (financialFilter !== "Todos" ? 1 : 0) +
     (situationFilter !== "Todas" ? 1 : 0) +
     (platformFilter !== "Todas" ? 1 : 0) +
@@ -410,7 +425,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
     (folderFilter !== "Todas" ? 1 : 0);
 
   const clearFilters = () => {
-    setChip("pago_aguardando");
+    setChip("nenhum");
     setFinancialFilter("Todos");
     setSituationFilter("Todas");
     setPlatformFilter("Todas");
@@ -437,7 +452,6 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
   }, [products]);
 
   const chips: { id: ChipFilter; label: string }[] = [
-    { id: "todos", label: "Todos" },
     { id: "reserva_vencida", label: "Reserva vencida" },
     { id: "pendente", label: "Pendente" },
     { id: "pago_aguardando", label: "Pago aguardando envio" },
@@ -657,7 +671,8 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
         </div>
 
         <>
-            <div className="table-scroll-y mt-5 max-h-[28rem] overflow-x-auto rounded-md border border-border/60">
+            <div className="relative table-scroll-y mt-5 max-h-[28rem] overflow-x-auto rounded-md border border-border/60">
+              {noFilterApplied && <FilterEmptyState />}
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -991,7 +1006,7 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                     </Fragment>
                     );
                   })}
-                  {pagedRows.length === 0 && (
+                  {pagedRows.length === 0 && !noFilterApplied && (
                     <tr>
                       <td
                         colSpan={8}
