@@ -44,6 +44,7 @@ function dateInputToIso(v: string): string {
 export function MgmvAgreementEditor({ clientId, agreement, products, availableProducts = [], onClose }: Props) {
   const setMGMVAgreementConfirmed = useStore((s) => s.setMGMVAgreementConfirmed);
   const updateProduct = useStore((s) => s.updateProduct);
+  const setProductMGMVMembership = useStore((s) => s.setProductMGMVMembership);
 
   const [draft, setDraft] = useState<MGMVAgreement>(agreement);
   const [targetN, setTargetN] = useState<number>(agreement.installments.length);
@@ -201,17 +202,25 @@ export function MgmvAgreementEditor({ clientId, agreement, products, availablePr
     setTargetN((n) => n + 1);
   };
 
-  const removeProductFromAgreement = (productId: string) => {
-    updateProduct(productId, { financialStatus: "Pendente" });
-    setConfirmRemoveProduct(null);
-    toast.success("Produto removido do acordo.");
+  const removeProductFromAgreement = async (productId: string) => {
+    try {
+      await setProductMGMVMembership(clientId, [productId], false);
+      setConfirmRemoveProduct(null);
+      toast.success("Produto removido do acordo.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao remover produto.");
+    }
   };
 
-  const addProductToAgreement = (productId: string) => {
-    updateProduct(productId, { financialStatus: "MGMV" });
-    setShowAddPicker(false);
-    setAddSearch("");
-    toast.success("Produto adicionado ao acordo.");
+  const addProductToAgreement = async (productId: string) => {
+    try {
+      await setProductMGMVMembership(clientId, [productId], true);
+      setShowAddPicker(false);
+      setAddSearch("");
+      toast.success("Produto adicionado ao acordo.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao adicionar produto.");
+    }
   };
 
   const productsTotalFull = products.reduce((s, p) => s + p.totalValue, 0);
@@ -502,7 +511,7 @@ export function MgmvAgreementEditor({ clientId, agreement, products, availablePr
                       <span className="w-20 text-right tabular-nums">{formatBRL(rest)}</span>
                       <button
                         type="button"
-                        onClick={() => addProductToAgreement(p.id)}
+                        onClick={() => void addProductToAgreement(p.id)}
                         className="rounded-md p-1 text-primary hover:bg-primary/10"
                         aria-label="Adicionar ao acordo"
                       >
@@ -533,7 +542,7 @@ export function MgmvAgreementEditor({ clientId, agreement, products, availablePr
                       <span className="text-[10px] text-muted-foreground">Remover?</span>
                       <button
                         type="button"
-                        onClick={() => removeProductFromAgreement(p.id)}
+                         onClick={() => void removeProductFromAgreement(p.id)}
                         className="rounded-md p-1 text-destructive hover:bg-destructive/10"
                         aria-label="Confirmar remoção"
                       >

@@ -1076,9 +1076,13 @@ export function ClientesSection({ onScrollTo }: { onScrollTo: (id: string) => vo
                 updateProduct(p.id, { paidValue: p.totalValue, financialStatus: "Pago" });
                 toast.success("Marcado como pago");
               }}
-              onPayMGMVInstallment={(installmentNumber) => {
-                payMGMVInstallment(drawerClient.id, installmentNumber);
-                toast.success(`Parcela ${installmentNumber} marcada como paga`);
+              onPayMGMVInstallment={async (installmentNumber) => {
+                try {
+                  await payMGMVInstallment(drawerClient.id, installmentNumber);
+                  toast.success(`Parcela ${installmentNumber} marcada como paga`);
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Falha ao salvar parcela.");
+                }
               }}
               onRegisterMGMVPartialPayment={(
                 installmentNumber,
@@ -1636,7 +1640,7 @@ function ClientDrawer({
     toast.success(`${targets.length} produto(s) atualizados`);
     clearSelection();
   };
-  const bulkAddToMgmv = () => {
+  const bulkAddToMgmv = async () => {
     if (!client.mgmv) {
       toast.error("Este cliente não possui acordo MGMV ativo.");
       return;
@@ -1652,9 +1656,17 @@ function ClientDrawer({
       )
     )
       return;
-    targets.forEach((p) => updateProduct(p.id, { financialStatus: "MGMV" }));
-    toast.success(`${targets.length} produto(s) adicionado(s) ao acordo MGMV`);
-    clearSelection();
+    try {
+      await useStore.getState().setProductMGMVMembership(
+        client.id,
+        targets.map((p) => p.id),
+        true,
+      );
+      toast.success(`${targets.length} produto(s) adicionado(s) ao acordo MGMV`);
+      clearSelection();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao adicionar produtos.");
+    }
   };
   const bulkCopy = async () => {
     const targets = selectedProducts();

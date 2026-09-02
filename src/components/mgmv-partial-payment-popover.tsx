@@ -31,7 +31,7 @@ export function MgmvPartialPaymentPopover({
    * Executa o pagamento. Pode retornar `PartialPaymentResult` (do store) para
    * que o popover mostre o erro do backend, ou `void` para compatibilidade.
    */
-  onSubmit: (amount: number) => PartialPaymentResult | void;
+  onSubmit: (amount: number) => PartialPaymentResult | Promise<PartialPaymentResult> | void;
 }) {
   const [open, setOpen] = useState(false);
   const [raw, setRaw] = useState("");
@@ -179,14 +179,14 @@ export function MgmvPartialPaymentPopover({
             size="sm"
             data-confirm
             disabled={!valid || submitting}
-            onClick={() => {
+            onClick={async () => {
               if (!valid || submitting) return;
               setSubmitting(true);
               let result: PartialPaymentResult | void;
               try {
-                result = onSubmit(parsed);
+                result = await onSubmit(parsed);
               } catch (err) {
-                setSubmitting(false);
+              setSubmitting(false);
                 const msg =
                   err instanceof Error
                     ? err.message
