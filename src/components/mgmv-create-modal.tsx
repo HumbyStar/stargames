@@ -12,8 +12,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Lock, CheckCircle2, Loader2, RotateCcw } from "lucide-react";
+import { Lock, CheckCircle2, Loader2, RotateCcw, AlertTriangle, ShieldCheck, XCircle } from "lucide-react";
 import { toast } from "sonner";
+import { usePermissions } from "@/lib/use-permissions";
+import { runMgmvPreflight, preflightBlocked } from "@/lib/mgmv-preflight";
 import {
   formatBRL,
   formatDateBR,
@@ -23,6 +25,7 @@ import {
   type MGMVAgreement,
   type MGMVInstallment,
 } from "@/lib/store";
+
 
 function addMonthsIso(iso: string, months: number): string {
   const d = new Date(iso);
