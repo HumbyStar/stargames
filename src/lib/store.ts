@@ -919,11 +919,8 @@ export const useStore = create<State>()((set, get) => ({
             );
             set({
               clients: nextClients,
-              products: nextProducts.map((p) =>
-                p.financialStatus === "MGMV" && p.situation === "Em Aberto"
-                  ? { ...p, situation: "Resolvido" as Situation }
-                  : p,
-              ),
+              products: nextProducts.map(normalizeProductSituation),
+
               importHistory: snap.importHistory,
               currentEnv: env,
               envSyncing: false,
