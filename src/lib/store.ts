@@ -1528,7 +1528,9 @@ export const useStore = create<State>()((set, get) => ({
           const updated = get().clients.find((c) => c.id === clientId);
           if (!updated) throw new Error("Cliente não encontrado.");
           // Transação única no banco: acordo, parcelas e vínculo dos produtos.
-          await dbSyncAgreementForClientAsync(updated, ids);
+          // Criação sempre reinicia: se havia um acordo quitado, ele é
+          // arquivado e o novo acordo pode reusar os mesmos produtos.
+          await dbSyncAgreementForClientAsync(updated, ids, true);
           clearLocalMutation("client", [clientId]);
           clearLocalMutation("product", ids);
           // Releitura direcionada: a tela passa a mostrar o que está gravado.
