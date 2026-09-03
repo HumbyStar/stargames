@@ -951,6 +951,10 @@ export const useStore = create<State>()((set, get) => ({
         }
         const id = String(row.id ?? "");
         if (!id) return;
+        // Eco de realtime não pode desfazer o que o usuário acabou de gravar:
+        // enquanto houver alteração local recente para a linha, ela é ignorada
+        // (a releitura confirmada pelo banco cuida do estado final).
+        if (hasPendingLocalMutation(e.table === "clients" ? "client" : "product", id)) return;
         if (e.eventType === "DELETE") {
           if (e.table === "clients") {
             set((s) => ({
@@ -971,7 +975,10 @@ export const useStore = create<State>()((set, get) => ({
               : [...s.clients, client],
           }));
         } else {
-          const product = rowToProduct(row as unknown as Parameters<typeof rowToProduct>[0]);
+          const product = normalizeProductSituation(
+            rowToProduct(row as unknown as Parameters<typeof rowToProduct>[0]),
+          );
+
           set((s) => ({
             products: s.products.some((p) => p.id === product.id)
               ? s.products.map((p) => (p.id === product.id ? product : p))
