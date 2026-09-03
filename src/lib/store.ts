@@ -48,7 +48,8 @@ import {
 } from "./db-sync";
 import type { RealtimeRowEvent } from "./db-sync";
 import { suspendRealtimeRefresh } from "./db-sync";
-import { getCurrentUserInfo } from "./db-sync";
+import { getCurrentUserInfo, hasPendingLocalMutation } from "./db-sync";
+
 import type { ImportDiagnostics } from "./db-sync";
 export type { ImportDiagnostics } from "./db-sync";
 import type { AppEnv, DbSnapshot } from "./db-sync";
