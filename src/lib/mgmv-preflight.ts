@@ -69,8 +69,8 @@ export function runMgmvPreflight(input: PreflightInput): PreflightCheck[] {
         ? {
             id: "produtos",
             label: "Produtos do acordo",
-            level: "block",
-            detail: `${alreadyMgmv.length} produto(s) já pertencem a outro acordo: ${alreadyMgmv
+            level: "warn",
+            detail: `${alreadyMgmv.length} produto(s) vêm de um acordo anterior e serão migrados para o novo: ${alreadyMgmv
               .map((p) => p.name)
               .join(", ")}.`,
           }

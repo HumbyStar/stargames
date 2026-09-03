@@ -85,11 +85,10 @@ export function MgmvCreateModal({
   const [draft, setDraft] = usePersistedState<Draft | null>(draftKey, null);
 
   // Produtos elegíveis: os que ainda têm saldo (Em Aberto e não pertencem a MGMV).
+  // Inclui também produtos de acordos anteriores (financialStatus "MGMV"):
+  // eles podem ser migrados para o novo acordo.
   const eligible = useMemo(
-    () =>
-      products.filter(
-        (p) => p.financialStatus !== "MGMV" && p.totalValue - p.paidValue > 0,
-      ),
+    () => products.filter((p) => p.totalValue - p.paidValue > 0),
     [products],
   );
 
