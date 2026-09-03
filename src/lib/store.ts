@@ -816,14 +816,10 @@ export const useStore = create<State>()((set, get) => ({
           }
           set({
             clients: keepOnPartial(snap.clients, get().clients, snap.partial),
-            products: keepOnPartial(snap.products, get().products, snap.partial).map((p) =>
-              // Fix retroativo: produtos que já foram consolidados em MGMV
-              // não devem permanecer com situation "Em Aberto" (causava dupla
-              // cobrança e inflação em "Valores a Receber").
-              p.financialStatus === "MGMV" && p.situation === "Em Aberto"
-                ? { ...p, situation: "Resolvido" as Situation }
-                : p,
+            products: keepOnPartial(snap.products, get().products, snap.partial).map(
+              normalizeProductSituation,
             ),
+
             importHistory: snap.importHistory,
             preferences: { ...defaultPreferences, ...snap.preferences },
             rules: { ...defaultRules, ...snap.rules },
