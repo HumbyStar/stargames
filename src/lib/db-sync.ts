@@ -1339,7 +1339,11 @@ function throwDb(step: string, error: unknown): never {
 
 const mgmvWriteQueues = new Map<string, Promise<void>>();
 
-async function performAgreementSync(client: Client, productIds?: string[]): Promise<void> {
+async function performAgreementSync(
+  client: Client,
+  productIds?: string[],
+  restart?: boolean,
+): Promise<void> {
   const agreementId = client.id;
 
   if (!isLocalMode()) {
@@ -1356,6 +1360,9 @@ async function performAgreementSync(client: Client, productIds?: string[]): Prom
           // transação marca/desvincula os produtos — sem depender de uma
           // gravação de status anterior ter chegado ao banco.
           ...(productIds ? { _product_ids: productIds } : {}),
+          // Novo acordo por cima de um acordo já quitado: a transação arquiva
+          // o anterior e recria do zero, permitindo reusar os mesmos produtos.
+          ...(restart ? { _restart: true } : {}),
         });
         if (error) throwDb("syncAgreement.atomic", error);
       })(),
@@ -1473,11 +1480,12 @@ async function performAgreementSync(client: Client, productIds?: string[]): Prom
 export function dbSyncAgreementForClientAsync(
   client: Client,
   productIds?: string[],
+  restart?: boolean,
 ): Promise<void> {
   const previous = mgmvWriteQueues.get(client.id) ?? Promise.resolve();
   const current = previous
     .catch(() => undefined)
-    .then(() => performAgreementSync(client, productIds));
+    .then(() => performAgreementSync(client, productIds, restart));
 
   mgmvWriteQueues.set(client.id, current);
   void current.finally(() => {
