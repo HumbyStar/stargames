@@ -428,6 +428,38 @@ export function MgmvCreateModal({
           </div>
         </fieldset>
 
+        {!confirmed ? (
+          <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <ShieldCheck className="size-3.5" /> Conferência assistida
+            </div>
+            <ul className="space-y-1.5">
+              {preflight.map((c) => (
+                <li key={c.id} className="flex items-start gap-2 text-xs">
+                  {c.level === "ok" ? (
+                    <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-[color:var(--success)]" />
+                  ) : c.level === "warn" ? (
+                    <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" />
+                  ) : (
+                    <XCircle className="mt-0.5 size-3.5 shrink-0 text-destructive" />
+                  )}
+                  <span>
+                    <span className="font-medium">{c.label}:</span>{" "}
+                    <span className="text-muted-foreground">{c.detail}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {blocked ? (
+              <p className="mt-2 text-xs text-destructive">
+                Corrija os itens marcados em vermelho para liberar a criação do acordo.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+
+
         <DialogFooter>
           {confirmed ? (
             <>
