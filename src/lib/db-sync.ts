@@ -1460,9 +1460,15 @@ async function performAgreementSync(client: Client, productIds?: string[]): Prom
  * Serializa todas as versões de um acordo por cliente. Uma requisição mais
  * antiga nunca pode terminar depois e substituir parcelas recém-pagas.
  */
-export function dbSyncAgreementForClientAsync(client: Client): Promise<void> {
+export function dbSyncAgreementForClientAsync(
+  client: Client,
+  productIds?: string[],
+): Promise<void> {
   const previous = mgmvWriteQueues.get(client.id) ?? Promise.resolve();
-  const current = previous.catch(() => undefined).then(() => performAgreementSync(client));
+  const current = previous
+    .catch(() => undefined)
+    .then(() => performAgreementSync(client, productIds));
+
   mgmvWriteQueues.set(client.id, current);
   void current.finally(() => {
     if (mgmvWriteQueues.get(client.id) === current) mgmvWriteQueues.delete(client.id);
