@@ -1603,6 +1603,7 @@ export type Database = {
           _client_id: string
           _client_mgmv: Json
           _installments: Json
+          _product_ids?: string[]
         }
         Returns: Json
       }
