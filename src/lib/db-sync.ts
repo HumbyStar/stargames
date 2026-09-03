@@ -1360,6 +1360,9 @@ async function performAgreementSync(
           // transação marca/desvincula os produtos — sem depender de uma
           // gravação de status anterior ter chegado ao banco.
           ...(productIds ? { _product_ids: productIds } : {}),
+          // Novo acordo por cima de um acordo já quitado: a transação arquiva
+          // o anterior e recria do zero, permitindo reusar os mesmos produtos.
+          ...(restart ? { _restart: true } : {}),
         });
         if (error) throwDb("syncAgreement.atomic", error);
       })(),
