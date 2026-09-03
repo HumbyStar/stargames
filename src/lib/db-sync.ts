@@ -1339,7 +1339,11 @@ function throwDb(step: string, error: unknown): never {
 
 const mgmvWriteQueues = new Map<string, Promise<void>>();
 
-async function performAgreementSync(client: Client, productIds?: string[]): Promise<void> {
+async function performAgreementSync(
+  client: Client,
+  productIds?: string[],
+  restart?: boolean,
+): Promise<void> {
   const agreementId = client.id;
 
   if (!isLocalMode()) {
