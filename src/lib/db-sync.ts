@@ -1371,7 +1371,8 @@ async function performAgreementSync(
           ...(productIds ? { _product_ids: productIds } : {}),
           // Novo acordo por cima de um acordo já quitado: a transação arquiva
           // o anterior e recria do zero, permitindo reusar os mesmos produtos.
-          ...(restart ? { _restart: true } : {}),
+          _restart: !!restart,
+
         });
         if (error) throwDb("syncAgreement.atomic", error);
       })(),
