@@ -48,7 +48,8 @@ import {
 } from "./db-sync";
 import type { RealtimeRowEvent } from "./db-sync";
 import { suspendRealtimeRefresh } from "./db-sync";
-import { getCurrentUserInfo } from "./db-sync";
+import { getCurrentUserInfo, hasPendingLocalMutation } from "./db-sync";
+
 import type { ImportDiagnostics } from "./db-sync";
 export type { ImportDiagnostics } from "./db-sync";
 import type { AppEnv, DbSnapshot } from "./db-sync";
@@ -58,6 +59,22 @@ import { recalcPendingDueDates } from "./mgmv-schedule";
 import { canonicalPhone } from "./list-import-parser";
 
 export type FinancialStatus = "Pago" | "Reserva" | "Pendente" | "MGMV";
+
+/**
+ * Regra ÚNICA de exibição: um produto consolidado em MGMV nunca fica com
+ * situação "Em Aberto" na tela (isso duplicava cobrança e fazia o item pular
+ * entre as tabelas conforme o caminho que atualizou por último).
+ * Todos os caminhos de leitura (snapshot, releitura da ficha e tempo real)
+ * passam por aqui.
+ */
+export function normalizeProductSituation<T extends { financialStatus: string; situation: string }>(
+  p: T,
+): T {
+  return p.financialStatus === "MGMV" && p.situation === "Em Aberto"
+    ? { ...p, situation: "Resolvido" }
+    : p;
+}
+
 
 /**
  * Resultado do registro de pagamento parcial em uma parcela MGMV.
@@ -541,7 +558,19 @@ interface State {
   setMGMVAgreementConfirmed: (
     clientId: string,
     agreement: MGMVAgreement | undefined,
+    productIds?: string[],
   ) => Promise<void>;
+  /**
+   * Cria/atualiza o acordo e vincula os produtos escolhidos em UMA ÚNICA
+   * transação no banco (sem depender de gravações de status anteriores).
+   * Só resolve depois da confirmação e da releitura da ficha.
+   */
+  createMGMVAgreementConfirmed: (
+    clientId: string,
+    agreement: MGMVAgreement,
+    productIds: string[],
+  ) => Promise<void>;
+
 
   /**
    * Confirma a quitação do acordo MGMV: marca o acordo como concluído
@@ -799,14 +828,10 @@ export const useStore = create<State>()((set, get) => ({
           }
           set({
             clients: keepOnPartial(snap.clients, get().clients, snap.partial),
-            products: keepOnPartial(snap.products, get().products, snap.partial).map((p) =>
-              // Fix retroativo: produtos que já foram consolidados em MGMV
-              // não devem permanecer com situation "Em Aberto" (causava dupla
-              // cobrança e inflação em "Valores a Receber").
-              p.financialStatus === "MGMV" && p.situation === "Em Aberto"
-                ? { ...p, situation: "Resolvido" as Situation }
-                : p,
+            products: keepOnPartial(snap.products, get().products, snap.partial).map(
+              normalizeProductSituation,
             ),
+
             importHistory: snap.importHistory,
             preferences: { ...defaultPreferences, ...snap.preferences },
             rules: { ...defaultRules, ...snap.rules },
@@ -855,11 +880,8 @@ export const useStore = create<State>()((set, get) => ({
             if (!snap.partial) envSnapshots.set(env, snap);
             set({
               clients: snap.clients,
-              products: snap.products.map((p) =>
-                p.financialStatus === "MGMV" && p.situation === "Em Aberto"
-                  ? { ...p, situation: "Resolvido" as Situation }
-                  : p,
-              ),
+              products: snap.products.map(normalizeProductSituation),
+
               importHistory: snap.importHistory,
               currentEnv: env,
               dataLoaded: true,
@@ -909,11 +931,8 @@ export const useStore = create<State>()((set, get) => ({
             );
             set({
               clients: nextClients,
-              products: nextProducts.map((p) =>
-                p.financialStatus === "MGMV" && p.situation === "Em Aberto"
-                  ? { ...p, situation: "Resolvido" as Situation }
-                  : p,
-              ),
+              products: nextProducts.map(normalizeProductSituation),
+
               importHistory: snap.importHistory,
               currentEnv: env,
               envSyncing: false,
@@ -944,6 +963,10 @@ export const useStore = create<State>()((set, get) => ({
         }
         const id = String(row.id ?? "");
         if (!id) return;
+        // Eco de realtime não pode desfazer o que o usuário acabou de gravar:
+        // enquanto houver alteração local recente para a linha, ela é ignorada
+        // (a releitura confirmada pelo banco cuida do estado final).
+        if (hasPendingLocalMutation(e.table === "clients" ? "client" : "product", id)) return;
         if (e.eventType === "DELETE") {
           if (e.table === "clients") {
             set((s) => ({
@@ -964,7 +987,10 @@ export const useStore = create<State>()((set, get) => ({
               : [...s.clients, client],
           }));
         } else {
-          const product = rowToProduct(row as unknown as Parameters<typeof rowToProduct>[0]);
+          const product = normalizeProductSituation(
+            rowToProduct(row as unknown as Parameters<typeof rowToProduct>[0]),
+          );
+
           set((s) => ({
             products: s.products.some((p) => p.id === product.id)
               ? s.products.map((p) => (p.id === product.id ? product : p))
@@ -995,9 +1021,10 @@ export const useStore = create<State>()((set, get) => ({
             ...s.products.filter((p) => p.clientId !== clientId && !productIds.has(p.id)),
             ...reconcileWithLocalMutations(
               "product",
-              products,
+              products.map(normalizeProductSituation),
               s.products.filter((p) => p.clientId === clientId),
             ),
+
           ],
         }));
       },
@@ -1450,7 +1477,7 @@ export const useStore = create<State>()((set, get) => ({
        * Em caso de falha (ex.: recusa por permissão), desfaz o estado local
        * para a tela nunca mostrar um "sucesso" que não existe no banco.
        */
-      setMGMVAgreementConfirmed: async (clientId, agreement) => {
+      setMGMVAgreementConfirmed: async (clientId, agreement, productIds) => {
         const prevClients = get().clients;
         markLocalMutation("client", [clientId], "upsert");
         set((s) => ({
@@ -1467,7 +1494,7 @@ export const useStore = create<State>()((set, get) => ({
         try {
           const updated = get().clients.find((c) => c.id === clientId);
           if (!updated) throw new Error("Cliente não encontrado.");
-          await dbSyncAgreementForClientAsync(updated);
+          await dbSyncAgreementForClientAsync(updated, productIds);
           clearLocalMutation("client", [clientId]);
         } catch (err) {
           clearLocalMutation("client", [clientId]);
@@ -1476,6 +1503,48 @@ export const useStore = create<State>()((set, get) => ({
           throw err;
         }
       },
+
+      createMGMVAgreementConfirmed: async (clientId, agreement, productIds) => {
+        const prevClients = get().clients;
+        const prevProducts = get().products;
+        const ids = Array.from(new Set(productIds));
+        markLocalMutation("client", [clientId], "upsert");
+        if (ids.length > 0) markLocalMutation("product", ids, "upsert");
+        // Estado otimista: acordo + itens do acordo em um passo só.
+        set((s) => ({
+          clients: s.clients.map((c) =>
+            c.id === clientId
+              ? { ...c, mgmv: recalcPendingDueDates(agreement), clientType: "mgmv" as const }
+              : c,
+          ),
+          products: s.products.map((p) =>
+            ids.includes(p.id)
+              ? normalizeProductSituation({ ...p, financialStatus: "MGMV" as FinancialStatus })
+              : p,
+          ),
+        }));
+        get().setRowsBusy("client", [clientId], true);
+        try {
+          const updated = get().clients.find((c) => c.id === clientId);
+          if (!updated) throw new Error("Cliente não encontrado.");
+          // Transação única no banco: acordo, parcelas e vínculo dos produtos.
+          await dbSyncAgreementForClientAsync(updated, ids);
+          clearLocalMutation("client", [clientId]);
+          clearLocalMutation("product", ids);
+          // Releitura direcionada: a tela passa a mostrar o que está gravado.
+          await get().refreshClientData(clientId);
+        } catch (err) {
+          clearLocalMutation("client", [clientId]);
+          clearLocalMutation("product", ids);
+          set({ clients: prevClients, products: prevProducts });
+          console.error("createMGMVAgreementConfirmed failed", err);
+          throw err;
+        } finally {
+          get().setRowsBusy("client", [clientId], false);
+        }
+      },
+
+
 
       applyAiReviewToAgreement: async (clientId, nextAgreement, meta) => {
         const prevClient = get().clients.find((c) => c.id === clientId);

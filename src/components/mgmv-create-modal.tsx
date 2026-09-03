@@ -12,8 +12,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Lock, CheckCircle2, Loader2, RotateCcw } from "lucide-react";
+import { Lock, CheckCircle2, Loader2, RotateCcw, AlertTriangle, ShieldCheck, XCircle } from "lucide-react";
 import { toast } from "sonner";
+import { usePermissions } from "@/lib/use-permissions";
+import { runMgmvPreflight, preflightBlocked } from "@/lib/mgmv-preflight";
 import {
   formatBRL,
   formatDateBR,
@@ -23,6 +25,7 @@ import {
   type MGMVAgreement,
   type MGMVInstallment,
 } from "@/lib/store";
+
 
 function addMonthsIso(iso: string, months: number): string {
   const d = new Date(iso);
@@ -58,8 +61,9 @@ export function MgmvCreateModal({
   products,
   preselectedProductId,
 }: Props) {
-  const setMGMVAgreementConfirmed = useStore((s) => s.setMGMVAgreementConfirmed);
-  const updateProduct = useStore((s) => s.updateProduct);
+  const createMGMVAgreementConfirmed = useStore((s) => s.createMGMVAgreementConfirmed);
+  const { hasPermission } = usePermissions();
+
 
   // Draft vs. Confirmed state — once confirmed the form is locked to prevent
   // accidental edits to an agreement that has already been persisted.
@@ -151,8 +155,41 @@ export function MgmvCreateModal({
     return out;
   }, [installmentsCount, installmentValue, firstDueIso]);
 
+  // Conferência assistida: roda a cada mudança do formulário e só libera a
+  // gravação quando nenhuma regra estiver bloqueando.
+  const preflight = useMemo(
+    () =>
+      runMgmvPreflight({
+        selected: products
+          .filter((p) => selected.has(p.id))
+          .map((p) => ({
+            id: p.id,
+            name: p.name,
+            financialStatus: p.financialStatus,
+            totalValue: p.totalValue,
+            paidValue: p.paidValue,
+          })),
+        hasActiveAgreement: !!client.mgmv && !client.mgmv.completedAt,
+        hasCompletedAgreement: !!client.mgmv?.completedAt,
+        total,
+        entry,
+        installments: schedule.map((i) => ({
+          number: i.number,
+          value: i.value,
+          dueDate: i.dueDate,
+        })),
+        canWrite: hasPermission("clientes.edit"),
+      }),
+    [products, selected, client.mgmv, total, entry, schedule, hasPermission],
+  );
+  const blocked = preflightBlocked(preflight);
+
   const canSubmit =
-    selected.size > 0 && total > 0 && installmentsCount >= 1 && installmentValue > 0;
+    selected.size > 0 &&
+    total > 0 &&
+    installmentsCount >= 1 &&
+    installmentValue > 0 &&
+    !blocked;
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -173,15 +210,10 @@ export function MgmvCreateModal({
         installments: schedule,
         reviewStatus: "manually_reviewed",
       };
-      // Ordem importa: primeiro os produtos entram como MGMV, depois o acordo
-      // é gravado. A sincronização do acordo vincula os produtos pelo status,
-      // então inverter a ordem deixava itens fora da tabela do acordo.
-      for (const id of selected) {
-        updateProduct(id, { financialStatus: "MGMV" });
-      }
-      // Só confirmamos sucesso após o banco gravar o acordo e devolver os
-      // produtos vinculados — nada de "sucesso" que depois se desfaz.
-      await setMGMVAgreementConfirmed(client.id, agreement);
+      // Acordo, parcelas e vínculo dos produtos vão juntos numa única
+      // transação: nada de gravar status antes e o acordo depois (era isso
+      // que fazia produtos sumirem e reaparecerem).
+      await createMGMVAgreementConfirmed(client.id, agreement, Array.from(selected));
       // Limpa o rascunho salvo — o acordo agora existe de fato.
       setDraft(null);
       toast.success(
@@ -189,10 +221,6 @@ export function MgmvCreateModal({
       );
       setConfirmed(true);
     } catch (err) {
-      for (const id of selected) {
-        const prev = products.find((p) => p.id === id);
-        if (prev) updateProduct(id, { financialStatus: prev.financialStatus });
-      }
       toast.error(
         `Não foi possível criar o acordo: ${err instanceof Error ? err.message : "erro desconhecido"}`,
       );
@@ -200,6 +228,7 @@ export function MgmvCreateModal({
       setSubmitting(false);
     }
   };
+
 
 
   const discardDraft = () => {
@@ -398,6 +427,38 @@ export function MgmvCreateModal({
             </div>
           </div>
         </fieldset>
+
+        {!confirmed ? (
+          <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <ShieldCheck className="size-3.5" /> Conferência assistida
+            </div>
+            <ul className="space-y-1.5">
+              {preflight.map((c) => (
+                <li key={c.id} className="flex items-start gap-2 text-xs">
+                  {c.level === "ok" ? (
+                    <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-[color:var(--success)]" />
+                  ) : c.level === "warn" ? (
+                    <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" />
+                  ) : (
+                    <XCircle className="mt-0.5 size-3.5 shrink-0 text-destructive" />
+                  )}
+                  <span>
+                    <span className="font-medium">{c.label}:</span>{" "}
+                    <span className="text-muted-foreground">{c.detail}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {blocked ? (
+              <p className="mt-2 text-xs text-destructive">
+                Corrija os itens marcados em vermelho para liberar a criação do acordo.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+
 
         <DialogFooter>
           {confirmed ? (

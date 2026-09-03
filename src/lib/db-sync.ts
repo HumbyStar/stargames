@@ -262,6 +262,16 @@ function mutationFor(kind: MutationKind, id: string) {
 }
 
 /**
+ * `true` quando existe uma alteração local recente para o registro: eventos de
+ * realtime (inclusive o eco da própria gravação anterior) não podem sobrescrever
+ * o que o usuário acabou de fazer na tela.
+ */
+export function hasPendingLocalMutation(kind: MutationKind, id: string): boolean {
+  return mutationFor(kind, id) !== null;
+}
+
+
+/**
  * Aplica um snapshot do banco respeitando as mutações locais recentes:
  * - id excluído há pouco nunca ressuscita;
  * - id criado/alterado há pouco e ausente na leitura é preservado.
@@ -1303,14 +1313,24 @@ export function buildInstallmentRows(client: Client): Record<string, unknown>[] 
 export function describeDbError(error: unknown): string {
   const e = error as { code?: string; message?: string } | null;
   const msg = e?.message ?? "";
-  if (e?.code === "42501" || /row-level security|permission denied/i.test(msg)) {
-    return "Sem permissão para gravar esta alteração no banco.";
+  if (e?.code === "42501" || /row-level security|permission denied|forbidden/i.test(msg)) {
+    return "Sem permissão para gravar esta alteração no banco. Peça acesso a um administrador.";
+  }
+  if (e?.code === "P0002" || /client_not_found/i.test(msg)) {
+    return "Cliente não encontrado no ambiente ativo. Recarregue a ficha e tente novamente.";
+  }
+  if (e?.code === "55000" || /agreement_already_completed/i.test(msg)) {
+    return "Este acordo MGMV já está quitado e não pode ser alterado.";
+  }
+  if (e?.code === "22023" || /agreement_requires_installments/i.test(msg)) {
+    return "O acordo precisa ter ao menos uma parcela.";
   }
   if (/Failed to fetch|NetworkError/i.test(msg)) {
     return "Sem conexão com o banco. A alteração não foi salva.";
   }
   return msg || "Falha ao gravar no banco.";
 }
+
 
 function throwDb(step: string, error: unknown): never {
   logErr(step, error);
@@ -1319,7 +1339,7 @@ function throwDb(step: string, error: unknown): never {
 
 const mgmvWriteQueues = new Map<string, Promise<void>>();
 
-async function performAgreementSync(client: Client): Promise<void> {
+async function performAgreementSync(client: Client, productIds?: string[]): Promise<void> {
   const agreementId = client.id;
 
   if (!isLocalMode()) {
@@ -1332,12 +1352,17 @@ async function performAgreementSync(client: Client): Promise<void> {
           _agreement: agreement as Json,
           _installments: installments as Json,
           _client_mgmv: (client.mgmv ?? null) as Json,
+          // Quando a UI conhece exatamente os itens do acordo, a própria
+          // transação marca/desvincula os produtos — sem depender de uma
+          // gravação de status anterior ter chegado ao banco.
+          ...(productIds ? { _product_ids: productIds } : {}),
         });
         if (error) throwDb("syncAgreement.atomic", error);
       })(),
     );
     return;
   }
+
 
   if (!client.mgmv || client.mgmv.installments.length === 0) {
     // Sem acordo → remove agreement (cascata apaga parcelas) e zera flags.
@@ -1399,8 +1424,25 @@ async function performAgreementSync(client: Client): Promise<void> {
     .gt("installment_number", sorted.length);
   if (delExtra.error) logErr("syncAgreement.delExtraInstallments", delExtra.error);
 
+  // Quando a UI informou os itens do acordo, aplica o status antes das flags.
+  if (productIds && productIds.length > 0) {
+    const setMgmv = await sb()
+      .from("products")
+      .update({ financial_status: "MGMV" })
+      .in("id", productIds);
+    if (setMgmv.error) throwDb("syncAgreement.setMgmvStatus", setMgmv.error);
+    const clearMgmv = await sb()
+      .from("products")
+      .update({ financial_status: "Em Aberto" })
+      .eq("client_id", client.id)
+      .eq("financial_status", "MGMV")
+      .not("id", "in", `(${productIds.join(",")})`);
+    if (clearMgmv.error) throwDb("syncAgreement.clearMgmvStatus", clearMgmv.error);
+  }
+
   // Atualiza flags dos produtos do cliente: produtos com financialStatus
   // = 'MGMV' viram parte do acordo; demais saem do acordo.
+
   const mgmvProducts = await sb()
     .from("products")
     .update({
@@ -1428,9 +1470,15 @@ async function performAgreementSync(client: Client): Promise<void> {
  * Serializa todas as versões de um acordo por cliente. Uma requisição mais
  * antiga nunca pode terminar depois e substituir parcelas recém-pagas.
  */
-export function dbSyncAgreementForClientAsync(client: Client): Promise<void> {
+export function dbSyncAgreementForClientAsync(
+  client: Client,
+  productIds?: string[],
+): Promise<void> {
   const previous = mgmvWriteQueues.get(client.id) ?? Promise.resolve();
-  const current = previous.catch(() => undefined).then(() => performAgreementSync(client));
+  const current = previous
+    .catch(() => undefined)
+    .then(() => performAgreementSync(client, productIds));
+
   mgmvWriteQueues.set(client.id, current);
   void current.finally(() => {
     if (mgmvWriteQueues.get(client.id) === current) mgmvWriteQueues.delete(client.id);
