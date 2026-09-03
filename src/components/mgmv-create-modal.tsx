@@ -155,8 +155,41 @@ export function MgmvCreateModal({
     return out;
   }, [installmentsCount, installmentValue, firstDueIso]);
 
+  // Conferência assistida: roda a cada mudança do formulário e só libera a
+  // gravação quando nenhuma regra estiver bloqueando.
+  const preflight = useMemo(
+    () =>
+      runMgmvPreflight({
+        selected: products
+          .filter((p) => selected.has(p.id))
+          .map((p) => ({
+            id: p.id,
+            name: p.name,
+            financialStatus: p.financialStatus,
+            totalValue: p.totalValue,
+            paidValue: p.paidValue,
+          })),
+        hasActiveAgreement: !!client.mgmv && !client.mgmv.completedAt,
+        hasCompletedAgreement: !!client.mgmv?.completedAt,
+        total,
+        entry,
+        installments: schedule.map((i) => ({
+          number: i.number,
+          value: i.value,
+          dueDate: i.dueDate,
+        })),
+        canWrite: hasPermission("clientes.edit"),
+      }),
+    [products, selected, client.mgmv, total, entry, schedule, hasPermission],
+  );
+  const blocked = preflightBlocked(preflight);
+
   const canSubmit =
-    selected.size > 0 && total > 0 && installmentsCount >= 1 && installmentValue > 0;
+    selected.size > 0 &&
+    total > 0 &&
+    installmentsCount >= 1 &&
+    installmentValue > 0 &&
+    !blocked;
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -177,15 +210,10 @@ export function MgmvCreateModal({
         installments: schedule,
         reviewStatus: "manually_reviewed",
       };
-      // Ordem importa: primeiro os produtos entram como MGMV, depois o acordo
-      // é gravado. A sincronização do acordo vincula os produtos pelo status,
-      // então inverter a ordem deixava itens fora da tabela do acordo.
-      for (const id of selected) {
-        updateProduct(id, { financialStatus: "MGMV" });
-      }
-      // Só confirmamos sucesso após o banco gravar o acordo e devolver os
-      // produtos vinculados — nada de "sucesso" que depois se desfaz.
-      await setMGMVAgreementConfirmed(client.id, agreement);
+      // Acordo, parcelas e vínculo dos produtos vão juntos numa única
+      // transação: nada de gravar status antes e o acordo depois (era isso
+      // que fazia produtos sumirem e reaparecerem).
+      await createMGMVAgreementConfirmed(client.id, agreement, Array.from(selected));
       // Limpa o rascunho salvo — o acordo agora existe de fato.
       setDraft(null);
       toast.success(
@@ -193,10 +221,6 @@ export function MgmvCreateModal({
       );
       setConfirmed(true);
     } catch (err) {
-      for (const id of selected) {
-        const prev = products.find((p) => p.id === id);
-        if (prev) updateProduct(id, { financialStatus: prev.financialStatus });
-      }
       toast.error(
         `Não foi possível criar o acordo: ${err instanceof Error ? err.message : "erro desconhecido"}`,
       );
@@ -204,6 +228,7 @@ export function MgmvCreateModal({
       setSubmitting(false);
     }
   };
+
 
 
   const discardDraft = () => {
