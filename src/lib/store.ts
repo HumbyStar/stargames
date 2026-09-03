@@ -61,6 +61,22 @@ import { canonicalPhone } from "./list-import-parser";
 export type FinancialStatus = "Pago" | "Reserva" | "Pendente" | "MGMV";
 
 /**
+ * Regra ÚNICA de exibição: um produto consolidado em MGMV nunca fica com
+ * situação "Em Aberto" na tela (isso duplicava cobrança e fazia o item pular
+ * entre as tabelas conforme o caminho que atualizou por último).
+ * Todos os caminhos de leitura (snapshot, releitura da ficha e tempo real)
+ * passam por aqui.
+ */
+export function normalizeProductSituation<T extends { financialStatus: string; situation: string }>(
+  p: T,
+): T {
+  return p.financialStatus === "MGMV" && p.situation === "Em Aberto"
+    ? { ...p, situation: "Resolvido" }
+    : p;
+}
+
+
+/**
  * Resultado do registro de pagamento parcial em uma parcela MGMV.
  * Sucesso inclui `becameQuitado` para o caller decidir toasts/refresh.
  */
