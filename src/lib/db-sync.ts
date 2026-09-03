@@ -1329,7 +1329,7 @@ function throwDb(step: string, error: unknown): never {
 
 const mgmvWriteQueues = new Map<string, Promise<void>>();
 
-async function performAgreementSync(client: Client): Promise<void> {
+async function performAgreementSync(client: Client, productIds?: string[]): Promise<void> {
   const agreementId = client.id;
 
   if (!isLocalMode()) {
@@ -1342,12 +1342,17 @@ async function performAgreementSync(client: Client): Promise<void> {
           _agreement: agreement as Json,
           _installments: installments as Json,
           _client_mgmv: (client.mgmv ?? null) as Json,
+          // Quando a UI conhece exatamente os itens do acordo, a própria
+          // transação marca/desvincula os produtos — sem depender de uma
+          // gravação de status anterior ter chegado ao banco.
+          ...(productIds ? { _product_ids: productIds } : {}),
         });
         if (error) throwDb("syncAgreement.atomic", error);
       })(),
     );
     return;
   }
+
 
   if (!client.mgmv || client.mgmv.installments.length === 0) {
     // Sem acordo → remove agreement (cascata apaga parcelas) e zera flags.
