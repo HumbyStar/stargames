@@ -1414,8 +1414,25 @@ async function performAgreementSync(client: Client, productIds?: string[]): Prom
     .gt("installment_number", sorted.length);
   if (delExtra.error) logErr("syncAgreement.delExtraInstallments", delExtra.error);
 
+  // Quando a UI informou os itens do acordo, aplica o status antes das flags.
+  if (productIds && productIds.length > 0) {
+    const setMgmv = await sb()
+      .from("products")
+      .update({ financial_status: "MGMV" })
+      .in("id", productIds);
+    if (setMgmv.error) throwDb("syncAgreement.setMgmvStatus", setMgmv.error);
+    const clearMgmv = await sb()
+      .from("products")
+      .update({ financial_status: "Em Aberto" })
+      .eq("client_id", client.id)
+      .eq("financial_status", "MGMV")
+      .not("id", "in", `(${productIds.join(",")})`);
+    if (clearMgmv.error) throwDb("syncAgreement.clearMgmvStatus", clearMgmv.error);
+  }
+
   // Atualiza flags dos produtos do cliente: produtos com financialStatus
   // = 'MGMV' viram parte do acordo; demais saem do acordo.
+
   const mgmvProducts = await sb()
     .from("products")
     .update({
