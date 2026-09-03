@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.save_mgmv_agreement_atomic(uuid, jsonb, jsonb, jsonb, uuid[]);

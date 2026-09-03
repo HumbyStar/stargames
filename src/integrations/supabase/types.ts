@@ -1597,28 +1597,17 @@ export type Database = {
         }[]
       }
       product_reports: { Args: { _limit?: number }; Returns: Json }
-      save_mgmv_agreement_atomic:
-        | {
-            Args: {
-              _agreement: Json
-              _client_id: string
-              _client_mgmv: Json
-              _installments: Json
-              _product_ids?: string[]
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              _agreement: Json
-              _client_id: string
-              _client_mgmv: Json
-              _installments: Json
-              _product_ids?: string[]
-              _restart?: boolean
-            }
-            Returns: Json
-          }
+      save_mgmv_agreement_atomic: {
+        Args: {
+          _agreement: Json
+          _client_id: string
+          _client_mgmv: Json
+          _installments: Json
+          _product_ids?: string[]
+          _restart?: boolean
+        }
+        Returns: Json
+      }
       segment_client_products: {
         Args: {
           _basis?: string

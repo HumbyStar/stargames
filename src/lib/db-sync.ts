@@ -1328,8 +1328,17 @@ export function describeDbError(error: unknown): string {
   if (/Failed to fetch|NetworkError/i.test(msg)) {
     return "Sem conexão com o banco. A alteração não foi salva.";
   }
-  return msg || "Falha ao gravar no banco.";
+  if (e?.code === "PGRST203" || /best candidate function|is not unique/i.test(msg)) {
+    return "Não foi possível salvar agora por uma inconsistência interna do sistema. Tente novamente em instantes; se continuar, avise o suporte.";
+  }
+  if (e?.code === "PGRST301" || /JWT|not authenticated|session/i.test(msg)) {
+    return "Sua sessão expirou. Entre novamente para salvar a alteração.";
+  }
+  // Nunca repassar o texto técnico do banco para o usuário — ele já foi
+  // registrado no console por `logErr` para diagnóstico.
+  return "Não foi possível salvar a alteração agora. Tente novamente em instantes; se continuar, avise o suporte.";
 }
+
 
 
 function throwDb(step: string, error: unknown): never {
@@ -1362,7 +1371,8 @@ async function performAgreementSync(
           ...(productIds ? { _product_ids: productIds } : {}),
           // Novo acordo por cima de um acordo já quitado: a transação arquiva
           // o anterior e recria do zero, permitindo reusar os mesmos produtos.
-          ...(restart ? { _restart: true } : {}),
+          _restart: !!restart,
+
         });
         if (error) throwDb("syncAgreement.atomic", error);
       })(),
