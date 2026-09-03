@@ -1480,11 +1480,12 @@ async function performAgreementSync(
 export function dbSyncAgreementForClientAsync(
   client: Client,
   productIds?: string[],
+  restart?: boolean,
 ): Promise<void> {
   const previous = mgmvWriteQueues.get(client.id) ?? Promise.resolve();
   const current = previous
     .catch(() => undefined)
-    .then(() => performAgreementSync(client, productIds));
+    .then(() => performAgreementSync(client, productIds, restart));
 
   mgmvWriteQueues.set(client.id, current);
   void current.finally(() => {
