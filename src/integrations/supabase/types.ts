@@ -1531,6 +1531,7 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["app_env"]
       }
+      dashboard_aggregates: { Args: never; Returns: Json }
       env_row_visible: {
         Args: { _env: Database["public"]["Enums"]["app_env"]; _owner: string }
         Returns: boolean
