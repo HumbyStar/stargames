@@ -1477,7 +1477,7 @@ export const useStore = create<State>()((set, get) => ({
        * Em caso de falha (ex.: recusa por permissão), desfaz o estado local
        * para a tela nunca mostrar um "sucesso" que não existe no banco.
        */
-      setMGMVAgreementConfirmed: async (clientId, agreement) => {
+      setMGMVAgreementConfirmed: async (clientId, agreement, productIds) => {
         const prevClients = get().clients;
         markLocalMutation("client", [clientId], "upsert");
         set((s) => ({
@@ -1494,7 +1494,7 @@ export const useStore = create<State>()((set, get) => ({
         try {
           const updated = get().clients.find((c) => c.id === clientId);
           if (!updated) throw new Error("Cliente não encontrado.");
-          await dbSyncAgreementForClientAsync(updated);
+          await dbSyncAgreementForClientAsync(updated, productIds);
           clearLocalMutation("client", [clientId]);
         } catch (err) {
           clearLocalMutation("client", [clientId]);
@@ -1503,6 +1503,48 @@ export const useStore = create<State>()((set, get) => ({
           throw err;
         }
       },
+
+      createMGMVAgreementConfirmed: async (clientId, agreement, productIds) => {
+        const prevClients = get().clients;
+        const prevProducts = get().products;
+        const ids = Array.from(new Set(productIds));
+        markLocalMutation("client", [clientId], "upsert");
+        if (ids.length > 0) markLocalMutation("product", ids, "upsert");
+        // Estado otimista: acordo + itens do acordo em um passo só.
+        set((s) => ({
+          clients: s.clients.map((c) =>
+            c.id === clientId
+              ? { ...c, mgmv: recalcPendingDueDates(agreement), clientType: "mgmv" as const }
+              : c,
+          ),
+          products: s.products.map((p) =>
+            ids.includes(p.id)
+              ? normalizeProductSituation({ ...p, financialStatus: "MGMV" as FinancialStatus })
+              : p,
+          ),
+        }));
+        get().setRowsBusy("client", [clientId], true);
+        try {
+          const updated = get().clients.find((c) => c.id === clientId);
+          if (!updated) throw new Error("Cliente não encontrado.");
+          // Transação única no banco: acordo, parcelas e vínculo dos produtos.
+          await dbSyncAgreementForClientAsync(updated, ids);
+          clearLocalMutation("client", [clientId]);
+          clearLocalMutation("product", ids);
+          // Releitura direcionada: a tela passa a mostrar o que está gravado.
+          await get().refreshClientData(clientId);
+        } catch (err) {
+          clearLocalMutation("client", [clientId]);
+          clearLocalMutation("product", ids);
+          set({ clients: prevClients, products: prevProducts });
+          console.error("createMGMVAgreementConfirmed failed", err);
+          throw err;
+        } finally {
+          get().setRowsBusy("client", [clientId], false);
+        }
+      },
+
+
 
       applyAiReviewToAgreement: async (clientId, nextAgreement, meta) => {
         const prevClient = get().clients.find((c) => c.id === clientId);
