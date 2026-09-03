@@ -262,6 +262,16 @@ function mutationFor(kind: MutationKind, id: string) {
 }
 
 /**
+ * `true` quando existe uma alteração local recente para o registro: eventos de
+ * realtime (inclusive o eco da própria gravação anterior) não podem sobrescrever
+ * o que o usuário acabou de fazer na tela.
+ */
+export function hasPendingLocalMutation(kind: MutationKind, id: string): boolean {
+  return mutationFor(kind, id) !== null;
+}
+
+
+/**
  * Aplica um snapshot do banco respeitando as mutações locais recentes:
  * - id excluído há pouco nunca ressuscita;
  * - id criado/alterado há pouco e ausente na leitura é preservado.
