@@ -558,7 +558,19 @@ interface State {
   setMGMVAgreementConfirmed: (
     clientId: string,
     agreement: MGMVAgreement | undefined,
+    productIds?: string[],
   ) => Promise<void>;
+  /**
+   * Cria/atualiza o acordo e vincula os produtos escolhidos em UMA ÚNICA
+   * transação no banco (sem depender de gravações de status anteriores).
+   * Só resolve depois da confirmação e da releitura da ficha.
+   */
+  createMGMVAgreementConfirmed: (
+    clientId: string,
+    agreement: MGMVAgreement,
+    productIds: string[],
+  ) => Promise<void>;
+
 
   /**
    * Confirma a quitação do acordo MGMV: marca o acordo como concluído
