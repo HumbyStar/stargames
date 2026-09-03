@@ -1303,14 +1303,24 @@ export function buildInstallmentRows(client: Client): Record<string, unknown>[] 
 export function describeDbError(error: unknown): string {
   const e = error as { code?: string; message?: string } | null;
   const msg = e?.message ?? "";
-  if (e?.code === "42501" || /row-level security|permission denied/i.test(msg)) {
-    return "Sem permissão para gravar esta alteração no banco.";
+  if (e?.code === "42501" || /row-level security|permission denied|forbidden/i.test(msg)) {
+    return "Sem permissão para gravar esta alteração no banco. Peça acesso a um administrador.";
+  }
+  if (e?.code === "P0002" || /client_not_found/i.test(msg)) {
+    return "Cliente não encontrado no ambiente ativo. Recarregue a ficha e tente novamente.";
+  }
+  if (e?.code === "55000" || /agreement_already_completed/i.test(msg)) {
+    return "Este acordo MGMV já está quitado e não pode ser alterado.";
+  }
+  if (e?.code === "22023" || /agreement_requires_installments/i.test(msg)) {
+    return "O acordo precisa ter ao menos uma parcela.";
   }
   if (/Failed to fetch|NetworkError/i.test(msg)) {
     return "Sem conexão com o banco. A alteração não foi salva.";
   }
   return msg || "Falha ao gravar no banco.";
 }
+
 
 function throwDb(step: string, error: unknown): never {
   logErr(step, error);
