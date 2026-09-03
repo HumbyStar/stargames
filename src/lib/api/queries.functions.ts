@@ -458,94 +458,18 @@ export interface DashboardAggregates {
   }>;
 }
 
-// (helper `countRows` removido — as contagens do dashboard usam chamadas
-// diretas `supabase.from(...).select('id', { count: 'exact', head: true })`).
-
+// As contagens do dashboard vêm de UMA única RPC (`dashboard_aggregates`),
+// que faz um scan por tabela em vez de ~22 counts exatos em paralelo (que
+// estouravam o statement timeout). Se a RPC falhar, propagamos o erro: é
+// melhor manter os últimos valores/placeholders do que exibir zeros falsos.
 export const getDashboardAggregates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<DashboardAggregates> => {
     const { supabase } = context;
     const nowIso = new Date().toISOString();
 
-    // Rodamos todas as contagens em paralelo. Cada chamada é `head:true`,
-    // então o Postgres retorna apenas o count.
-    const [
-      totalClients,
-      totalProducts,
-      reservasAtivas,
-      reservasVencidas,
-      pendencias,
-      pendenciasVencidas,
-      pagosAgEnvio,
-      enviados,
-      desistencias,
-      abandonos,
-      retirar,
-      retirados,
-      removidos,
-      clientesMGMV,
-      mgmvVencidas,
-      cobrancaAtiva,
-      aberto,
-      finPago,
-      finReserva,
-      finMGMV,
-      finPend,
-      alertsRes,
-    ] = await Promise.all([
-      supabase.from("clients").select("id", { count: "exact", head: true }),
-      supabase.from("products").select("id", { count: "exact", head: true }),
-      supabase
-        .from("products")
-        .select("id", { count: "exact", head: true })
-        .eq("financial_status", "Reserva")
-        .eq("situation", "Em Aberto"),
-      supabase
-        .from("products")
-        .select("id", { count: "exact", head: true })
-        .eq("financial_status", "Reserva")
-        .eq("situation", "Em Aberto")
-        .lt("due_date", nowIso),
-      supabase
-        .from("products")
-        .select("id", { count: "exact", head: true })
-        .eq("financial_status", "Pendente")
-        .eq("situation", "Em Aberto"),
-      supabase
-        .from("products")
-        .select("id", { count: "exact", head: true })
-        .eq("financial_status", "Pendente")
-        .eq("situation", "Em Aberto")
-        .lt("due_date", nowIso),
-      supabase
-        .from("products")
-        .select("id", { count: "exact", head: true })
-        .eq("financial_status", "Pago")
-        .eq("situation", "Em Aberto"),
-      supabase.from("products").select("id", { count: "exact", head: true }).eq("situation", "Enviado"),
-      supabase.from("products").select("id", { count: "exact", head: true }).eq("situation", "Desistiu"),
-      supabase.from("products").select("id", { count: "exact", head: true }).eq("situation", "Abandonou"),
-      supabase.from("products").select("id", { count: "exact", head: true }).eq("situation", "Retirar"),
-      supabase.from("products").select("id", { count: "exact", head: true }).eq("situation", "Retirado"),
-      supabase.from("products").select("id", { count: "exact", head: true }).eq("situation", "Removido"),
-      supabase.from("clients").select("id", { count: "exact", head: true }).eq("client_type", "mgmv"),
-      supabase
-        .from("mgmv_installments")
-        .select("id", { count: "exact", head: true })
-        .neq("status", "Paga")
-        .lt("due_date", nowIso),
-      supabase
-        .from("products")
-        .select("id", { count: "exact", head: true })
-        .in("financial_status", ["Reserva", "Pendente"])
-        .eq("situation", "Em Aberto")
-        .eq("included_in_mgmv", false)
-        .lt("due_date", nowIso),
-      supabase.from("products").select("id", { count: "exact", head: true }).eq("situation", "Em Aberto"),
-      supabase.from("products").select("id", { count: "exact", head: true }).eq("financial_status", "Pago"),
-      supabase.from("products").select("id", { count: "exact", head: true }).eq("financial_status", "Reserva"),
-      supabase.from("products").select("id", { count: "exact", head: true }).eq("financial_status", "MGMV"),
-      supabase.from("products").select("id", { count: "exact", head: true }).eq("financial_status", "Pendente"),
+    const [aggRes, alertsRes] = await Promise.all([
+      supabase.rpc("dashboard_aggregates"),
       supabase
         .from("products")
         .select("id,client_id,name,total_value,paid_value,financial_status,clients(name)")
@@ -557,15 +481,13 @@ export const getDashboardAggregates = createServerFn({ method: "POST" })
         .limit(3),
     ]);
 
-    // Uma contagem que falha (timeout, rede instável) não pode derrubar o
-    // dashboard inteiro: registramos e seguimos com 0 naquela métrica.
-    const c = (r: { count: number | null; error: unknown }) => {
-      if (r.error) {
-        console.error("[getDashboardAggregates] count failed:", JSON.stringify(r.error));
-        return 0;
-      }
-      return r.count ?? 0;
-    };
+    if (aggRes.error) {
+      console.error("[getDashboardAggregates] rpc failed:", JSON.stringify(aggRes.error));
+      throw new Error("Não foi possível calcular os indicadores do dashboard.");
+    }
+
+    const agg = (aggRes.data ?? {}) as Record<string, number>;
+    const n = (k: keyof DashboardAggregates) => Number(agg[k as string] ?? 0);
 
     if (alertsRes.error) {
       console.error("[getDashboardAggregates] alerts failed:", JSON.stringify(alertsRes.error));
@@ -583,30 +505,31 @@ export const getDashboardAggregates = createServerFn({ method: "POST" })
     });
 
     return {
-      totalClients: c(totalClients),
-      totalProducts: c(totalProducts),
-      reservasAtivas: c(reservasAtivas),
-      reservasVencidas: c(reservasVencidas),
-      pendencias: c(pendencias),
-      pendenciasVencidas: c(pendenciasVencidas),
-      pagosAgEnvio: c(pagosAgEnvio),
-      enviados: c(enviados),
-      desistencias: c(desistencias),
-      abandonos: c(abandonos),
-      retirar: c(retirar),
-      retirados: c(retirados),
-      removidos: c(removidos),
-      clientesMGMV: c(clientesMGMV),
-      mgmvVencidas: c(mgmvVencidas),
-      cobrancaAtiva: c(cobrancaAtiva),
-      aberto: c(aberto),
-      finPago: c(finPago),
-      finReserva: c(finReserva),
-      finMGMV: c(finMGMV),
-      finPend: c(finPend),
+      totalClients: n("totalClients"),
+      totalProducts: n("totalProducts"),
+      reservasAtivas: n("reservasAtivas"),
+      reservasVencidas: n("reservasVencidas"),
+      pendencias: n("pendencias"),
+      pendenciasVencidas: n("pendenciasVencidas"),
+      pagosAgEnvio: n("pagosAgEnvio"),
+      enviados: n("enviados"),
+      desistencias: n("desistencias"),
+      abandonos: n("abandonos"),
+      retirar: n("retirar"),
+      retirados: n("retirados"),
+      removidos: n("removidos"),
+      clientesMGMV: n("clientesMGMV"),
+      mgmvVencidas: n("mgmvVencidas"),
+      cobrancaAtiva: n("cobrancaAtiva"),
+      aberto: n("aberto"),
+      finPago: n("finPago"),
+      finReserva: n("finReserva"),
+      finMGMV: n("finMGMV"),
+      finPend: n("finPend"),
       topAlerts,
     };
   });
+
 
 // ============================================================================
 // getClientDetail — cliente + agregados + primeira página de produtos.
