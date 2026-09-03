@@ -1009,9 +1009,10 @@ export const useStore = create<State>()((set, get) => ({
             ...s.products.filter((p) => p.clientId !== clientId && !productIds.has(p.id)),
             ...reconcileWithLocalMutations(
               "product",
-              products,
+              products.map(normalizeProductSituation),
               s.products.filter((p) => p.clientId === clientId),
             ),
+
           ],
         }));
       },
