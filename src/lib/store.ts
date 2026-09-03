@@ -868,11 +868,8 @@ export const useStore = create<State>()((set, get) => ({
             if (!snap.partial) envSnapshots.set(env, snap);
             set({
               clients: snap.clients,
-              products: snap.products.map((p) =>
-                p.financialStatus === "MGMV" && p.situation === "Em Aberto"
-                  ? { ...p, situation: "Resolvido" as Situation }
-                  : p,
-              ),
+              products: snap.products.map(normalizeProductSituation),
+
               importHistory: snap.importHistory,
               currentEnv: env,
               dataLoaded: true,
