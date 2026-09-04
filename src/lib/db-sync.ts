@@ -1448,9 +1448,11 @@ async function performAgreementSync(
       .update({ financial_status: "MGMV" })
       .in("id", productIds);
     if (setMgmv.error) throwDb("syncAgreement.setMgmvStatus", setMgmv.error);
+    // Produtos que saíram do acordo voltam a um status financeiro válido
+    // ("Em Aberto" não é status financeiro e sumia de todas as listas).
     const clearMgmv = await sb()
       .from("products")
-      .update({ financial_status: "Em Aberto" })
+      .update({ financial_status: "Pendente" })
       .eq("client_id", client.id)
       .eq("financial_status", "MGMV")
       .not("id", "in", `(${productIds.join(",")})`);
