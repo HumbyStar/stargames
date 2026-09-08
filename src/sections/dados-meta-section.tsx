@@ -191,7 +191,11 @@ export function DadosMetaSection() {
   };
 
   const leads = data?.leads ?? [];
-  const categories = useMemo(() => data?.categories ?? [], [data]);
+  const categories = useMemo(
+    () => setup.data?.categories ?? data?.categories ?? [],
+    [setup.data, data],
+  );
+  const platformStats = useMemo(() => setup.data?.platforms ?? [], [setup.data]);
 
   /** Opções do select: árvore ordenada com indentação por nível. */
   const categoryOptions = useMemo(() => {
@@ -224,12 +228,13 @@ export function DadosMetaSection() {
       l.situations.forEach((s) => situations.add(s));
       l.financialStatuses.forEach((s) => financial.add(s));
     }
+    for (const p of platformStats) if (p.platform) platforms.add(p.platform);
     return {
-      platforms: Array.from(platforms).sort().slice(0, 400),
+      platforms: Array.from(platforms).sort((a, b) => a.localeCompare(b, "pt-BR")),
       situations: Array.from(situations).sort(),
       financial: Array.from(financial).sort(),
     };
-  }, [leads]);
+  }, [leads, platformStats]);
 
   /**
    * "Todos os produtos" → nenhum recorte.
