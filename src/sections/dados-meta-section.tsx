@@ -60,9 +60,12 @@ import {
   EMPTY_FILTERS,
   META_HEADERS,
   analyticRow,
+  applyCategoryScope,
   buildAnalyticCsv,
   buildMetaCsv,
   buildPhoneList,
+  categoryPath,
+  categoryScopeIds,
   exportFileName,
   filterLeads,
   isLeadComplete,
@@ -73,6 +76,7 @@ import {
   type MetaFilters,
   type MetaLead,
 } from "@/lib/meta-export-format";
+
 import { buildXlsxBlob } from "@/lib/xlsx-writer";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
