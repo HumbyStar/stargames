@@ -488,3 +488,73 @@ export function summarizeFilters(f: MetaFilters): string {
   if (f.shipment !== "any") parts.push(f.shipment === "with" ? "com-envio" : "sem-envio");
   return parts.join("-") || "todos";
 }
+
+/* -------------------------------------------------------------------------- */
+/* Categorias hierárquicas                                                     */
+/* -------------------------------------------------------------------------- */
+
+/** Ids da categoria escolhida + todos os descendentes (qualquer profundidade). */
+export function categoryScopeIds(categories: MetaCategory[], rootId: string): Set<string> {
+  const children = new Map<string, string[]>();
+  for (const c of categories) {
+    if (!c.parentId) continue;
+    const list = children.get(c.parentId) ?? [];
+    list.push(c.id);
+    children.set(c.parentId, list);
+  }
+  const out = new Set<string>();
+  const stack = [rootId];
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (out.has(id)) continue;
+    out.add(id);
+    for (const child of children.get(id) ?? []) stack.push(child);
+  }
+  return out;
+}
+
+/** Caminho legível da categoria ("Brinquedos › Figures › Anime"). */
+export function categoryPath(categories: MetaCategory[], id: string): string {
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const parts: string[] = [];
+  let cur = byId.get(id) ?? null;
+  let guard = 0;
+  while (cur && guard++ < 20) {
+    parts.unshift(cur.name);
+    cur = cur.parentId ? (byId.get(cur.parentId) ?? null) : null;
+  }
+  return parts.join(" › ");
+}
+
+/**
+ * Recalcula as métricas de cada lead considerando apenas os produtos das
+ * categorias do escopo. Leads sem compra na categoria saem da lista.
+ * Sem escopo (Todos os produtos) devolve os leads originais.
+ */
+export function applyCategoryScope(leads: MetaLead[], scope: Set<string> | null): MetaLead[] {
+  if (!scope || !scope.size) return leads;
+  const out: MetaLead[] = [];
+  for (const l of leads) {
+    const by = l.byCategory ?? {};
+    let count = 0;
+    let total = 0;
+    let paid = 0;
+    for (const id of scope) {
+      const m = by[id];
+      if (!m) continue;
+      count += m.count;
+      total += m.total;
+      paid += m.paid;
+    }
+    if (!count) continue;
+    out.push({
+      ...l,
+      productCount: count,
+      totalValue: Math.round(total * 100) / 100,
+      paidValue: Math.round(paid * 100) / 100,
+      openValue: Math.round(Math.max(total - paid, 0) * 100) / 100,
+      avgTicket: Math.round((total / count) * 100) / 100,
+    });
+  }
+  return out;
+}
