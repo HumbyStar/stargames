@@ -92,6 +92,8 @@ export interface MetaFilters {
 
 export const EMPTY_FILTERS: MetaFilters = {
   clientType: "all",
+  categoryId: null,
+
   totalMin: null,
   totalMax: null,
   states: [],
