@@ -2,7 +2,17 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { fichaFromTextWithDefaults } from "@/lib/ficha-parse";
-import type { MetaLead, MetaLeadFicha } from "@/lib/meta-export-format";
+import type {
+  CategoryMetrics,
+  MetaCategory,
+  MetaLead,
+  MetaLeadFicha,
+} from "@/lib/meta-export-format";
+
+function platformKey(v: string | null | undefined): string {
+  return (v ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
 
 /**
  * Extração de leads para campanhas no Meta Business.
@@ -47,7 +57,11 @@ function emptyFicha(): MetaLeadFicha {
 
 export const fetchMetaLeads = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<{ leads: MetaLead[]; generatedAt: string }> => {
+  .handler(
+    async ({
+      context,
+    }): Promise<{ leads: MetaLead[]; categories: MetaCategory[]; generatedAt: string }> => {
+
     const supabase = context.supabase;
 
     const [{ data: isAdmin }, { data: isMaster }] = await Promise.all([
@@ -101,6 +115,25 @@ export const fetchMetaLeads = createServerFn({ method: "POST" })
       supabase.from("mgmv_agreements").select("client_id,status").range(from, to),
     );
 
+    const [cats, links] = await Promise.all([
+      supabase.from("product_categories").select("id,name,parent_id,sort").order("sort"),
+      supabase.from("platform_categories").select("platform_key,category_id"),
+    ]);
+    if (cats.error) throw new Error(cats.error.message);
+    if (links.error) throw new Error(links.error.message);
+
+    const categories: MetaCategory[] = (cats.data ?? []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      parentId: c.parent_id,
+      sort: c.sort,
+    }));
+    const platformToCategory = new Map<string, string>();
+    for (const l of links.data ?? []) {
+      if (l.category_id) platformToCategory.set(l.platform_key, l.category_id);
+    }
+
+
     const shipped = new Set(shipments.map((s) => s.client_id));
     const mgmvStatus = new Map<string, string>();
     for (const a of agreements) {
@@ -119,7 +152,9 @@ export const fetchMetaLeads = createServerFn({ method: "POST" })
       financial: Set<string>;
       first: string | null;
       last: string | null;
+      byCategory: Record<string, CategoryMetrics>;
     }
+
     const agg = new Map<string, Agg>();
     for (const p of products) {
       let a = agg.get(p.client_id);
@@ -133,15 +168,24 @@ export const fetchMetaLeads = createServerFn({ method: "POST" })
           financial: new Set(),
           first: null,
           last: null,
+          byCategory: {},
         };
         agg.set(p.client_id, a);
       }
+      const value = Number(p.total_value ?? 0);
+      const paidValue = Number(p.paid_value ?? 0);
       a.count += 1;
-      a.total += Number(p.total_value ?? 0);
-      a.paid += Number(p.paid_value ?? 0);
+      a.total += value;
+      a.paid += paidValue;
+      const catId = platformToCategory.get(platformKey(p.platform)) ?? "none";
+      const m = (a.byCategory[catId] ??= { count: 0, total: 0, paid: 0 });
+      m.count += 1;
+      m.total += value;
+      m.paid += paidValue;
       if (p.platform) a.platforms.add(p.platform);
       if (p.situation) a.situations.add(p.situation);
       if (p.financial_status) a.financial.add(p.financial_status);
+
       const d = p.register_date;
       if (d) {
         if (!a.first || d < a.first) a.first = d;
@@ -180,11 +224,14 @@ export const fetchMetaLeads = createServerFn({ method: "POST" })
         hasShipment: shipped.has(c.id),
         mgmvStatus: mgmvStatus.get(c.id) ?? "",
         ficha,
+        byCategory: a ? a.byCategory : {},
       };
     });
 
-    return { leads, generatedAt: new Date().toISOString() };
-  });
+    return { leads, categories, generatedAt: new Date().toISOString() };
+  },
+);
+
 
 const LogInput = z.object({
   format: z.string().min(1).max(40),

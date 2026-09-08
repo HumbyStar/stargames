@@ -60,9 +60,12 @@ import {
   EMPTY_FILTERS,
   META_HEADERS,
   analyticRow,
+  applyCategoryScope,
   buildAnalyticCsv,
   buildMetaCsv,
   buildPhoneList,
+  categoryPath,
+  categoryScopeIds,
   exportFileName,
   filterLeads,
   isLeadComplete,
@@ -73,6 +76,7 @@ import {
   type MetaFilters,
   type MetaLead,
 } from "@/lib/meta-export-format";
+
 import { buildXlsxBlob } from "@/lib/xlsx-writer";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -176,6 +180,29 @@ export function DadosMetaSection() {
   };
 
   const leads = data?.leads ?? [];
+  const categories = useMemo(() => data?.categories ?? [], [data]);
+
+  /** Opções do select: árvore ordenada com indentação por nível. */
+  const categoryOptions = useMemo(() => {
+    const byParent = new Map<string | null, typeof categories>();
+    for (const c of categories) {
+      const list = byParent.get(c.parentId) ?? [];
+      list.push(c);
+      byParent.set(c.parentId, list);
+    }
+    const out: { id: string; label: string; depth: number }[] = [];
+    const walk = (parent: string | null, depth: number) => {
+      const list = [...(byParent.get(parent) ?? [])].sort(
+        (a, b) => a.sort - b.sort || a.name.localeCompare(b.name, "pt-BR"),
+      );
+      for (const c of list) {
+        out.push({ id: c.id, label: c.name, depth });
+        walk(c.id, depth + 1);
+      }
+    };
+    walk(null, 0);
+    return out;
+  }, [categories]);
 
   const options = useMemo(() => {
     const platforms = new Set<string>();
@@ -193,7 +220,18 @@ export function DadosMetaSection() {
     };
   }, [leads]);
 
-  const filtered = useMemo(() => filterLeads(leads, filters), [leads, filters]);
+  /**
+   * "Todos os produtos" → nenhum recorte.
+   * Categoria com filhas → soma a categoria e todos os descendentes.
+   * Categoria folha → apenas os produtos vinculados a ela.
+   */
+  const scopedLeads = useMemo(() => {
+    if (!filters.categoryId) return leads;
+    return applyCategoryScope(leads, categoryScopeIds(categories, filters.categoryId));
+  }, [leads, categories, filters.categoryId]);
+
+  const filtered = useMemo(() => filterLeads(scopedLeads, filters), [scopedLeads, filters]);
+
   const complete = useMemo(() => filtered.filter(isLeadComplete), [filtered]);
   const incomplete = useMemo(() => filtered.filter((l) => !isLeadComplete(l)), [filtered]);
   const exportSet = includeIncomplete ? filtered : complete;
@@ -656,7 +694,32 @@ export function DadosMetaSection() {
 
             {step === 3 ? (
               <div className="space-y-3">
+                <div>
+                  <Label className="text-xs">Categoria de produtos</Label>
+                  <Select
+                    value={filters.categoryId ?? "__all__"}
+                    onValueChange={(v) => set("categoryId", v === "__all__" ? null : v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[320px]">
+                      <SelectItem value="__all__">Todos os produtos</SelectItem>
+                      {categoryOptions.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {"\u00A0".repeat(c.depth * 3) + (c.depth ? "└ " : "") + c.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="pt-1 text-xs text-muted-foreground">
+                    {filters.categoryId
+                      ? `Somando ${categoryPath(categories, filters.categoryId)} e tudo que estiver abaixo dela. Valores e nº de itens passam a considerar só essas compras.`
+                      : "Considera todas as compras do cliente, de qualquer categoria."}
+                  </p>
+                </div>
                 <div className="grid gap-3 sm:grid-cols-3">
+
                   <div>
                     <Label className="text-xs">Mín. itens</Label>
                     <Input
