@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2, Plus, Trash2, Tags } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CategoryRulesTab } from "@/components/category-rules-tab";
+import { getCategoryRules } from "@/lib/category-rules.functions";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +38,9 @@ export function ProductCategoriesPanel({ categories, platforms, onChanged }: Cat
   const createFn = useServerFn(createProductCategory);
   const deleteFn = useServerFn(deleteProductCategory);
   const linkFn = useServerFn(setPlatformCategories);
+  const rulesFn = useServerFn(getCategoryRules);
+  const rulesQuery = useQuery({ queryKey: ["category-rules"], queryFn: () => rulesFn({}) });
+
 
   const [search, setSearch] = useState("");
   const [onlyUnset, setOnlyUnset] = useState(false);
@@ -157,7 +164,27 @@ export function ProductCategoriesPanel({ categories, platforms, onChanged }: Cat
   }
 
   return (
-    <div className="space-y-5">
+    <Tabs defaultValue="platforms" className="space-y-4">
+      <TabsList>
+        <TabsTrigger value="platforms">Plataformas</TabsTrigger>
+        <TabsTrigger value="rules">Regras</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="rules">
+        {rulesQuery.isLoading ? (
+          <p className="p-3 text-sm text-muted-foreground">Carregando regras…</p>
+        ) : (
+          <CategoryRulesTab
+            key={rulesQuery.dataUpdatedAt}
+            categories={categories}
+            platforms={platforms}
+            initialRules={rulesQuery.data ?? []}
+            onChanged={onChanged}
+          />
+        )}
+      </TabsContent>
+
+      <TabsContent value="platforms" className="space-y-5">
       {/* Árvore */}
       <div className="rounded-xl border bg-muted/20 p-3">
         <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
@@ -326,6 +353,7 @@ export function ProductCategoriesPanel({ categories, platforms, onChanged }: Cat
           ) : null}
         </div>
       </div>
-    </div>
+      </TabsContent>
+    </Tabs>
   );
 }
