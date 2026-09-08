@@ -15,6 +15,7 @@ import {
   MapPin,
   Package,
   RefreshCw,
+  Settings2,
   ShieldAlert,
   Sparkles,
   Target,
@@ -55,6 +56,8 @@ import {
 import { Card } from "@/components/ui-bits";
 import { usePermissions } from "@/lib/use-permissions";
 import { fetchMetaLeads, logMetaExport } from "@/lib/meta-export.functions";
+import { getSegmentationSetup } from "@/lib/segmentation.functions";
+import { ProductCategoriesPanel } from "@/components/product-categories-panel";
 import {
   ANALYTIC_HEADERS,
   EMPTY_FILTERS,
@@ -138,6 +141,15 @@ export function DadosMetaSection() {
 
   const fetchFn = useServerFn(fetchMetaLeads);
   const logFn = useServerFn(logMetaExport);
+  const setupFn = useServerFn(getSegmentationSetup);
+
+  const setup = useQuery({
+    queryKey: ["segmentation-setup"],
+    queryFn: () => setupFn(),
+    enabled: isAdmin,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
 
   const { data, isLoading, isFetching, refetch, error } = useQuery({
     queryKey: ["meta-leads"],
@@ -158,6 +170,7 @@ export function DadosMetaSection() {
   const [confirmed, setConfirmed] = useState(false);
   const [saved, setSaved] = useState<SavedFilter[]>([]);
   const [saveOpen, setSaveOpen] = useState(false);
+  const [catOpen, setCatOpen] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", goal: "" });
 
   useEffect(() => {
@@ -180,7 +193,11 @@ export function DadosMetaSection() {
   };
 
   const leads = data?.leads ?? [];
-  const categories = useMemo(() => data?.categories ?? [], [data]);
+  const categories = useMemo(
+    () => setup.data?.categories ?? data?.categories ?? [],
+    [setup.data, data],
+  );
+  const platformStats = useMemo(() => setup.data?.platforms ?? [], [setup.data]);
 
   /** Opções do select: árvore ordenada com indentação por nível. */
   const categoryOptions = useMemo(() => {
@@ -213,12 +230,13 @@ export function DadosMetaSection() {
       l.situations.forEach((s) => situations.add(s));
       l.financialStatuses.forEach((s) => financial.add(s));
     }
+    for (const p of platformStats) if (p.platform) platforms.add(p.platform);
     return {
-      platforms: Array.from(platforms).sort().slice(0, 400),
+      platforms: Array.from(platforms).sort((a, b) => a.localeCompare(b, "pt-BR")),
       situations: Array.from(situations).sort(),
       financial: Array.from(financial).sort(),
     };
-  }, [leads]);
+  }, [leads, platformStats]);
 
   /**
    * "Todos os produtos" → nenhum recorte.
@@ -695,7 +713,18 @@ export function DadosMetaSection() {
             {step === 3 ? (
               <div className="space-y-3">
                 <div>
-                  <Label className="text-xs">Categoria de produtos</Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-xs">Categoria de produtos</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1 text-xs"
+                      onClick={() => setCatOpen(true)}
+                    >
+                      <Settings2 className="size-3.5" /> Gerenciar categorias
+                    </Button>
+                  </div>
                   <Select
                     value={filters.categoryId ?? "__all__"}
                     onValueChange={(v) => set("categoryId", v === "__all__" ? null : v)}
@@ -918,6 +947,28 @@ export function DadosMetaSection() {
         </Tabs>
       </Card>
 
+      <Dialog open={catOpen} onOpenChange={setCatOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Categorias de produtos</DialogTitle>
+            <DialogDescription>
+              Crie categorias e subcategorias e escolha quais plataformas entram em cada uma. O
+              filtro soma automaticamente tudo que estiver abaixo da categoria escolhida.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[70vh] overflow-y-auto pr-1">
+            <ProductCategoriesPanel
+              categories={categories}
+              platforms={platformStats}
+              onChanged={() => {
+                void setup.refetch();
+                void refetch();
+              }}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1099,13 +1150,22 @@ function MultiChips({
   max?: number;
 }) {
   const [q, setQ] = useState("");
-  const list = q
-    ? options.filter((o) => o.toLowerCase().includes(q.toLowerCase())).slice(0, max)
-    : options.slice(0, max);
+  const term = q.trim().toLowerCase();
+  const matched = term
+    ? options.filter((o) => o.toLowerCase().includes(term))
+    : options;
+  // Mantém os já selecionados sempre visíveis, mesmo fora do recorte.
+  const list = Array.from(new Set([...selected, ...matched.slice(0, max)]));
   if (!options.length) return null;
   return (
     <div>
-      <Label className="text-xs">{label}</Label>
+      <Label className="text-xs">
+        {label}{" "}
+        <span className="font-normal text-muted-foreground">
+          ({matched.length} de {options.length}
+          {matched.length > max ? ` • mostrando ${max}` : ""})
+        </span>
+      </Label>
       {options.length > max ? (
         <Input
           className="mt-1 h-8"

@@ -45,14 +45,41 @@ export function ProductCategoriesPanel({ categories, platforms, onChanged }: Cat
   const [visible, setVisible] = useState(40);
 
   const byId = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
-  const roots = useMemo(() => categories.filter((c) => !c.parentId), [categories]);
+  
+
+  /** Árvore achatada em qualquer profundidade, para os selects. */
+  const tree = useMemo(() => {
+    const byParent = new Map<string | null, CategoryNode[]>();
+    for (const c of categories) {
+      const list = byParent.get(c.parentId) ?? [];
+      list.push(c);
+      byParent.set(c.parentId, list);
+    }
+    const out: { id: string; name: string; depth: number }[] = [];
+    const walk = (parent: string | null, depth: number) => {
+      const list = [...(byParent.get(parent) ?? [])].sort(
+        (a, b) => a.sort - b.sort || a.name.localeCompare(b.name, "pt-BR"),
+      );
+      for (const c of list) {
+        out.push({ id: c.id, name: c.name, depth });
+        walk(c.id, depth + 1);
+      }
+    };
+    walk(null, 0);
+    return out;
+  }, [categories]);
 
   const label = (id: string | null) => {
     if (!id) return "Sem categoria";
-    const c = byId.get(id);
-    if (!c) return "Sem categoria";
-    const parent = c.parentId ? byId.get(c.parentId) : null;
-    return parent ? `${parent.name} › ${c.name}` : c.name;
+    const parts: string[] = [];
+    let cur = byId.get(id);
+    const seen = new Set<string>();
+    while (cur && !seen.has(cur.id)) {
+      seen.add(cur.id);
+      parts.unshift(cur.name);
+      cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+    }
+    return parts.length ? parts.join(" › ") : "Sem categoria";
   };
 
   const filtered = useMemo(() => {
@@ -136,45 +163,43 @@ export function ProductCategoriesPanel({ categories, platforms, onChanged }: Cat
         <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
           <Tags className="size-4 text-primary" /> Árvore de categorias
         </div>
-        <div className="space-y-2">
-          {roots.map((r) => {
-            const kids = categories.filter((c) => c.parentId === r.id);
-            return (
-              <div key={r.id} className="rounded-lg border bg-card p-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium">{r.name}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7 text-muted-foreground"
-                    disabled={busy}
-                    onClick={() => void removeCategory(r.id)}
-                    aria-label={`Remover ${r.name}`}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </div>
-                {kids.length ? (
-                  <div className="mt-1 flex flex-wrap gap-1.5">
-                    {kids.map((k) => (
-                      <Badge key={k.id} variant="secondary" className="gap-1">
-                        {k.name}
-                        <button
-                          type="button"
-                          className="text-muted-foreground hover:text-destructive"
-                          disabled={busy}
-                          onClick={() => void removeCategory(k.id)}
-                          aria-label={`Remover ${k.name}`}
-                        >
-                          <Trash2 className="size-3" />
-                        </button>
-                      </Badge>
-                    ))}
+        <div className="divide-y rounded-lg border bg-card">
+          {tree.length ? (
+            tree.map((c) => {
+              const linked = platforms.filter((p) => p.categoryId === c.id).length;
+              return (
+                <div
+                  key={c.id}
+                  className="flex items-center justify-between gap-2 px-2 py-1.5"
+                  style={{ paddingLeft: 8 + c.depth * 18 }}
+                >
+                  <span className={c.depth ? "text-sm" : "text-sm font-medium"}>
+                    {c.depth ? "└ " : ""}
+                    {c.name}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-[11px]">
+                      {linked} plataforma(s)
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 text-muted-foreground"
+                      disabled={busy}
+                      onClick={() => void removeCategory(c.id)}
+                      aria-label={`Remover ${c.name}`}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
                   </div>
-                ) : null}
-              </div>
-            );
-          })}
+                </div>
+              );
+            })
+          ) : (
+            <p className="p-3 text-sm text-muted-foreground">
+              Nenhuma categoria ainda. Crie a primeira abaixo.
+            </p>
+          )}
         </div>
 
         <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
@@ -192,11 +217,11 @@ export function ProductCategoriesPanel({ categories, platforms, onChanged }: Cat
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[320px]">
                 <SelectItem value={UNSET}>Categoria principal</SelectItem>
-                {roots.map((r) => (
-                  <SelectItem key={r.id} value={r.id}>
-                    {r.name}
+                {tree.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {"\u00A0".repeat(c.depth * 3) + (c.depth ? "└ " : "") + c.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -244,7 +269,7 @@ export function ProductCategoriesPanel({ categories, platforms, onChanged }: Cat
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={UNSET}>Sem categoria (desvincular)</SelectItem>
-                {categories.map((c) => (
+                {tree.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {label(c.id)}
                   </SelectItem>
