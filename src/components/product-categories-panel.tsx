@@ -47,12 +47,39 @@ export function ProductCategoriesPanel({ categories, platforms, onChanged }: Cat
   const byId = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const roots = useMemo(() => categories.filter((c) => !c.parentId), [categories]);
 
+  /** Árvore achatada em qualquer profundidade, para os selects. */
+  const tree = useMemo(() => {
+    const byParent = new Map<string | null, CategoryNode[]>();
+    for (const c of categories) {
+      const list = byParent.get(c.parentId) ?? [];
+      list.push(c);
+      byParent.set(c.parentId, list);
+    }
+    const out: { id: string; name: string; depth: number }[] = [];
+    const walk = (parent: string | null, depth: number) => {
+      const list = [...(byParent.get(parent) ?? [])].sort(
+        (a, b) => a.sort - b.sort || a.name.localeCompare(b.name, "pt-BR"),
+      );
+      for (const c of list) {
+        out.push({ id: c.id, name: c.name, depth });
+        walk(c.id, depth + 1);
+      }
+    };
+    walk(null, 0);
+    return out;
+  }, [categories]);
+
   const label = (id: string | null) => {
     if (!id) return "Sem categoria";
-    const c = byId.get(id);
-    if (!c) return "Sem categoria";
-    const parent = c.parentId ? byId.get(c.parentId) : null;
-    return parent ? `${parent.name} › ${c.name}` : c.name;
+    const parts: string[] = [];
+    let cur = byId.get(id);
+    const seen = new Set<string>();
+    while (cur && !seen.has(cur.id)) {
+      seen.add(cur.id);
+      parts.unshift(cur.name);
+      cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+    }
+    return parts.length ? parts.join(" › ") : "Sem categoria";
   };
 
   const filtered = useMemo(() => {
