@@ -224,11 +224,14 @@ export const fetchMetaLeads = createServerFn({ method: "POST" })
         hasShipment: shipped.has(c.id),
         mgmvStatus: mgmvStatus.get(c.id) ?? "",
         ficha,
+        byCategory: a ? a.byCategory : {},
       };
     });
 
-    return { leads, generatedAt: new Date().toISOString() };
-  });
+    return { leads, categories, generatedAt: new Date().toISOString() };
+  },
+);
+
 
 const LogInput = z.object({
   format: z.string().min(1).max(40),
