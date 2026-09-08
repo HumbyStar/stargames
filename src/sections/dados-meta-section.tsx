@@ -694,7 +694,32 @@ export function DadosMetaSection() {
 
             {step === 3 ? (
               <div className="space-y-3">
+                <div>
+                  <Label className="text-xs">Categoria de produtos</Label>
+                  <Select
+                    value={filters.categoryId ?? "__all__"}
+                    onValueChange={(v) => set("categoryId", v === "__all__" ? null : v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[320px]">
+                      <SelectItem value="__all__">Todos os produtos</SelectItem>
+                      {categoryOptions.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {"\u00A0".repeat(c.depth * 3) + (c.depth ? "└ " : "") + c.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="pt-1 text-xs text-muted-foreground">
+                    {filters.categoryId
+                      ? `Somando ${categoryPath(categories, filters.categoryId)} e tudo que estiver abaixo dela. Valores e nº de itens passam a considerar só essas compras.`
+                      : "Considera todas as compras do cliente, de qualquer categoria."}
+                  </p>
+                </div>
                 <div className="grid gap-3 sm:grid-cols-3">
+
                   <div>
                     <Label className="text-xs">Mín. itens</Label>
                     <Input
