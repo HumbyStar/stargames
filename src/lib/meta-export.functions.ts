@@ -152,7 +152,9 @@ export const fetchMetaLeads = createServerFn({ method: "POST" })
       financial: Set<string>;
       first: string | null;
       last: string | null;
+      byCategory: Record<string, CategoryMetrics>;
     }
+
     const agg = new Map<string, Agg>();
     for (const p of products) {
       let a = agg.get(p.client_id);
