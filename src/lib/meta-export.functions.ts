@@ -57,7 +57,11 @@ function emptyFicha(): MetaLeadFicha {
 
 export const fetchMetaLeads = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<{ leads: MetaLead[]; generatedAt: string }> => {
+  .handler(
+    async ({
+      context,
+    }): Promise<{ leads: MetaLead[]; categories: MetaCategory[]; generatedAt: string }> => {
+
     const supabase = context.supabase;
 
     const [{ data: isAdmin }, { data: isMaster }] = await Promise.all([
