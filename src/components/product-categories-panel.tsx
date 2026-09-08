@@ -192,11 +192,11 @@ export function ProductCategoriesPanel({ categories, platforms, onChanged }: Cat
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[320px]">
                 <SelectItem value={UNSET}>Categoria principal</SelectItem>
-                {roots.map((r) => (
-                  <SelectItem key={r.id} value={r.id}>
-                    {r.name}
+                {tree.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {"\u00A0".repeat(c.depth * 3) + (c.depth ? "└ " : "") + c.name}
                   </SelectItem>
                 ))}
               </SelectContent>
