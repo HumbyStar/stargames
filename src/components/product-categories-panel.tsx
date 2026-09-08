@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2, Plus, Trash2, Tags } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CategoryRulesTab } from "@/components/category-rules-tab";
+import { getCategoryRules } from "@/lib/category-rules.functions";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
