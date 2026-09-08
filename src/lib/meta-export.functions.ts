@@ -2,7 +2,17 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { fichaFromTextWithDefaults } from "@/lib/ficha-parse";
-import type { MetaLead, MetaLeadFicha } from "@/lib/meta-export-format";
+import type {
+  CategoryMetrics,
+  MetaCategory,
+  MetaLead,
+  MetaLeadFicha,
+} from "@/lib/meta-export-format";
+
+function platformKey(v: string | null | undefined): string {
+  return (v ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
 
 /**
  * Extração de leads para campanhas no Meta Business.
