@@ -48,9 +48,7 @@ export function matchCategoryRule(platform: string, rules: CategoryRule[]): Cate
     for (const raw of rule.palavras) {
       const word = normalizeText(raw);
       if (!word) continue;
-      if (text.includes(` ${word} `) || text.includes(`${word} `) === false ? text.includes(` ${word} `) : true) {
-        if (text.includes(` ${word} `)) return rule;
-      }
+      if (text.includes(` ${word} `)) return rule;
     }
   }
   return null;
