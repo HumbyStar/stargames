@@ -15,6 +15,7 @@ import {
   MapPin,
   Package,
   RefreshCw,
+  Settings2,
   ShieldAlert,
   Sparkles,
   Target,
@@ -169,6 +170,7 @@ export function DadosMetaSection() {
   const [confirmed, setConfirmed] = useState(false);
   const [saved, setSaved] = useState<SavedFilter[]>([]);
   const [saveOpen, setSaveOpen] = useState(false);
+  const [catOpen, setCatOpen] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", goal: "" });
 
   useEffect(() => {
@@ -944,6 +946,28 @@ export function DadosMetaSection() {
           </TabsContent>
         </Tabs>
       </Card>
+
+      <Dialog open={catOpen} onOpenChange={setCatOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Categorias de produtos</DialogTitle>
+            <DialogDescription>
+              Crie categorias e subcategorias e escolha quais plataformas entram em cada uma. O
+              filtro soma automaticamente tudo que estiver abaixo da categoria escolhida.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[70vh] overflow-y-auto pr-1">
+            <ProductCategoriesPanel
+              categories={categories}
+              platforms={platformStats}
+              onChanged={() => {
+                void setup.refetch();
+                void refetch();
+              }}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
         <DialogContent>
