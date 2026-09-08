@@ -157,7 +157,27 @@ export function ProductCategoriesPanel({ categories, platforms, onChanged }: Cat
   }
 
   return (
-    <div className="space-y-5">
+    <Tabs defaultValue="platforms" className="space-y-4">
+      <TabsList>
+        <TabsTrigger value="platforms">Plataformas</TabsTrigger>
+        <TabsTrigger value="rules">Regras</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="rules">
+        {rulesQuery.isLoading ? (
+          <p className="p-3 text-sm text-muted-foreground">Carregando regras…</p>
+        ) : (
+          <CategoryRulesTab
+            key={rulesQuery.dataUpdatedAt}
+            categories={categories}
+            platforms={platforms}
+            initialRules={rulesQuery.data ?? []}
+            onChanged={onChanged}
+          />
+        )}
+      </TabsContent>
+
+      <TabsContent value="platforms" className="space-y-5">
       {/* Árvore */}
       <div className="rounded-xl border bg-muted/20 p-3">
         <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
