@@ -40,12 +40,29 @@ export interface MetaLead {
   hasShipment: boolean;
   mgmvStatus: string;
   ficha: MetaLeadFicha;
+  /** Métricas por categoria de produto (chave = id da categoria, "none" = sem categoria). */
+  byCategory?: Record<string, CategoryMetrics>;
+}
+
+export interface CategoryMetrics {
+  count: number;
+  total: number;
+  paid: number;
+}
+
+export interface MetaCategory {
+  id: string;
+  name: string;
+  parentId: string | null;
+  sort: number;
 }
 
 export interface MetaFilters {
   clientType: "all" | "mgmv" | "common";
+  categoryId: string | null;
   totalMin: number | null;
   totalMax: number | null;
+
   states: string[];
   city: string;
   cepPrefix: string;
