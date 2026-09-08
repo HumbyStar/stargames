@@ -346,6 +346,7 @@ export function ProductCategoriesPanel({ categories, platforms, onChanged }: Cat
           ) : null}
         </div>
       </div>
-    </div>
+      </TabsContent>
+    </Tabs>
   );
 }
