@@ -711,7 +711,18 @@ export function DadosMetaSection() {
             {step === 3 ? (
               <div className="space-y-3">
                 <div>
-                  <Label className="text-xs">Categoria de produtos</Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-xs">Categoria de produtos</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1 text-xs"
+                      onClick={() => setCatOpen(true)}
+                    >
+                      <Settings2 className="size-3.5" /> Gerenciar categorias
+                    </Button>
+                  </div>
                   <Select
                     value={filters.categoryId ?? "__all__"}
                     onValueChange={(v) => set("categoryId", v === "__all__" ? null : v)}
