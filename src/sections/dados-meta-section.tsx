@@ -55,6 +55,8 @@ import {
 import { Card } from "@/components/ui-bits";
 import { usePermissions } from "@/lib/use-permissions";
 import { fetchMetaLeads, logMetaExport } from "@/lib/meta-export.functions";
+import { getSegmentationSetup } from "@/lib/segmentation.functions";
+import { ProductCategoriesPanel } from "@/components/product-categories-panel";
 import {
   ANALYTIC_HEADERS,
   EMPTY_FILTERS,
@@ -138,6 +140,15 @@ export function DadosMetaSection() {
 
   const fetchFn = useServerFn(fetchMetaLeads);
   const logFn = useServerFn(logMetaExport);
+  const setupFn = useServerFn(getSegmentationSetup);
+
+  const setup = useQuery({
+    queryKey: ["segmentation-setup"],
+    queryFn: () => setupFn(),
+    enabled: isAdmin,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
 
   const { data, isLoading, isFetching, refetch, error } = useQuery({
     queryKey: ["meta-leads"],
