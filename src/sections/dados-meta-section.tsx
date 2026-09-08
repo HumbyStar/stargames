@@ -1115,13 +1115,22 @@ function MultiChips({
   max?: number;
 }) {
   const [q, setQ] = useState("");
-  const list = q
-    ? options.filter((o) => o.toLowerCase().includes(q.toLowerCase())).slice(0, max)
-    : options.slice(0, max);
+  const term = q.trim().toLowerCase();
+  const matched = term
+    ? options.filter((o) => o.toLowerCase().includes(term))
+    : options;
+  // Mantém os já selecionados sempre visíveis, mesmo fora do recorte.
+  const list = Array.from(new Set([...selected, ...matched.slice(0, max)]));
   if (!options.length) return null;
   return (
     <div>
-      <Label className="text-xs">{label}</Label>
+      <Label className="text-xs">
+        {label}{" "}
+        <span className="font-normal text-muted-foreground">
+          ({matched.length} de {options.length}
+          {matched.length > max ? ` • mostrando ${max}` : ""})
+        </span>
+      </Label>
       {options.length > max ? (
         <Input
           className="mt-1 h-8"
