@@ -180,6 +180,29 @@ export function DadosMetaSection() {
   };
 
   const leads = data?.leads ?? [];
+  const categories = useMemo(() => data?.categories ?? [], [data]);
+
+  /** Opções do select: árvore ordenada com indentação por nível. */
+  const categoryOptions = useMemo(() => {
+    const byParent = new Map<string | null, typeof categories>();
+    for (const c of categories) {
+      const list = byParent.get(c.parentId) ?? [];
+      list.push(c);
+      byParent.set(c.parentId, list);
+    }
+    const out: { id: string; label: string; depth: number }[] = [];
+    const walk = (parent: string | null, depth: number) => {
+      const list = [...(byParent.get(parent) ?? [])].sort(
+        (a, b) => a.sort - b.sort || a.name.localeCompare(b.name, "pt-BR"),
+      );
+      for (const c of list) {
+        out.push({ id: c.id, label: c.name, depth });
+        walk(c.id, depth + 1);
+      }
+    };
+    walk(null, 0);
+    return out;
+  }, [categories]);
 
   const options = useMemo(() => {
     const platforms = new Set<string>();
@@ -197,7 +220,18 @@ export function DadosMetaSection() {
     };
   }, [leads]);
 
-  const filtered = useMemo(() => filterLeads(leads, filters), [leads, filters]);
+  /**
+   * "Todos os produtos" → nenhum recorte.
+   * Categoria com filhas → soma a categoria e todos os descendentes.
+   * Categoria folha → apenas os produtos vinculados a ela.
+   */
+  const scopedLeads = useMemo(() => {
+    if (!filters.categoryId) return leads;
+    return applyCategoryScope(leads, categoryScopeIds(categories, filters.categoryId));
+  }, [leads, categories, filters.categoryId]);
+
+  const filtered = useMemo(() => filterLeads(scopedLeads, filters), [scopedLeads, filters]);
+
   const complete = useMemo(() => filtered.filter(isLeadComplete), [filtered]);
   const incomplete = useMemo(() => filtered.filter((l) => !isLeadComplete(l)), [filtered]);
   const exportSet = includeIncomplete ? filtered : complete;
