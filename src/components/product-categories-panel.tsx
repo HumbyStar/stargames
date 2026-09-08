@@ -163,45 +163,43 @@ export function ProductCategoriesPanel({ categories, platforms, onChanged }: Cat
         <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
           <Tags className="size-4 text-primary" /> Árvore de categorias
         </div>
-        <div className="space-y-2">
-          {roots.map((r) => {
-            const kids = categories.filter((c) => c.parentId === r.id);
-            return (
-              <div key={r.id} className="rounded-lg border bg-card p-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium">{r.name}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7 text-muted-foreground"
-                    disabled={busy}
-                    onClick={() => void removeCategory(r.id)}
-                    aria-label={`Remover ${r.name}`}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </div>
-                {kids.length ? (
-                  <div className="mt-1 flex flex-wrap gap-1.5">
-                    {kids.map((k) => (
-                      <Badge key={k.id} variant="secondary" className="gap-1">
-                        {k.name}
-                        <button
-                          type="button"
-                          className="text-muted-foreground hover:text-destructive"
-                          disabled={busy}
-                          onClick={() => void removeCategory(k.id)}
-                          aria-label={`Remover ${k.name}`}
-                        >
-                          <Trash2 className="size-3" />
-                        </button>
-                      </Badge>
-                    ))}
+        <div className="divide-y rounded-lg border bg-card">
+          {tree.length ? (
+            tree.map((c) => {
+              const linked = platforms.filter((p) => p.categoryId === c.id).length;
+              return (
+                <div
+                  key={c.id}
+                  className="flex items-center justify-between gap-2 px-2 py-1.5"
+                  style={{ paddingLeft: 8 + c.depth * 18 }}
+                >
+                  <span className={c.depth ? "text-sm" : "text-sm font-medium"}>
+                    {c.depth ? "└ " : ""}
+                    {c.name}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-[11px]">
+                      {linked} plataforma(s)
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 text-muted-foreground"
+                      disabled={busy}
+                      onClick={() => void removeCategory(c.id)}
+                      aria-label={`Remover ${c.name}`}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
                   </div>
-                ) : null}
-              </div>
-            );
-          })}
+                </div>
+              );
+            })
+          ) : (
+            <p className="p-3 text-sm text-muted-foreground">
+              Nenhuma categoria ainda. Crie a primeira abaixo.
+            </p>
+          )}
         </div>
 
         <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
