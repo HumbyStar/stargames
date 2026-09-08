@@ -45,7 +45,7 @@ export function ProductCategoriesPanel({ categories, platforms, onChanged }: Cat
   const [visible, setVisible] = useState(40);
 
   const byId = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
-  const roots = useMemo(() => categories.filter((c) => !c.parentId), [categories]);
+  
 
   /** Árvore achatada em qualquer profundidade, para os selects. */
   const tree = useMemo(() => {
@@ -269,7 +269,7 @@ export function ProductCategoriesPanel({ categories, platforms, onChanged }: Cat
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={UNSET}>Sem categoria (desvincular)</SelectItem>
-                {categories.map((c) => (
+                {tree.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {label(c.id)}
                   </SelectItem>
