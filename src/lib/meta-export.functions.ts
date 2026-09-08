@@ -115,6 +115,25 @@ export const fetchMetaLeads = createServerFn({ method: "POST" })
       supabase.from("mgmv_agreements").select("client_id,status").range(from, to),
     );
 
+    const [cats, links] = await Promise.all([
+      supabase.from("product_categories").select("id,name,parent_id,sort").order("sort"),
+      supabase.from("platform_categories").select("platform_key,category_id"),
+    ]);
+    if (cats.error) throw new Error(cats.error.message);
+    if (links.error) throw new Error(links.error.message);
+
+    const categories: MetaCategory[] = (cats.data ?? []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      parentId: c.parent_id,
+      sort: c.sort,
+    }));
+    const platformToCategory = new Map<string, string>();
+    for (const l of links.data ?? []) {
+      if (l.category_id) platformToCategory.set(l.platform_key, l.category_id);
+    }
+
+
     const shipped = new Set(shipments.map((s) => s.client_id));
     const mgmvStatus = new Map<string, string>();
     for (const a of agreements) {
