@@ -168,15 +168,24 @@ export const fetchMetaLeads = createServerFn({ method: "POST" })
           financial: new Set(),
           first: null,
           last: null,
+          byCategory: {},
         };
         agg.set(p.client_id, a);
       }
+      const value = Number(p.total_value ?? 0);
+      const paidValue = Number(p.paid_value ?? 0);
       a.count += 1;
-      a.total += Number(p.total_value ?? 0);
-      a.paid += Number(p.paid_value ?? 0);
+      a.total += value;
+      a.paid += paidValue;
+      const catId = platformToCategory.get(platformKey(p.platform)) ?? "none";
+      const m = (a.byCategory[catId] ??= { count: 0, total: 0, paid: 0 });
+      m.count += 1;
+      m.total += value;
+      m.paid += paidValue;
       if (p.platform) a.platforms.add(p.platform);
       if (p.situation) a.situations.add(p.situation);
       if (p.financial_status) a.financial.add(p.financial_status);
+
       const d = p.register_date;
       if (d) {
         if (!a.first || d < a.first) a.first = d;
