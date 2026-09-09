@@ -182,7 +182,7 @@ export function ProductCategoriesPanel({ categories, platforms, onChanged }: Cat
           <p className="p-3 text-sm text-muted-foreground">Carregando regras…</p>
         ) : (
           <CategoryRulesTab
-            key={rulesQuery.dataUpdatedAt}
+            key={rulesQuery.isSuccess ? "rules-loaded" : "rules-empty"}
             categories={categories}
             platforms={platforms}
             initialRules={rulesQuery.data ?? []}
