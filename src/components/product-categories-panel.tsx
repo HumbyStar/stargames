@@ -39,7 +39,14 @@ export function ProductCategoriesPanel({ categories, platforms, onChanged }: Cat
   const deleteFn = useServerFn(deleteProductCategory);
   const linkFn = useServerFn(setPlatformCategories);
   const rulesFn = useServerFn(getCategoryRules);
-  const rulesQuery = useQuery({ queryKey: ["category-rules"], queryFn: () => rulesFn({}) });
+  const rulesQuery = useQuery({
+    queryKey: ["category-rules"],
+    queryFn: () => rulesFn({}),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+  });
 
 
   const [search, setSearch] = useState("");
@@ -175,7 +182,7 @@ export function ProductCategoriesPanel({ categories, platforms, onChanged }: Cat
           <p className="p-3 text-sm text-muted-foreground">Carregando regras…</p>
         ) : (
           <CategoryRulesTab
-            key={rulesQuery.dataUpdatedAt}
+            key={rulesQuery.isSuccess ? "rules-loaded" : "rules-empty"}
             categories={categories}
             platforms={platforms}
             initialRules={rulesQuery.data ?? []}
