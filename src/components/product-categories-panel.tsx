@@ -39,7 +39,14 @@ export function ProductCategoriesPanel({ categories, platforms, onChanged }: Cat
   const deleteFn = useServerFn(deleteProductCategory);
   const linkFn = useServerFn(setPlatformCategories);
   const rulesFn = useServerFn(getCategoryRules);
-  const rulesQuery = useQuery({ queryKey: ["category-rules"], queryFn: () => rulesFn({}) });
+  const rulesQuery = useQuery({
+    queryKey: ["category-rules"],
+    queryFn: () => rulesFn({}),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+  });
 
 
   const [search, setSearch] = useState("");
