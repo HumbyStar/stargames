@@ -227,6 +227,7 @@ export function NfFormatModal({ open, onClose, client, products, onSaved }: Prop
             <div className="space-y-2">
               <div className="text-sm font-medium">Descrição dos itens</div>
               {items.map((item) => (
+                <div key={item.id} className="grid gap-1">
                   <label htmlFor={`nf-description-${item.id}`} className="text-xs text-muted-foreground">
                     {item.name}
                   </label>
