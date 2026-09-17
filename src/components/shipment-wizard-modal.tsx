@@ -45,7 +45,6 @@ import {
   buildShippingDeclarationProducts,
   buildShippingDescription,
   productDescription,
-  shortenDescription,
 } from "@/lib/product-descriptions";
 
 type Measures = { weightKg: string; lengthCm: string; widthCm: string; heightCm: string };
