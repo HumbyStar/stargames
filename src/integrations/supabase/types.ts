@@ -775,6 +775,7 @@ export type Database = {
           client_id: string
           collection_eligible: boolean
           created_at: string
+          default_description: string | null
           due_date: string
           env: Database["public"]["Enums"]["app_env"]
           financial_status: string
@@ -795,6 +796,7 @@ export type Database = {
           client_id: string
           collection_eligible?: boolean
           created_at?: string
+          default_description?: string | null
           due_date?: string
           env?: Database["public"]["Enums"]["app_env"]
           financial_status?: string
@@ -815,6 +817,7 @@ export type Database = {
           client_id?: string
           collection_eligible?: boolean
           created_at?: string
+          default_description?: string | null
           due_date?: string
           env?: Database["public"]["Enums"]["app_env"]
           financial_status?: string
@@ -1093,6 +1096,7 @@ export type Database = {
           selected_service_id: string | null
           selected_service_name: string | null
           service: string
+          shipping_description: string | null
           status: string
           superfrete_order_id: string | null
           superfrete_status: string | null
@@ -1130,6 +1134,7 @@ export type Database = {
           selected_service_id?: string | null
           selected_service_name?: string | null
           service?: string
+          shipping_description?: string | null
           status?: string
           superfrete_order_id?: string | null
           superfrete_status?: string | null
@@ -1167,6 +1172,7 @@ export type Database = {
           selected_service_id?: string | null
           selected_service_name?: string | null
           service?: string
+          shipping_description?: string | null
           status?: string
           superfrete_order_id?: string | null
           superfrete_status?: string | null
