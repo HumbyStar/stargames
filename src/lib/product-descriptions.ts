@@ -26,3 +26,21 @@ export function buildShippingDescription(
   const body = unique.join(", ") || "Produtos diversos";
   return shortenDescription(`${prefix}: ${body}`, maxLength);
 }
+
+export interface ShippingDeclarationProduct {
+  name: string;
+  quantity: number;
+  unitaryValue: number;
+}
+
+/** Monta a declaração de conteúdo com uma linha e um valor por produto. */
+export function buildShippingDeclarationProducts(
+  products: Array<{ id: string; name: string; totalValue: number }>,
+  descriptions: Record<string, string>,
+): ShippingDeclarationProduct[] {
+  return products.map((product) => ({
+    name: shortenDescription(descriptions[product.id]?.trim() || product.name),
+    quantity: 1,
+    unitaryValue: Math.max(0, Math.round(product.totalValue * 100) / 100),
+  }));
+}
