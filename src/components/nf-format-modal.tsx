@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { useServerFn } from "@tanstack/react-start";
 import type { CustomerFiscalData } from "@/lib/customer-data-ai.functions";
 import { fiscalDataFromFichaText } from "@/lib/ficha-parse";
@@ -25,6 +26,18 @@ import { toast } from "sonner";
 import { CheckCircle2, Download, Loader2, Sparkles, AlertCircle } from "lucide-react";
 import { downloadNfPdf } from "@/lib/nf-pdf";
 import type { Client } from "@/lib/store";
+import { useStore } from "@/lib/store";
+import { productDescription } from "@/lib/product-descriptions";
+
+type EditableNfItem = {
+  id: string;
+  name: string;
+  description: string;
+  platform: string;
+  totalValue: number;
+  ncm: string;
+  category: string;
+};
 
 interface Props {
   open: boolean;
@@ -37,12 +50,16 @@ interface Props {
 export function NfFormatModal({ open, onClose, client, products, onSaved }: Props) {
   const classify = useServerFn(classifyProductsForNf);
   const save = useServerFn(saveNfInvoice);
+  const updateProduct = useStore((s) => s.updateProduct);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [missing, setMissing] = useState<string[]>([]);
   const [text, setText] = useState("");
   const [totalCents, setTotalCents] = useState(0);
+  const [header, setHeader] = useState("");
+  const [items, setItems] = useState<EditableNfItem[]>([]);
+  const [saveAsDefault, setSaveAsDefault] = useState(false);
 
   useEffect(() => {
     if (!open || !client) return;
@@ -50,6 +67,9 @@ export function NfFormatModal({ open, onClose, client, products, onSaved }: Prop
     setMissing([]);
     setText("");
     setTotalCents(0);
+    setHeader("");
+    setItems([]);
+    setSaveAsDefault(false);
     const raw = (client.customerData ?? "").trim();
     if (!raw) {
       setError(
@@ -92,13 +112,17 @@ export function NfFormatModal({ open, onClose, client, products, onSaved }: Prop
         const items = products.map((p) => {
           const c = byId.get(p.id);
           return {
+            id: p.id,
             name: p.name,
+            description: productDescription(p.name, p.defaultDescription),
             platform: p.platform ?? "",
             totalValue: p.totalValue,
             ncm: c?.ncm ? formatNcm(c.ncm) : "—",
             category: c?.category?.trim() || "Sem classificação (revisar)",
           };
         });
+        setHeader(header);
+        setItems(items);
         setText(renderAccountantNfText(header, items));
         const total = items.reduce((s, i) => s + i.totalValue, 0);
         setTotalCents(Math.round(total * 100));
@@ -114,10 +138,22 @@ export function NfFormatModal({ open, onClose, client, products, onSaved }: Prop
     };
   }, [open, client, products, classify]);
 
+  function updateDescription(id: string, description: string) {
+    setItems((current) => {
+      const next = current.map((item) => (item.id === id ? { ...item, description } : item));
+      setText(renderAccountantNfText(header, next));
+      return next;
+    });
+  }
+
   async function confirmNota() {
     if (!client || !text) return;
     setSaving(true);
     try {
+      if (items.some((item) => !item.description.trim())) {
+        toast.error("Preencha a descrição de todos os produtos.");
+        return;
+      }
       await save({
         data: {
           clientId: client.id,
@@ -126,6 +162,11 @@ export function NfFormatModal({ open, onClose, client, products, onSaved }: Prop
           productIds: products.map((p) => p.id),
         },
       });
+      if (saveAsDefault) {
+        items.forEach((item) =>
+          updateProduct(item.id, { defaultDescription: item.description.trim() }),
+        );
+      }
       toast.success("Nota registrada no histórico do cliente.");
       onSaved?.();
       onClose();
@@ -183,6 +224,30 @@ export function NfFormatModal({ open, onClose, client, products, onSaved }: Prop
 
         {!loading && !error && text && (
           <>
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Descrição dos itens</div>
+              {items.map((item) => (
+                <div key={item.id} className="grid gap-1">
+                  <label htmlFor={`nf-description-${item.id}`} className="text-xs text-muted-foreground">
+                    {item.name}
+                  </label>
+                  <Input
+                    id={`nf-description-${item.id}`}
+                    value={item.description}
+                    maxLength={500}
+                    onChange={(event) => updateDescription(item.id, event.target.value)}
+                  />
+                </div>
+              ))}
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={saveAsDefault}
+                  onChange={(event) => setSaveAsDefault(event.target.checked)}
+                />
+                Salvar estas descrições como padrão dos produtos
+              </label>
+            </div>
             <Textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
