@@ -331,6 +331,8 @@ export interface Product {
   id: string;
   clientId: string;
   name: string;
+  /** Descrição padrão reutilizada em notas fiscais e envios. */
+  defaultDescription?: string;
   platform: string;
   totalValue: number;
   paidValue: number;

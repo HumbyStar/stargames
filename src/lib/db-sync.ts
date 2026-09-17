@@ -60,6 +60,7 @@ export interface DbProductRow {
   id: string;
   client_id: string;
   name: string;
+  default_description?: string | null;
   platform: string;
   total_value: number;
   paid_value: number;
@@ -131,6 +132,7 @@ export function rowToProduct(r: DbProductRow): Product {
     id: r.id,
     clientId: r.client_id,
     name: r.name,
+    defaultDescription: r.default_description ?? undefined,
     platform: r.platform ?? "",
     totalValue: Number(r.total_value) || 0,
     paidValue: Number(r.paid_value) || 0,
@@ -148,6 +150,7 @@ export function productToRow(p: Product): DbProductRow {
     id: p.id,
     client_id: p.clientId,
     name: p.name,
+    default_description: p.defaultDescription?.trim() || null,
     platform: p.platform ?? "",
     total_value: p.totalValue,
     paid_value: p.paidValue,
