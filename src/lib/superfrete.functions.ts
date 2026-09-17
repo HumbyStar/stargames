@@ -53,6 +53,9 @@ const ProductSchema = z.object({
   name: z.string().default("Produto"),
   quantity: z.number().int().min(1).default(1),
   unitaryValue: z.number().nonnegative().default(0),
+});
+
+const ParcelSchema = z.object({
   weightKg: z.number().nonnegative().default(0.3),
   lengthCm: z.number().nonnegative().default(16),
   widthCm: z.number().nonnegative().default(11),
@@ -157,6 +160,7 @@ export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
         from: AddressSchema,
         to: AddressSchema,
         products: z.array(ProductSchema).min(1),
+        parcels: z.array(ParcelSchema).min(1),
         insuranceValue: z.number().nonnegative().default(0),
         services: z.string().default(SUPERFRETE_SERVICES),
       })
@@ -170,14 +174,19 @@ export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
     if (fromCep.length !== 8) throw new Error("Informe o CEP de origem nas configurações de envio.");
     if (toCep.length !== 8) throw new Error("Complete os dados do destinatário antes de calcular o frete.");
 
-    const apiProducts = data.products.map((p) => ({
-      name: p.name,
-      quantity: p.quantity,
-      unitary_value: Number(p.unitaryValue.toFixed(2)),
-      weight: Math.max(0.01, p.weightKg),
-      length: Math.max(1, p.lengthCm),
-      width: Math.max(1, p.widthCm),
-      height: Math.max(1, p.heightCm),
+    const declaredValue = data.products.reduce(
+      (total, product) => total + product.quantity * product.unitaryValue,
+      0,
+    );
+    const valuePerParcel = declaredValue / data.parcels.length;
+    const apiProducts = data.parcels.map((parcel, index) => ({
+      name: data.parcels.length === 1 ? "Volume" : `Volume ${index + 1}`,
+      quantity: 1,
+      unitary_value: Number(valuePerParcel.toFixed(2)),
+      weight: Math.max(0.01, parcel.weightKg),
+      length: Math.max(1, parcel.lengthCm),
+      width: Math.max(1, parcel.widthCm),
+      height: Math.max(1, parcel.heightCm),
     }));
 
     const buildPayload = (insuranceValue: number) => ({
@@ -386,7 +395,7 @@ function assertRecipient(a: SuperfreteAddress) {
 }
 
 /** Limites das transportadoras aplicados também no servidor. */
-function assertBoxes(boxes: Array<z.infer<typeof ProductSchema>>) {
+function assertBoxes(boxes: Array<z.infer<typeof ParcelSchema>>) {
   const problems: string[] = [];
   boxes.forEach((b, i) => {
     const tag = `Caixa #${i + 1}`;
@@ -418,6 +427,7 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
         to: AddressSchema,
         service: z.string().min(1),
         products: z.array(ProductSchema).min(1),
+        parcels: z.array(ParcelSchema).min(1),
         insuranceValue: z.number().nonnegative().default(0),
       })
       .parse(data),
@@ -427,11 +437,11 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
 
     assertRecipient(data.to);
-    assertBoxes(data.products);
+    assertBoxes(data.parcels);
 
     // A etiqueta usa exatamente as mesmas caixas da cotação (um volume por caixa),
     // evitando diferença entre o valor cotado e o cobrado.
-    const volumes = data.products.map((p) => ({
+    const volumes = data.parcels.map((p) => ({
       height: Math.max(1, p.heightCm),
       width: Math.max(1, p.widthCm),
       length: Math.max(1, p.lengthCm),

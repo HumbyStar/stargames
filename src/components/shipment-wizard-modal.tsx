@@ -42,9 +42,9 @@ import { defaultShipOrigin, isShipOriginComplete } from "@/lib/ship-origin";
 import { useServerFn } from "@tanstack/react-start";
 import { useSuperfreteBalance } from "@/lib/use-superfrete-balance";
 import {
+  buildShippingDeclarationProducts,
   buildShippingDescription,
   productDescription,
-  shortenDescription,
 } from "@/lib/product-descriptions";
 
 type Measures = { weightKg: string; lengthCm: string; widthCm: string; heightCm: string };
@@ -249,7 +249,15 @@ export function ShipmentWizardModal({
       ? Math.max(0, chargeCents - balance.balanceCents)
       : 0;
   const insufficient = missingCents > 0;
-  const totalValue = chosen.reduce((acc, p) => acc + p.totalValue, 0);
+  const declarationProducts = useMemo(
+    () => buildShippingDeclarationProducts(chosen, descriptions),
+    [chosen, descriptions],
+  );
+  const totalValue =
+    declarationProducts.reduce(
+      (cents, product) => cents + Math.round(product.unitaryValue * 100) * product.quantity,
+      0,
+    ) / 100;
   const insuranceValue = insured ? totalValue : 0;
 
   const addressReady =
@@ -272,16 +280,13 @@ export function ShipmentWizardModal({
   const removeBox = (id: string) =>
     setBoxes((list) => (list.length > 1 ? list.filter((b) => b.id !== id) : list));
 
-  /** Volumes enviados à SuperFrete: uma entrada por caixa. */
-  const apiProducts = () => {
+  /** Volumes físicos usados somente no cálculo e na etiqueta. */
+  const apiParcels = () => {
     // Pacote único: mesma conta do simulador do site (peso somado, alturas
     // empilhadas). Por caixa: cada volume é cobrado separadamente.
     if (combineBoxes || boxes.length === 1) {
       return [
         {
-          name: shippingDescription,
-          quantity: 1,
-          unitaryValue: Number(totalValue.toFixed(2)),
           weightKg: parcel.weightKg || 0.3,
           lengthCm: parcel.lengthCm || 16,
           widthCm: parcel.widthCm || 11,
@@ -289,11 +294,7 @@ export function ShipmentWizardModal({
         },
       ];
     }
-    const share = boxes.length > 0 ? totalValue / boxes.length : totalValue;
-    return boxes.map((b, i) => ({
-      name: shortenDescription(`${shippingDescription} — caixa ${i + 1}`),
-      quantity: 1,
-      unitaryValue: Number(share.toFixed(2)),
+    return boxes.map((b) => ({
       weightKg: dec(b.weightKg) || 0.3,
       lengthCm: dec(b.lengthCm) || 16,
       widthCm: dec(b.widthCm) || 11,
@@ -337,7 +338,8 @@ export function ShipmentWizardModal({
         data: {
           from: origin,
           to: toAddress(),
-          products: apiProducts(),
+          products: declarationProducts,
+          parcels: apiParcels(),
           insuranceValue,
         },
       });
@@ -365,7 +367,8 @@ export function ShipmentWizardModal({
           from: origin,
           to: toAddress(),
           service: quote.id,
-          products: apiProducts(),
+          products: declarationProducts,
+          parcels: apiParcels(),
           insuranceValue,
         },
       });
