@@ -5,6 +5,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 export interface ShipmentItem {
   productId: string;
   name: string;
+  description?: string;
   platform: string;
   value: number;
   weightKg: number;
@@ -39,6 +40,7 @@ export interface ShipmentRow {
   items: ShipmentItem[];
   recipient: ShipmentRecipient | null;
   notes: string | null;
+  shippingDescription: string | null;
   createdAt: string;
   status: string;
   superfreteOrderId: string | null;
@@ -52,6 +54,7 @@ export interface ShipmentRow {
 const ItemSchema = z.object({
   productId: z.string(),
   name: z.string(),
+  description: z.string().max(500).optional(),
   platform: z.string().default(""),
   value: z.number().nonnegative().default(0),
   weightKg: z.number().nonnegative().default(0),
@@ -85,6 +88,7 @@ const CreateSchema = z.object({
   items: z.array(ItemSchema).min(1),
   recipient: RecipientSchema,
   notes: z.string().nullable().default(null),
+  shippingDescription: z.string().max(500).nullable().default(null),
   selectedServiceId: z.string().nullable().default(null),
   selectedServiceName: z.string().nullable().default(null),
   payloadQuote: z.unknown().nullable().default(null),
@@ -111,6 +115,7 @@ function mapRow(r: Record<string, unknown>): ShipmentRow {
     items: (r["items"] as ShipmentItem[]) ?? [],
     recipient: (r["recipient"] as ShipmentRecipient | null) ?? null,
     notes: (r["notes"] as string | null) ?? null,
+    shippingDescription: (r["shipping_description"] as string | null) ?? null,
     createdAt: r["created_at"] as string,
     status: (r["status"] as string) ?? "Rascunho",
     superfreteOrderId: (r["superfrete_order_id"] as string | null) ?? null,
@@ -142,6 +147,7 @@ export const createShipment = createServerFn({ method: "POST" })
         recipient: data.recipient as unknown as never,
         product_ids: data.items.map((i) => i.productId),
         notes: data.notes,
+        shipping_description: data.shippingDescription,
         created_by: userId,
         status: data.status ?? "Etiqueta pendente de pagamento",
         selected_service_id: data.selectedServiceId,

@@ -137,7 +137,14 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
                   className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md bg-muted/40 px-2.5 py-1.5"
                 >
                   <Package className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate">{it.name}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{it.description || it.name}</span>
+                    {it.description && it.description !== it.name ? (
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        Produto: {it.name}
+                      </span>
+                    ) : null}
+                  </span>
                   {it.platform && (
                     <span className="text-xs text-muted-foreground">{it.platform}</span>
                   )}
@@ -150,6 +157,17 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
               ))}
             </div>
           </div>
+
+          {shipment.shippingDescription && (
+            <div>
+              <div className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">
+                Descrição enviada à SuperFrete
+              </div>
+              <div className="whitespace-pre-wrap text-muted-foreground">
+                {shipment.shippingDescription}
+              </div>
+            </div>
+          )}
 
           {shipment.notes && (
             <div>

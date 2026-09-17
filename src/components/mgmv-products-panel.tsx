@@ -261,6 +261,7 @@ export function MgmvProductsPanel({
         products={nfProducts.map((p) => ({
           id: p.id,
           name: p.name,
+          defaultDescription: p.defaultDescription,
           platform: p.platform ?? "",
           totalValue: p.totalValue,
         }))}

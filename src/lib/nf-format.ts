@@ -4,6 +4,7 @@ import type { CustomerFiscalData } from "@/lib/customer-data-ai.functions";
 export interface NfProduct {
   id: string;
   name: string;
+  defaultDescription?: string;
   platform: string;
   totalValue: number;
 }
@@ -144,6 +145,7 @@ export function renderNfText(header: string, groups: NfGroup[]): string {
 
 export interface NfAccountantLineItem {
   name: string;
+  description?: string;
   platform: string;
   totalValue: number;
   ncm: string;
@@ -160,7 +162,7 @@ export function renderAccountantNfText(
   items.forEach((it, i) => {
     blocks.push(
       [
-        `Item ${i + 1} – ${it.name}`,
+        `Item ${i + 1} – ${it.description?.trim() || it.name}`,
         `Quantidade: 1`,
         `NCM: ${it.ncm}`,
         `Categoria fiscal: ${it.category}`,
