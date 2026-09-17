@@ -41,6 +41,11 @@ import {
 import { defaultShipOrigin, isShipOriginComplete } from "@/lib/ship-origin";
 import { useServerFn } from "@tanstack/react-start";
 import { useSuperfreteBalance } from "@/lib/use-superfrete-balance";
+import {
+  buildShippingDescription,
+  productDescription,
+  shortenDescription,
+} from "@/lib/product-descriptions";
 
 type Measures = { weightKg: string; lengthCm: string; widthCm: string; heightCm: string };
 type Box = Measures & { id: string };
@@ -95,6 +100,7 @@ export function ShipmentWizardModal({
   initialSelectedIds?: string[];
 }) {
   const setProductSituation = useStore((s) => s.setProductSituation);
+  const updateProduct = useStore((s) => s.updateProduct);
   const origin = useStore((s) => s.preferences.shipOrigin) ?? defaultShipOrigin;
   const runQuote = useServerFn(calculateSuperfreteQuote);
   const runCart = useServerFn(createSuperfreteCartOrder);
@@ -106,6 +112,8 @@ export function ShipmentWizardModal({
   const [insured, setInsured] = useState(false);
   /** Cotar tudo como um pacote só (igual ao simulador do site) ou por caixa. */
   const [combineBoxes, setCombineBoxes] = useState(true);
+  const [descriptions, setDescriptions] = useState<Record<string, string>>({});
+  const [saveDescriptionsAsDefault, setSaveDescriptionsAsDefault] = useState(false);
 
 
   const [recipient, setRecipient] = useState<ShipmentRecipient>(emptyRecipient);
@@ -144,6 +152,10 @@ export function ShipmentWizardModal({
     setBoxes([newBox()]);
     setInsured(false);
     setCombineBoxes(true);
+    setDescriptions(
+      Object.fromEntries(products.map((p) => [p.id, productDescription(p.name, p.defaultDescription)])),
+    );
+    setSaveDescriptionsAsDefault(false);
 
 
     const f = fichaFromTextWithDefaults(client.customerData, { phone: client.phone });
@@ -167,6 +179,11 @@ export function ShipmentWizardModal({
   const chosen = useMemo(
     () => products.filter((p) => selected.has(p.id)),
     [products, selected],
+  );
+
+  const shippingDescription = useMemo(
+    () => buildShippingDescription(chosen.map((p) => descriptions[p.id] || p.name)),
+    [chosen, descriptions],
   );
 
   const parcel = useMemo(
@@ -262,7 +279,7 @@ export function ShipmentWizardModal({
     if (combineBoxes || boxes.length === 1) {
       return [
         {
-          name: boxes.length > 1 ? `Pacote (${boxes.length} caixas)` : "Pacote",
+          name: shippingDescription,
           quantity: 1,
           unitaryValue: Number(totalValue.toFixed(2)),
           weightKg: parcel.weightKg || 0.3,
@@ -274,7 +291,7 @@ export function ShipmentWizardModal({
     }
     const share = boxes.length > 0 ? totalValue / boxes.length : totalValue;
     return boxes.map((b, i) => ({
-      name: `Caixa ${i + 1}`,
+      name: shortenDescription(`${shippingDescription} — caixa ${i + 1}`),
       quantity: 1,
       unitaryValue: Number(share.toFixed(2)),
       weightKg: dec(b.weightKg) || 0.3,
@@ -366,6 +383,7 @@ export function ShipmentWizardModal({
           items: chosen.map((p) => ({
             productId: p.id,
             name: p.name,
+            description: (descriptions[p.id] || p.name).trim(),
             platform: p.platform ?? "",
             value: p.totalValue,
             weightKg: 0,
@@ -389,6 +407,7 @@ export function ShipmentWizardModal({
             ]
               .filter(Boolean)
               .join(" · ") || null,
+          shippingDescription,
           selectedServiceId: quote.id,
           selectedServiceName: quote.name,
           superfreteOrderId: order.orderId || null,
@@ -406,6 +425,14 @@ export function ShipmentWizardModal({
         priceCents: order.priceCents ?? quote.priceCents,
         insuredValue: order.insuredValue ?? null,
       });
+
+      if (saveDescriptionsAsDefault) {
+        chosen.forEach((product) =>
+          updateProduct(product.id, {
+            defaultDescription: (descriptions[product.id] || product.name).trim(),
+          }),
+        );
+      }
 
       toast.success(`Etiqueta criada na SuperFrete (${order.internalStatus}).`);
     } catch (e) {
@@ -517,6 +544,45 @@ export function ShipmentWizardModal({
                   );
                 })}
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Descrição dos produtos</p>
+              <p className="text-xs text-muted-foreground">
+                Revise o texto que identificará os produtos na SuperFrete.
+              </p>
+              {chosen.map((product) => (
+                <div key={product.id} className="grid gap-1">
+                  <Label htmlFor={`shipping-description-${product.id}`} className="text-xs">
+                    {product.name}
+                  </Label>
+                  <Input
+                    id={`shipping-description-${product.id}`}
+                    value={descriptions[product.id] ?? product.name}
+                    maxLength={500}
+                    onChange={(event) => {
+                      setDescriptions((current) => ({
+                        ...current,
+                        [product.id]: event.target.value,
+                      }));
+                      setOptions([]);
+                      setQuoteId("");
+                    }}
+                  />
+                </div>
+              ))}
+              <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs">
+                <span className="font-medium">Resumo enviado: </span>
+                {shippingDescription}
+              </div>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={saveDescriptionsAsDefault}
+                  onChange={(event) => setSaveDescriptionsAsDefault(event.target.checked)}
+                />
+                Salvar estas descrições como padrão dos produtos
+              </label>
             </div>
 
             <div className="space-y-2">
