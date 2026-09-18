@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, Save, Trash2, Wand2, ArrowUp, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,8 @@ type PreviewFilter = "all" | "new" | "change" | "unmatched";
 export function CategoryRulesTab({ categories, platforms, initialRules, onChanged }: Props) {
   const saveFn = useServerFn(saveCategoryRules);
   const linkFn = useServerFn(setPlatformCategories);
+  const queryClient = useQueryClient();
+
 
   const [rules, setRules] = useState<CategoryRule[]>(initialRules);
   const [skipAssigned, setSkipAssigned] = useState(true);
@@ -114,7 +117,8 @@ export function CategoryRulesTab({ categories, platforms, initialRules, onChange
   async function persistRules() {
     setBusy(true);
     try {
-      await saveFn({ data: { rules } });
+      const saved = await saveFn({ data: { rules } });
+      queryClient.setQueryData(["category-rules"], saved ?? rules);
       toast.success("Regras salvas.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao salvar as regras.");
