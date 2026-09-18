@@ -117,7 +117,8 @@ export function CategoryRulesTab({ categories, platforms, initialRules, onChange
   async function persistRules() {
     setBusy(true);
     try {
-      await saveFn({ data: { rules } });
+      const saved = await saveFn({ data: { rules } });
+      queryClient.setQueryData(["category-rules"], saved ?? rules);
       toast.success("Regras salvas.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao salvar as regras.");
