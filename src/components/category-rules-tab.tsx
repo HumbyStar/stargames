@@ -43,6 +43,8 @@ type PreviewFilter = "all" | "new" | "change" | "unmatched";
 export function CategoryRulesTab({ categories, platforms, initialRules, onChanged }: Props) {
   const saveFn = useServerFn(saveCategoryRules);
   const linkFn = useServerFn(setPlatformCategories);
+  const queryClient = useQueryClient();
+
 
   const [rules, setRules] = useState<CategoryRule[]>(initialRules);
   const [skipAssigned, setSkipAssigned] = useState(true);
