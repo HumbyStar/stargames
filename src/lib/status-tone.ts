@@ -4,9 +4,16 @@ import { isOpenSituation, isOverdue } from "@/lib/store";
 type ToneInput = Pick<Product, "financialStatus" | "situation" | "dueDate">;
 
 /** Classificação única usada pelo fundo, pelo texto e pela Tag do status. */
-export type StatusTone = "closed" | "paid" | "overdue" | "reserva" | "none";
+export type StatusTone =
+  | "closed"
+  | "paid"
+  | "overdue"
+  | "reserva"
+  | "retirar"
+  | "none";
 
 export function productToneKind(p: ToneInput): StatusTone {
+  if (p.situation === "Retirar") return "retirar";
   if (!isOpenSituation({ situation: p.situation, financialStatus: p.financialStatus })) {
     return "closed";
   }
@@ -22,6 +29,7 @@ export function productToneKind(p: ToneInput): StatusTone {
  * Fundo suave por status financeiro do produto.
  *
  * Regras:
+ * - Retirar -> laranja (destaque para itens aguardando retirada).
  * - Situação fechada (Enviado, Removido, Retirado, Resolvido, ...) -> cinza,
  *   mesmo que o item esteja pago ou vencido.
  * - Pago em aberto -> verde.
@@ -38,6 +46,8 @@ export function productStatusTone(p: ToneInput): string {
       return "bg-[color:var(--warning)]/10";
     case "overdue":
       return "bg-destructive/10";
+    case "retirar":
+      return "bg-[color:var(--orange)]/10";
     default:
       return "";
   }
@@ -50,6 +60,8 @@ export function productStatusTextTone(p: ToneInput): string {
       return "text-muted-foreground";
     case "overdue":
       return "text-destructive font-semibold";
+    case "retirar":
+      return "text-[color:var(--orange)] font-semibold";
     default:
       return "";
   }
@@ -58,7 +70,7 @@ export function productStatusTextTone(p: ToneInput): string {
 /** Variante da <Tag> do status, alinhada às cores da legenda. */
 export function productStatusVariant(
   p: ToneInput,
-): "neutral" | "success" | "danger" | "warning" {
+): "neutral" | "success" | "danger" | "warning" | "orange" {
   switch (productToneKind(p)) {
     case "closed":
       return "neutral";
@@ -68,6 +80,8 @@ export function productStatusVariant(
       return "warning";
     case "overdue":
       return "danger";
+    case "retirar":
+      return "orange";
     default:
       return "neutral";
   }

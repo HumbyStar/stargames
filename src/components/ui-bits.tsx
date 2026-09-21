@@ -77,7 +77,7 @@ export function Tag({
   className,
 }: {
   children: ReactNode;
-  variant?: "neutral" | "success" | "danger" | "warning" | "primary";
+  variant?: "neutral" | "success" | "danger" | "warning" | "primary" | "orange";
   className?: string;
 }) {
   const styles = {
@@ -86,6 +86,7 @@ export function Tag({
     danger: "bg-destructive/10 text-destructive",
     warning: "bg-[color:var(--warning)]/25 text-[color:var(--warning-foreground)]",
     primary: "bg-primary/10 text-primary",
+    orange: "bg-[color:var(--orange)]/15 text-[color:var(--orange)]",
   }[variant];
   return (
     <span
