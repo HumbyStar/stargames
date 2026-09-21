@@ -1,12 +1,16 @@
 import type { FinancialStatus, Product } from "@/lib/store";
 import { isOpenSituation, isOverdue } from "@/lib/store";
 
-type ToneInput = Pick<Product, "financialStatus" | "situation" | "dueDate">;
-
-/** Classificação única usada pelo fundo, pelo texto e pela Tag do status. */
-export type StatusTone = "closed" | "paid" | "overdue" | "reserva" | "none";
+export type StatusTone =
+  | "closed"
+  | "paid"
+  | "overdue"
+  | "reserva"
+  | "retirar"
+  | "none";
 
 export function productToneKind(p: ToneInput): StatusTone {
+  if (p.situation === "Retirar") return "retirar";
   if (!isOpenSituation({ situation: p.situation, financialStatus: p.financialStatus })) {
     return "closed";
   }
