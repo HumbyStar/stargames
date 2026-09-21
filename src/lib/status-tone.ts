@@ -60,6 +60,8 @@ export function productStatusTextTone(p: ToneInput): string {
       return "text-muted-foreground";
     case "overdue":
       return "text-destructive font-semibold";
+    case "retirar":
+      return "text-[color:var(--orange)] font-semibold";
     default:
       return "";
   }
@@ -68,7 +70,7 @@ export function productStatusTextTone(p: ToneInput): string {
 /** Variante da <Tag> do status, alinhada às cores da legenda. */
 export function productStatusVariant(
   p: ToneInput,
-): "neutral" | "success" | "danger" | "warning" {
+): "neutral" | "success" | "danger" | "warning" | "orange" {
   switch (productToneKind(p)) {
     case "closed":
       return "neutral";
@@ -78,6 +80,8 @@ export function productStatusVariant(
       return "warning";
     case "overdue":
       return "danger";
+    case "retirar":
+      return "orange";
     default:
       return "neutral";
   }
