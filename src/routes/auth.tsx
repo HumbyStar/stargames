@@ -106,6 +106,7 @@ function AuthPage() {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         const network = isNetworkFailure(error.message);
+        setBlocked(network);
         toast.error(network ? "Sem conexão com o servidor de login" : "Falha ao entrar", {
           description: describeAuthError(error.message),
           duration: network ? 12000 : 6000,
@@ -116,6 +117,7 @@ function AuthPage() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro inesperado";
       const network = isNetworkFailure(msg);
+      setBlocked(network);
       toast.error(network ? "Sem conexão com o servidor de login" : "Não foi possível concluir o login", {
         description: describeAuthError(msg),
         duration: network ? 12000 : 6000,
