@@ -1,0 +1,2 @@
+ALTER TABLE public.import_progress DROP CONSTRAINT IF EXISTS import_progress_user_id_file_hash_key;
+ALTER TABLE public.import_progress ADD CONSTRAINT import_progress_user_file_env_key UNIQUE (user_id, file_hash, env);
