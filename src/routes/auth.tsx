@@ -150,6 +150,13 @@ function AuthPage() {
           </div>
         </div>
 
+        {blocked && (
+          <div className="mb-4 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-foreground">
+            <p className="font-medium">Seu navegador não está conseguindo alcançar o servidor</p>
+            <p className="mt-1 text-muted-foreground">{NETWORK_HINT}</p>
+          </div>
+        )}
+
         <form
           onSubmit={onSubmit}
           className="rounded-2xl border border-border bg-card/80 p-6 shadow-xl backdrop-blur space-y-4"
