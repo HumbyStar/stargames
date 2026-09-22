@@ -10,6 +10,9 @@ import {
 import { useEffect, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useStore } from "@/lib/store";
+import { installSupabaseNetworkFallback } from "@/lib/supabase-network-fallback";
+
+installSupabaseNetworkFallback();
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
