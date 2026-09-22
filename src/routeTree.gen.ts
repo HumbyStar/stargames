@@ -22,6 +22,7 @@ import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } fr
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
+import { Route as ApiPublicSbSplatRouteImport } from './routes/api/public/sb/$'
 import { Route as ApiPublicHooksBackupRunRouteImport } from './routes/api/public/hooks/backup-run'
 
 const McpRoute = McpRouteImport.update({
@@ -91,6 +92,11 @@ const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
   path: '/.lovable/oauth/consent',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicSbSplatRoute = ApiPublicSbSplatRouteImport.update({
+  id: '/api/public/sb/$',
+  path: '/api/public/sb/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHooksBackupRunRoute = ApiPublicHooksBackupRunRouteImport.update({
   id: '/api/public/hooks/backup-run',
   path: '/api/public/hooks/backup-run',
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/public/hooks/backup-run': typeof ApiPublicHooksBackupRunRoute
+  '/api/public/sb/$': typeof ApiPublicSbSplatRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
@@ -126,6 +133,7 @@ export interface FileRoutesByTo {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/public/hooks/backup-run': typeof ApiPublicHooksBackupRunRoute
+  '/api/public/sb/$': typeof ApiPublicSbSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -143,6 +151,7 @@ export interface FileRoutesById {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/public/hooks/backup-run': typeof ApiPublicHooksBackupRunRoute
+  '/api/public/sb/$': typeof ApiPublicSbSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -160,6 +169,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/public/hooks/backup-run'
+    | '/api/public/sb/$'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
@@ -175,6 +185,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/public/hooks/backup-run'
+    | '/api/public/sb/$'
   id:
     | '__root__'
     | '/_authenticated'
@@ -191,6 +202,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/public/hooks/backup-run'
+    | '/api/public/sb/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -203,6 +215,7 @@ export interface RootRouteChildren {
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   ApiPublicHooksBackupRunRoute: typeof ApiPublicHooksBackupRunRoute
+  ApiPublicSbSplatRoute: typeof ApiPublicSbSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -298,6 +311,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DotlovableOauthConsentRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/sb/$': {
+      id: '/api/public/sb/$'
+      path: '/api/public/sb/$'
+      fullPath: '/api/public/sb/$'
+      preLoaderRoute: typeof ApiPublicSbSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/backup-run': {
       id: '/api/public/hooks/backup-run'
       path: '/api/public/hooks/backup-run'
@@ -339,6 +359,7 @@ const rootRouteChildren: RootRouteChildren = {
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   ApiPublicHooksBackupRunRoute: ApiPublicHooksBackupRunRoute,
+  ApiPublicSbSplatRoute: ApiPublicSbSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
