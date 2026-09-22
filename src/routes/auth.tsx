@@ -57,14 +57,22 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [blocked, setBlocked] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        if (next) window.location.replace(next);
-        else navigate({ to: "/", replace: true });
-      }
-    });
+    supabase.auth
+      .getUser()
+      .then(({ data, error }) => {
+        if (error && isNetworkFailure(error.message)) setBlocked(true);
+        if (data.user) {
+          if (next) window.location.replace(next);
+          else navigate({ to: "/", replace: true });
+        }
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "";
+        if (isNetworkFailure(msg)) setBlocked(true);
+      });
   }, [navigate, next]);
 
   async function attemptClaim() {
@@ -98,6 +106,7 @@ function AuthPage() {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         const network = isNetworkFailure(error.message);
+        setBlocked(network);
         toast.error(network ? "Sem conexão com o servidor de login" : "Falha ao entrar", {
           description: describeAuthError(error.message),
           duration: network ? 12000 : 6000,
@@ -108,6 +117,7 @@ function AuthPage() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro inesperado";
       const network = isNetworkFailure(msg);
+      setBlocked(network);
       toast.error(network ? "Sem conexão com o servidor de login" : "Não foi possível concluir o login", {
         description: describeAuthError(msg),
         duration: network ? 12000 : 6000,
@@ -139,6 +149,13 @@ function AuthPage() {
             <p className="text-sm text-muted-foreground">Gestão Operacional</p>
           </div>
         </div>
+
+        {blocked && (
+          <div className="mb-4 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-foreground">
+            <p className="font-medium">Seu navegador não está conseguindo alcançar o servidor</p>
+            <p className="mt-1 text-muted-foreground">{NETWORK_HINT}</p>
+          </div>
+        )}
 
         <form
           onSubmit={onSubmit}
