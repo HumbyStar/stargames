@@ -57,14 +57,22 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [blocked, setBlocked] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        if (next) window.location.replace(next);
-        else navigate({ to: "/", replace: true });
-      }
-    });
+    supabase.auth
+      .getUser()
+      .then(({ data, error }) => {
+        if (error && isNetworkFailure(error.message)) setBlocked(true);
+        if (data.user) {
+          if (next) window.location.replace(next);
+          else navigate({ to: "/", replace: true });
+        }
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "";
+        if (isNetworkFailure(msg)) setBlocked(true);
+      });
   }, [navigate, next]);
 
   async function attemptClaim() {
