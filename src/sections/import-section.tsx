@@ -1311,7 +1311,7 @@ export function ImportSection({ onScrollTo }: { onScrollTo: (id: string) => void
       };
       const { data, error } = await supabase
         .from("import_progress")
-        .upsert(payload, { onConflict: "user_id,file_hash" })
+        .upsert(payload, { onConflict: "user_id,file_hash,env" })
         .select("id")
         .maybeSingle();
       if (error) {

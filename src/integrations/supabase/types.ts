@@ -337,11 +337,13 @@ export type Database = {
           created_at: string
           current_idx: number
           done: boolean
+          env: Database["public"]["Enums"]["app_env"]
           errors: Json
           file_hash: string
           folders: Json
           id: string
           messages: Json
+          sandbox_owner: string | null
           started_at: string
           stats: Json
           total: number
@@ -353,11 +355,13 @@ export type Database = {
           created_at?: string
           current_idx?: number
           done?: boolean
+          env?: Database["public"]["Enums"]["app_env"]
           errors?: Json
           file_hash: string
           folders?: Json
           id?: string
           messages?: Json
+          sandbox_owner?: string | null
           started_at?: string
           stats?: Json
           total?: number
@@ -369,11 +373,13 @@ export type Database = {
           created_at?: string
           current_idx?: number
           done?: boolean
+          env?: Database["public"]["Enums"]["app_env"]
           errors?: Json
           file_hash?: string
           folders?: Json
           id?: string
           messages?: Json
+          sandbox_owner?: string | null
           started_at?: string
           stats?: Json
           total?: number
