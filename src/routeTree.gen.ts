@@ -9,30 +9,24 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as McpRouteImport } from './routes/mcp'
-import { Route as ManutencaoRouteImport } from './routes/manutencao'
-import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
-import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated.index'
-import { Route as AuthenticatedSandboxRouteImport } from './routes/_authenticated.sandbox'
-import { Route as AuthenticatedQaRouteImport } from './routes/_authenticated.qa'
-import { Route as AuthenticatedNikostartRouteImport } from './routes/_authenticated.nikostart'
-import { Route as AuthenticatedDadosMetaRouteImport } from './routes/_authenticated.dados-meta'
-import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as ManutencaoRouteImport } from './routes/manutencao'
+import { Route as McpRouteImport } from './routes/mcp'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
-import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
+import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
+import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated.index'
+import { Route as AuthenticatedDadosMetaRouteImport } from './routes/_authenticated.dados-meta'
+import { Route as AuthenticatedNikostartRouteImport } from './routes/_authenticated.nikostart'
+import { Route as AuthenticatedQaRouteImport } from './routes/_authenticated.qa'
+import { Route as AuthenticatedSandboxRouteImport } from './routes/_authenticated.sandbox'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
-import { Route as ApiPublicSbSplatRouteImport } from './routes/api/public/sb/$'
+import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as ApiPublicHooksBackupRunRouteImport } from './routes/api/public/hooks/backup-run'
+import { Route as ApiPublicSbSplatRouteImport } from './routes/api/public/sb/$'
 
-const McpRoute = McpRouteImport.update({
-  id: '/mcp',
-  path: '/mcp',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ManutencaoRoute = ManutencaoRouteImport.update({
-  id: '/manutencao',
-  path: '/manutencao',
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -40,28 +34,31 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedRoute = AuthenticatedRouteImport.update({
-  id: '/_authenticated',
+const ManutencaoRoute = ManutencaoRouteImport.update({
+  id: '/manutencao',
+  path: '/manutencao',
   getParentRoute: () => rootRouteImport,
 } as any)
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Char91DotmcpChar93ListToolsRoute =
+  Char91DotmcpChar93ListToolsRouteImport.update({
+    id: '/.mcp/list-tools',
+    path: '/.mcp/list-tools',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char91DotwellKnownChar93OauthProtectedResourceRoute =
+  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedSandboxRoute = AuthenticatedSandboxRouteImport.update({
-  id: '/sandbox',
-  path: '/sandbox',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedQaRoute = AuthenticatedQaRouteImport.update({
-  id: '/qa',
-  path: '/qa',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedNikostartRoute = AuthenticatedNikostartRouteImport.update({
-  id: '/nikostart',
-  path: '/nikostart',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedDadosMetaRoute = AuthenticatedDadosMetaRouteImport.update({
@@ -69,37 +66,40 @@ const AuthenticatedDadosMetaRoute = AuthenticatedDadosMetaRouteImport.update({
   path: '/dados-meta',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const Char91DotwellKnownChar93OauthProtectedResourceRoute =
-  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
-    id: '/.well-known/oauth-protected-resource',
-    path: '/.well-known/oauth-protected-resource',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const Char91DotmcpChar93ListToolsRoute =
-  Char91DotmcpChar93ListToolsRouteImport.update({
-    id: '/.mcp/list-tools',
-    path: '/.mcp/list-tools',
-    getParentRoute: () => rootRouteImport,
-  } as any)
+const AuthenticatedNikostartRoute = AuthenticatedNikostartRouteImport.update({
+  id: '/nikostart',
+  path: '/nikostart',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedQaRoute = AuthenticatedQaRouteImport.update({
+  id: '/qa',
+  path: '/qa',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedSandboxRoute = AuthenticatedSandboxRouteImport.update({
+  id: '/sandbox',
+  path: '/sandbox',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
+  id: '/.lovable/oauth/consent',
+  path: '/.lovable/oauth/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const Char91DotmcpChar93InvokeToolToolRoute =
   Char91DotmcpChar93InvokeToolToolRouteImport.update({
     id: '/.mcp/invoke-tool/$tool',
     path: '/.mcp/invoke-tool/$tool',
     getParentRoute: () => rootRouteImport,
   } as any)
-const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
-  id: '/.lovable/oauth/consent',
-  path: '/.lovable/oauth/consent',
+const ApiPublicHooksBackupRunRoute = ApiPublicHooksBackupRunRouteImport.update({
+  id: '/api/public/hooks/backup-run',
+  path: '/api/public/hooks/backup-run',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicSbSplatRoute = ApiPublicSbSplatRouteImport.update({
   id: '/api/public/sb/$',
   path: '/api/public/sb/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPublicHooksBackupRunRoute = ApiPublicHooksBackupRunRouteImport.update({
-  id: '/api/public/hooks/backup-run',
-  path: '/api/public/hooks/backup-run',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -220,18 +220,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/mcp': {
-      id: '/mcp'
-      path: '/mcp'
-      fullPath: '/mcp'
-      preLoaderRoute: typeof McpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/manutencao': {
-      id: '/manutencao'
-      path: '/manutencao'
-      fullPath: '/manutencao'
-      preLoaderRoute: typeof ManutencaoRouteImport
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -241,53 +234,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated': {
-      id: '/_authenticated'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedRouteImport
+    '/manutencao': {
+      id: '/manutencao'
+      path: '/manutencao'
+      fullPath: '/manutencao'
+      preLoaderRoute: typeof ManutencaoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/': {
-      id: '/_authenticated/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/sandbox': {
-      id: '/_authenticated/sandbox'
-      path: '/sandbox'
-      fullPath: '/sandbox'
-      preLoaderRoute: typeof AuthenticatedSandboxRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/qa': {
-      id: '/_authenticated/qa'
-      path: '/qa'
-      fullPath: '/qa'
-      preLoaderRoute: typeof AuthenticatedQaRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/nikostart': {
-      id: '/_authenticated/nikostart'
-      path: '/nikostart'
-      fullPath: '/nikostart'
-      preLoaderRoute: typeof AuthenticatedNikostartRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/dados-meta': {
-      id: '/_authenticated/dados-meta'
-      path: '/dados-meta'
-      fullPath: '/dados-meta'
-      preLoaderRoute: typeof AuthenticatedDadosMetaRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/.well-known/oauth-protected-resource': {
-      id: '/.well-known/oauth-protected-resource'
-      path: '/.well-known/oauth-protected-resource'
-      fullPath: '/.well-known/oauth-protected-resource'
-      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/.mcp/list-tools': {
@@ -297,12 +255,47 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/.mcp/invoke-tool/$tool': {
-      id: '/.mcp/invoke-tool/$tool'
-      path: '/.mcp/invoke-tool/$tool'
-      fullPath: '/.mcp/invoke-tool/$tool'
-      preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/': {
+      id: '/_authenticated/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/dados-meta': {
+      id: '/_authenticated/dados-meta'
+      path: '/dados-meta'
+      fullPath: '/dados-meta'
+      preLoaderRoute: typeof AuthenticatedDadosMetaRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/nikostart': {
+      id: '/_authenticated/nikostart'
+      path: '/nikostart'
+      fullPath: '/nikostart'
+      preLoaderRoute: typeof AuthenticatedNikostartRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/qa': {
+      id: '/_authenticated/qa'
+      path: '/qa'
+      fullPath: '/qa'
+      preLoaderRoute: typeof AuthenticatedQaRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/sandbox': {
+      id: '/_authenticated/sandbox'
+      path: '/sandbox'
+      fullPath: '/sandbox'
+      preLoaderRoute: typeof AuthenticatedSandboxRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
     '/.lovable/oauth/consent': {
       id: '/.lovable/oauth/consent'
@@ -311,11 +304,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DotlovableOauthConsentRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/sb/$': {
-      id: '/api/public/sb/$'
-      path: '/api/public/sb/$'
-      fullPath: '/api/public/sb/$'
-      preLoaderRoute: typeof ApiPublicSbSplatRouteImport
+    '/.mcp/invoke-tool/$tool': {
+      id: '/.mcp/invoke-tool/$tool'
+      path: '/.mcp/invoke-tool/$tool'
+      fullPath: '/.mcp/invoke-tool/$tool'
+      preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/backup-run': {
@@ -323,6 +316,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/hooks/backup-run'
       fullPath: '/api/public/hooks/backup-run'
       preLoaderRoute: typeof ApiPublicHooksBackupRunRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/sb/$': {
+      id: '/api/public/sb/$'
+      path: '/api/public/sb/$'
+      fullPath: '/api/public/sb/$'
+      preLoaderRoute: typeof ApiPublicSbSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
