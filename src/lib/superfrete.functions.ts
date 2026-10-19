@@ -139,17 +139,31 @@ async function logEvent(
  * Bloco de opções usado TANTO na cotação quanto na criação da etiqueta.
  * Manter idêntico evita a diferença entre o valor cotado e o valor cobrado.
  */
-function shippingOptions(insuranceValue: number) {
+function shippingOptions(insuranceValue: number, invoiceKey?: string | null) {
   return {
     own_hand: false,
     receipt: false,
     reverse: false,
-    non_commercial: true,
+    // Com NF o envio é comercial: a etiqueta sai com "NF: <chave>" e sem declaração.
+    non_commercial: !invoiceKey,
+    ...(invoiceKey ? { invoice: { key: invoiceKey } } : {}),
     insurance_value: Number(insuranceValue.toFixed(2)),
     use_insurance_value: insuranceValue > 0,
     platform: "Star Games",
   };
 }
+
+/** Chave de acesso (44 dígitos) ou número da NF; vazio = sem NF. */
+const InvoiceKeySchema = z
+  .string()
+  .nullable()
+  .optional()
+  .transform((v) => {
+    const raw = (v ?? "").trim();
+    if (!raw) return null;
+    const d = raw.replace(/\D/g, "");
+    return d.length > 0 ? d : raw;
+  });
 
 /** Cotação de frete — POST /calculator. */
 export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
@@ -162,6 +176,7 @@ export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
         products: z.array(ProductSchema).min(1),
         parcels: z.array(ParcelSchema).min(1),
         insuranceValue: z.number().nonnegative().default(0),
+        invoiceKey: InvoiceKeySchema,
         services: z.string().default(SUPERFRETE_SERVICES),
       })
       .parse(data),
@@ -193,7 +208,7 @@ export const calculateSuperfreteQuote = createServerFn({ method: "POST" })
       from: { postal_code: fromCep },
       to: { postal_code: toCep },
       services: data.services,
-      options: shippingOptions(insuranceValue),
+      options: shippingOptions(insuranceValue, data.invoiceKey),
       products: apiProducts,
     });
 
@@ -429,6 +444,7 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
         products: z.array(ProductSchema).min(1),
         parcels: z.array(ParcelSchema).min(1),
         insuranceValue: z.number().nonnegative().default(0),
+        invoiceKey: InvoiceKeySchema,
       })
       .parse(data),
   )
@@ -452,15 +468,20 @@ export const createSuperfreteCartOrder = createServerFn({ method: "POST" })
       from: addressToApi(data.from),
       to: addressToApi(data.to),
       service: Number(data.service),
-      products: data.products.map((p) => ({
-        name: p.name,
-        quantity: p.quantity,
-        unitary_value: Number(p.unitaryValue.toFixed(2)),
-      })),
+      // Com NF, os itens são cobertos pela nota (sem declaração de conteúdo).
+      ...(data.invoiceKey
+        ? {}
+        : {
+            products: data.products.map((p) => ({
+              name: p.name,
+              quantity: p.quantity,
+              unitary_value: Number(p.unitaryValue.toFixed(2)),
+            })),
+          }),
       volumes: volumes.length === 1 ? volumes[0] : volumes,
 
       // Mesmo bloco de opções da cotação — evita cobrar diferente do cotado.
-      options: shippingOptions(data.insuranceValue),
+      options: shippingOptions(data.insuranceValue, data.invoiceKey),
 
     };
 
