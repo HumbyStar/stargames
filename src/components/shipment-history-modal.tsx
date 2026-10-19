@@ -51,6 +51,11 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
   }, [expanded, logs, fetchLogs, shipment.id]);
 
   const download = async () => {
+    // Etiqueta oficial da SuperFrete (com NF no cabeçalho quando houver).
+    if (shipment.labelUrl) {
+      window.open(shipment.labelUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
     setDownloading(true);
     try {
       await downloadShipmentLabelPdf(shipment);

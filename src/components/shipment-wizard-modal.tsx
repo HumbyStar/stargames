@@ -114,6 +114,9 @@ export function ShipmentWizardModal({
   const [combineBoxes, setCombineBoxes] = useState(true);
   const [descriptions, setDescriptions] = useState<Record<string, string>>({});
   const [saveDescriptionsAsDefault, setSaveDescriptionsAsDefault] = useState(false);
+  /** Chave/número da NF-e. Preenchido = envio comercial, sem declaração de conteúdo. */
+  const [invoiceKey, setInvoiceKey] = useState("");
+  const hasInvoice = invoiceKey.trim().length > 0;
 
 
   const [recipient, setRecipient] = useState<ShipmentRecipient>(emptyRecipient);
@@ -156,6 +159,7 @@ export function ShipmentWizardModal({
       Object.fromEntries(products.map((p) => [p.id, productDescription(p.name, p.defaultDescription)])),
     );
     setSaveDescriptionsAsDefault(false);
+    setInvoiceKey("");
 
 
     const f = fichaFromTextWithDefaults(client.customerData, { phone: client.phone });
@@ -341,6 +345,7 @@ export function ShipmentWizardModal({
           products: declarationProducts,
           parcels: apiParcels(),
           insuranceValue,
+          invoiceKey: hasInvoice ? invoiceKey.trim() : null,
         },
       });
 
@@ -370,6 +375,7 @@ export function ShipmentWizardModal({
           products: declarationProducts,
           parcels: apiParcels(),
           insuranceValue,
+          invoiceKey: hasInvoice ? invoiceKey.trim() : null,
         },
       });
 
@@ -398,6 +404,7 @@ export function ShipmentWizardModal({
           notes:
             [
               notes.trim(),
+              hasInvoice ? `NF: ${invoiceKey.trim()}` : "",
               `Caixas: ${boxes
                 .map(
                   (b, i) =>
@@ -549,6 +556,30 @@ export function ShipmentWizardModal({
               </div>
             </div>
 
+            <div className="space-y-1">
+              <Label htmlFor="shipping-invoice-key" className="text-sm font-medium">
+                Nota fiscal (opcional)
+              </Label>
+              <Input
+                id="shipping-invoice-key"
+                inputMode="numeric"
+                placeholder="Chave de acesso (44 dígitos) ou número da NF"
+                value={invoiceKey}
+                maxLength={60}
+                onChange={(e) => {
+                  setInvoiceKey(e.target.value);
+                  setOptions([]);
+                  setQuoteId("");
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                {hasInvoice
+                  ? "Envio com nota fiscal: a declaração de itens não será feita e a NF sai impressa na etiqueta."
+                  : "Sem nota fiscal, o envio segue com a declaração de conteúdo dos itens."}
+              </p>
+            </div>
+
+            {!hasInvoice && (
             <div className="space-y-2">
               <p className="text-sm font-medium">Descrição dos produtos</p>
               <p className="text-xs text-muted-foreground">
@@ -587,6 +618,7 @@ export function ShipmentWizardModal({
                 Salvar estas descrições como padrão dos produtos
               </label>
             </div>
+            )}
 
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
