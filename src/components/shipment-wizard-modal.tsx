@@ -549,6 +549,30 @@ export function ShipmentWizardModal({
               </div>
             </div>
 
+            <div className="space-y-1">
+              <Label htmlFor="shipping-invoice-key" className="text-sm font-medium">
+                Nota fiscal (opcional)
+              </Label>
+              <Input
+                id="shipping-invoice-key"
+                inputMode="numeric"
+                placeholder="Chave de acesso (44 dígitos) ou número da NF"
+                value={invoiceKey}
+                maxLength={60}
+                onChange={(e) => {
+                  setInvoiceKey(e.target.value);
+                  setOptions([]);
+                  setQuoteId("");
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                {hasInvoice
+                  ? "Envio com nota fiscal: a declaração de itens não será feita e a NF sai impressa na etiqueta."
+                  : "Sem nota fiscal, o envio segue com a declaração de conteúdo dos itens."}
+              </p>
+            </div>
+
+            {!hasInvoice && (
             <div className="space-y-2">
               <p className="text-sm font-medium">Descrição dos produtos</p>
               <p className="text-xs text-muted-foreground">
