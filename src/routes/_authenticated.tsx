@@ -3,6 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { PermissionsProvider } from "@/lib/use-permissions";
 import { SessionGuard } from "@/components/session-guard";
 import { getMaintenanceState } from "@/lib/maintenance.functions";
+import {
+  BACKUP_LOCK_ACTIVE,
+  BackupLockModal,
+  isBackupLockAllowed,
+} from "@/components/backup-lock-modal";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -20,18 +25,24 @@ export const Route = createFileRoute("/_authenticated")({
         throw redirect({ to: "/manutencao" });
       }
     } catch (err) {
-      // Propaga redirects (incluindo o nosso para /manutencao).
       if (isRedirect(err)) throw err;
-      // erro transient: segue o fluxo normal, guard revalida depois.
     }
 
-    return { user: data.user };
+    const backupLocked = BACKUP_LOCK_ACTIVE && !isBackupLockAllowed(data.user.email);
+    return { user: data.user, backupLocked };
   },
-  component: () => (
+  component: AuthenticatedLayout,
+});
+
+function AuthenticatedLayout() {
+  const { backupLocked } = Route.useRouteContext();
+  // Bloqueado: não monta o painel (nenhum dado é carregado).
+  if (backupLocked) return <BackupLockModal />;
+  return (
     <PermissionsProvider>
       <SessionGuard>
         <Outlet />
       </SessionGuard>
     </PermissionsProvider>
-  ),
-});
+  );
+}
