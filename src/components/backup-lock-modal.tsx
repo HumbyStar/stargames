@@ -3,7 +3,7 @@ import { DatabaseBackup, Clock } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
 /** Bloqueio temporário: só este e-mail entra. Para desativar, mude BACKUP_LOCK_ACTIVE para false. */
-export const BACKUP_LOCK_ACTIVE = true;
+export const BACKUP_LOCK_ACTIVE = false;
 export const BACKUP_LOCK_ALLOWED = "joaovittormkt";
 const STARTED_AT = new Date("2026-10-30T20:20:00Z").getTime();
 const DURATION_MS = 60 * 60 * 1000;
