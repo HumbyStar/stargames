@@ -8,6 +8,10 @@ export const Route = createFileRoute("/manutencao")({
   head: () => ({
     meta: [
       { title: "Manutenção — Star Games" },
+      { property: "og:title", content: "Manutenção — Star Games" },
+      { property: "og:description", content: "O sistema Star Games está em manutenção. Voltaremos em breve." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       {
         name: "description",
         content: "O sistema está em manutenção. Voltaremos em breve.",

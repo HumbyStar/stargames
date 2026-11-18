@@ -21,6 +21,8 @@ export const Route = createFileRoute("/_authenticated/sandbox")({
         content: "Ambiente isolado para testar importações, backups e edições sem risco.",
       },
       { name: "robots", content: "noindex" },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: SandboxPage,

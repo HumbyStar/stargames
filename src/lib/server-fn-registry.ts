@@ -8,6 +8,7 @@
 // apenas stubs RPC, então não há custo relevante de bundle.
 
 import "@/lib/api/queries.functions";
+import "@/lib/api/finance.functions";
 import "@/lib/permissions.functions";
 import "@/lib/session-guard.functions";
 

@@ -17,6 +17,10 @@ export const Route = createFileRoute("/auth")({
     meta: [
       { title: "Entrar — Star Games" },
       { name: "description", content: "Acesso ao painel operacional Star Games." },
+      { property: "og:title", content: "Entrar — Star Games" },
+      { property: "og:description", content: "Acesso ao painel operacional Star Games." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: AuthPage,

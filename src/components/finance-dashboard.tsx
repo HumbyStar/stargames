@@ -4,7 +4,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { RefreshCw } from "lucide-react";
 import {
   getFinanceAggregates,
-  type FinanceAggregates,
   type TimelineMode,
 } from "@/lib/api/finance.functions";
 import {
@@ -38,6 +37,7 @@ import {
 } from "recharts";
 import { useStore } from "@/lib/store";
 import { useUiStore } from "@/lib/ui-store";
+import { useSandbox } from "@/lib/use-sandbox";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -113,13 +113,16 @@ export function FinanceDashboard() {
   const closeFinance = useUiStore((s) => s.closeFinance);
   const setActiveSection = useUiStore((s) => s.setActiveSection);
   const [timelineMode, setTimelineMode] = useState<TimelineMode>("6m");
+  const { state: sandbox, loading: sandboxLoading } = useSandbox();
+  const env = sandbox.active ? "sandbox" : "producao";
 
   // Finanças agora vem pronto do servidor: uma única consulta agregada,
   // com cache de 5 minutos e botão de atualizar (em vez de recalcular a base
   // inteira no navegador a cada abertura).
   const aggregatesFn = useServerFn(getFinanceAggregates);
   const query = useQuery({
-    queryKey: ["finance-aggregates"],
+    queryKey: ["finance-aggregates", env],
+    enabled: !sandboxLoading,
     queryFn: () => aggregatesFn(),
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
@@ -131,26 +134,24 @@ export function FinanceDashboard() {
     openClient(clientId);
   };
 
-  const empty: FinanceAggregates = {
-    total: 0,
-    received: 0,
-    open: 0,
-    receivedPct: 0,
-    statusData: [],
-    platforms: [],
-    topDebtors: [],
-    topBuyers: [],
-    mgmvTotal: 0,
-    mgmvPaid: 0,
-    overdueValue: 0,
-    overdueCount: 0,
-    ticket: 0,
-    activeClients: 0,
-    productsCount: 0,
-    timelines: { "7d": [], "30d": [], "6m": [], "12m": [], all: [] },
-    generatedAt: "",
-  };
-  const data = query.data ?? empty;
+  if (!query.data) {
+    return (
+      <div className="space-y-4 py-8" role={query.isError ? "alert" : "status"}>
+        <h2 className="text-2xl font-bold">Finanças</h2>
+        <p className="text-sm text-muted-foreground">
+          {query.isError
+            ? "Não foi possível carregar as informações financeiras. Tente novamente."
+            : "Carregando as informações financeiras…"}
+        </p>
+        {query.isError ? (
+          <Button variant="outline" onClick={() => void query.refetch()} disabled={query.isFetching}>
+            <RefreshCw className="mr-2 size-4" /> Tentar novamente
+          </Button>
+        ) : <RefreshCw className="size-5 animate-spin text-primary motion-reduce:animate-none" />}
+      </div>
+    );
+  }
+  const data = query.data;
   const timeline = data.timelines[timelineMode] ?? [];
 
   return (
@@ -179,6 +180,12 @@ export function FinanceDashboard() {
           </span>
         </div>
       </div>
+
+      {query.isError && (
+        <p role="alert" className="text-sm text-destructive">
+          Não foi possível atualizar os valores. As informações anteriores foram mantidas; tente atualizar novamente.
+        </p>
+      )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Kpi

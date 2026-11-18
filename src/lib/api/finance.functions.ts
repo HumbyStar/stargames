@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { readFinancePages } from "@/lib/finance-pagination";
 
 // ============================================================================
 // getFinanceAggregates — Finanças calculado no servidor.
@@ -221,8 +222,6 @@ function buildTimeline(
   return buckets;
 }
 
-const PAGE = 1000;
-
 export const getFinanceAggregates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<FinanceAggregates> => {
@@ -231,16 +230,28 @@ export const getFinanceAggregates = createServerFn({ method: "POST" })
     const nowMs = now.getTime();
 
     // --- leitura enxuta (só as colunas usadas nos cálculos) -----------------
-    const clients: SlimClient[] = [];
-    for (let from = 0; ; from += PAGE) {
+    const [clientRows, productRows] = await Promise.all([
+      readFinancePages(async (from, to) => {
       const { data, error } = await supabase
         .from("clients")
         .select("id, name, mgmv")
         .order("id", { ascending: true })
-        .range(from, from + PAGE - 1);
+        .range(from, to);
       if (error) throw new Error(error.message);
-      const rows = data ?? [];
-      for (const r of rows) {
+      return data ?? [];
+      }),
+      readFinancePages(async (from, to) => {
+        const { data, error } = await supabase
+          .from("products")
+          .select("client_id, platform, total_value, paid_value, financial_status, situation, register_date, due_date")
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) throw new Error(error.message);
+        return data ?? [];
+      }),
+    ]);
+    const clients: SlimClient[] = [];
+      for (const r of clientRows) {
         const raw = r.mgmv as
           | { totalDebt?: number; startDate?: string; installments?: SlimInstallment[] }
           | null;
@@ -262,21 +273,8 @@ export const getFinanceAggregates = createServerFn({ method: "POST" })
             : null,
         });
       }
-      if (rows.length < PAGE) break;
-    }
-
     const products: SlimProduct[] = [];
-    for (let from = 0; ; from += PAGE) {
-      const { data, error } = await supabase
-        .from("products")
-        .select(
-          "client_id, platform, total_value, paid_value, financial_status, situation, register_date, due_date",
-        )
-        .order("id", { ascending: true })
-        .range(from, from + PAGE - 1);
-      if (error) throw new Error(error.message);
-      const rows = data ?? [];
-      for (const r of rows) {
+      for (const r of productRows) {
         products.push({
           clientId: r.client_id,
           platform: r.platform || "Outros",
@@ -288,9 +286,6 @@ export const getFinanceAggregates = createServerFn({ method: "POST" })
           dueDate: r.due_date,
         });
       }
-      if (rows.length < PAGE) break;
-    }
-
     // --- agregação por cliente (mesma regra de calculateClientFinancialSummary)
     const byClient = new Map<string, SlimProduct[]>();
     for (const p of products) {

@@ -17,6 +17,16 @@ function oauth(): OAuthNamespace {
 }
 
 export const Route = createFileRoute("/.lovable/oauth/consent")({
+  head: () => ({
+    meta: [
+      { title: "Autorizar acesso — Star Games" },
+      { name: "description", content: "Confirme o acesso de uma integração à sua conta Star Games." },
+      { property: "og:title", content: "Autorizar acesso — Star Games" },
+      { property: "og:description", content: "Confirme o acesso de uma integração à sua conta Star Games." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   ssr: false,
   validateSearch: (s: Record<string, unknown>) => ({
     authorization_id: typeof s.authorization_id === "string" ? s.authorization_id : "",

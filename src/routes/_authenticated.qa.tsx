@@ -8,8 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 export const Route = createFileRoute("/_authenticated/qa")({
   head: () => ({
     meta: [
-      { title: "QA — Responsividade & Modais" },
+      { title: "QA — Responsividade & Modais | Star Games" },
       { name: "description", content: "Checklist de aceite para responsividade e modais." },
+      { property: "og:title", content: "QA — Responsividade & Modais | Star Games" },
+      { property: "og:description", content: "Checklist de aceite dos modais e telas Star Games." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: QaPage,

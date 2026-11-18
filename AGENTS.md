@@ -8,3 +8,6 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Read financial source rows in bounded parallel, ordered pages and reject any failed page; complete totals must never use partial results.
+- Financial modals render explicit loading/error states without fabricated zero totals, with query caches separated by environment.

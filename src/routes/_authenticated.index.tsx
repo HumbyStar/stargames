@@ -9,6 +9,8 @@ export const Route = createFileRoute("/_authenticated/")({
       { name: "description", content: "Dashboard, clientes, cobranças e importação em uma única página." },
       { property: "og:title", content: "Star Games — Gestão Operacional" },
       { property: "og:description", content: "Sistema operacional one-page." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: OnePage,
